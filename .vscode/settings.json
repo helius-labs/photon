@@ -1,0 +1,9 @@
+{
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.formatOnSave": true
+    },
+    "rust-analyzer.linkedProjects": [
+        "./lib/migration/Cargo.toml"
+    ]
+}
