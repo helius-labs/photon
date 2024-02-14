@@ -6,7 +6,6 @@ members = [
 [package]
 name = "photon"
 version = "0.1.0"
-edition = "2021"
 authors = ["Helius Labs"]
 homepage = "https://helius.dev"
 license = "AGPL-3.0"
