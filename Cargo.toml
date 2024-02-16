@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "lib/migration"
+]
+
+[package]
+name = "photon"
+version = "0.1.0"
+authors = ["Helius Labs"]
+homepage = "https://helius.dev"
+edition = "2021"
+license = "Apache-2.0"
+keywords = ["solana", "photon"]
+
+[workspace.dependencies]
+sea-orm = { version = "0.12", features = ["sqlx-postgres", "tokio", "macros" ] }
