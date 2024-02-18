@@ -1,3 +1,5 @@
+use jsonrpsee::core::Error as RpcError;
+use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -8,9 +10,9 @@ pub enum PhotonError {
     DatabaseError(#[from] sea_orm::DbErr),
 }
 
-impl From<PhotonError> for RpcError {
-    fn from(err: PhotonError) -> Self {
-        match err {
+impl Into<RpcError> for PhotonError {
+    fn into(self) -> RpcError {
+        match self {
             PhotonError::ValidationError(msg) => RpcError::Call(CallError::from_std_error(self)),
             PhotonError::DatabaseError(_) => internal_server_error(),
         }
@@ -18,5 +20,5 @@ impl From<PhotonError> for RpcError {
 }
 
 fn internal_server_error() -> RpcError {
-    RpcError::Call(CallError::from_std_error(Err("Internal server error")))
+    RpcError::Call(CallError::Failed(anyhow::anyhow!("Internal server error")))
 }

@@ -1,3 +1,6 @@
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountRequest {

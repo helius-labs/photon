@@ -1,4 +1,6 @@
-#[document_rpc]
+use async_trait::async_trait;
+use jsonrpsee::proc_macros::rpc;
+
 #[async_trait]
 pub trait ApiContract: Send + Sync + 'static {
     #[rpc(name = "liveness", summary = "Aliveness check for the API")]
@@ -48,7 +50,6 @@ impl PhotonApi {
     }
 }
 
-#[document_rpc]
 #[async_trait]
 impl ApiContract for PhotonApi {
     async fn liveness() -> Result<(), PublicApiError> {
