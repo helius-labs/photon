@@ -21,7 +21,6 @@ pub enum PhotonApiError {
 impl Into<RpcError> for PhotonApiError {
     fn into(self) -> RpcError {
         match self {
-            // TODO: Make
             PhotonApiError::ValidationError(_)
             | PhotonApiError::InvalidPubkey { .. }
             | PhotonApiError::RecordNotFound(_) => invalid_request(self),

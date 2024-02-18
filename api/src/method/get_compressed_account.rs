@@ -47,7 +47,7 @@ pub async fn get_compressed_account(
         Ok(utxos::Column::Account.eq(acc_vec))
     } else {
         Err(PhotonApiError::ValidationError(
-            "Must provide either `hash` or `account`".to_string(),
+            "Must provide either `hash` or `account_id`".to_string(),
         ))
     }?;
 
