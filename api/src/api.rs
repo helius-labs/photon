@@ -1,36 +1,35 @@
 use async_trait::async_trait;
-use jsonrpsee::proc_macros::rpc;
+use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
+use sqlx::{postgres::PgPoolOptions, Executor};
+
+use crate::{
+    error::PhotonApiError,
+    method::{
+        get_compressed_account::{
+            get_compressed_account, GetCompressedAccountRequest, GetCompressedAccountResponse,
+        },
+        get_compressed_account_proof::{
+            get_compressed_account_proof, GetCompressedAccountProofRequest,
+            GetCompressedAccountProofResponse,
+        },
+    },
+};
 
 #[async_trait]
 pub trait ApiContract: Send + Sync + 'static {
-    #[rpc(name = "liveness", summary = "Aliveness check for the API")]
-    async fn liveness(&self) -> Result<(), PublicApiError>;
+    async fn liveness(&self) -> Result<(), PhotonApiError>;
 
-    #[rpc(
-        name = "readiness",
-        summary = "Readiness check for the API. Requires an available DB connection."
-    )]
-    async fn readiness(&self) -> Result<(), PublicApiError>;
+    async fn readiness(&self) -> Result<(), PhotonApiError>;
 
-    #[rpc(
-        name = "getCompressedAccount",
-        params = "named",
-        summary = "Get a compressed account (UTXO)"
-    )]
     async fn get_compressed_account(
         &self,
-        payload: GetCompressedAcccountRequest,
-    ) -> Result<GetCompressedAcccountResponse, PublicApiError>;
+        payload: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedAccountResponse, PhotonApiError>;
 
-    #[rpc(
-        name = "getCompressedAccountProof",
-        params = "named",
-        summary = "Get the merkle proof for a compressed account (UTXO)"
-    )]
     async fn get_compressed_account_proof(
         &self,
-        payload: GetCompressedAcccountProofRequest,
-    ) -> Result<GetCompressedAcccountProofResponse, PublicApiError>;
+        payload: GetCompressedAccountProofRequest,
+    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
@@ -44,34 +43,40 @@ pub struct PhotonApi {
 }
 
 impl PhotonApi {
-    pub async fn new(config: PhotonApiConfig) {
-        let db_conn = init_pool(db_url, max_conn, timeout_seconds);
-        PhotonApi { db_conn }
+    pub async fn new(config: PhotonApiConfig) -> Result<Self, anyhow::Error> {
+        let PhotonApiConfig {
+            db_url,
+            max_conn,
+            timeout_seconds,
+            ..
+        } = config;
+        let db_conn = init_pool(&db_url, max_conn, timeout_seconds).await?;
+        Ok(Self { db_conn })
     }
 }
 
 #[async_trait]
 impl ApiContract for PhotonApi {
-    async fn liveness() -> Result<(), PublicApiError> {
+    async fn liveness(&self) -> Result<(), PhotonApiError> {
         Ok(())
     }
 
-    async fn readiness(&self) -> Result<(), PublicApiError> {
+    async fn readiness(&self) -> Result<(), PhotonApiError> {
         todo!();
     }
 
     async fn get_compressed_account(
         &self,
-        request: GetCompressedAcccountRequest,
-    ) -> Result<GetCompressedAcccountResponse, PublicApiError> {
-        get_compressed_account(request)
+        request: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedAccountResponse, PhotonApiError> {
+        get_compressed_account(&self.db_conn, request)
     }
 
     async fn get_compressed_account_proof(
         &self,
-        request: GetCompressedAcccountProofRequest,
-    ) -> Result<GetCompressedAcccountProofResponse, PublicApiError> {
-        get_compressed_account(request)
+        request: GetCompressedAccountProofRequest,
+    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
+        get_compressed_account_proof(&self.db_conn, request)
     }
 }
 
@@ -81,15 +86,15 @@ async fn init_pool(
     timeout_seconds: i32,
 ) -> Result<DatabaseConnection, sqlx::Error> {
     let pool = PgPoolOptions::new()
-        .max_connections(max_conn.unwrap_or(100))
+        .max_connections(max_conn as u32)
         .after_connect(move |conn, _meta| {
             Box::pin(async move {
-                conn.execute(format!("SET statement_timeout = '{}s'", timeout_seconds))
+                conn.execute(format!("SET statement_timeout = '{}s'", timeout_seconds).as_str())
                     .await?;
                 Ok(())
             })
         })
         .connect(db_url)
         .await?;
-    SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+    Ok(SqlxPostgresConnector::from_sqlx_postgres_pool(pool))
 }

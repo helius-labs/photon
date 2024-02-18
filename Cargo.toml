@@ -32,6 +32,8 @@ jsonrpsee-core = {version = "0.16.2", features = ["server"]}
 log = "0.4.17"
 lazy_static = "1.4.0"
 light-poseidon = "0.2.0"
+open-rpc-derive = {version = "0.0.4"}
+open-rpc-schema = {version = "0.0.4"}
 schemars = {version = "0.8.6", features = ["chrono"]}
 schemars_derive = "0.8.6"
 sea-orm = {version = "0.10.6", features = [

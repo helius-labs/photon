@@ -1,3 +1,9 @@
+use std::env;
+
+use log::{error, info};
+
+use crate::rpc_server::run_server;
+
 pub mod api;
 pub mod error;
 pub mod method;
@@ -10,14 +16,13 @@ async fn main() -> Result<(), anyhow::Error> {
         .unwrap_or("info,sqlx::query=warn,jsonrpsee_server::server=warn".to_string());
     let t = tracing_subscriber::fmt().with_env_filter(env_filter);
     if env.eq("local") {
-        t.pretty()
+        t.pretty().init();
     } else {
-        t.json()
+        t.json().init();
     }
-    .init();
 
-    let s = run_server().await?;
-    info!("Server Started");
+    let server_handle: jsonrpsee::server::ServerHandle = run_server().await?;
+    info!("Server started");
 
     match tokio::signal::ctrl_c().await {
         Ok(()) => {

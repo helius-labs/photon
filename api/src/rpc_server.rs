@@ -41,9 +41,9 @@ pub async fn run_server() -> Result<ServerHandle, anyhow::Error> {
         .set_middleware(middleware)
         .build(addr)
         .await?;
-    let api = PhotonApi::new(config);
-    let rpc_module = build_rpc_module(Box::new(api));
-    server.start(rpc_module)
+    let api = PhotonApi::new(config).await?;
+    let rpc_module = build_rpc_module(Box::new(api))?;
+    server.start(rpc_module).map_err(|e| anyhow::anyhow!(e))
 }
 
 pub fn build_rpc_module(
