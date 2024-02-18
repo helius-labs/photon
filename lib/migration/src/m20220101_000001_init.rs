@@ -87,6 +87,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(UTXOs::Hash).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Data).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Account).binary())
+                    .col(ColumnDef::new(UTXOs::Owner).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Lamports).big_integer())
                     .col(ColumnDef::new(UTXOs::Tree).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Seq).big_integer().not_null())

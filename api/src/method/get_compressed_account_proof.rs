@@ -20,9 +20,9 @@ pub struct GetCompressedAccountProofResponse {
     pub slot_updated: i64,
 }
 
-pub fn get_compressed_account_proof(
+pub async fn get_compressed_account_proof(
     conn: &DatabaseConnection,
     request: GetCompressedAccountProofRequest,
-) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
+) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError> {
     todo!();
 }

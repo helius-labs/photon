@@ -110,6 +110,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
+ "bs58",
+ "dao",
  "env_logger 0.10.2",
  "hyper",
  "jsonrpsee",
@@ -1910,6 +1913,8 @@ name = "integration_tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "api",
+ "base64 0.21.7",
  "borsh 0.10.3",
  "bs58",
  "dao",

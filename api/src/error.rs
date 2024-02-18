@@ -6,8 +6,12 @@ use thiserror::Error;
 pub enum PhotonApiError {
     #[error("Validation Error: {0}")]
     ValidationError(String),
+    #[error("Invalid Public Key: field '{field}'")]
+    InvalidPubkey { field: String },
     #[error("Database Error: {0}")]
     DatabaseError(#[from] sea_orm::DbErr),
+    #[error("Record Not Found: {0}")]
+    RecordNotFound(String),
 }
 
 // TODO: Simplify error conversions and ensure we adhere
@@ -15,12 +19,17 @@ pub enum PhotonApiError {
 impl Into<RpcError> for PhotonApiError {
     fn into(self) -> RpcError {
         match self {
-            PhotonApiError::ValidationError(msg) => {
-                RpcError::Call(CallError::Failed(anyhow::anyhow!(msg)))
-            }
+            // TODO: Make
+            PhotonApiError::ValidationError(_)
+            | PhotonApiError::InvalidPubkey { .. }
+            | PhotonApiError::RecordNotFound(_) => invalid_request(self),
             PhotonApiError::DatabaseError(_) => internal_server_error(),
         }
     }
+}
+
+fn invalid_request(e: PhotonApiError) -> RpcError {
+    RpcError::Call(CallError::from_std_error(e))
 }
 
 fn internal_server_error() -> RpcError {

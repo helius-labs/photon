@@ -1,4 +1,5 @@
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use api::{api::ApiContract, method::get_compressed_account::GetCompressedAccountRequest};
 use dao::generated::{state_trees, utxos};
 use parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
 use persist::persist_bundle;
@@ -24,7 +25,7 @@ struct Person {
 
 #[tokio::test]
 async fn persist_state_transitions() {
-    let TestSetup { db_conn } = setup().await;
+    let TestSetup { db_conn, api } = setup().await;
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -81,13 +82,27 @@ async fn persist_state_transitions() {
     assert_eq!(tree_nodes[0].hash, hash_v1.to_vec());
     assert_eq!(tree_nodes[0].seq, 0);
 
-    let res = utxos::Entity::find()
-        .filter(utxos::Column::Hash.eq(hash_v1.to_vec()))
-        .one(&db_conn)
+    let res = api
+        .get_compressed_account(GetCompressedAccountRequest {
+            hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .unwrap();
-    let parsed = Person::try_from_slice(&res.data).unwrap();
+    let res_clone = res.clone();
+    let raw_data = base64::decode(res.data).unwrap();
+    let parsed = Person::try_from_slice(&raw_data).unwrap();
     assert_eq!(parsed, person);
     assert_eq!(res.lamports, Some(5000));
+
+    let account_lookup = api
+        .get_compressed_account(GetCompressedAccountRequest {
+            account_id: account.map(|a| bs58::encode(a).into_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(account_lookup, res_clone);
 }

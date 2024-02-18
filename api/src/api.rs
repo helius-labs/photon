@@ -24,12 +24,12 @@ pub trait ApiContract: Send + Sync + 'static {
     async fn get_compressed_account(
         &self,
         payload: GetCompressedAccountRequest,
-    ) -> Result<GetCompressedAccountResponse, PhotonApiError>;
+    ) -> Result<Option<GetCompressedAccountResponse>, PhotonApiError>;
 
     async fn get_compressed_account_proof(
         &self,
         payload: GetCompressedAccountProofRequest,
-    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError>;
+    ) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
@@ -68,15 +68,15 @@ impl ApiContract for PhotonApi {
     async fn get_compressed_account(
         &self,
         request: GetCompressedAccountRequest,
-    ) -> Result<GetCompressedAccountResponse, PhotonApiError> {
-        get_compressed_account(&self.db_conn, request)
+    ) -> Result<Option<GetCompressedAccountResponse>, PhotonApiError> {
+        get_compressed_account(&self.db_conn, request).await
     }
 
     async fn get_compressed_account_proof(
         &self,
         request: GetCompressedAccountProofRequest,
-    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
-        get_compressed_account_proof(&self.db_conn, request)
+    ) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError> {
+        get_compressed_account_proof(&self.db_conn, request).await
     }
 }
 

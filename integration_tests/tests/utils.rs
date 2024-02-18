@@ -1,5 +1,6 @@
 use std::{env, sync::Mutex};
 
+use api::api::{PhotonApi, PhotonApiConfig};
 use lazy_static::lazy_static;
 use parser::bundle::Hash;
 use sea_orm::{
@@ -26,6 +27,7 @@ lazy_static! {
 
 pub struct TestSetup {
     pub db_conn: DatabaseConnection,
+    pub api: PhotonApi,
 }
 
 pub async fn setup() -> TestSetup {
@@ -36,7 +38,17 @@ pub async fn setup() -> TestSetup {
     let pool = setup_pg_pool(local_db.to_string()).await;
     let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
     reset_tables(&db_conn).await.unwrap();
-    TestSetup { db_conn }
+
+    let api = PhotonApi::new(PhotonApiConfig {
+        max_conn: 1,
+        timeout_seconds: 15,
+        db_url: local_db.to_string(),
+    })
+    .await
+    .map_err(|e| panic!("Failed to setup Photon API: {}", e))
+    .unwrap();
+
+    TestSetup { db_conn, api }
 }
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
