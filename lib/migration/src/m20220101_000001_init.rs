@@ -15,7 +15,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(StateTrees::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
@@ -23,17 +23,13 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(StateTrees::Tree).binary().not_null())
                     .col(ColumnDef::new(StateTrees::NodeIdx).big_integer().not_null())
                     .col(ColumnDef::new(StateTrees::LeafIdx).big_integer())
+                    .col(ColumnDef::new(StateTrees::Level).big_integer().not_null())
                     .col(ColumnDef::new(StateTrees::Hash).binary().not_null())
                     .col(ColumnDef::new(StateTrees::Seq).big_integer().not_null())
                     .col(
                         ColumnDef::new(StateTrees::SlotUpdated)
                             .big_integer()
                             .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(StateTrees::CreatedAt)
-                            .timestamp()
-                            .default(Expr::current_timestamp()),
                     )
                     .to_owned(),
             )
@@ -63,6 +59,19 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // TODO: Convert to sparse index.
+        // We only need to index the leaf nodes.
+        manager
+            .create_index(
+                Index::create()
+                    .name("state_trees_hash_sparse_idx")
+                    .table(StateTrees::Table)
+                    .col(StateTrees::Hash)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .create_table(
                 Table::create()
@@ -70,7 +79,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(UTXOs::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
@@ -78,8 +87,9 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(UTXOs::Hash).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Data).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Account).binary())
-                    .col(ColumnDef::new(UTXOs::LeafIdx).big_integer().not_null())
+                    .col(ColumnDef::new(UTXOs::Lamports).big_integer())
                     .col(ColumnDef::new(UTXOs::Tree).binary().not_null())
+                    .col(ColumnDef::new(UTXOs::Seq).big_integer().not_null())
                     .col(ColumnDef::new(UTXOs::SlotUpdated).big_integer().not_null())
                     .col(ColumnDef::new(UTXOs::Spent).boolean().not_null())
                     .col(
@@ -97,18 +107,6 @@ impl MigrationTrait for Migration {
                     .name("utxos_hash_idx")
                     .table(UTXOs::Table)
                     .col(UTXOs::Hash)
-                    .unique()
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("utxos_tree_leaf_idx")
-                    .table(UTXOs::Table)
-                    .col(UTXOs::Tree)
-                    .col(UTXOs::LeafIdx)
                     .unique()
                     .to_owned(),
             )

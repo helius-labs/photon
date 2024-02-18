@@ -1,0 +1,27 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+anyhow = { workspace = true }
+borsh = { workspace = true }
+bs58 = { workspace = true }
+dao = { path = "../lib/dao" }
+parser = { path = "../lib/parser" }
+persist = { path = "../lib/persist" }
+lazy_static = { workspace = true }
+light-poseidon = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+sea-orm = { workspace = true }
+sqlx = { workspace = true }
+solana-sdk = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = {workspace = true}

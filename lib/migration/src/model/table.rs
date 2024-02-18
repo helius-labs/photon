@@ -1,29 +1,30 @@
 use sea_orm_migration::prelude::*;
 
-#[derive(Copy, Clone, DeriveIden)]
+#[derive(Copy, Clone, Iden)]
 pub enum StateTrees {
     Table,
     Id,
     Tree,
     NodeIdx,
     LeafIdx,
+    Level,
     Hash,
     Seq,
     SlotUpdated,
-    CreatedAt,
 }
 
-#[derive(Copy, Clone, DeriveIden)]
+#[derive(Copy, Clone, Iden)]
 pub enum UTXOs {
-    #[sea_orm(iden = "utxos")]
+    #[iden = "utxos"]
     Table,
     Id,
     Hash,
     Data,
     Account,
+    Lamports,
     Tree,
-    LeafIdx,
     Spent,
+    Seq,
     SlotUpdated,
     CreatedAt,
 }
