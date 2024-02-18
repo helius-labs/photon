@@ -12,6 +12,8 @@ pub enum PhotonApiError {
     DatabaseError(#[from] sea_orm::DbErr),
     #[error("Record Not Found: {0}")]
     RecordNotFound(String),
+    #[error("Unexpected Error: {0}")]
+    UnexpectedError(String),
 }
 
 // TODO: Simplify error conversions and ensure we adhere
@@ -23,7 +25,9 @@ impl Into<RpcError> for PhotonApiError {
             PhotonApiError::ValidationError(_)
             | PhotonApiError::InvalidPubkey { .. }
             | PhotonApiError::RecordNotFound(_) => invalid_request(self),
-            PhotonApiError::DatabaseError(_) => internal_server_error(),
+            PhotonApiError::DatabaseError(_) | PhotonApiError::UnexpectedError(_) => {
+                internal_server_error()
+            }
         }
     }
 }

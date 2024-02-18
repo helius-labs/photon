@@ -1,9 +1,15 @@
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use api::{api::ApiContract, method::get_compressed_account::GetCompressedAccountRequest};
-use dao::generated::{state_trees, utxos};
+use api::{
+    api::ApiContract,
+    method::{
+        get_compressed_account::GetCompressedAccountRequest,
+        get_compressed_account_proof::{
+            GetCompressedAccountProofRequest, GetCompressedAccountProofResponse,
+        },
+    },
+};
 use parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
 use persist::persist_bundle;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::utils::{mock_str_to_hash, setup, TestSetup};
@@ -55,15 +61,15 @@ async fn persist_state_transitions() {
             seq: 0,
             path: vec![
                 PathNode {
-                    index: 0,
+                    index: 4,
                     hash: hash_v1,
                 },
                 PathNode {
-                    index: 1,
+                    index: 2,
                     hash: mock_str_to_hash("hash_v1_level_1"),
                 },
                 PathNode {
-                    index: 2,
+                    index: 1,
                     hash: mock_str_to_hash("hash_v1_level_2"),
                 },
             ],
@@ -73,15 +79,7 @@ async fn persist_state_transitions() {
     };
     persist_bundle(&db_conn, bundle.into()).await.unwrap();
 
-    let tree_nodes = state_trees::Entity::find()
-        .filter(state_trees::Column::Tree.eq(tree.as_ref().to_vec()))
-        .all(&db_conn)
-        .await
-        .unwrap();
-    assert_eq!(tree_nodes.len(), 3);
-    assert_eq!(tree_nodes[0].hash, hash_v1.to_vec());
-    assert_eq!(tree_nodes[0].seq, 0);
-
+    // Verify GetCompressedAccount
     let res = api
         .get_compressed_account(GetCompressedAccountRequest {
             hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
@@ -105,4 +103,20 @@ async fn persist_state_transitions() {
         .unwrap()
         .unwrap();
     assert_eq!(account_lookup, res_clone);
+
+    // Verify GetCompressedAccountProof
+    let GetCompressedAccountProofResponse { root, proof, hash } = api
+        .get_compressed_account_proof(GetCompressedAccountProofRequest {
+            hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(hash, bs58::encode(hash_v1.to_vec()).into_string());
+    assert_eq!(proof.len(), 2);
+    assert_eq!(
+        root,
+        bs58::encode(mock_str_to_hash("hash_v1_level_2").to_vec()).into_string()
+    );
 }
