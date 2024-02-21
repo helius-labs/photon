@@ -73,6 +73,7 @@ async fn spend_input_utxo(
     let model = utxos::ActiveModel {
         data: Set(vec![]),
         spent: Set(true),
+        owner: Set(vec![]),
         slot_updated: Set(slot_updated),
         seq: Set(*seq),
         ..Default::default()
@@ -93,6 +94,7 @@ async fn spend_input_utxo(
                 utxos::Entity::insert(utxos::ActiveModel {
                     hash: Set(hash.to_vec()),
                     data: Set(vec![]),
+                    owner: Set(vec![]),
                     lamports: Set(None),
                     spent: Set(true),
                     slot_updated: Set(slot_updated),
@@ -130,6 +132,7 @@ async fn append_output_utxo(
         data: Set(out_utxo.data.clone()),
         tree: Set(out_utxo.tree.as_ref().to_vec()),
         account: Set(out_utxo.account.map(|a| a.as_ref().to_vec())),
+        owner: Set(out_utxo.owner.as_ref().to_vec()),
         lamports: Set(out_utxo.lamports),
         spent: Set(false),
         seq: Set(out_utxo.seq),

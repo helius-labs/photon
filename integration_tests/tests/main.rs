@@ -1,8 +1,15 @@
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use dao::generated::{state_trees, utxos};
+use api::{
+    api::ApiContract,
+    method::{
+        get_compressed_account::GetCompressedAccountRequest,
+        get_compressed_account_proof::{
+            GetCompressedAccountProofRequest, GetCompressedAccountProofResponse,
+        },
+    },
+};
 use parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
 use persist::persist_bundle;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::utils::{mock_str_to_hash, setup, TestSetup};
@@ -24,7 +31,7 @@ struct Person {
 
 #[tokio::test]
 async fn persist_state_transitions() {
-    let TestSetup { db_conn } = setup().await;
+    let TestSetup { db_conn, api } = setup().await;
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -54,15 +61,15 @@ async fn persist_state_transitions() {
             seq: 0,
             path: vec![
                 PathNode {
-                    index: 0,
+                    index: 4,
                     hash: hash_v1,
                 },
                 PathNode {
-                    index: 1,
+                    index: 2,
                     hash: mock_str_to_hash("hash_v1_level_1"),
                 },
                 PathNode {
-                    index: 2,
+                    index: 1,
                     hash: mock_str_to_hash("hash_v1_level_2"),
                 },
             ],
@@ -72,22 +79,44 @@ async fn persist_state_transitions() {
     };
     persist_bundle(&db_conn, bundle.into()).await.unwrap();
 
-    let tree_nodes = state_trees::Entity::find()
-        .filter(state_trees::Column::Tree.eq(tree.as_ref().to_vec()))
-        .all(&db_conn)
-        .await
-        .unwrap();
-    assert_eq!(tree_nodes.len(), 3);
-    assert_eq!(tree_nodes[0].hash, hash_v1.to_vec());
-    assert_eq!(tree_nodes[0].seq, 0);
-
-    let res = utxos::Entity::find()
-        .filter(utxos::Column::Hash.eq(hash_v1.to_vec()))
-        .one(&db_conn)
+    // Verify GetCompressedAccount
+    let res = api
+        .get_compressed_account(GetCompressedAccountRequest {
+            hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .unwrap();
-    let parsed = Person::try_from_slice(&res.data).unwrap();
+    let res_clone = res.clone();
+    let raw_data = base64::decode(res.data).unwrap();
+    let parsed = Person::try_from_slice(&raw_data).unwrap();
     assert_eq!(parsed, person);
     assert_eq!(res.lamports, Some(5000));
+
+    let account_lookup = api
+        .get_compressed_account(GetCompressedAccountRequest {
+            account_id: account.map(|a| bs58::encode(a).into_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(account_lookup, res_clone);
+
+    // Verify GetCompressedAccountProof
+    let GetCompressedAccountProofResponse { root, proof, hash } = api
+        .get_compressed_account_proof(GetCompressedAccountProofRequest {
+            hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(hash, bs58::encode(hash_v1.to_vec()).into_string());
+    assert_eq!(proof.len(), 2);
+    assert_eq!(
+        root,
+        bs58::encode(mock_str_to_hash("hash_v1_level_2").to_vec()).into_string()
+    );
 }

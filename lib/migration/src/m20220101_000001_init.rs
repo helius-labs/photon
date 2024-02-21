@@ -1,4 +1,7 @@
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{
+    prelude::*,
+    sea_orm::{ConnectionTrait, DatabaseBackend, Statement},
+};
 
 use crate::model::table::{StateTrees, UTXOs};
 
@@ -59,17 +62,14 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // TODO: Convert to sparse index.
-        // We only need to index the leaf nodes.
+        // We only need to index the hash values for leaf nodes (UTXO identifier).
         manager
-            .create_index(
-                Index::create()
-                    .name("state_trees_hash_sparse_idx")
-                    .table(StateTrees::Table)
-                    .col(StateTrees::Hash)
-                    .unique()
-                    .to_owned(),
-            )
+            .get_connection()
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                "CREATE UNIQUE INDEX state_trees_hash_sparse_idx ON state_trees (hash) WHERE level = 0;
+                ".to_string(),
+            ))
             .await?;
 
         manager
@@ -87,6 +87,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(UTXOs::Hash).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Data).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Account).binary())
+                    .col(ColumnDef::new(UTXOs::Owner).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Lamports).big_integer())
                     .col(ColumnDef::new(UTXOs::Tree).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Seq).big_integer().not_null())

@@ -10,6 +10,7 @@ pub struct Model {
     pub hash: Vec<u8>,
     pub data: Vec<u8>,
     pub account: Option<Vec<u8>>,
+    pub owner: Vec<u8>,
     pub lamports: Option<i64>,
     pub tree: Vec<u8>,
     pub seq: i64,

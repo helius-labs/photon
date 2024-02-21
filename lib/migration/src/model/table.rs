@@ -21,6 +21,7 @@ pub enum UTXOs {
     Hash,
     Data,
     Account,
+    Owner,
     Lamports,
     Tree,
     Spent,
