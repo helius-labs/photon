@@ -12,14 +12,15 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
-use tracing_subscriber::fmt;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
 fn setup_logging() {
     let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
-    let t = tracing_subscriber::fmt().with_env_filter(env_filter);
-    t.event_format(fmt::format::json()).init();
+    tracing_subscriber::fmt()
+        .with_test_writer()
+        .with_env_filter(env_filter)
+        .init();
 }
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
