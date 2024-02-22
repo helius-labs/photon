@@ -1,29 +1,31 @@
 [package]
-name = "integration_tests"
-version = "0.1.0"
 edition = "2021"
+name = "integration_tests"
 publish = false
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-api = { path = "../api" }
-anyhow = { workspace = true }
-base64 = { workspace = true }
-borsh = { workspace = true }
-bs58 = { workspace = true }
-dao = { path = "../lib/dao" }
-parser = { path = "../lib/parser" }
-persist = { path = "../lib/persist" }
-lazy_static = { workspace = true }
-light-poseidon = { workspace = true }
-log = { workspace = true }
-thiserror = { workspace = true }
-sea-orm = { workspace = true }
-sqlx = { workspace = true }
-solana-sdk = { workspace = true }
-serde_json = { workspace = true }
-serde = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+anyhow = {workspace = true}
+api = {path = "../api"}
+base64 = {workspace = true}
+borsh = {workspace = true}
+bs58 = {workspace = true}
+dao = {path = "../lib/dao"}
+lazy_static = {workspace = true}
+light-poseidon = {workspace = true}
+log = {workspace = true}
+migration = {workspace = true}
+once_cell = {workspace = true}
+parser = {path = "../lib/parser"}
+persist = {path = "../lib/persist"}
+sea-orm = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
+solana-sdk = {workspace = true}
+sqlx = {workspace = true}
+thiserror = {workspace = true}
 tokio = {workspace = true}
+tracing = {workspace = true}
+tracing-subscriber = {workspace = true}

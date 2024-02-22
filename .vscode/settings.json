@@ -4,7 +4,7 @@
         "editor.formatOnSave": true
     },
     "rust-analyzer.linkedProjects": [
-        "./lib/migration/Cargo.toml"
+        "Cargo.toml"
     ],
     "rust-analyzer.diagnostics.disabled": ["unresolved-proc-macro"]
 }

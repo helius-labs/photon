@@ -1921,6 +1921,8 @@ dependencies = [
  "lazy_static",
  "light-poseidon",
  "log",
+ "migration",
+ "once_cell",
  "parser",
  "persist",
  "sea-orm",
@@ -2585,10 +2587,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
-
-[[package]]
-name = "photon"
-version = "0.1.0"
 
 [[package]]
 name = "pin-project"

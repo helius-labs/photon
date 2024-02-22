@@ -26,7 +26,7 @@ sea-orm-cli generate entity -o lib/dao/src/generated
 ## Integration Tests
 First, setup your local database following the steps above. Then run the following:
 ```
-cargo test -p integration_tests -- --nocapture
+cargo test -- --nocapture
 ```
 The `nocatpure` argument is optional. It will show you the logs when this flag is included.
 
