@@ -1,7 +1,6 @@
 use std::{env, sync::Mutex};
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use lazy_static::lazy_static;
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
 use parser::bundle::Hash;
