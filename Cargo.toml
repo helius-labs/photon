@@ -1,21 +1,12 @@
 [workspace]
 members = [
-    "api",
-    "integration_tests", 
-    "lib/dao",
-    "lib/parser",
-    "lib/migration",
-    "lib/persist"
+  "api",
+  "integration_tests",
+  "lib/dao",
+  "lib/parser",
+  "lib/migration",
+  "lib/persist",
 ]
-
-[package]
-name = "photon"
-version = "0.1.0"
-edition = "2021"
-authors = ["Helius Labs"]
-homepage = "https://helius.dev"
-license = "Apache-2.0"
-keywords = ["solana", "photon"]
 
 resolver = "2"
 
@@ -30,9 +21,11 @@ hyper = "0.14.23"
 insta = {version = "1.34.0", features = ["json"]}
 jsonrpsee = {version = "0.16.2", features = ["server", "macros"]}
 jsonrpsee-core = {version = "0.16.2", features = ["server"]}
-log = "0.4.17"
 lazy_static = "1.4.0"
 light-poseidon = "0.2.0"
+log = "0.4.17"
+migration = {path = "lib/migration"}
+once_cell = "1.19.0"
 open-rpc-derive = {version = "0.0.4"}
 open-rpc-schema = {version = "0.0.4"}
 schemars = {version = "0.8.6", features = ["chrono"]}
@@ -44,8 +37,8 @@ sea-orm = {version = "0.10.6", features = [
   "with-chrono",
   "mock",
 ]}
-serde_json = "1.0.82"
 serde = "1.0.140"
+serde_json = "1.0.82"
 solana-sdk = "=1.17.18"
 sqlx = {version = "0.6.2", features = [
   "macros",
