@@ -8,8 +8,8 @@ use api::{
         },
     },
 };
-use parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
-use persist::persist_bundle;
+use ingester::parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
+use ingester::persist::persist_bundle;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::utils::{mock_str_to_hash, setup, TestSetup};
