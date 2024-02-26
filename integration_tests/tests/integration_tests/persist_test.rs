@@ -14,8 +14,6 @@ use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::utils::{mock_str_to_hash, setup, TestSetup};
 
-mod utils;
-
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
     name: String,
@@ -89,6 +87,8 @@ async fn persist_state_transitions() {
         .unwrap()
         .unwrap();
     let res_clone = res.clone();
+
+    #[allow(deprecated)]
     let raw_data = base64::decode(res.data).unwrap();
     let parsed = Person::try_from_slice(&raw_data).unwrap();
     assert_eq!(parsed, person);

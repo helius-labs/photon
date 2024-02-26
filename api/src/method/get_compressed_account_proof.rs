@@ -1,5 +1,4 @@
 use dao::generated::{state_trees, utxos};
-use log::debug;
 use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};

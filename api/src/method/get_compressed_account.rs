@@ -56,6 +56,7 @@ pub async fn get_compressed_account(
         let res = GetCompressedAccountResponse {
             hash: bs58::encode(utxo.hash).into_string(),
             account: utxo.account.map(|a| bs58::encode(a).into_string()),
+            #[allow(deprecated)]
             data: base64::encode(utxo.data),
             owner: bs58::encode(utxo.owner).into_string(),
             lamports: utxo.lamports,
