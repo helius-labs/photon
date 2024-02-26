@@ -1,9 +1,9 @@
 use std::{env, sync::Mutex};
 
 use api::api::{PhotonApi, PhotonApiConfig};
+use ingester::parser::bundle::Hash;
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
-use parser::bundle::Hash;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     Statement,

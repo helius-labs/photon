@@ -1900,6 +1900,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ingester"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "borsh 0.10.3",
+ "bs58",
+ "dao",
+ "lazy_static",
+ "log",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "solana-sdk",
+ "sqlx",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1918,13 +1938,12 @@ dependencies = [
  "borsh 0.10.3",
  "bs58",
  "dao",
+ "ingester",
  "lazy_static",
  "light-poseidon",
  "log",
  "migration",
  "once_cell",
- "parser",
- "persist",
  "sea-orm",
  "serde",
  "serde_json",
@@ -2530,14 +2549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parser"
-version = "0.1.0"
-dependencies = [
- "bs58",
- "solana-sdk",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2566,27 +2577,6 @@ name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
-
-[[package]]
-name = "persist"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "borsh 0.10.3",
- "bs58",
- "dao",
- "lazy_static",
- "log",
- "parser",
- "sea-orm",
- "serde",
- "serde_json",
- "solana-sdk",
- "sqlx",
- "thiserror",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "pin-project"

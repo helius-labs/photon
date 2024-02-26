@@ -1,13 +1,13 @@
+use crate::parser::bundle::{ChangelogEvent, EventBundle, PublicStateTransitionBundle, UTXOEvent};
 use dao::generated::{state_trees, utxos};
 use log::{debug, warn};
-use parser::bundle::{ChangelogEvent, EventBundle, PublicStateTransitionBundle, UTXOEvent};
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction,
     DbBackend, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, TransactionTrait,
 };
 use solana_sdk::signature::Signature;
 
-use crate::error::PersistError;
+use error::PersistError;
 pub mod error;
 
 pub async fn persist_bundle(
@@ -124,7 +124,7 @@ async fn spend_input_utxo(
 
 async fn append_output_utxo(
     txn: &DatabaseTransaction,
-    out_utxo: &parser::bundle::UTXOEvent,
+    out_utxo: &UTXOEvent,
     slot_updated: i64,
 ) -> Result<(), PersistError> {
     let model = utxos::ActiveModel {
@@ -157,7 +157,7 @@ async fn append_output_utxo(
 
 async fn persist_changelog_event(
     txn: &DatabaseTransaction,
-    event: &parser::bundle::ChangelogEvent,
+    event: &ChangelogEvent,
     slot_updated: i64,
 ) -> Result<(), PersistError> {
     let ChangelogEvent { path, tree, seq } = event;
