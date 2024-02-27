@@ -19,6 +19,8 @@ pub struct VersionedTransactionWithUiStatusMeta {
     pub meta: UiTransactionStatusMeta,
 }
 
+// We create this struct instead of using VersionedConfirmedTransactionWithStatusMeta because
+// event though UiStatusMeta is pracitcally identical to StatusMeta, it has better deserialization support.
 pub struct VersionedConfirmedTransactionWithUiStatusMeta {
     pub slot: Slot,
     pub tx_with_meta: VersionedTransactionWithUiStatusMeta,
