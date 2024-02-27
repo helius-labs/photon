@@ -8,11 +8,13 @@ use api::{
         },
     },
 };
+use function_name::named;
 use ingester::parser::bundle::{ChangelogEvent, PathNode, PublicStateTransitionBundle, UTXOEvent};
 use ingester::persist::persist_bundle;
+use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-use crate::utils::{mock_str_to_hash, setup, TestSetup};
+use crate::utils::*;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -28,8 +30,11 @@ struct Person {
 // - Replace assertions with API queries instead of direct DB queries.
 
 #[tokio::test]
+#[serial]
+#[named]
 async fn persist_state_transitions() {
-    let TestSetup { db_conn, api } = setup().await;
+    let name = trim_test_name(function_name!());
+    let setup = setup(name).await;
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -75,10 +80,11 @@ async fn persist_state_transitions() {
         transaction: Signature::new_unique(),
         slot_updated: 0,
     };
-    persist_bundle(&db_conn, bundle.into()).await.unwrap();
+    persist_bundle(&setup.db_conn, bundle.into()).await.unwrap();
 
     // Verify GetCompressedAccount
-    let res = api
+    let res = setup
+        .api
         .get_compressed_account(GetCompressedAccountRequest {
             hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
             ..Default::default()
@@ -94,7 +100,8 @@ async fn persist_state_transitions() {
     assert_eq!(parsed, person);
     assert_eq!(res.lamports, Some(5000));
 
-    let account_lookup = api
+    let account_lookup = setup
+        .api
         .get_compressed_account(GetCompressedAccountRequest {
             account_id: account.map(|a| bs58::encode(a).into_string()),
             ..Default::default()
@@ -105,7 +112,8 @@ async fn persist_state_transitions() {
     assert_eq!(account_lookup, res_clone);
 
     // Verify GetCompressedAccountProof
-    let GetCompressedAccountProofResponse { root, proof, hash } = api
+    let GetCompressedAccountProofResponse { root, proof, hash } = setup
+        .api
         .get_compressed_account_proof(GetCompressedAccountProofRequest {
             hash: Some(bs58::encode(hash_v1.to_vec()).into_string()),
             ..Default::default()

@@ -1,17 +1,44 @@
-use std::{env, sync::Mutex};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Mutex,
+    time::Duration,
+};
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::parser::bundle::Hash;
+use ingester::{
+    parser::bundle::Hash, VersionedConfirmedTransactionWithUiStatusMeta,
+    VersionedTransactionWithUiStatusMeta,
+};
+use log::{error, info};
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     Statement,
 };
+use serde::Serialize;
+use solana_client::{
+    client_error::{reqwest::Version, ClientError},
+    nonblocking::rpc_client::RpcClient,
+    rpc_config::RpcTransactionConfig,
+    rpc_request::RpcRequest,
+};
+use solana_sdk::{
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+    signature::Signature,
+};
+use solana_transaction_status::{
+    EncodedConfirmedTransactionWithStatusMeta, TransactionStatusMeta, UiTransactionEncoding,
+    UiTransactionStatusMeta, VersionedConfirmedTransactionWithStatusMeta,
+    VersionedTransactionWithStatusMeta,
+};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
+use tokio::time::sleep;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
@@ -41,9 +68,26 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
 pub struct TestSetup {
     pub db_conn: DatabaseConnection,
     pub api: PhotonApi,
+    pub name: String,
+    pub client: RpcClient,
 }
 
-pub async fn setup() -> TestSetup {
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Network {
+    #[default]
+    Mainnet,
+    Devnet,
+    // Localnet is not a great test option since transactions are not persisted but we don't know
+    // how to deploy everything into devnet yet.
+    Localnet,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct TestSetupOptions {
+    pub network: Network,
+}
+
+pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
     let local_db = "postgres://postgres@localhost/postgres";
     let pool = setup_pg_pool(local_db.to_string()).await;
     let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
@@ -59,7 +103,23 @@ pub async fn setup() -> TestSetup {
     .map_err(|e| panic!("Failed to setup Photon API: {}", e))
     .unwrap();
 
-    TestSetup { db_conn, api }
+    let rpc_url = match opts.network {
+        Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
+        Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
+        Network::Localnet => std::env::var("LOCALNET_RPC_URL").unwrap(),
+    };
+    let client = RpcClient::new(rpc_url.to_string());
+
+    TestSetup {
+        name,
+        db_conn,
+        api,
+        client,
+    }
+}
+
+pub async fn setup(name: String) -> TestSetup {
+    setup_with_options(name, TestSetupOptions::default()).await
 }
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
@@ -95,4 +155,84 @@ pub fn mock_str_to_hash(input: &str) -> Hash {
     }
 
     Hash::new(array)
+}
+
+fn get_relative_project_path(path: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)
+}
+
+pub async fn fetch_transaction(
+    client: &RpcClient,
+    sig: Signature,
+) -> EncodedConfirmedTransactionWithStatusMeta {
+    const CONFIG: RpcTransactionConfig = RpcTransactionConfig {
+        encoding: Some(UiTransactionEncoding::Base64),
+        commitment: Some(CommitmentConfig {
+            commitment: CommitmentLevel::Confirmed,
+        }),
+        max_supported_transaction_version: Some(0),
+    };
+
+    // We do not immediately deserialize because VersionedTransactionWithStatusMeta does not
+    // implement Deserialize
+    let txn: EncodedConfirmedTransactionWithStatusMeta = client
+        .send(
+            RpcRequest::GetTransaction,
+            serde_json::json!([sig.to_string(), CONFIG,]),
+        )
+        .await
+        .unwrap();
+
+    // Ignore if tx failed or meta is missed
+    let meta = txn.transaction.meta.as_ref();
+    if meta.map(|meta| meta.status.is_err()).unwrap_or(true) {
+        panic!("Trying to index failed transaction: {}", sig);
+    }
+    txn
+}
+
+async fn cached_fetch_transaction(
+    setup: &TestSetup,
+    sig: Signature,
+) -> VersionedConfirmedTransactionWithUiStatusMeta {
+    let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
+
+    if !Path::new(&dir).exists() {
+        std::fs::create_dir(&dir).unwrap();
+    }
+    let file_path = dir.join(sig.to_string());
+
+    let txn = if file_path.exists() {
+        let txn_string = std::fs::read(file_path).unwrap();
+        serde_json::from_slice(&txn_string).unwrap()
+    } else {
+        let txn = fetch_transaction(&setup.client, sig).await;
+        std::fs::write(file_path, serde_json::to_string(&txn).unwrap()).unwrap();
+        txn
+    };
+
+    VersionedConfirmedTransactionWithUiStatusMeta {
+        tx_with_meta: VersionedTransactionWithUiStatusMeta {
+            transaction: txn.transaction.transaction.decode().unwrap(),
+            meta: txn.transaction.meta.unwrap(),
+        },
+        block_time: txn.block_time,
+        slot: txn.slot,
+    }
+}
+
+pub async fn index_transaction(setup: &TestSetup, txn: &str) {
+    let sig = Signature::from_str(txn).unwrap();
+    let txn = cached_fetch_transaction(setup, sig).await;
+    ingester::index_transaction(&setup.db_conn, txn).await
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Order {
+    Forward,
+    AllPermutations,
+}
+
+pub fn trim_test_name(name: &str) -> String {
+    name.replace("test_", "")
 }
