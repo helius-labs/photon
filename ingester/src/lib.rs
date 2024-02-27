@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use error::IngesterError;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
+use parser::parse_transaction;
 use sea_orm::DatabaseConnection;
 use solana_sdk::clock::Slot;
 use solana_sdk::clock::UnixTimestamp;
@@ -10,6 +12,7 @@ use solana_sdk::transaction::VersionedTransaction;
 use solana_transaction_status::UiTransactionStatusMeta;
 use solana_transaction_status::VersionedTransactionWithStatusMeta;
 use std::pin::Pin;
+pub mod error;
 pub mod parser;
 pub mod persist;
 
@@ -30,7 +33,9 @@ pub struct VersionedConfirmedTransactionWithUiStatusMeta {
 pub async fn index_transaction(
     db: &DatabaseConnection,
     txn: VersionedConfirmedTransactionWithUiStatusMeta,
-) {
+) -> Result<(), IngesterError> {
+    let event_bundle = parse_transaction(txn)?;
+    persist::persist_bundle(db, event_bundle).await
 }
 
 // TODO: API here is work in progress. Subject to removal.

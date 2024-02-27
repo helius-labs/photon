@@ -1,4 +1,7 @@
-use crate::parser::bundle::{ChangelogEvent, EventBundle, PublicStateTransitionBundle, UTXOEvent};
+use crate::{
+    error,
+    parser::bundle::{ChangelogEvent, EventBundle, PublicStateTransitionBundle, UTXOEvent},
+};
 use dao::generated::{state_trees, utxos};
 use log::{debug, warn};
 use sea_orm::{
@@ -7,13 +10,12 @@ use sea_orm::{
 };
 use solana_sdk::signature::Signature;
 
-use error::PersistError;
-pub mod error;
+use error::IngesterError;
 
 pub async fn persist_bundle(
     conn: &DatabaseConnection,
     event: EventBundle,
-) -> Result<(), PersistError> {
+) -> Result<(), IngesterError> {
     match event {
         EventBundle::PublicStateTransition(e) => {
             debug!("Persisting PublicStateTransitionBundle: {:?}", e);
@@ -21,7 +23,7 @@ pub async fn persist_bundle(
         }
         EventBundle::PublicNullifier(e) => {
             debug!("Persisting PublicNullifierBundle: {:?}", e);
-            Err(PersistError::EventNotImplemented {
+            Err(IngesterError::EventNotImplemented {
                 event_type: "PublicNullifierBundle".to_string(),
             })
         }
@@ -31,7 +33,7 @@ pub async fn persist_bundle(
 async fn persist_state_transition(
     conn: &DatabaseConnection,
     bundle: PublicStateTransitionBundle,
-) -> Result<(), PersistError> {
+) -> Result<(), IngesterError> {
     let PublicStateTransitionBundle {
         in_utxos,
         out_utxos,
@@ -41,7 +43,7 @@ async fn persist_state_transition(
     } = bundle;
 
     if out_utxos.len() != changelogs.len() {
-        return Err(PersistError::MalformedEvent {
+        return Err(IngesterError::MalformedEvent {
             msg: format!(
                 "Number of changelogs did not match the number of output UTXOs (txn: {})",
                 transaction,
@@ -68,7 +70,7 @@ async fn spend_input_utxo(
     in_utxo: &UTXOEvent,
     slot_updated: i64,
     transaction: Signature,
-) -> Result<(), PersistError> {
+) -> Result<(), IngesterError> {
     let UTXOEvent { hash, seq, .. } = in_utxo;
     let model = utxos::ActiveModel {
         data: Set(vec![]),
@@ -126,7 +128,7 @@ async fn append_output_utxo(
     txn: &DatabaseTransaction,
     out_utxo: &UTXOEvent,
     slot_updated: i64,
-) -> Result<(), PersistError> {
+) -> Result<(), IngesterError> {
     let model = utxos::ActiveModel {
         hash: Set(out_utxo.hash.to_vec()),
         data: Set(out_utxo.data.clone()),
@@ -159,7 +161,7 @@ async fn persist_changelog_event(
     txn: &DatabaseTransaction,
     event: &ChangelogEvent,
     slot_updated: i64,
-) -> Result<(), PersistError> {
+) -> Result<(), IngesterError> {
     let ChangelogEvent { path, tree, seq } = event;
     let depth = path.len() - 1;
     let items = path

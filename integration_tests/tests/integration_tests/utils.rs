@@ -43,11 +43,11 @@ use tokio::time::sleep;
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
 fn setup_logging() {
-    let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
-    tracing_subscriber::fmt()
-        .with_test_writer()
-        .with_env_filter(env_filter)
-        .init();
+    // let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
+    // tracing_subscriber::fmt()
+    //     .with_test_writer()
+    //     .with_env_filter(env_filter)
+    //     .init();
 }
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
@@ -106,7 +106,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     let rpc_url = match opts.network {
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
-        Network::Localnet => std::env::var("LOCALNET_RPC_URL").unwrap(),
+        Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
     let client = RpcClient::new(rpc_url.to_string());
 
@@ -196,7 +196,6 @@ async fn cached_fetch_transaction(
     sig: Signature,
 ) -> VersionedConfirmedTransactionWithUiStatusMeta {
     let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
-
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
@@ -225,6 +224,12 @@ pub async fn index_transaction(setup: &TestSetup, txn: &str) {
     let sig = Signature::from_str(txn).unwrap();
     let txn = cached_fetch_transaction(setup, sig).await;
     ingester::index_transaction(&setup.db_conn, txn).await
+}
+
+pub async fn index_transactions(setup: &TestSetup, txns: &[&str]) {
+    for txn in txns {
+        index_transaction(setup, txn).await;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
