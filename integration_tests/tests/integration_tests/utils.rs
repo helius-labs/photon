@@ -223,7 +223,9 @@ async fn cached_fetch_transaction(
 pub async fn index_transaction(setup: &TestSetup, txn: &str) {
     let sig = Signature::from_str(txn).unwrap();
     let txn = cached_fetch_transaction(setup, sig).await;
-    ingester::index_transaction(&setup.db_conn, txn).await
+    ingester::index_transaction(&setup.db_conn, txn)
+        .await
+        .unwrap()
 }
 
 pub async fn index_transactions(setup: &TestSetup, txns: &[&str]) {

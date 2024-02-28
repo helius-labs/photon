@@ -9,7 +9,7 @@ pub enum IngesterError {
     #[error("Database error: {0}")]
     DatabaseError(String),
     #[error("Ingestion error: {0}")]
-    CustomError(String),
+    ParserError(String),
 }
 
 impl From<sea_orm::error::DbErr> for IngesterError {

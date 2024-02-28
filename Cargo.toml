@@ -10,6 +10,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
+account-compression = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "jorrit/feat-public"}
 anyhow = "1.0.79"
 api = {path = "api"}
 async-trait = "0.1.53"
@@ -28,11 +29,13 @@ jsonrpsee = {version = "0.16.2", features = ["server", "macros"]}
 jsonrpsee-core = {version = "0.16.2", features = ["server"]}
 lazy_static = "1.4.0"
 light-poseidon = "0.2.0"
+light-verifier-sdk = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "jorrit/feat-public"}
 log = "0.4.17"
 migration = {path = "migration"}
 once_cell = "1.19.0"
 open-rpc-derive = {version = "0.0.4"}
 open-rpc-schema = {version = "0.0.4"}
+psp-compressed-token = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "jorrit/feat-public"}
 schemars = {version = "0.8.6", features = ["chrono"]}
 schemars_derive = "0.8.6"
 sea-orm = {version = "0.10.6", features = [
@@ -45,9 +48,10 @@ sea-orm = {version = "0.10.6", features = [
 serde = "1.0.140"
 serde_json = "1.0.82"
 serial_test = "2.0.0"
-solana-client = "1.17.16"
-solana-sdk = "=1.17.18"
-solana-transaction-status = "1.17.16"
+# Downgraded to a lower version in order to satisfy Light constraints.
+solana-client = ">=1.16, <1.17"
+solana-sdk = ">=1.16, <1.17"
+solana-transaction-status = ">=1.16, <1.78"
 sqlx = {version = "0.6.2", features = [
   "macros",
   "runtime-tokio-rustls",

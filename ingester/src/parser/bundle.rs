@@ -1,11 +1,12 @@
 use std::fmt::{Display, Formatter};
 
+use light_verifier_sdk::public_transaction::PublicTransactionEvent;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-#[derive(Debug, Eq, PartialEq)]
 pub enum EventBundle {
     PublicStateTransition(PublicStateTransitionBundle),
     PublicNullifier(PublicNullifierBundle),
+    LegacyPublicStateTransaction(PublicTransactionEvent),
 }
 
 impl Display for EventBundle {
@@ -16,6 +17,9 @@ impl Display for EventBundle {
             }
             EventBundle::PublicNullifier(_) => {
                 write!(f, "PublicNullifier")
+            }
+            EventBundle::LegacyPublicStateTransaction(_) => {
+                write!(f, "LegacyPublicStateTransaction")
             }
         }
     }

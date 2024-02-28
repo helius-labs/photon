@@ -27,6 +27,9 @@ pub async fn persist_bundle(
                 event_type: "PublicNullifierBundle".to_string(),
             })
         }
+        _ => {
+            panic!("Not implemented")
+        }
     }
 }
 

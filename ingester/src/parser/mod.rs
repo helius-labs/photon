@@ -1,17 +1,16 @@
 use log::{debug, info};
-use solana_sdk::{signature::Signature, transaction::VersionedTransaction};
+use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction};
 
 use crate::{
     error::IngesterError, VersionedConfirmedTransactionWithUiStatusMeta,
     VersionedTransactionWithUiStatusMeta,
 };
 
-use self::{
-    bundle::{EventBundle, PublicStateTransitionBundle},
-    error::ParserError,
-};
+use self::bundle::{EventBundle, PublicStateTransitionBundle};
 
 pub mod bundle;
+
+const MERKLE_TREE_PROGRAM_ID: Pubkey = pubkey!("MERKLE_TREE_PROGRAM_ID");
 
 pub fn parse_transaction(
     tx: VersionedConfirmedTransactionWithUiStatusMeta,
@@ -34,24 +33,5 @@ pub fn parse_transaction(
 
     let atl_keys = msg.address_table_lookups();
     let account_keys = msg.static_account_keys();
-
-    let mut not_impl = 0;
-    let ixlen = meta.inner_instructions.len();
-    debug!("Instructions: {}", ixlen);
-    let contains = meta
-        .inner_instructions
-        .iter()
-        .filter(|(ib, _inner)| ib.0 .0.as_ref() == mpl_bubblegum::ID.as_ref());
-    debug!("Instructions bgum: {}", contains.count());
-    for (outer_ix, inner_ix) in instructions {
-        let (program, instruction) = outer_ix;
-        let ix_accounts = instruction.accounts().unwrap().iter().collect::<Vec<_>>();
-        let ix_account_len = ix_accounts.len();
-        let max = ix_accounts.iter().max().copied().unwrap_or(0) as usize;
-        if keys.len() < max {
-            return Err(IngesterError::DeserializationError(
-                "Missing Accounts in Serialized Ixn/Txn".to_string(),
-            ));
-        }
-    }
+    panic!("Not implemented");
 }
