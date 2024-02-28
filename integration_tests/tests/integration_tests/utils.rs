@@ -7,17 +7,17 @@ use std::{
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::parser::bundle::Hash;
+use ingester::{
+    parser::bundle::Hash, VersionedConfirmedTransactionWithUiStatusMeta,
+    VersionedTransactionWithUiStatusMeta,
+};
 use log::{error, info};
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
-use plerkle_serialization::root_as_transaction_info;
-use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     Statement,
 };
-
 use serde::Serialize;
 use solana_client::{
     client_error::{reqwest::Version, ClientError},
@@ -191,53 +191,39 @@ pub async fn fetch_transaction(
     txn
 }
 
-pub async fn fetch_and_serialize_transaction(
-    client: &RpcClient,
+async fn cached_fetch_transaction(
+    setup: &TestSetup,
     sig: Signature,
-) -> anyhow::Result<Option<Vec<u8>>> {
-    let max_retries = 5;
-    let tx: EncodedConfirmedTransactionWithStatusMeta = fetch_transaction(&client, sig).await;
-
-    // Ignore if tx failed or meta is missed
-    let meta = tx.transaction.meta.as_ref();
-    if meta.map(|meta| meta.status.is_err()).unwrap_or(true) {
-        info!("Ignoring failed transaction: {}", sig);
-        return Ok(None);
-    }
-    let fbb = flatbuffers::FlatBufferBuilder::new();
-    let fbb = seralize_encoded_transaction_with_status(fbb, tx)?;
-    let serialized = fbb.finished_data();
-
-    Ok(Some(serialized.to_vec()))
-}
-
-async fn cached_fetch_transaction(setup: &TestSetup, sig: Signature) -> Vec<u8> {
+) -> VersionedConfirmedTransactionWithUiStatusMeta {
     let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
-
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
     let file_path = dir.join(sig.to_string());
 
-    if file_path.exists() {
-        std::fs::read(file_path).unwrap()
+    let txn = if file_path.exists() {
+        let txn_string = std::fs::read(file_path).unwrap();
+        serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let txn_bytes = fetch_and_serialize_transaction(&setup.client, sig)
-            .await
-            .unwrap()
-            .unwrap();
-        std::fs::write(file_path, &txn_bytes).unwrap();
-        txn_bytes
+        let txn = fetch_transaction(&setup.client, sig).await;
+        std::fs::write(file_path, serde_json::to_string(&txn).unwrap()).unwrap();
+        txn
+    };
+
+    VersionedConfirmedTransactionWithUiStatusMeta {
+        tx_with_meta: VersionedTransactionWithUiStatusMeta {
+            transaction: txn.transaction.transaction.decode().unwrap(),
+            meta: txn.transaction.meta.unwrap(),
+        },
+        block_time: txn.block_time,
+        slot: txn.slot,
     }
 }
 
 pub async fn index_transaction(setup: &TestSetup, txn: &str) {
     let sig = Signature::from_str(txn).unwrap();
-    let txn_bytes = cached_fetch_transaction(setup, sig).await;
-    let txn = root_as_transaction_info(&txn_bytes).unwrap();
-    ingester::index_transaction(&setup.db_conn, txn)
-        .await
-        .unwrap()
+    let txn = cached_fetch_transaction(setup, sig).await;
+    ingester::index_transaction(&setup.db_conn, txn).await
 }
 
 pub async fn index_transactions(setup: &TestSetup, txns: &[&str]) {

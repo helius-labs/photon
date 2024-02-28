@@ -8,8 +8,8 @@ pub enum IngesterError {
     MalformedEvent { msg: String },
     #[error("Database error: {0}")]
     DatabaseError(String),
-    #[error("Parsing error: {0}")]
-    ParsingError(String),
+    #[error("Ingestion error: {0}")]
+    CustomError(String),
 }
 
 impl From<sea_orm::error::DbErr> for IngesterError {

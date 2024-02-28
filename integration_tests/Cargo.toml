@@ -13,7 +13,6 @@ base64 = {workspace = true}
 borsh = {workspace = true}
 bs58 = {workspace = true}
 dao = {workspace = true}
-flatbuffers = {workspace = true}
 function_name = {workspace = true}
 ingester = {workspace = true}
 itertools = {workspace = true}
@@ -22,7 +21,6 @@ light-poseidon = {workspace = true}
 log = {workspace = true}
 migration = {workspace = true}
 once_cell = {workspace = true}
-plerkle_serialization = {workspace = true}
 sea-orm = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}

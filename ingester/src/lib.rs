@@ -4,7 +4,6 @@ use error::IngesterError;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
 use parser::parse_transaction;
-use plerkle_serialization::TransactionInfo;
 use sea_orm::DatabaseConnection;
 use solana_sdk::clock::Slot;
 use solana_sdk::clock::UnixTimestamp;
@@ -17,18 +16,32 @@ pub mod error;
 pub mod parser;
 pub mod persist;
 
-pub async fn index_transaction<'a>(
+#[derive(Clone, Debug, PartialEq)]
+pub struct VersionedTransactionWithUiStatusMeta {
+    pub transaction: VersionedTransaction,
+    pub meta: UiTransactionStatusMeta,
+}
+
+// We create this struct instead of using VersionedConfirmedTransactionWithStatusMeta because
+// event though UiStatusMeta is pracitcally identical to StatusMeta, it has better deserialization support.
+pub struct VersionedConfirmedTransactionWithUiStatusMeta {
+    pub slot: Slot,
+    pub tx_with_meta: VersionedTransactionWithUiStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+pub async fn index_transaction(
     db: &DatabaseConnection,
-    txn: TransactionInfo<'a>,
+    txn: VersionedConfirmedTransactionWithUiStatusMeta,
 ) -> Result<(), IngesterError> {
     let event_bundle = parse_transaction(txn)?;
     persist::persist_bundle(db, event_bundle).await
 }
 
 // TODO: API here is work in progress. Subject to removal.
-pub async fn index_transaction_stream<'a>(
+pub async fn index_transaction_stream(
     db: Arc<DatabaseConnection>,
-    stream: Pin<Box<dyn Stream<Item = TransactionInfo<'a>> + Send>>,
+    stream: Pin<Box<dyn Stream<Item = VersionedConfirmedTransactionWithUiStatusMeta> + Send>>,
     max_concurrency: usize,
 ) {
     // Use `for_each_concurrent` to control the level of concurrency.
