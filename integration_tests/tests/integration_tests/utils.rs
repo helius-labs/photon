@@ -3,47 +3,36 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Mutex,
-    time::Duration,
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::{
-    parser::bundle::Hash, VersionedConfirmedTransactionWithUiStatusMeta,
-    VersionedTransactionWithUiStatusMeta,
-};
-use log::{error, info};
+use ingester::{parser::bundle::Hash, transaction_info::TransactionInfo};
+
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     Statement,
 };
-use serde::Serialize;
+
 use solana_client::{
-    client_error::{reqwest::Version, ClientError},
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::RpcTransactionConfig,
-    rpc_request::RpcRequest,
+    nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
     signature::Signature,
 };
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, TransactionStatusMeta, UiTransactionEncoding,
-    UiTransactionStatusMeta, VersionedConfirmedTransactionWithStatusMeta,
-    VersionedTransactionWithStatusMeta,
-};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
-use tokio::time::sleep;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
 fn setup_logging() {
-    let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
+    let env_filter =
+        env::var("RUST_LOG").unwrap_or("info,sqlx=error,sea_orm_migration=error".to_string());
     tracing_subscriber::fmt()
         .with_test_writer()
         .with_env_filter(env_filter)
@@ -76,6 +65,7 @@ pub struct TestSetup {
 pub enum Network {
     #[default]
     Mainnet,
+    #[allow(dead_code)]
     Devnet,
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
@@ -106,7 +96,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     let rpc_url = match opts.network {
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
-        Network::Localnet => std::env::var("LOCALNET_RPC_URL").unwrap(),
+        Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
     let client = RpcClient::new(rpc_url.to_string());
 
@@ -191,46 +181,23 @@ pub async fn fetch_transaction(
     txn
 }
 
-async fn cached_fetch_transaction(
-    setup: &TestSetup,
-    sig: Signature,
-) -> VersionedConfirmedTransactionWithUiStatusMeta {
+pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> TransactionInfo {
+    let sig = Signature::from_str(tx).unwrap();
     let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
-
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
     let file_path = dir.join(sig.to_string());
 
-    let txn = if file_path.exists() {
+    let tx: EncodedConfirmedTransactionWithStatusMeta = if file_path.exists() {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let txn = fetch_transaction(&setup.client, sig).await;
-        std::fs::write(file_path, serde_json::to_string(&txn).unwrap()).unwrap();
-        txn
+        let tx = fetch_transaction(&setup.client, sig).await;
+        std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
+        tx
     };
-
-    VersionedConfirmedTransactionWithUiStatusMeta {
-        tx_with_meta: VersionedTransactionWithUiStatusMeta {
-            transaction: txn.transaction.transaction.decode().unwrap(),
-            meta: txn.transaction.meta.unwrap(),
-        },
-        block_time: txn.block_time,
-        slot: txn.slot,
-    }
-}
-
-pub async fn index_transaction(setup: &TestSetup, txn: &str) {
-    let sig = Signature::from_str(txn).unwrap();
-    let txn = cached_fetch_transaction(setup, sig).await;
-    ingester::index_transaction(&setup.db_conn, txn).await
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Order {
-    Forward,
-    AllPermutations,
+    tx.try_into().unwrap()
 }
 
 pub fn trim_test_name(name: &str) -> String {
