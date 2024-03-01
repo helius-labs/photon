@@ -2865,6 +2865,7 @@ version = "0.1.0"
 dependencies = [
  "account-compression",
  "anyhow",
+ "async-stream",
  "borsh 0.10.3",
  "bs58 0.4.0",
  "dao",
@@ -2876,6 +2877,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "solana-client",
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
