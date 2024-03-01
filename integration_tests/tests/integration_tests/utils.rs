@@ -3,21 +3,19 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Mutex,
-    time::Duration,
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
 use ingester::parser::bundle::Hash;
-use log::{error, info};
+
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     Statement,
 };
-use serde::Serialize;
+
 use solana_client::{
-    client_error::{reqwest::Version, ClientError},
     nonblocking::rpc_client::RpcClient,
     rpc_config::RpcTransactionConfig,
     rpc_request::RpcRequest,
@@ -27,15 +25,13 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, TransactionStatusMeta, UiTransactionEncoding,
-    UiTransactionStatusMeta, VersionedConfirmedTransactionWithStatusMeta,
-    VersionedTransactionWithStatusMeta,
+    EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
 };
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
-use tokio::time::sleep;
+
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
