@@ -12,6 +12,7 @@ pub mod error;
 pub mod parser;
 pub mod persist;
 pub mod transaction_info;
+pub mod fetchers;
 
 pub async fn index_transaction(
     db: &DatabaseConnection,

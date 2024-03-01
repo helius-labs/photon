@@ -2876,6 +2876,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "solana-client",
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
