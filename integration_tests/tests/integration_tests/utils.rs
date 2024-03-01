@@ -7,10 +7,7 @@ use std::{
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::{
-    parser::bundle::Hash, VersionedConfirmedTransactionWithUiStatusMeta,
-    VersionedTransactionWithUiStatusMeta,
-};
+use ingester::parser::bundle::Hash;
 use log::{error, info};
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
@@ -43,11 +40,11 @@ use tokio::time::sleep;
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
 fn setup_logging() {
-    // let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
-    // tracing_subscriber::fmt()
-    //     .with_test_writer()
-    //     .with_env_filter(env_filter)
-    //     .init();
+    let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
+    tracing_subscriber::fmt()
+        .with_test_writer()
+        .with_env_filter(env_filter)
+        .init();
 }
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
@@ -194,36 +191,27 @@ pub async fn fetch_transaction(
 async fn cached_fetch_transaction(
     setup: &TestSetup,
     sig: Signature,
-) -> VersionedConfirmedTransactionWithUiStatusMeta {
+) -> EncodedConfirmedTransactionWithStatusMeta {
     let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
     let file_path = dir.join(sig.to_string());
 
-    let txn = if file_path.exists() {
+    if file_path.exists() {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
         let txn = fetch_transaction(&setup.client, sig).await;
         std::fs::write(file_path, serde_json::to_string(&txn).unwrap()).unwrap();
         txn
-    };
-
-    VersionedConfirmedTransactionWithUiStatusMeta {
-        tx_with_meta: VersionedTransactionWithUiStatusMeta {
-            transaction: txn.transaction.transaction.decode().unwrap(),
-            meta: txn.transaction.meta.unwrap(),
-        },
-        block_time: txn.block_time,
-        slot: txn.slot,
     }
 }
 
 pub async fn index_transaction(setup: &TestSetup, txn: &str) {
     let sig = Signature::from_str(txn).unwrap();
     let txn = cached_fetch_transaction(setup, sig).await;
-    ingester::index_transaction(&setup.db_conn, txn)
+    ingester::index_transaction(&setup.db_conn, txn.try_into().unwrap())
         .await
         .unwrap()
 }

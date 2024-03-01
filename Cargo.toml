@@ -50,6 +50,7 @@ serde_json = "1.0.82"
 serial_test = "2.0.0"
 # Downgraded to a lower version in order to satisfy Light constraints.
 solana-client = ">=1.16, <1.17"
+solana-program = ">=1.16, <1.78"
 solana-sdk = ">=1.16, <1.17"
 solana-transaction-status = ">=1.16, <1.78"
 sqlx = {version = "0.6.2", features = [

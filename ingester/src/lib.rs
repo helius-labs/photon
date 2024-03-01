@@ -3,45 +3,36 @@ use std::sync::Arc;
 use error::IngesterError;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
+use futures::TryStreamExt;
 use parser::parse_transaction;
 use sea_orm::DatabaseConnection;
-use solana_sdk::clock::Slot;
-use solana_sdk::clock::UnixTimestamp;
-use solana_sdk::signature::Signature;
-use solana_sdk::transaction::VersionedTransaction;
-use solana_transaction_status::UiTransactionStatusMeta;
-use solana_transaction_status::VersionedTransactionWithStatusMeta;
 use std::pin::Pin;
+use transaction_info::TransactionInfo;
 pub mod error;
 pub mod parser;
 pub mod persist;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct VersionedTransactionWithUiStatusMeta {
-    pub transaction: VersionedTransaction,
-    pub meta: UiTransactionStatusMeta,
-}
-
-// We create this struct instead of using VersionedConfirmedTransactionWithStatusMeta because
-// event though UiStatusMeta is pracitcally identical to StatusMeta, it has better deserialization support.
-pub struct VersionedConfirmedTransactionWithUiStatusMeta {
-    pub slot: Slot,
-    pub tx_with_meta: VersionedTransactionWithUiStatusMeta,
-    pub block_time: Option<UnixTimestamp>,
-}
+pub mod transaction_info;
 
 pub async fn index_transaction(
     db: &DatabaseConnection,
-    txn: VersionedConfirmedTransactionWithUiStatusMeta,
+    txn: TransactionInfo,
 ) -> Result<(), IngesterError> {
-    let event_bundle = parse_transaction(txn)?;
-    persist::persist_bundle(db, event_bundle).await
+    let event_bundles = parse_transaction(txn)?;
+    let stream = futures::stream::iter(event_bundles);
+
+    // We use a default parameter to avoid parameter input overload. High concurrency is likely
+    // ineffective due to database locking since the events in a transaction likely affect the same tree.
+    let max_concurrent_calls = 5;
+    stream
+        .map(|bundle| async { persist::persist_bundle(db, bundle).await })
+        .buffer_unordered(max_concurrent_calls)
+        .try_collect::<()>()
+        .await
 }
 
-// TODO: API here is work in progress. Subject to removal.
 pub async fn index_transaction_stream(
     db: Arc<DatabaseConnection>,
-    stream: Pin<Box<dyn Stream<Item = VersionedConfirmedTransactionWithUiStatusMeta> + Send>>,
+    stream: Pin<Box<dyn Stream<Item = TransactionInfo>>>,
     max_concurrency: usize,
 ) {
     // Use `for_each_concurrent` to control the level of concurrency.
@@ -49,7 +40,9 @@ pub async fn index_transaction_stream(
         .for_each_concurrent(max_concurrency, |sig| {
             let db_clone = db.clone();
             async move {
-                index_transaction(&db_clone, sig).await;
+                if let Err(e) = index_transaction(&db_clone, sig).await {
+                    log::error!("Failed to index transaction: {}", e);
+                }
             }
         })
         .await;
