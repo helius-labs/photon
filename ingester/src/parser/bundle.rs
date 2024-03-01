@@ -114,3 +114,35 @@ impl Default for Hash {
         Hash([0; 32])
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+
+// Copied from the light code. Can't import it right now because rely on two branches of the Light code.
+#[derive(Debug, PartialEq, Eq)]
+pub struct TokenTlvData {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: Option<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_some, this is a native token, and the value logs the rent-exempt
+    /// reserve. An Account is required to be rent-exempt, so the value is
+    /// used by the Processor to ensure that wrapped SOL accounts do not
+    /// drop below this threshold.
+    pub is_native: Option<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: Option<Pubkey>,
+}
