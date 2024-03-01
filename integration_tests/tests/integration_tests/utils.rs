@@ -16,22 +16,17 @@ use sea_orm::{
 };
 
 use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::RpcTransactionConfig,
-    rpc_request::RpcRequest,
+    nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
     signature::Signature,
 };
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
-};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
-
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
@@ -69,6 +64,7 @@ pub struct TestSetup {
 pub enum Network {
     #[default]
     Mainnet,
+    #[allow(dead_code)]
     Devnet,
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
@@ -216,12 +212,6 @@ pub async fn index_transactions(setup: &TestSetup, txns: &[&str]) {
     for txn in txns {
         index_transaction(setup, txn).await;
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Order {
-    Forward,
-    AllPermutations,
 }
 
 pub fn trim_test_name(name: &str) -> String {

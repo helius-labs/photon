@@ -1,14 +1,11 @@
-use account_compression::instructions;
-use futures::stream::futures_unordered::Iter;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
-    instruction::CompiledInstruction,
     pubkey::Pubkey,
-    transaction::{self, VersionedTransaction},
+    transaction::VersionedTransaction,
 };
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransactionWithStatusMeta, UiInnerInstructions, UiInstruction,
+    EncodedTransactionWithStatusMeta, UiInstruction,
 };
 
 use std::convert::TryFrom;
@@ -72,7 +69,6 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
                         UiInstruction::Compiled(ui_compiled_instruction) => {
                             let program_id =
                                 accounts[ui_compiled_instruction.program_id_index as usize];
-                            let data = ui_compiled_instruction.data.clone();
                             let data = bs58::decode(&ui_compiled_instruction.data)
                                 .into_vec()
                                 .map_err(|e| IngesterError::ParserError(e.to_string()))?;
