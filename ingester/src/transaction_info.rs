@@ -7,6 +7,7 @@ use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
     EncodedTransactionWithStatusMeta, UiInstruction,
 };
+use std::fmt;
 
 use std::convert::TryFrom;
 
@@ -15,6 +16,7 @@ use crate::error::IngesterError;
 pub struct Instruction {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
+    pub accounts: Vec<Pubkey>,
 }
 
 pub struct InstructionGroup {
@@ -26,6 +28,43 @@ pub struct TransactionInfo {
     pub slot: Slot,
     pub block_time: Option<UnixTimestamp>,
     pub instruction_groups: Vec<InstructionGroup>,
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Instruction {{ program_id: {}}}", self.program_id,)
+    }
+}
+
+impl fmt::Display for InstructionGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "InstructionGroup {{ outer_instruction: {}, inner_instructions: [{}] }}",
+            self.outer_instruction,
+            self.inner_instructions
+                .iter()
+                .map(Instruction::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+}
+
+impl fmt::Display for TransactionInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TransactionInfo {{ slot: {}, block_time: {:?}, instruction_groups: [{}] }}",
+            self.slot,
+            self.block_time,
+            self.instruction_groups
+                .iter()
+                .map(InstructionGroup::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
@@ -54,7 +93,11 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
                 let program_id = accounts[ix.program_id_index as usize];
                 let data = ix.data.clone();
                 InstructionGroup {
-                    outer_instruction: Instruction { program_id, data },
+                    outer_instruction: Instruction {
+                        program_id,
+                        data,
+                        accounts: accounts.into(),
+                    },
                     inner_instructions: Vec::new(),
                 }
             })
@@ -72,10 +115,16 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
                             let data = bs58::decode(&ui_compiled_instruction.data)
                                 .into_vec()
                                 .map_err(|e| IngesterError::ParserError(e.to_string()))?;
+                            let accounts = ui_compiled_instruction
+                                .accounts
+                                .iter()
+                                .map(|account_index| accounts[*account_index as usize])
+                                .collect();
                             instruction_groups[index as usize].inner_instructions.push(
                                 Instruction {
                                     program_id,
                                     data: data.into(),
+                                    accounts,
                                 },
                             );
                         }

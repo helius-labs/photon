@@ -6,7 +6,7 @@ use std::{
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::parser::bundle::Hash;
+use ingester::{parser::bundle::Hash, transaction_info::TransactionInfo};
 
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
@@ -31,7 +31,8 @@ use sqlx::{
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
 fn setup_logging() {
-    let env_filter = env::var("RUST_LOG").unwrap_or("debug,sqlx::off".to_string());
+    let env_filter =
+        env::var("RUST_LOG").unwrap_or("info,sqlx=error,sea_orm_migration=error".to_string());
     tracing_subscriber::fmt()
         .with_test_writer()
         .with_env_filter(env_filter)
@@ -180,38 +181,23 @@ pub async fn fetch_transaction(
     txn
 }
 
-async fn cached_fetch_transaction(
-    setup: &TestSetup,
-    sig: Signature,
-) -> EncodedConfirmedTransactionWithStatusMeta {
+pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> TransactionInfo {
+    let sig = Signature::from_str(tx).unwrap();
     let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
     let file_path = dir.join(sig.to_string());
 
-    if file_path.exists() {
+    let tx: EncodedConfirmedTransactionWithStatusMeta = if file_path.exists() {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let txn = fetch_transaction(&setup.client, sig).await;
-        std::fs::write(file_path, serde_json::to_string(&txn).unwrap()).unwrap();
-        txn
-    }
-}
-
-pub async fn index_transaction(setup: &TestSetup, txn: &str) {
-    let sig = Signature::from_str(txn).unwrap();
-    let txn = cached_fetch_transaction(setup, sig).await;
-    ingester::index_transaction(&setup.db_conn, txn.try_into().unwrap())
-        .await
-        .unwrap()
-}
-
-pub async fn index_transactions(setup: &TestSetup, txns: &[&str]) {
-    for txn in txns {
-        index_transaction(setup, txn).await;
-    }
+        let tx = fetch_transaction(&setup.client, sig).await;
+        std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
+        tx
+    };
+    tx.try_into().unwrap()
 }
 
 pub fn trim_test_name(name: &str) -> String {

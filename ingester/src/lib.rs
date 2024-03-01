@@ -35,12 +35,11 @@ pub async fn index_transaction_stream(
     stream: Pin<Box<dyn Stream<Item = TransactionInfo>>>,
     max_concurrency: usize,
 ) {
-    // Use `for_each_concurrent` to control the level of concurrency.
     stream
         .for_each_concurrent(max_concurrency, |sig| {
             let db_clone = db.clone();
             async move {
-                if let Err(e) = index_transaction(&db_clone, sig).await {
+                if let Err(e) = index_transaction(db_clone.as_ref(), sig).await {
                     log::error!("Failed to index transaction: {}", e);
                 }
             }

@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+use account_compression::Changelogs;
 use light_verifier_sdk::public_transaction::PublicTransactionEvent;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
@@ -7,6 +8,7 @@ pub enum EventBundle {
     PublicStateTransition(PublicStateTransitionBundle),
     PublicNullifier(PublicNullifierBundle),
     LegacyPublicStateTransaction(PublicTransactionEvent),
+    LegacyChangeLogEvent(Changelogs),
 }
 
 impl Display for EventBundle {
@@ -20,6 +22,9 @@ impl Display for EventBundle {
             }
             EventBundle::LegacyPublicStateTransaction(_) => {
                 write!(f, "LegacyPublicStateTransaction")
+            }
+            EventBundle::LegacyChangeLogEvent(_) => {
+                write!(f, "LegacyChangeLogEvent")
             }
         }
     }
