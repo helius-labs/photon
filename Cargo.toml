@@ -13,7 +13,6 @@ resolver = "2"
 account-compression = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "jorrit/feat-public"}
 anyhow = "1.0.79"
 api = {path = "api"}
-async-stream = "0.3.5"
 async-trait = "0.1.53"
 base64 = "0.21.0"
 borsh = "0.10.3"
