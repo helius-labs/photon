@@ -217,7 +217,7 @@ fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
 
 // Work in progress. I am using the latest TokenTlvData, but haven't parsed in
 // the latest PublicTransactionState bundles.
-async fn persist_token_data(
+pub async fn persist_token_data(
     conn: &DatabaseConnection,
     token_tlv_data: TokenTlvData,
 ) -> Result<(), IngesterError> {
