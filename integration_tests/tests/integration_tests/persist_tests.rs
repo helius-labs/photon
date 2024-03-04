@@ -6,6 +6,7 @@ use api::{
         get_compressed_account_proof::{
             GetCompressedAccountProofRequest, GetCompressedAccountProofResponse,
         },
+        get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
     },
 };
 use dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -139,18 +140,110 @@ async fn test_persist_state_transitions() {
 async fn test_persist_token_data() {
     let name = trim_test_name(function_name!());
     let setup = setup(name).await;
+    let mint1 = Pubkey::new_unique();
+    let mint2 = Pubkey::new_unique();
+    let owner1 = Pubkey::new_unique();
+    let owner2 = Pubkey::new_unique();
 
-    let token_tlv_data = TokenTlvData {
-        mint: Pubkey::new_unique(),
-        owner: Pubkey::new_unique(),
-        amount: 100,
+    let token_tlv_data1: TokenTlvData = TokenTlvData {
+        mint: mint1.clone(),
+        owner: owner1.clone(),
+        amount: 1,
+        delegate: Some(Pubkey::new_unique()),
+        state: AccountState::Frozen,
+        is_native: Some(1),
+        delegated_amount: 0,
+        close_authority: Some(Pubkey::new_unique()),
+    };
+
+    let token_tlv_data2: TokenTlvData = TokenTlvData {
+        mint: mint2.clone(),
+        owner: owner1.clone(),
+        amount: 2,
+        delegate: Some(Pubkey::new_unique()),
+        state: AccountState::Initialized,
+        is_native: None,
+        delegated_amount: 1,
+        close_authority: None,
+    };
+
+    let token_tlv_data3: TokenTlvData = TokenTlvData {
+        mint: mint1.clone(),
+        owner: owner2.clone(),
+        amount: 3,
         delegate: Some(Pubkey::new_unique()),
         state: AccountState::Frozen,
         is_native: Some(1000),
         delegated_amount: 0,
         close_authority: Some(Pubkey::new_unique()),
     };
-    persist_token_data(&setup.db_conn, token_tlv_data)
+    for token_tlv_data in vec![
+        token_tlv_data1.clone(),
+        token_tlv_data2.clone(),
+        token_tlv_data3.clone(),
+    ] {
+        persist_token_data(&setup.db_conn, token_tlv_data.clone())
+            .await
+            .unwrap();
+    }
+
+    let res = setup
+        .api
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+            owner: SerializablePubkey::from(owner1.clone()),
+            ..Default::default()
+        })
         .await
         .unwrap();
+
+    assert_eq!(res.total, 2);
+
+    let res = setup
+        .api
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+            owner: SerializablePubkey::from(owner1.clone()),
+            mint: Some(SerializablePubkey::from(mint1.clone())),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.total, 1);
+    let res = res.items[0].clone();
+    assert_eq!(res.mint, mint1.into());
+    assert_eq!(res.owner, owner1.into());
+    assert_eq!(res.amount, token_tlv_data1.amount);
+    assert_eq!(
+        res.delegate,
+        token_tlv_data1.delegate.map(SerializablePubkey::from)
+    );
+    assert_eq!(res.is_native, true);
+    assert_eq!(
+        res.close_authority,
+        token_tlv_data1
+            .close_authority
+            .map(SerializablePubkey::from)
+    );
+
+    let res = setup
+        .api
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+            owner: SerializablePubkey::from(owner1.clone()),
+            mint: Some(SerializablePubkey::from(mint2.clone())),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.total, 1);
+    let res = res.items[0].clone();
+    assert_eq!(res.mint, mint2.into());
+    assert_eq!(res.owner, owner1.into());
+    assert_eq!(res.amount, token_tlv_data2.amount);
+    assert_eq!(
+        res.delegate,
+        token_tlv_data2.delegate.map(SerializablePubkey::from)
+    );
+    assert_eq!(res.is_native, false);
+    assert_eq!(res.close_authority, None);
 }

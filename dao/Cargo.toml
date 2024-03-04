@@ -10,5 +10,6 @@ bs58 = {workspace = true}
 schemars = {workspace = true}
 sea-orm = {workspace = true}
 serde = {workspace = true}
+serde_json = {workspace = true}
 solana-sdk = {workspace = true}
 thiserror = {workspace = true}

@@ -93,7 +93,7 @@ pub enum AccountState {
 }
 
 // Copied from the light code. Can't import it right now because rely on two branches of the Light code.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TokenTlvData {
     /// The mint associated with this account
     pub mint: Pubkey,

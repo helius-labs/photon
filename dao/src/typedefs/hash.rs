@@ -9,17 +9,29 @@ use schemars::schema::Schema;
 use serde::de::{self, Visitor};
 use serde::ser::Serializer;
 use serde::Deserializer;
+use solana_sdk::pubkey::Pubkey;
 use thiserror::Error;
 
-/// Maximum string length of a base58 encoded pubkey
+// Maximum length of a 32 byte base58 encoded hash
 const MAX_BASE58_LEN: usize = 44;
 
+/// `Hash` is a struct that represents a 32-byte hash.
+///
+/// This is similar to a Solana Public Key, which is also a 32-byte hash. However, while a Solana
+/// Public Key is specifically an ed25519 public key, a `Hash` is not necessarily an ed25519 hash.
+///
+/// Also a `Hash` is used to represent other types of hashes, such as UTXO hashes and Merkle
+/// tree node hashes. This is why `Hash` is a separate struct from the the Solana Public Key struct.
 #[derive(Default, Clone, PartialEq, Eq)]
-pub struct Hash(pub(crate) [u8; 32]);
+pub struct Hash([u8; 32]);
 
 impl Hash {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    pub fn to_base58(&self) -> String {
+        bs58::encode(self.0).into_string()
     }
 }
 
@@ -68,21 +80,19 @@ impl From<Vec<u8>> for Hash {
 
 impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: Reduce code duplication here
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        write!(f, "{}", self.to_base58())
     }
 }
 
 impl Into<String> for Hash {
     fn into(self) -> String {
-        bs58::encode(self.0).into_string()
+        self.to_base58()
     }
 }
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: Reduce code duplication here
-        write!(f, "Hash({})", bs58::encode(self.0).into_string())
+        write!(f, "Hash({})", self.to_base58())
     }
 }
 
@@ -124,4 +134,13 @@ impl Serialize for Hash {
         let base58_string = bs58::encode(self.0).into_string();
         serializer.serialize_str(&base58_string)
     }
+}
+
+#[test]
+fn test_serialization() {
+    // Hacky way to get 32 bytes
+    let hash = Hash(Pubkey::new_unique().to_bytes());
+    let serialized = serde_json::to_string(&hash).unwrap();
+    let deserialized: Hash = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(hash, deserialized);
 }

@@ -3,9 +3,9 @@ use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
-use dao::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::error::PhotonApiError;
 use dao::typedefs::hash::Hash;
+use dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -44,6 +44,7 @@ pub async fn get_compressed_account(
     }?;
 
     let result = utxos::Entity::find().filter(filter).one(conn).await?;
+
     if let Some(utxo) = result {
         let res = GetCompressedAccountResponse {
             hash: utxo.hash.into(),
@@ -56,6 +57,7 @@ pub async fn get_compressed_account(
             seq: utxo.seq,
             slot_updated: utxo.slot_updated,
         };
+
         Ok(Some(res))
     } else {
         Ok(None)

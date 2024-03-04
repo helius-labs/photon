@@ -3,8 +3,8 @@ use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
-use dao::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::error::PhotonApiError;
+use dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -16,6 +16,7 @@ pub struct GetCompressedTokenAccountsByOwnerRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAccount {
+    pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
     pub amount: u64,
     pub delegate: Option<SerializablePubkey>,
@@ -33,7 +34,7 @@ pub struct GetCompressedTokenAccountsByOwnerResponse {
 pub async fn get_compressed_account_token_accounts_by_owner(
     conn: &DatabaseConnection,
     request: GetCompressedTokenAccountsByOwnerRequest,
-) -> Result<Option<GetCompressedTokenAccountsByOwnerResponse>, PhotonApiError> {
+) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError> {
     let GetCompressedTokenAccountsByOwnerRequest { owner, mint } = request;
 
     let mut filter = token_ownership::Column::Owner.eq::<Vec<u8>>(owner.into());
@@ -50,6 +51,7 @@ pub async fn get_compressed_account_token_accounts_by_owner(
     let items = result
         .into_iter()
         .map(|ownership| TokenAccount {
+            owner: ownership.owner.into(),
             mint: ownership.mint.into(),
             amount: ownership.amount as u64,
             delegate: ownership.delegate.map(SerializablePubkey::from),
@@ -58,8 +60,5 @@ pub async fn get_compressed_account_token_accounts_by_owner(
         })
         .collect();
 
-    Ok(Some(GetCompressedTokenAccountsByOwnerResponse {
-        total,
-        items,
-    }))
+    Ok(GetCompressedTokenAccountsByOwnerResponse { total, items })
 }

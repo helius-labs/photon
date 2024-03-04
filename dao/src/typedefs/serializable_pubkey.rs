@@ -15,7 +15,7 @@ use solana_sdk::pubkey::Pubkey as SolanaPubkey;
 use std::convert::TryFrom;
 
 #[derive(Default, Clone, PartialEq, Eq)]
-pub struct SerializablePubkey(pub(crate) SolanaPubkey);
+pub struct SerializablePubkey(SolanaPubkey);
 
 impl TryFrom<&str> for SerializablePubkey {
     type Error = ParsePubkeyError;
@@ -41,7 +41,7 @@ impl From<Vec<u8>> for SerializablePubkey {
     fn from(bytes: Vec<u8>) -> Self {
         // Generally we don't want to use unwrap, but in this case we know the bytes are valid
         // because they are either coming from Solana or from our database.
-        SerializablePubkey::try_from(bytes).expect("Unable to deserialize pubkey")
+        SerializablePubkey(SolanaPubkey::try_from(bytes).expect("Unable to deserialize pubkey"))
     }
 }
 
@@ -95,4 +95,13 @@ impl Serialize for SerializablePubkey {
         let base58_string = bs58::encode(self.0).into_string();
         serializer.serialize_str(&base58_string)
     }
+}
+
+#[test]
+fn test_serialization() {
+    // Hacky way to get 32 bytes
+    let hash = SerializablePubkey(SolanaPubkey::new_unique());
+    let serialized = serde_json::to_string(&hash).unwrap();
+    let deserialized: SerializablePubkey = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(hash, deserialized);
 }

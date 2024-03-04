@@ -1841,6 +1841,7 @@ dependencies = [
  "schemars",
  "sea-orm",
  "serde",
+ "serde_json",
  "solana-sdk",
  "thiserror",
 ]
