@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+use dao::typedefs::hash::Hash;
 use light_merkle_tree_event::Changelogs;
 use psp_compressed_pda::event::PublicTransactionEvent;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
@@ -84,33 +85,34 @@ pub struct UTXOEvent {
     pub seq: i64,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy)]
-pub struct Hash([u8; 32]);
-
-impl Hash {
-    pub fn new(hash: [u8; 32]) -> Self {
-        Hash(hash)
-    }
-
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
 }
 
-impl std::fmt::Debug for Hash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Hash({})", bs58::encode(self.0).into_string())
-    }
-}
-
-impl std::fmt::Display for Hash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
-    }
-}
-
-impl Default for Hash {
-    fn default() -> Self {
-        Hash([0; 32])
-    }
+// Copied from the light code. Can't import it right now because rely on two branches of the Light code.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenTlvData {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: Option<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_some, this is a native token, and the value logs the rent-exempt
+    /// reserve. An Account is required to be rent-exempt, so the value is
+    /// used by the Processor to ensure that wrapped SOL accounts do not
+    /// drop below this threshold.
+    pub is_native: Option<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: Option<Pubkey>,
 }

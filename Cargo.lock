@@ -374,6 +374,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "solana-sdk",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1844,7 +1845,13 @@ dependencies = [
 name = "dao"
 version = "0.1.0"
 dependencies = [
+ "bs58 0.4.0",
+ "schemars",
  "sea-orm",
+ "serde",
+ "serde_json",
+ "solana-sdk",
+ "thiserror",
 ]
 
 [[package]]

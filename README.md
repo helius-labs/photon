@@ -35,7 +35,7 @@ cargo run -p migration -- up
 
 Run the following command to generate the DB models.
 ```
-sea-orm-cli generate entity -o lib/dao/src/generated
+sea-orm-cli generate entity -o dao/src/generated
 ```
 
 ## Integration Tests

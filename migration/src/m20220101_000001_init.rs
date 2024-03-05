@@ -3,7 +3,7 @@ use sea_orm_migration::{
     sea_orm::{ConnectionTrait, DatabaseBackend, Statement},
 };
 
-use crate::model::table::{StateTrees, UTXOs};
+use crate::model::table::{StateTrees, TokenOwners, UTXOs};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -124,6 +124,48 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(TokenOwners::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(TokenOwners::Id)
+                            .big_integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(TokenOwners::Owner).binary().not_null())
+                    .col(ColumnDef::new(TokenOwners::Mint).binary().not_null())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(ColumnDef::new(TokenOwners::Amount).big_integer().not_null())
+                    .col(ColumnDef::new(TokenOwners::Delegate).binary())
+                    .col(ColumnDef::new(TokenOwners::Frozen).boolean().not_null())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(ColumnDef::new(TokenOwners::IsNative).big_integer())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(
+                        ColumnDef::new(TokenOwners::DelegatedAmount)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(TokenOwners::CloseAuthority).binary())
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("token_owners_owner_mint_idx")
+                    .table(TokenOwners::Table)
+                    .col(TokenOwners::Owner)
+                    .col(TokenOwners::Mint)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -134,6 +176,10 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(UTXOs::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(TokenOwners::Table).to_owned())
             .await?;
 
         Ok(())

@@ -2,7 +2,7 @@
 members = [
   "api",
   "integration_tests",
-  "lib/dao",
+  "dao",
   "ingester",
   "migration",
 ]
@@ -16,7 +16,7 @@ async-trait = "0.1.53"
 base64 = "0.21.0"
 borsh = "0.10.3"
 bs58 = "0.4.0"
-dao = {path = "lib/dao"}
+dao = {path = "dao"}
 env_logger = "0.10.0"
 function_name = "0.3.0"
 futures = "0.3.30"

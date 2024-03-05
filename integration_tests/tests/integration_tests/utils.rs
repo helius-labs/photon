@@ -6,7 +6,7 @@ use std::{
 };
 
 use api::api::{PhotonApi, PhotonApiConfig};
-use ingester::{parser::bundle::Hash, transaction_info::TransactionInfo};
+use ingester::transaction_info::TransactionInfo;
 
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
@@ -15,6 +15,7 @@ use sea_orm::{
     Statement,
 };
 
+use dao::typedefs::hash::Hash;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
@@ -144,7 +145,7 @@ pub fn mock_str_to_hash(input: &str) -> Hash {
         array[i] = byte;
     }
 
-    Hash::new(array)
+    Hash::try_from(array.to_vec()).unwrap()
 }
 
 fn get_relative_project_path(path: &str) -> PathBuf {

@@ -1,12 +1,16 @@
 use crate::{
     error,
-    parser::bundle::{ChangelogEvent, EventBundle, PublicStateTransitionBundle, UTXOEvent},
+    parser::bundle::{
+        AccountState, ChangelogEvent, EventBundle, PublicStateTransitionBundle, TokenTlvData,
+        UTXOEvent,
+    },
 };
-use dao::generated::{state_trees, utxos};
+use dao::generated::{state_trees, token_owners, utxos};
 use log::{debug, warn};
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction,
-    DbBackend, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, TransactionTrait,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
+    DatabaseTransaction, DbBackend, DbErr, EntityTrait, QueryFilter, QueryTrait, Set,
+    TransactionTrait,
 };
 use solana_sdk::signature::Signature;
 
@@ -209,4 +213,39 @@ async fn persist_changelog_event(
 
 fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
     index - 2i64.pow(tree_height)
+}
+
+// Work in progress. I am using the latest TokenTlvData, but haven't parsed in
+// the latest PublicTransactionState bundles.
+pub async fn persist_token_data(
+    conn: &DatabaseConnection,
+    token_tlv_data: TokenTlvData,
+) -> Result<(), IngesterError> {
+    let txn = conn.begin().await?;
+    let TokenTlvData {
+        mint,
+        owner,
+        amount,
+        delegate,
+        state,
+        is_native,
+        delegated_amount,
+        close_authority,
+    } = token_tlv_data;
+
+    let model = token_owners::ActiveModel {
+        mint: Set(mint.to_bytes().to_vec()),
+        owner: Set(owner.to_bytes().to_vec()),
+        amount: Set(amount as i64),
+        delegate: Set(delegate.map(|d| d.to_bytes().to_vec())),
+        frozen: Set(state == AccountState::Frozen),
+        delegated_amount: Set(delegated_amount as i64),
+        is_native: Set(is_native.map(|n| n as i64)),
+        close_authority: Set(close_authority.map(|c| c.to_bytes().to_vec())),
+        ..Default::default()
+    };
+    // TODO: We are not addressing the case where the record already exists.
+    model.insert(&txn).await?;
+    txn.commit().await?;
+    Ok(())
 }

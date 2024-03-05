@@ -29,3 +29,17 @@ pub enum UTXOs {
     SlotUpdated,
     CreatedAt,
 }
+
+#[derive(Copy, Clone, Iden)]
+pub enum TokenOwners {
+    Table,
+    Id,
+    Owner,
+    Mint,
+    Amount,
+    Delegate,
+    Frozen,
+    IsNative,
+    DelegatedAmount,
+    CloseAuthority,
+}

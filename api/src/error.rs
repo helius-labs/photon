@@ -1,5 +1,7 @@
+use dao::typedefs::hash::ParseHashError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use solana_sdk::pubkey::ParsePubkeyError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -28,6 +30,20 @@ impl Into<RpcError> for PhotonApiError {
                 internal_server_error()
             }
         }
+    }
+}
+
+// The API contract receives parsed input from the user, so if we get a ParseHashError it means
+// that the database itself returned an invalid hash.
+impl From<ParseHashError> for PhotonApiError {
+    fn from(_error: ParseHashError) -> Self {
+        PhotonApiError::UnexpectedError("Invalid hash in database".to_string())
+    }
+}
+
+impl From<ParsePubkeyError> for PhotonApiError {
+    fn from(_error: ParsePubkeyError) -> Self {
+        PhotonApiError::UnexpectedError("Invalid public key in database".to_string())
     }
 }
 

@@ -4,23 +4,25 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PhotonApiError;
+use dao::typedefs::hash::Hash;
+use dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountRequest {
-    pub hash: Option<String>,
-    pub account_id: Option<String>,
+    pub hash: Option<Hash>,
+    pub account_id: Option<SerializablePubkey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountResponse {
-    pub hash: String,
-    pub account: Option<String>,
+    pub hash: Hash,
+    pub account: Option<SerializablePubkey>,
     pub data: String,
-    pub owner: String,
+    pub owner: SerializablePubkey,
     pub lamports: Option<i64>,
-    pub tree: String,
+    pub tree: SerializablePubkey,
     pub seq: i64,
     pub slot_updated: i64,
 }
@@ -32,19 +34,9 @@ pub async fn get_compressed_account(
     let GetCompressedAccountRequest { hash, account_id } = request;
 
     let filter = if let Some(h) = hash {
-        let hash_vec = bs58::decode(h)
-            .into_vec()
-            .map_err(|_| PhotonApiError::InvalidPubkey {
-                field: "hash".to_string(),
-            })?;
-        Ok(utxos::Column::Hash.eq(hash_vec))
+        Ok(utxos::Column::Hash.eq::<Vec<u8>>(h.into()))
     } else if let Some(a) = account_id {
-        let acc_vec = bs58::decode(a)
-            .into_vec()
-            .map_err(|_| PhotonApiError::InvalidPubkey {
-                field: "account_id".to_string(),
-            })?;
-        Ok(utxos::Column::Account.eq(acc_vec))
+        Ok(utxos::Column::Account.eq::<Vec<u8>>(a.into()))
     } else {
         Err(PhotonApiError::ValidationError(
             "Must provide either `hash` or `account_id`".to_string(),
@@ -52,18 +44,20 @@ pub async fn get_compressed_account(
     }?;
 
     let result = utxos::Entity::find().filter(filter).one(conn).await?;
+
     if let Some(utxo) = result {
         let res = GetCompressedAccountResponse {
-            hash: bs58::encode(utxo.hash).into_string(),
-            account: utxo.account.map(|a| bs58::encode(a).into_string()),
+            hash: utxo.hash.try_into()?,
+            account: utxo.account.map(SerializablePubkey::try_from).transpose()?,
             #[allow(deprecated)]
             data: base64::encode(utxo.data),
-            owner: bs58::encode(utxo.owner).into_string(),
+            owner: utxo.owner.try_into()?,
             lamports: utxo.lamports,
-            tree: bs58::encode(utxo.tree).into_string(),
+            tree: utxo.tree.try_into()?,
             seq: utxo.seq,
             slot_updated: utxo.slot_updated,
         };
+
         Ok(Some(res))
     } else {
         Ok(None)
