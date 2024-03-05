@@ -9,6 +9,7 @@ use schemars::schema::Schema;
 use serde::de::{self, Visitor};
 use serde::ser::Serializer;
 use serde::Deserializer;
+#[allow(unused_imports)]
 use solana_sdk::pubkey::Pubkey;
 use thiserror::Error;
 

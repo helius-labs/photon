@@ -31,7 +31,7 @@ pub async fn get_compressed_account_proof(
 ) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError> {
     let GetCompressedAccountProofRequest { hash, account_id } = request;
 
-    // Extract the leaf hash from the user, or look it up via the provided account_id.
+    // Extract the leaf hash from the user or look it up via the provided account_id.
     let leaf_hash: Vec<u8>;
     if let Some(h) = hash.clone() {
         leaf_hash = h.into();
@@ -48,7 +48,7 @@ pub async fn get_compressed_account_proof(
         }
     } else {
         return Err(PhotonApiError::ValidationError(
-            "Must provide either `hash` or `account`".to_string(),
+            "Must provide either `hash` or `account_id`".to_string(),
         ));
     }
 
@@ -115,9 +115,6 @@ fn build_full_proof(
     let depth = required_node_indices.len();
     let mut full_proof = vec![vec![0; 32]; depth];
 
-    println!("proofs: {:?}", proof_nodes);
-    println!("required indices: {:?}", required_node_indices);
-
     // Important:
     // We assume that the proof_nodes are already sorted in descending order (by level).
     for node in proof_nodes {
@@ -128,8 +125,6 @@ fn build_full_proof(
         .iter()
         .map(|proof| Hash::from(proof.clone()))
         .collect();
-
-    println!("hash: {:?}", hashes);
 
     ProofResponse {
         root: hashes[depth - 1].clone(),
@@ -161,7 +156,7 @@ fn test_build_full_proof() {
     let slot_updated = 0;
 
     // These are the nodes we got from the DB.
-    // DB response is sorted in descending order by level (top to bottom).
+    // DB response is sorted in ascending order by level (leaf to root; bottom to top).
     let root_node = state_trees::Model {
         id: 1,
         node_idx: 1,
@@ -191,7 +186,10 @@ fn test_build_full_proof() {
     // And the proof size should match the tree depth, minus one value (root hash).
     assert_eq!(proof.len(), required_node_indices.len() - 1);
 
-    // The first two values in the proof correspond to node 13 and 7, respectively. Neither
+    // The first two values in the proof correspond to node 13 and 7, respectively.
+    // Neither have an indexed node in the DB, and should be replaced with an empty hash.
+    //
+    // The last value corresponds to node 2 which was indexed in the DB.
     assert_eq!(proof[0], Hash::from(vec![0; 32]));
     assert_eq!(proof[1], Hash::from(vec![0; 32]));
     assert_eq!(proof[2], Hash::from(node_2.hash));
