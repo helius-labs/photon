@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 
-use account_compression::Changelogs;
-use light_verifier_sdk::public_transaction::PublicTransactionEvent;
+use light_merkle_tree_event::Changelogs;
+use psp_compressed_pda::event::PublicTransactionEvent;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 pub enum EventBundle {

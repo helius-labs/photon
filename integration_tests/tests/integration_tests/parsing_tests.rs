@@ -19,7 +19,7 @@ async fn test_parsing() {
 
     let tx = cached_fetch_transaction(
         &setup,
-        "vycDCdEwxnd2mMx51oVryVpjf4WXSqQ9QJjEMdAaU5U5EuzzLtcpimStSurG2Lpj3PL2HWqjjsvghAQoJ2XTFnH",
+        "2y27eTCZ53DiFubUqBtstcrFrDCvr1sqCJFYDnjFVuZrrCGXvQPfVVosBv7mYF3LeJRy73EiGzqPX2vWHDg4iRCk",
     )
     .await;
 

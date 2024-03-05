@@ -2,6 +2,21 @@
 
 Lightweight indexer for general & token compression. WIP.
 
+# Setup
+
+To be able to compile dependencies please run:
+
+```
+echo """
+[net]
+git-fetch-with-cli = true
+""" >> ~/.cargo/config.toml
+```
+
+We need to use the Git cli in order to be able to use ssh authentication and download the gnark-prover
+submodule from the Light repo that's specified through an ssh url. This setup step is temporary
+until Light publishes the packages to crates.io or removes the grank-prover submodule. 
+
 ## Database
 
 Photon uses Postgres and the schema is managed by SeaORM. The database is managed via migrations. 

@@ -1,7 +1,7 @@
-use account_compression::Changelogs;
 use borsh::BorshDeserialize;
-use light_verifier_sdk::public_transaction::PublicTransactionEvent;
+use light_merkle_tree_event::Changelogs;
 use log::info;
+use psp_compressed_pda::event::PublicTransactionEvent;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{error::IngesterError, transaction_info::TransactionInfo};
@@ -11,9 +11,8 @@ use self::bundle::EventBundle;
 pub mod bundle;
 use solana_program::pubkey;
 
-const TOKEN_PROGRAM_ID: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
-    pubkey!("DmtCHY9V1vqkYfQ5xYESzvGoMGhePHLja9GQ994GKTTc");
+    pubkey!("5QPEJ5zDsVou9FQS3KCauKswM3VwBEBu4dpL9xTqkWwN");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 
 pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, IngesterError> {
@@ -25,45 +24,39 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
         ordered_intructions.extend(instruction_group.inner_instructions);
 
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if index < ordered_intructions.len() - 1 {
+            if index < ordered_intructions.len() - 2 {
                 let next_instruction = &ordered_intructions[index + 1];
-                // We need to check if the instruction contains a noop account. We use to determine
-                // if the instruction emits a noop. If it doesn't then we want avoid indexing
+                let next_next_instruction = &ordered_intructions[index + 2];
+                // We need to check if the account compression instruction contains a noop account to determine
+                // if the instruction emits a noop event. If it doesn't then we want avoid indexing
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
-                if instruction.accounts.contains(&NOOP_PROGRAM_ID)
+                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+                    && instruction.accounts.contains(&NOOP_PROGRAM_ID)
                     && next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
-                    let instruction_data = &mut next_instruction.data.as_slice();
-                    let event_bundle = match instruction.program_id {
-                        TOKEN_PROGRAM_ID => {
-                            let event_bundle = PublicTransactionEvent::deserialize(
-                                instruction_data,
-                            )
-                            .map_err(|e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to deserialize PublicTransactionEvent: {}",
-                                    e
-                                ))
-                            })?;
-                            Some(EventBundle::LegacyPublicStateTransaction(event_bundle))
-                        }
-                        ACCOUNT_COMPRESSION_PROGRAM_ID => {
-                            let event_bundle =
-                                Changelogs::deserialize(&mut next_instruction.data.as_slice())
-                                    .map_err(|e| {
-                                        IngesterError::ParserError(format!(
-                                            "Failed to deserialize Changelogs: {}",
-                                            e
-                                        ))
-                                    })?;
-                            Some(EventBundle::LegacyChangeLogEvent(event_bundle))
-                        }
-                        _ => None,
-                    };
+                    let changelogs = Changelogs::deserialize(&mut next_instruction.data.as_slice())
+                        .map_err(|e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to deserialize Changelogs: {}",
+                                e
+                            ))
+                        })?;
+                    event_bundles.push(EventBundle::LegacyChangeLogEvent(changelogs));
 
-                    if let Some(event_bundle) = event_bundle {
-                        event_bundles.push(event_bundle);
-                    }
+                    let public_transaction_event = PublicTransactionEvent::deserialize(
+                        &mut next_next_instruction.data.as_slice(),
+                    )
+                    .map_err(|e| {
+                        IngesterError::ParserError(format!(
+                            "Failed to deserialize PublicTransactionEvent: {}",
+                            e
+                        ))
+                    })?;
+
+                    event_bundles.push(EventBundle::LegacyPublicStateTransaction(
+                        public_transaction_event.into(),
+                    ));
                 }
             }
         }
