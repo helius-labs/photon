@@ -40,7 +40,7 @@ impl Hash {
 pub enum ParseHashError {
     #[error("String is the wrong size")]
     WrongSize,
-    #[error("Invalid Base58 string")]
+    #[error("Invalid hash input")]
     Invalid,
 }
 
@@ -55,12 +55,7 @@ impl TryFrom<&str> for Hash {
             .into_vec()
             .map_err(|_| ParseHashError::Invalid)?;
 
-        if bytes.len() != mem::size_of::<Hash>() {
-            Err(ParseHashError::WrongSize)
-        } else {
-            let bytes: [u8; 32] = bytes.try_into().map_err(|_| ParseHashError::Invalid)?;
-            Ok(Hash(bytes))
-        }
+        bytes.try_into()
     }
 }
 
@@ -70,12 +65,16 @@ impl Into<Vec<u8>> for Hash {
     }
 }
 
-impl From<Vec<u8>> for Hash {
-    fn from(bytes: Vec<u8>) -> Self {
-        // Generally we don't want to use unwrap, but in this case we know the bytes are valid
-        // because they are either coming from Solana or from our database.
-        let bytes: [u8; 32] = bytes.try_into().expect("Unable to deserialize hash");
-        Hash(bytes)
+impl TryFrom<Vec<u8>> for Hash {
+    type Error = ParseHashError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        if bytes.len() != mem::size_of::<Hash>() {
+            Err(ParseHashError::WrongSize)
+        } else {
+            let bytes: [u8; 32] = bytes.try_into().map_err(|_| ParseHashError::Invalid)?;
+            Ok(Hash(bytes))
+        }
     }
 }
 

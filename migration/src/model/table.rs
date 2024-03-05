@@ -31,7 +31,7 @@ pub enum UTXOs {
 }
 
 #[derive(Copy, Clone, Iden)]
-pub enum TokenOwnership {
+pub enum TokenOwners {
     Table,
     Id,
     Owner,

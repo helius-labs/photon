@@ -3,5 +3,5 @@
 pub mod prelude;
 
 pub mod state_trees;
-pub mod token_ownership;
+pub mod token_owners;
 pub mod utxos;

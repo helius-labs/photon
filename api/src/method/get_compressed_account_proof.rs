@@ -4,7 +4,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOr
 use serde::{Deserialize, Serialize};
 
 use crate::error::PhotonApiError;
-use dao::typedefs::hash::Hash;
+use dao::typedefs::hash::{Hash, ParseHashError};
 
 use dao::typedefs::serializable_pubkey::SerializablePubkey;
 
@@ -79,9 +79,9 @@ pub async fn get_compressed_account_proof(
         .all(conn)
         .await?;
 
-    let ProofResponse { root, proof } = build_full_proof(proof_nodes, required_node_indices);
+    let ProofResponse { root, proof } = build_full_proof(proof_nodes, required_node_indices)?;
     let res = GetCompressedAccountProofResponse {
-        hash: Hash::from(leaf_node.hash).into(),
+        hash: Hash::try_from(leaf_node.hash)?.into(),
         root,
         proof,
     };
@@ -111,7 +111,7 @@ struct ProofResponse {
 fn build_full_proof(
     proof_nodes: Vec<state_trees::Model>,
     required_node_indices: Vec<i64>,
-) -> ProofResponse {
+) -> Result<ProofResponse, ParseHashError> {
     let depth = required_node_indices.len();
     let mut full_proof = vec![vec![0; 32]; depth];
 
@@ -121,15 +121,16 @@ fn build_full_proof(
         full_proof[node.level as usize] = node.hash
     }
 
-    let hashes: Vec<Hash> = full_proof
+    let hashes: Result<Vec<Hash>, _> = full_proof
         .iter()
-        .map(|proof| Hash::from(proof.clone()))
+        .map(|proof| Hash::try_from(proof.clone()))
         .collect();
+    let hashes = hashes?;
 
-    ProofResponse {
+    Ok(ProofResponse {
         root: hashes[depth - 1].clone(),
         proof: hashes[..(depth - 1)].to_vec(),
-    }
+    })
 }
 
 #[test]
@@ -179,10 +180,10 @@ fn test_build_full_proof() {
     };
     let proof_nodes = vec![root_node.clone(), node_2.clone()];
     let ProofResponse { proof, root } =
-        build_full_proof(proof_nodes, required_node_indices.clone());
+        build_full_proof(proof_nodes, required_node_indices.clone()).unwrap();
 
     // The root hash should correspond to the first node.
-    assert_eq!(root, Hash::from(root_node.hash));
+    assert_eq!(root, Hash::try_from(root_node.hash).unwrap());
     // And the proof size should match the tree depth, minus one value (root hash).
     assert_eq!(proof.len(), required_node_indices.len() - 1);
 
@@ -190,7 +191,7 @@ fn test_build_full_proof() {
     // Neither have an indexed node in the DB, and should be replaced with an empty hash.
     //
     // The last value corresponds to node 2 which was indexed in the DB.
-    assert_eq!(proof[0], Hash::from(vec![0; 32]));
-    assert_eq!(proof[1], Hash::from(vec![0; 32]));
-    assert_eq!(proof[2], Hash::from(node_2.hash));
+    assert_eq!(proof[0], Hash::try_from(vec![0; 32]).unwrap());
+    assert_eq!(proof[1], Hash::try_from(vec![0; 32]).unwrap());
+    assert_eq!(proof[2], Hash::try_from(node_2.hash).unwrap());
 }

@@ -6,7 +6,7 @@ use api::{
         get_compressed_account_proof::{
             GetCompressedAccountProofRequest, GetCompressedAccountProofResponse,
         },
-        get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
+        get_compressed_token_accounts_by_owner::GetCompressedTokenInfoByOwnerRequest,
     },
 };
 use dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -189,7 +189,7 @@ async fn test_persist_token_data() {
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             ..Default::default()
         })
@@ -200,7 +200,7 @@ async fn test_persist_token_data() {
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint1.clone())),
             ..Default::default()
@@ -227,7 +227,7 @@ async fn test_persist_token_data() {
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint2.clone())),
             ..Default::default()

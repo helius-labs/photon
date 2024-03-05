@@ -37,11 +37,13 @@ impl Into<Vec<u8>> for SerializablePubkey {
     }
 }
 
-impl From<Vec<u8>> for SerializablePubkey {
-    fn from(bytes: Vec<u8>) -> Self {
-        // Generally we don't want to use unwrap, but in this case we know the bytes are valid
-        // because they are either coming from Solana or from our database.
-        SerializablePubkey(SolanaPubkey::try_from(bytes).expect("Unable to deserialize pubkey"))
+impl TryFrom<Vec<u8>> for SerializablePubkey {
+    type Error = ParsePubkeyError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(SerializablePubkey(
+            SolanaPubkey::try_from(bytes).map_err(|_| ParsePubkeyError::Invalid)?,
+        ))
     }
 }
 

@@ -47,13 +47,13 @@ pub async fn get_compressed_account(
 
     if let Some(utxo) = result {
         let res = GetCompressedAccountResponse {
-            hash: utxo.hash.into(),
-            account: utxo.account.map(SerializablePubkey::from),
+            hash: utxo.hash.try_into()?,
+            account: utxo.account.map(SerializablePubkey::try_from).transpose()?,
             #[allow(deprecated)]
             data: base64::encode(utxo.data),
-            owner: utxo.owner.into(),
+            owner: utxo.owner.try_into()?,
             lamports: utxo.lamports,
-            tree: utxo.tree.into(),
+            tree: utxo.tree.try_into()?,
             seq: utxo.seq,
             slot_updated: utxo.slot_updated,
         };

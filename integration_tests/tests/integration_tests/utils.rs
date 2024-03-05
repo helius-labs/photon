@@ -145,7 +145,7 @@ pub fn mock_str_to_hash(input: &str) -> Hash {
         array[i] = byte;
     }
 
-    Hash::from(array.to_vec())
+    Hash::try_from(array.to_vec()).unwrap()
 }
 
 fn get_relative_project_path(path: &str) -> PathBuf {

@@ -3,7 +3,7 @@ use sea_orm_migration::{
     sea_orm::{ConnectionTrait, DatabaseBackend, Statement},
 };
 
-use crate::model::table::{StateTrees, TokenOwnership, UTXOs};
+use crate::model::table::{StateTrees, TokenOwners, UTXOs};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -127,34 +127,30 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(TokenOwnership::Table)
+                    .table(TokenOwners::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(TokenOwnership::Id)
+                        ColumnDef::new(TokenOwners::Id)
                             .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(TokenOwnership::Owner).binary().not_null())
-                    .col(ColumnDef::new(TokenOwnership::Mint).binary().not_null())
+                    .col(ColumnDef::new(TokenOwners::Owner).binary().not_null())
+                    .col(ColumnDef::new(TokenOwners::Mint).binary().not_null())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(ColumnDef::new(TokenOwners::Amount).big_integer().not_null())
+                    .col(ColumnDef::new(TokenOwners::Delegate).binary())
+                    .col(ColumnDef::new(TokenOwners::Frozen).boolean().not_null())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(ColumnDef::new(TokenOwners::IsNative).big_integer())
                     // TODO: Change this to a u64 here to avoid balance overflow.
                     .col(
-                        ColumnDef::new(TokenOwnership::Amount)
+                        ColumnDef::new(TokenOwners::DelegatedAmount)
                             .big_integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(TokenOwnership::Delegate).binary())
-                    .col(ColumnDef::new(TokenOwnership::Frozen).boolean().not_null())
-                    // TODO: Change this to a u64 here to avoid balance overflow.
-                    .col(ColumnDef::new(TokenOwnership::IsNative).big_integer())
-                    // TODO: Change this to a u64 here to avoid balance overflow.
-                    .col(
-                        ColumnDef::new(TokenOwnership::DelegatedAmount)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(TokenOwnership::CloseAuthority).binary())
+                    .col(ColumnDef::new(TokenOwners::CloseAuthority).binary())
                     .to_owned(),
             )
             .await?;
@@ -162,10 +158,10 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_ownership_owner_mint_idx")
-                    .table(TokenOwnership::Table)
-                    .col(TokenOwnership::Owner)
-                    .col(TokenOwnership::Mint)
+                    .name("token_owners_owner_mint_idx")
+                    .table(TokenOwners::Table)
+                    .col(TokenOwners::Owner)
+                    .col(TokenOwners::Mint)
                     .to_owned(),
             )
             .await?;
@@ -183,7 +179,7 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-            .drop_table(Table::drop().table(TokenOwnership::Table).to_owned())
+            .drop_table(Table::drop().table(TokenOwners::Table).to_owned())
             .await?;
 
         Ok(())

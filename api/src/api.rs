@@ -13,8 +13,8 @@ use crate::{
             GetCompressedAccountProofResponse,
         },
         get_compressed_token_accounts_by_owner::{
-            get_compressed_account_token_accounts_by_owner,
-            GetCompressedTokenAccountsByOwnerRequest, GetCompressedTokenAccountsByOwnerResponse,
+            get_compressed_account_token_accounts_by_owner, GetCompressedTokenInfoByOwnerRequest,
+            GetCompressedTokenInfoByOwnerResponse,
         },
     },
 };
@@ -37,8 +37,8 @@ pub trait ApiContract: Send + Sync + 'static {
 
     async fn get_compressed_account_token_accounts_by_owner(
         &self,
-        payload: GetCompressedTokenAccountsByOwnerRequest,
-    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError>;
+        payload: GetCompressedTokenInfoByOwnerRequest,
+    ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
@@ -90,8 +90,8 @@ impl ApiContract for PhotonApi {
 
     async fn get_compressed_account_token_accounts_by_owner(
         &self,
-        request: GetCompressedTokenAccountsByOwnerRequest,
-    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError> {
+        request: GetCompressedTokenInfoByOwnerRequest,
+    ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_owner(&self.db_conn, request).await
     }
 }

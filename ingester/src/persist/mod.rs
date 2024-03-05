@@ -5,7 +5,7 @@ use crate::{
         UTXOEvent,
     },
 };
-use dao::generated::{state_trees, token_ownership, utxos};
+use dao::generated::{state_trees, token_owners, utxos};
 use log::{debug, warn};
 use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
@@ -233,7 +233,7 @@ pub async fn persist_token_data(
         close_authority,
     } = token_tlv_data;
 
-    let model = token_ownership::ActiveModel {
+    let model = token_owners::ActiveModel {
         mint: Set(mint.to_bytes().to_vec()),
         owner: Set(owner.to_bytes().to_vec()),
         amount: Set(amount as i64),
