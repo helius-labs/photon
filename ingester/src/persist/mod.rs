@@ -25,12 +25,6 @@ pub async fn persist_bundle(
             debug!("Persisting PublicStateTransitionBundle: {:?}", e);
             persist_state_transition(conn, e).await
         }
-        EventBundle::PublicNullifier(e) => {
-            debug!("Persisting PublicNullifierBundle: {:?}", e);
-            Err(IngesterError::EventNotImplemented {
-                event_type: "PublicNullifierBundle".to_string(),
-            })
-        }
         _ => {
             panic!("Not implemented")
         }
