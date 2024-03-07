@@ -9,25 +9,14 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
-    api::{ApiContract, PhotonApi, PhotonApiConfig},
+    api::{ApiContract, PhotonApi},
     method::{
         get_compressed_account::GetCompressedAccountRequest,
         get_compressed_account_proof::GetCompressedAccountProofRequest,
     },
 };
 
-pub async fn run_server() -> Result<ServerHandle, anyhow::Error> {
-    // TODO: Load config from Figment.
-    let db_url = "postgres://postgres@localhost/postgres".to_string();
-    let max_conn = 100;
-    let timeout_seconds = 15;
-    let port = 9090;
-    let config = PhotonApiConfig {
-        db_url,
-        max_conn,
-        timeout_seconds,
-    };
-
+pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors = CorsLayer::new()
         .allow_methods([Method::POST, Method::GET])
@@ -41,7 +30,6 @@ pub async fn run_server() -> Result<ServerHandle, anyhow::Error> {
         .set_middleware(middleware)
         .build(addr)
         .await?;
-    let api = PhotonApi::new(config).await?;
     let rpc_module = build_rpc_module(Box::new(api))?;
     server.start(rpc_module).map_err(|e| anyhow::anyhow!(e))
 }

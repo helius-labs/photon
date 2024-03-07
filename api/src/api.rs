@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
 use sqlx::{postgres::PgPoolOptions, Executor};
@@ -52,7 +54,7 @@ pub struct PhotonApiConfig {
 }
 
 pub struct PhotonApi {
-    db_conn: DatabaseConnection,
+    db_conn: Arc<DatabaseConnection>,
 }
 
 impl PhotonApi {
@@ -64,7 +66,15 @@ impl PhotonApi {
             ..
         } = config;
         let db_conn = init_pool(&db_url, max_conn, timeout_seconds).await?;
-        Ok(Self { db_conn })
+        Ok(Self {
+            db_conn: Arc::new(db_conn),
+        })
+    }
+}
+
+impl From<Arc<DatabaseConnection>> for PhotonApi {
+    fn from(db_conn: Arc<DatabaseConnection>) -> Self {
+        Self { db_conn }
     }
 }
 

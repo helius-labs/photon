@@ -10,6 +10,7 @@ anyhow = {workspace = true}
 async-trait = {workspace = true}
 base64 = {workspace = true}
 bs58 = {workspace = true}
+cadence-macros = {workspace = true}
 dao = {workspace = true}
 env_logger = {workspace = true}
 hyper = {workspace = true}
@@ -29,3 +30,6 @@ tower = {workspace = true}
 tower-http = {workspace = true}
 tracing = {workspace = true}
 tracing-subscriber = {workspace = true}
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.5"

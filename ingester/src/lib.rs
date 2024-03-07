@@ -9,10 +9,10 @@ use sea_orm::DatabaseConnection;
 use std::pin::Pin;
 use transaction_info::TransactionInfo;
 pub mod error;
+pub mod fetchers;
 pub mod parser;
 pub mod persist;
 pub mod transaction_info;
-pub mod fetchers;
 
 pub async fn index_transaction(
     db: &DatabaseConnection,
@@ -33,7 +33,7 @@ pub async fn index_transaction(
 
 pub async fn index_transaction_stream(
     db: Arc<DatabaseConnection>,
-    stream: Pin<Box<dyn Stream<Item = TransactionInfo>>>,
+    stream: Pin<Box<dyn Stream<Item = TransactionInfo> + Send>>,
     max_concurrency: usize,
 ) {
     stream
