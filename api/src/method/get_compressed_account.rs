@@ -21,9 +21,9 @@ pub struct GetCompressedAccountResponse {
     pub account: Option<SerializablePubkey>,
     pub data: String,
     pub owner: SerializablePubkey,
-    pub lamports: Option<i64>,
-    pub tree: SerializablePubkey,
-    pub seq: i64,
+    pub lamports: i64,
+    pub tree: Option<SerializablePubkey>,
+    pub seq: Option<i64>,
     pub slot_updated: i64,
 }
 
@@ -53,7 +53,7 @@ pub async fn get_compressed_account(
             data: base64::encode(utxo.data),
             owner: utxo.owner.try_into()?,
             lamports: utxo.lamports,
-            tree: utxo.tree.try_into()?,
+            tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
             seq: utxo.seq,
             slot_updated: utxo.slot_updated,
         };

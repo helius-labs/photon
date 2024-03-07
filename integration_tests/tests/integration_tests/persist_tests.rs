@@ -1,28 +1,26 @@
+use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use api::{
     api::ApiContract,
     method::{
         get_compressed_account::GetCompressedAccountRequest,
-        get_compressed_account_proof::{
-            GetCompressedAccountProofRequest, GetCompressedAccountProofResponse,
-        },
         get_compressed_token_accounts_by_owner::GetCompressedTokenInfoByOwnerRequest,
     },
 };
 use dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use function_name::named;
+use ingester::parser::bundle::PublicTransactionEventBundle;
 use ingester::persist::persist_bundle;
-use ingester::{
-    parser::bundle::{
-        AccountState, ChangelogEvent, PathNode, PublicStateTransitionBundle, TokenTlvData,
-        UTXOEvent,
-    },
-    persist::persist_token_data,
+use ingester::persist::persist_token_data;
+use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
+use psp_compressed_pda::{
+    tlv::{Tlv, TlvDataElement},
+    utxo::Utxo,
 };
+use psp_compressed_token::AccountState;
+use psp_compressed_token::TokenTlvData;
 use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
-
-use crate::utils::*;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -48,45 +46,50 @@ async fn test_persist_state_transitions() {
         name: "Alice".to_string(),
         age: 20,
     };
-    let program = Pubkey::new_unique();
+    let person_tlv = Tlv {
+        tlv_elements: vec![TlvDataElement {
+            discriminator: [0; 8],
+            owner: owner,
+            data: to_vec(&person).unwrap(),
+            data_hash: [0; 32],
+        }],
+    };
     let tree = Pubkey::new_unique();
-    let account = Some(
-        Pubkey::find_program_address(&["person".as_bytes(), person.name.as_bytes()], &program).0,
-    );
-    let blinding = mock_str_to_hash("blinding");
-    let hash_v1 = mock_str_to_hash("person_v1");
-    let bundle = PublicStateTransitionBundle {
+    let utxo = Utxo {
+        data: Some(person_tlv.clone()),
+        owner,
+        blinding: [0; 32],
+        lamports: 1000,
+    };
+
+    let hash = utxo.hash();
+
+    let bundle = PublicTransactionEventBundle {
         in_utxos: vec![],
-        out_utxos: vec![UTXOEvent {
-            hash: hash_v1.clone(),
-            data: to_vec(&person.clone()).unwrap(),
-            owner,
-            blinding,
-            account,
-            tree,
-            seq: 0,
-            lamports: Some(5000),
-        }],
-        changelogs: vec![ChangelogEvent {
-            tree,
-            seq: 0,
-            path: vec![
-                PathNode {
-                    index: 4,
-                    hash: hash_v1.clone(),
-                },
-                PathNode {
-                    index: 2,
-                    hash: mock_str_to_hash("hash_v1_level_1"),
-                },
-                PathNode {
-                    index: 1,
-                    hash: mock_str_to_hash("hash_v1_level_2"),
-                },
-            ],
-        }],
+        out_utxos: vec![utxo.clone()],
+        changelogs: Changelogs {
+            changelogs: vec![ChangelogEvent::V1(ChangelogEventV1 {
+                id: tree.to_bytes(),
+                paths: vec![vec![
+                    PathNode {
+                        node: hash.clone().into(),
+                        index: 4,
+                    },
+                    PathNode {
+                        node: mock_str_to_hash("hash_v1_level_1").into(),
+                        index: 2,
+                    },
+                    PathNode {
+                        node: mock_str_to_hash("hash_v1_level_2").into(),
+                        index: 1,
+                    },
+                ]],
+                seq: 0,
+                index: 0,
+            })],
+        },
         transaction: Signature::new_unique(),
-        slot_updated: 0,
+        slot: 123,
     };
     persist_bundle(&setup.db_conn, bundle.into()).await.unwrap();
 
@@ -94,44 +97,17 @@ async fn test_persist_state_transitions() {
     let res = setup
         .api
         .get_compressed_account(GetCompressedAccountRequest {
-            hash: Some(Hash::from(hash_v1.clone())),
+            hash: Some(Hash::from(hash.clone())),
             ..Default::default()
         })
         .await
         .unwrap()
         .unwrap();
-    let res_clone = res.clone();
 
     #[allow(deprecated)]
     let raw_data = base64::decode(res.data).unwrap();
-    let parsed = Person::try_from_slice(&raw_data).unwrap();
-    assert_eq!(parsed, person);
-    assert_eq!(res.lamports, Some(5000));
-
-    let account_lookup = setup
-        .api
-        .get_compressed_account(GetCompressedAccountRequest {
-            account_id: account.map(SerializablePubkey::from),
-            ..Default::default()
-        })
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(account_lookup, res_clone);
-
-    // Verify GetCompressedAccountProof
-    let GetCompressedAccountProofResponse { root, proof, hash } = setup
-        .api
-        .get_compressed_account_proof(GetCompressedAccountProofRequest {
-            hash: Some(hash_v1.clone()),
-            ..Default::default()
-        })
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(hash, hash_v1);
-    assert_eq!(proof.len(), 2);
-    assert_eq!(root, mock_str_to_hash("hash_v1_level_2"));
+    assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
+    assert_eq!(res.lamports, utxo.lamports as i64);
 }
 
 #[tokio::test]

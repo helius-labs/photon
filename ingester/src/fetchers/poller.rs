@@ -1,9 +1,11 @@
 use std::{sync::Arc, thread::sleep, time::Duration};
 
+use anyhow::{anyhow, Result};
 use futures::{stream, StreamExt};
 use log::info;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_transaction_status::EncodedConfirmedBlock;
+use solana_sdk::{clock::UnixTimestamp, transaction::VersionedTransaction};
+use solana_transaction_status::{EncodedConfirmedBlock, EncodedTransactionWithStatusMeta};
 
 use crate::transaction_info::{parse_instruction_groups, TransactionInfo};
 
@@ -56,21 +58,40 @@ impl TransactionPoller {
         for (block, slot) in new_blocks {
             let block_time = block.block_time;
             for transaction in block.transactions {
-                let instruction_groups = parse_instruction_groups(transaction);
-                match instruction_groups {
+                let parsed_transaction = _parse_transaction(transaction, slot, block_time);
+                match parsed_transaction {
+                    Ok(transaction) => {
+                        transactions.push(transaction);
+                    }
                     Err(e) => {
                         log::error!("Failed to parse transaction: {}", e);
-                    }
-                    Ok(instruction_groups) => {
-                        transactions.push(TransactionInfo {
-                            slot,
-                            block_time,
-                            instruction_groups,
-                        });
                     }
                 }
             }
         }
         transactions
     }
+}
+
+fn _parse_transaction(
+    transaction: EncodedTransactionWithStatusMeta,
+    slot: u64,
+    block_time: Option<UnixTimestamp>,
+) -> Result<TransactionInfo> {
+    let EncodedTransactionWithStatusMeta {
+        transaction, meta, ..
+    } = transaction;
+
+    let versioned_transaction: VersionedTransaction = transaction
+        .decode()
+        .ok_or(anyhow!("Transaction cannot be decoded".to_string()))?;
+
+    let signature = versioned_transaction.signatures[0];
+    let instruction_groups = parse_instruction_groups(versioned_transaction, meta)?;
+    Ok(TransactionInfo {
+        slot: slot,
+        block_time: block_time,
+        instruction_groups,
+        signature,
+    })
 }

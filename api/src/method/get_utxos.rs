@@ -20,9 +20,9 @@ pub struct Utxo {
     pub account: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub data: String,
-    pub tree: SerializablePubkey,
+    pub tree: Option<SerializablePubkey>,
     // TODO: Consider making lamports a u64.
-    pub lamports: Option<u64>,
+    pub lamports: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -39,8 +39,8 @@ fn _parse_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
         #[allow(deprecated)]
         data: base64::encode(utxo.data),
         owner: utxo.owner.try_into()?,
-        tree: SerializablePubkey::try_from(utxo.tree)?,
-        lamports: utxo.lamports.map(|x| x as u64),
+        tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
+        lamports: utxo.lamports as u64,
     })
 }
 

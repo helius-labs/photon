@@ -65,6 +65,19 @@ impl Into<Vec<u8>> for Hash {
     }
 }
 
+impl From<[u8; 32]> for Hash {
+    fn from(bytes: [u8; 32]) -> Self {
+        Hash(bytes)
+    }
+}
+
+impl Into<[u8; 32]> for Hash {
+    fn into(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+
 impl TryFrom<Vec<u8>> for Hash {
     type Error = ParseHashError;
 

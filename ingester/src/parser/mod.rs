@@ -1,12 +1,11 @@
 use borsh::BorshDeserialize;
-use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs};
+use light_merkle_tree_event::Changelogs;
 use log::info;
 use psp_compressed_pda::event::PublicTransactionEvent;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    error::IngesterError,
-    parser::bundle::{Location, PublicTransactionEventBundle},
+    error::IngesterError, parser::bundle::PublicTransactionEventBundle,
     transaction_info::TransactionInfo,
 };
 
@@ -60,24 +59,12 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                     let public_transaction_bundle = PublicTransactionEventBundle {
                         in_utxos: public_transaction_event.in_utxos,
                         out_utxos: public_transaction_event.out_utxos,
+                        changelogs: changelogs,
                         slot: tx.slot,
                         transaction: tx.signature,
-                        out_uxtos_locations: changelogs
-                            .changelogs
-                            .iter()
-                            .map(|changelog: &light_merkle_tree_event::ChangelogEvent| {
-                                match changelog {
-                                    ChangelogEvent::V1(changelog) => Location {
-                                        index: changelog.index,
-                                        tree: Pubkey::from(changelog.id),
-                                    },
-                                }
-                            })
-                            .collect(),
                     };
 
                     event_bundles.push(public_transaction_bundle.into());
-                    event_bundles.push(changelogs.into());
                 }
             }
         }

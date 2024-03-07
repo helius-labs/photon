@@ -17,10 +17,13 @@ function_name = {workspace = true}
 ingester = {workspace = true}
 itertools = {workspace = true}
 lazy_static = {workspace = true}
+light-merkle-tree-event = {workspace = true}
 light-poseidon = {workspace = true}
 log = {workspace = true}
 migration = {workspace = true}
 once_cell = {workspace = true}
+psp-compressed-pda = {workspace = true}
+psp-compressed-token = {workspace = true}
 sea-orm = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}
@@ -33,4 +36,3 @@ thiserror = {workspace = true}
 tokio = {workspace = true}
 tracing = {workspace = true}
 tracing-subscriber = {workspace = true}
-

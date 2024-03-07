@@ -6,7 +6,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransactionWithStatusMeta, UiInstruction,
+    EncodedTransactionWithStatusMeta, UiInstruction, UiTransactionStatusMeta,
 };
 use std::fmt;
 
@@ -85,74 +85,83 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
         let versioned_transaction: VersionedTransaction = transaction.decode().ok_or(
             IngesterError::ParserError("Transaction cannot be decoded".to_string()),
         )?;
-        let accounts = versioned_transaction.message.static_account_keys();
-
-        // Parse outer instructions and bucket them into groups
-        let mut instruction_groups: Vec<InstructionGroup> = versioned_transaction
-            .message
-            .instructions()
-            .iter()
-            .map(|ix| {
-                let program_id = accounts[ix.program_id_index as usize];
-                let data = ix.data.clone();
-                let accounts: Vec<Pubkey> = ix
-                    .accounts
-                    .iter()
-                    .map(|account_index| accounts[*account_index as usize])
-                    .collect();
-
-                InstructionGroup {
-                    outer_instruction: Instruction {
-                        program_id,
-                        data,
-                        accounts: accounts.into(),
-                    },
-                    inner_instructions: Vec::new(),
-                }
-            })
-            .collect();
-
-        // Parse inner instructions and place them into the correct instruction group
-        let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
-        if let OptionSerializer::Some(inner_instructions_vec) = meta.inner_instructions.as_ref() {
-            for inner_instructions in inner_instructions_vec.iter() {
-                let index = inner_instructions.index;
-                for ui_instruction in inner_instructions.instructions.iter() {
-                    match ui_instruction {
-                        UiInstruction::Compiled(ui_compiled_instruction) => {
-                            let program_id =
-                                accounts[ui_compiled_instruction.program_id_index as usize];
-                            let data = bs58::decode(&ui_compiled_instruction.data)
-                                .into_vec()
-                                .map_err(|e| IngesterError::ParserError(e.to_string()))?;
-                            let accounts = ui_compiled_instruction
-                                .accounts
-                                .iter()
-                                .map(|account_index| accounts[*account_index as usize])
-                                .collect();
-                            instruction_groups[index as usize].inner_instructions.push(
-                                Instruction {
-                                    program_id,
-                                    data: data.into(),
-                                    accounts,
-                                },
-                            );
-                        }
-                        UiInstruction::Parsed(_) => {
-                            return Err(IngesterError::ParserError(
-                                "Parsed instructions are not implemented yet".to_string(),
-                            ));
-                        }
-                    }
-                }
-            }
-        };
+        let signature = versioned_transaction.signatures[0];
 
         Ok(TransactionInfo {
             slot,
             block_time,
-            instruction_groups: instruction_groups,
-            signature: versioned_transaction.signatures[0],
+            instruction_groups: parse_instruction_groups(versioned_transaction, meta)?,
+            signature: signature,
         })
     }
+}
+
+pub fn parse_instruction_groups(
+    versioned_transaction: VersionedTransaction,
+    meta: Option<UiTransactionStatusMeta>,
+) -> Result<Vec<InstructionGroup>, IngesterError> {
+    let accounts = versioned_transaction.message.static_account_keys();
+
+    // Parse outer instructions and bucket them into groups
+    let mut instruction_groups: Vec<InstructionGroup> = versioned_transaction
+        .message
+        .instructions()
+        .iter()
+        .map(|ix| {
+            let program_id = accounts[ix.program_id_index as usize];
+            let data = ix.data.clone();
+            let accounts: Vec<Pubkey> = ix
+                .accounts
+                .iter()
+                .map(|account_index| accounts[*account_index as usize])
+                .collect();
+
+            InstructionGroup {
+                outer_instruction: Instruction {
+                    program_id,
+                    data,
+                    accounts: accounts.into(),
+                },
+                inner_instructions: Vec::new(),
+            }
+        })
+        .collect();
+
+    // Parse inner instructions and place them into the correct instruction group
+    let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
+    if let OptionSerializer::Some(inner_instructions_vec) = meta.inner_instructions.as_ref() {
+        for inner_instructions in inner_instructions_vec.iter() {
+            let index = inner_instructions.index;
+            for ui_instruction in inner_instructions.instructions.iter() {
+                match ui_instruction {
+                    UiInstruction::Compiled(ui_compiled_instruction) => {
+                        let program_id =
+                            accounts[ui_compiled_instruction.program_id_index as usize];
+                        let data = bs58::decode(&ui_compiled_instruction.data)
+                            .into_vec()
+                            .map_err(|e| IngesterError::ParserError(e.to_string()))?;
+                        let accounts = ui_compiled_instruction
+                            .accounts
+                            .iter()
+                            .map(|account_index| accounts[*account_index as usize])
+                            .collect();
+                        instruction_groups[index as usize]
+                            .inner_instructions
+                            .push(Instruction {
+                                program_id,
+                                data: data.into(),
+                                accounts,
+                            });
+                    }
+                    UiInstruction::Parsed(_) => {
+                        return Err(IngesterError::ParserError(
+                            "Parsed instructions are not implemented yet".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(instruction_groups)
 }

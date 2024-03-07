@@ -1,13 +1,12 @@
 use std::fmt::{Display, Formatter};
 
-use dao::typedefs::hash::Hash;
 use light_merkle_tree_event::Changelogs;
-use psp_compressed_pda::{event::PublicTransactionEvent, utxo::Utxo};
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use psp_compressed_pda::utxo::Utxo;
+use solana_sdk::signature::Signature;
 
+#[derive(Debug)]
 pub enum EventBundle {
     PublicTransactionEvent(PublicTransactionEventBundle),
-    Changelogs(Changelogs),
 }
 
 impl Display for EventBundle {
@@ -16,24 +15,15 @@ impl Display for EventBundle {
             EventBundle::PublicTransactionEvent(_) => {
                 write!(f, "PublicTransactionEvent")
             }
-            EventBundle::Changelogs(_) => {
-                write!(f, "Changelogs")
-            }
         }
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Location {
-    pub index: u32,
-    pub tree: Pubkey,
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct PublicTransactionEventBundle {
     pub in_utxos: Vec<Utxo>,
     pub out_utxos: Vec<Utxo>,
-    pub out_uxtos_locations: Vec<Location>,
+    pub changelogs: Changelogs,
     pub transaction: Signature,
     pub slot: u64,
 }
@@ -41,11 +31,5 @@ pub struct PublicTransactionEventBundle {
 impl From<PublicTransactionEventBundle> for EventBundle {
     fn from(bundle: PublicTransactionEventBundle) -> EventBundle {
         EventBundle::PublicTransactionEvent(bundle)
-    }
-}
-
-impl From<Changelogs> for EventBundle {
-    fn from(changelogs: Changelogs) -> EventBundle {
-        EventBundle::Changelogs(changelogs)
     }
 }

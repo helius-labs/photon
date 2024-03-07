@@ -1310,7 +1310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4114279215a005bc675e386011e594e1d9b800918cea18fcadadcce864a2046b"
 dependencies = [
  "borsh-derive 0.10.3",
- "hashbrown 0.13.2",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -2897,6 +2897,7 @@ dependencies = [
  "light-merkle-tree-event",
  "log",
  "psp-compressed-pda",
+ "psp-compressed-token",
  "sea-orm",
  "serde",
  "serde_json",
@@ -2933,10 +2934,13 @@ dependencies = [
  "ingester",
  "itertools 0.12.1",
  "lazy_static",
+ "light-merkle-tree-event",
  "light-poseidon",
  "log",
  "migration",
  "once_cell",
+ "psp-compressed-pda",
+ "psp-compressed-token",
  "sea-orm",
  "serde",
  "serde_json",
@@ -4125,6 +4129,25 @@ dependencies = [
  "light-utils",
  "light-verifier-sdk",
  "solana-sdk",
+]
+
+[[package]]
+name = "psp-compressed-token"
+version = "0.3.0"
+source = "git+https://github.com/Lightprotocol/light-protocol.git?branch=emit-indexable-for-photon#a2d7471b2c7ee44635111154baa84c8a7b1279ca"
+dependencies = [
+ "account-compression",
+ "ahash 0.8.6",
+ "aligned-sized",
+ "anchor-lang",
+ "anchor-spl",
+ "bytemuck",
+ "light-hasher",
+ "light-utils",
+ "psp-compressed-pda",
+ "solana-sdk",
+ "solana-security-txt",
+ "spl-token 3.5.0",
 ]
 
 [[package]]
