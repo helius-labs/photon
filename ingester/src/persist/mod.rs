@@ -174,32 +174,34 @@ async fn persist_path_updates(
     paths: Vec<PathUpdate<'_>>,
     slot_updated: i64,
 ) -> Result<(), IngesterError> {
-    let items = paths
-        .iter()
-        .map(|p| {
-            p.path.iter().enumerate().map(|(i, node)| {
-                let node_idx = node.index as i64;
-                let depth = p.path.len() as u32 - 1;
-                let leaf_idx = if i == 0 {
-                    Some(node_idx_to_leaf_idx(node_idx, depth))
-                } else {
-                    None
-                };
-                println!("Leaf idx {:?}", leaf_idx);
-                state_trees::ActiveModel {
-                    tree: Set(p.tree.to_vec()),
+    let mut seen = std::collections::HashSet::new();
+    let mut items = Vec::new();
+    // Only include the latest state for each node.
+    for path in paths.iter().rev() {
+        for (i, node) in path.path.iter().enumerate() {
+            let node_idx = node.index as i64;
+            let depth = path.path.len() as u32 - 1;
+            let leaf_idx = if i == 0 {
+                Some(node_idx_to_leaf_idx(node_idx, depth))
+            } else {
+                None
+            };
+            let key = (path.tree, node_idx);
+            match seen.insert(key) {
+                true => items.push(state_trees::ActiveModel {
+                    tree: Set(path.tree.to_vec()),
                     level: Set(i as i64),
                     node_idx: Set(node_idx),
                     hash: Set(node.node.to_vec()),
                     leaf_idx: Set(leaf_idx),
-                    seq: Set(p.seq as i64),
+                    seq: Set(path.seq as i64),
                     slot_updated: Set(slot_updated),
                     ..Default::default()
-                }
-            })
-        })
-        .flatten()
-        .collect::<Vec<_>>();
+                }),
+                false => {}
+            }
+        }
+    }
 
     let mut query = state_trees::Entity::insert_many(items)
         .on_conflict(

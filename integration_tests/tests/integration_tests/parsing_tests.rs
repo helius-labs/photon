@@ -39,5 +39,5 @@ async fn test_e2e() {
         .await
         .unwrap();
 
-    assert_eq!(utxos.total, 2);
+    assert_eq!(utxos.total, 1);
 }
