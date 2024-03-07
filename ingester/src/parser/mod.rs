@@ -4,7 +4,10 @@ use log::info;
 use psp_compressed_pda::event::PublicTransactionEvent;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{error::IngesterError, transaction_info::TransactionInfo};
+use crate::{
+    error::IngesterError, parser::bundle::PublicTransactionEventBundle,
+    transaction_info::TransactionInfo,
+};
 
 use self::bundle::EventBundle;
 
@@ -42,7 +45,6 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                                 e
                             ))
                         })?;
-                    event_bundles.push(EventBundle::LegacyChangeLogEvent(changelogs));
 
                     let public_transaction_event = PublicTransactionEvent::deserialize(
                         &mut next_next_instruction.data.as_slice(),
@@ -54,9 +56,15 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                         ))
                     })?;
 
-                    event_bundles.push(EventBundle::LegacyPublicStateTransaction(
-                        public_transaction_event.into(),
-                    ));
+                    let public_transaction_bundle = PublicTransactionEventBundle {
+                        in_utxos: public_transaction_event.in_utxos,
+                        out_utxos: public_transaction_event.out_utxos,
+                        changelogs: changelogs,
+                        slot: tx.slot,
+                        transaction: tx.signature,
+                    };
+
+                    event_bundles.push(public_transaction_bundle.into());
                 }
             }
         }

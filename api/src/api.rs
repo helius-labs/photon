@@ -16,6 +16,7 @@ use crate::{
             get_compressed_account_token_accounts_by_owner, GetCompressedTokenInfoByOwnerRequest,
             GetCompressedTokenInfoByOwnerResponse,
         },
+        get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
     },
 };
 
@@ -39,6 +40,9 @@ pub trait ApiContract: Send + Sync + 'static {
         &self,
         payload: GetCompressedTokenInfoByOwnerRequest,
     ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError>;
+
+    async fn get_utxos(&self, payload: GetUtxosRequest)
+        -> Result<GetUtxosResponse, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
@@ -93,6 +97,13 @@ impl ApiContract for PhotonApi {
         request: GetCompressedTokenInfoByOwnerRequest,
     ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_owner(&self.db_conn, request).await
+    }
+
+    async fn get_utxos(
+        &self,
+        request: GetUtxosRequest,
+    ) -> Result<GetUtxosResponse, PhotonApiError> {
+        get_utxos(&self.db_conn, request).await
     }
 }
 

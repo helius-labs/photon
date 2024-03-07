@@ -1,11 +1,12 @@
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
+    signature::Signature,
     transaction::VersionedTransaction,
 };
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransactionWithStatusMeta, UiInstruction,
+    EncodedTransactionWithStatusMeta, UiInstruction, UiTransactionStatusMeta,
 };
 use std::fmt;
 
@@ -28,6 +29,7 @@ pub struct TransactionInfo {
     pub slot: Slot,
     pub block_time: Option<UnixTimestamp>,
     pub instruction_groups: Vec<InstructionGroup>,
+    pub signature: Signature,
 }
 
 impl fmt::Display for Instruction {
@@ -76,24 +78,28 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
             transaction,
         } = tx;
 
+        let EncodedTransactionWithStatusMeta {
+            transaction, meta, ..
+        } = transaction;
+
+        let versioned_transaction: VersionedTransaction = transaction.decode().ok_or(
+            IngesterError::ParserError("Transaction cannot be decoded".to_string()),
+        )?;
+        let signature = versioned_transaction.signatures[0];
+
         Ok(TransactionInfo {
             slot,
             block_time,
-            instruction_groups: parse_instruction_groups(transaction)?,
+            instruction_groups: parse_instruction_groups(versioned_transaction, meta)?,
+            signature: signature,
         })
     }
 }
 
 pub fn parse_instruction_groups(
-    transaction: EncodedTransactionWithStatusMeta,
+    versioned_transaction: VersionedTransaction,
+    meta: Option<UiTransactionStatusMeta>,
 ) -> Result<Vec<InstructionGroup>, IngesterError> {
-    let EncodedTransactionWithStatusMeta {
-        transaction, meta, ..
-    } = transaction;
-
-    let versioned_transaction: VersionedTransaction = transaction.decode().ok_or(
-        IngesterError::ParserError("Transaction cannot be decoded".to_string()),
-    )?;
     let accounts = versioned_transaction.message.static_account_keys();
 
     // Parse outer instructions and bucket them into groups

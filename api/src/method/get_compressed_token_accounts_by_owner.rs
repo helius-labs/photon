@@ -1,4 +1,4 @@
-use dao::generated::{token_owners};
+use dao::generated::token_owners;
 use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
