@@ -10,6 +10,7 @@ use ingester::transaction_info::TransactionInfo;
 
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
+pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     SqlxSqliteConnector, Statement,
@@ -21,9 +22,12 @@ use solana_client::{
 };
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    instruction::CompiledInstruction,
     signature::Signature,
 };
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use solana_transaction_status::{
+    EncodedConfirmedTransactionWithStatusMeta, InnerInstruction, UiTransactionEncoding,
+};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
@@ -32,6 +36,8 @@ use sqlx::{
 use std::sync::Arc;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
+const SUPPORTED_DB_BACKENDS: [DatabaseBackend; 2] =
+    [DatabaseBackend::Postgres, DatabaseBackend::Sqlite];
 
 fn setup_logging() {
     let env_filter =
@@ -51,7 +57,10 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
     let mut init = INIT.lock().unwrap();
     if init.is_none() {
         setup_logging();
-        run_migrations_from_fresh(db).await;
+        if db.get_database_backend() != DbBackend::Sqlite {
+            // We run migrations from fresh everytime for SQLite
+            run_migrations_from_fresh(db).await;
+        }
         *init = Some(());
         return;
     }
@@ -64,33 +73,43 @@ pub struct TestSetup {
     pub client: RpcClient,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub enum Network {
-    #[default]
     Mainnet,
-    #[allow(dead_code)]
     Devnet,
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
     Localnet,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct TestSetupOptions {
     pub network: Network,
+    pub database_backed: DatabaseBackend,
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
-    // let local_db = "postgres://postgres@localhost/postgres";
-    // let pool = setup_pg_pool(local_db.to_string()).await;
-    // let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
-    let db_conn = Arc::new(SqlxSqliteConnector::from_sqlx_sqlite_pool(
-        setup_sqllite_pool().await,
-    ));
+    let local_db = "postgres://postgres@localhost/postgres";
+    let pool = setup_pg_pool(local_db.to_string()).await;
+    let db_conn = Arc::new(match opts.database_backed {
+        DatabaseBackend::Postgres => SqlxPostgresConnector::from_sqlx_postgres_pool(pool),
+        DatabaseBackend::Sqlite => {
+            SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
+        }
+        _ => unimplemented!(),
+    });
     run_one_time_setup(&db_conn).await;
-    run_migrations_from_fresh(&db_conn).await;
-    reset_tables(&db_conn).await.unwrap();
-
+    match opts.database_backed {
+        DatabaseBackend::Postgres => {
+            reset_tables(&db_conn).await.unwrap();
+        }
+        DatabaseBackend::Sqlite => {
+            // We need to run migrations from fresh for SQLite every time since we are using an
+            // in memory database that gets dropped every after test.
+            run_migrations_from_fresh(&db_conn).await;
+        }
+        _ => unimplemented!(),
+    }
     let api = PhotonApi::from(db_conn.clone());
 
     let rpc_url = match opts.network {
@@ -108,8 +127,15 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     }
 }
 
-pub async fn setup(name: String) -> TestSetup {
-    setup_with_options(name, TestSetupOptions::default()).await
+pub async fn setup(name: String, database_backend: DatabaseBackend) -> TestSetup {
+    setup_with_options(
+        name,
+        TestSetupOptions {
+            network: Network::Mainnet,
+            database_backed: database_backend,
+        },
+    )
+    .await
 }
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
@@ -138,11 +164,26 @@ pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
 }
 
 pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<ExecResult, DbErr> {
-    conn.execute(Statement::from_string(
-        DbBackend::Postgres,
-        format!("DELETE FROM {}", table),
-    ))
-    .await
+    match conn.get_database_backend() {
+        DbBackend::Postgres => {
+            conn.execute(Statement::from_string(
+                conn.get_database_backend(),
+                format!("TRUNCATE TABLE {} CASCADE", table),
+            ))
+            .await
+        }
+        DbBackend::Sqlite => {
+            conn.execute(Statement::from_string(
+                conn.get_database_backend(),
+                // SQLite does not support the TRUNCATE operation. Typically, using DELETE FROM could
+                // result in errors due to foreign key constraints. However, SQLite does not enforce
+                // foreign key constraints by default.
+                format!("DELETE FROM {}", table),
+            ))
+            .await
+        }
+        _ => unimplemented!(),
+    }
 }
 
 pub fn mock_str_to_hash(input: &str) -> Hash {
@@ -210,5 +251,10 @@ pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> Transactio
 }
 
 pub fn trim_test_name(name: &str) -> String {
+    // Remove the test_ prefix and the case suffix
     name.replace("test_", "")
+        .split("::case")
+        .next()
+        .unwrap()
+        .to_string()
 }

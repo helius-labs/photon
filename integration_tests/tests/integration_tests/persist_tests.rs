@@ -22,6 +22,8 @@ use psp_compressed_token::TokenTlvData;
 use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
+use rstest::rstest;
+
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
     name: String,
@@ -35,12 +37,17 @@ struct Person {
 // - Add test for multi-input/output transitions.
 // - Replace assertions with API queries instead of direct DB queries.
 
+#[named]
+#[rstest]
 #[tokio::test]
 #[serial]
-#[named]
-async fn test_persist_state_transitions() {
+async fn test_persist_state_transitions(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let full_name = function_name!();
+    println!("Starting {full_name} {:?}...", db_backend);
     let name = trim_test_name(function_name!());
-    let setup = setup(name).await;
+    let setup = setup(name, db_backend).await;
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -108,14 +115,20 @@ async fn test_persist_state_transitions() {
     let raw_data = base64::decode(res.data).unwrap();
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports as i64);
+    println!("Finished {full_name} {:?}...", db_backend);
 }
 
+#[named]
+#[rstest]
 #[tokio::test]
 #[serial]
-#[named]
-async fn test_persist_token_data() {
+async fn test_persist_token_data(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let full_name = function_name!();
+    println!("Starting {full_name} {:?}...", db_backend);
     let name = trim_test_name(function_name!());
-    let setup = setup(name).await;
+    let setup = setup(name, db_backend).await;
     let mint1 = Pubkey::new_unique();
     let mint2 = Pubkey::new_unique();
     let owner1 = Pubkey::new_unique();
@@ -222,4 +235,5 @@ async fn test_persist_token_data() {
     );
     assert_eq!(res.is_native, false);
     assert_eq!(res.close_authority, None);
+    println!("Finished {full_name} {:?}...", db_backend);
 }

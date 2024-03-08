@@ -24,15 +24,15 @@ use std::sync::Arc;
 
 #[derive(Parser, Debug, Clone, ValueEnum)]
 enum LoggingFormat {
-    STANDARD,
-    JSON,
+    Standard,
+    Json,
 }
 
 impl fmt::Display for LoggingFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LoggingFormat::STANDARD => write!(f, "standard"),
-            LoggingFormat::JSON => write!(f, "json"),
+            LoggingFormat::Standard => write!(f, "standard"),
+            LoggingFormat::Json => write!(f, "json"),
         }
     }
 }
@@ -64,7 +64,7 @@ struct Args {
     max_db_conn: u32,
 
     /// Logging format
-    #[arg(short, long, default_value_t = LoggingFormat::STANDARD)]
+    #[arg(short, long, default_value_t = LoggingFormat::Standard)]
     logging_format: LoggingFormat,
 }
 
@@ -138,8 +138,8 @@ fn setup_logging(logging_format: LoggingFormat) {
         env::var("RUST_LOG").unwrap_or("info,sqlx=error,sea_orm_migration=error".to_string());
     let subscriber = tracing_subscriber::fmt().with_env_filter(env_filter);
     match logging_format {
-        LoggingFormat::STANDARD => subscriber.init(),
-        LoggingFormat::JSON => subscriber.json().init(),
+        LoggingFormat::Standard => subscriber.init(),
+        LoggingFormat::Json => subscriber.json().init(),
     }
 }
 

@@ -39,6 +39,7 @@ open-rpc-derive = {version = "0.0.4"}
 open-rpc-schema = {version = "0.0.4"}
 psp-compressed-pda = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "emit-indexable-for-photon"}
 psp-compressed-token = {git = "https://github.com/Lightprotocol/light-protocol.git", branch = "emit-indexable-for-photon"}
+rstest = "0.18.2"
 schemars = {version = "0.8.6", features = ["chrono"]}
 schemars_derive = "0.8.6"
 sea-orm = {version = "0.10.6", features = [
