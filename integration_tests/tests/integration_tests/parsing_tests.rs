@@ -5,15 +5,19 @@ use serial_test::serial;
 
 use crate::utils::*;
 
+#[named]
+#[rstest]
 #[tokio::test]
 #[serial]
-#[named]
-async fn test_e2e() {
+async fn test_e2e(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name,
         TestSetupOptions {
             network: Network::Localnet,
+            db_backend,
         },
     )
     .await;

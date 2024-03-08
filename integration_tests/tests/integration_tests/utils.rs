@@ -5,17 +5,19 @@ use std::{
     sync::Mutex,
 };
 
-use api::api::{PhotonApi, PhotonApiConfig};
+use api::api::PhotonApi;
 use ingester::transaction_info::TransactionInfo;
 
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
+pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
-    Statement,
+    SqlxSqliteConnector, Statement,
 };
 
 use dao::typedefs::hash::Hash;
+pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
@@ -26,8 +28,10 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
+    sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     PgPool,
 };
+use std::sync::Arc;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
@@ -49,50 +53,67 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
     let mut init = INIT.lock().unwrap();
     if init.is_none() {
         setup_logging();
-        run_migrations_from_fresh(db).await;
+        if db.get_database_backend() != DbBackend::Sqlite {
+            // We run migrations from fresh everytime for SQLite
+            run_migrations_from_fresh(db).await;
+        }
         *init = Some(());
         return;
     }
 }
 
 pub struct TestSetup {
-    pub db_conn: DatabaseConnection,
+    pub db_conn: Arc<DatabaseConnection>,
     pub api: PhotonApi,
     pub name: String,
     pub client: RpcClient,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub enum Network {
-    #[default]
+    #[allow(unused)]
     Mainnet,
-    #[allow(dead_code)]
+    #[allow(unused)]
     Devnet,
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
     Localnet,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct TestSetupOptions {
     pub network: Network,
+    pub db_backend: DatabaseBackend,
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
-    let local_db = "postgres://postgres@localhost/postgres";
-    let pool = setup_pg_pool(local_db.to_string()).await;
-    let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
+    let db_conn = Arc::new(match opts.db_backend {
+        DatabaseBackend::Postgres => {
+            let local_db = "postgres://postgres@localhost/postgres";
+            if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
+                panic!("Refusing to run tests on non-local database out of caution");
+            }
+            let pool = setup_pg_pool(local_db.to_string()).await;
+            SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+        }
+        DatabaseBackend::Sqlite => {
+            SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
+        }
+        _ => unimplemented!(),
+    });
     run_one_time_setup(&db_conn).await;
-    reset_tables(&db_conn).await.unwrap();
-
-    let api = PhotonApi::new(PhotonApiConfig {
-        max_conn: 1,
-        timeout_seconds: 15,
-        db_url: local_db.to_string(),
-    })
-    .await
-    .map_err(|e| panic!("Failed to setup Photon API: {}", e))
-    .unwrap();
+    match opts.db_backend {
+        DatabaseBackend::Postgres => {
+            reset_tables(&db_conn).await.unwrap();
+        }
+        DatabaseBackend::Sqlite => {
+            // We need to run migrations from fresh for SQLite every time since we are using an
+            // in memory database that gets dropped every after test.
+            run_migrations_from_fresh(&db_conn).await;
+        }
+        _ => unimplemented!(),
+    }
+    let api = PhotonApi::from(db_conn.clone());
 
     let rpc_url = match opts.network {
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
@@ -109,8 +130,15 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     }
 }
 
-pub async fn setup(name: String) -> TestSetup {
-    setup_with_options(name, TestSetupOptions::default()).await
+pub async fn setup(name: String, database_backend: DatabaseBackend) -> TestSetup {
+    setup_with_options(
+        name,
+        TestSetupOptions {
+            network: Network::Mainnet,
+            db_backend: database_backend,
+        },
+    )
+    .await
 }
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
@@ -122,19 +150,43 @@ pub async fn setup_pg_pool(database_url: String) -> PgPool {
         .unwrap()
 }
 
+pub async fn setup_sqllite_pool() -> SqlitePool {
+    let options: SqliteConnectOptions = "sqlite::memory:".parse().unwrap();
+    SqlitePoolOptions::new()
+        .min_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap()
+}
+
 pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
-    for table in vec!["state_trees", "utxos"] {
+    for table in vec!["state_trees", "utxos", "token_owners"] {
         truncate_table(conn, table.to_string()).await?;
     }
     Ok(())
 }
 
 pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<ExecResult, DbErr> {
-    conn.execute(Statement::from_string(
-        DbBackend::Postgres,
-        format!("TRUNCATE TABLE {} CASCADE", table),
-    ))
-    .await
+    match conn.get_database_backend() {
+        DbBackend::Postgres => {
+            conn.execute(Statement::from_string(
+                conn.get_database_backend(),
+                format!("TRUNCATE TABLE {} CASCADE", table),
+            ))
+            .await
+        }
+        DbBackend::Sqlite => {
+            conn.execute(Statement::from_string(
+                conn.get_database_backend(),
+                // SQLite does not support the TRUNCATE operation. Typically, using DELETE FROM could
+                // result in errors due to foreign key constraints. However, SQLite does not enforce
+                // foreign key constraints by default.
+                format!("DELETE FROM {}", table),
+            ))
+            .await
+        }
+        _ => unimplemented!(),
+    }
 }
 
 pub fn mock_str_to_hash(input: &str) -> Hash {
@@ -202,5 +254,10 @@ pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> Transactio
 }
 
 pub fn trim_test_name(name: &str) -> String {
+    // Remove the test_ prefix and the case suffix
     name.replace("test_", "")
+        .split("::case")
+        .next()
+        .unwrap()
+        .to_string()
 }

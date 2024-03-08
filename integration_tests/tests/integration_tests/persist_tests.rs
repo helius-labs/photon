@@ -35,12 +35,15 @@ struct Person {
 // - Add test for multi-input/output transitions.
 // - Replace assertions with API queries instead of direct DB queries.
 
+#[named]
+#[rstest]
 #[tokio::test]
 #[serial]
-#[named]
-async fn test_persist_state_transitions() {
+async fn test_persist_state_transitions(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
     let name = trim_test_name(function_name!());
-    let setup = setup(name).await;
+    let setup = setup(name, db_backend).await;
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -110,12 +113,15 @@ async fn test_persist_state_transitions() {
     assert_eq!(res.lamports, utxo.lamports as i64);
 }
 
+#[named]
+#[rstest]
 #[tokio::test]
 #[serial]
-#[named]
-async fn test_persist_token_data() {
+async fn test_persist_token_data(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
     let name = trim_test_name(function_name!());
-    let setup = setup(name).await;
+    let setup = setup(name, db_backend).await;
     let mint1 = Pubkey::new_unique();
     let mint2 = Pubkey::new_unique();
     let owner1 = Pubkey::new_unique();

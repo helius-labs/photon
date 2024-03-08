@@ -24,6 +24,7 @@ migration = {workspace = true}
 once_cell = {workspace = true}
 psp-compressed-pda = {workspace = true}
 psp-compressed-token = {workspace = true}
+rstest = {workspace = true}
 sea-orm = {workspace = true}
 serde = {workspace = true}
 serde_json = {workspace = true}
