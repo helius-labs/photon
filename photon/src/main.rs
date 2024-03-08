@@ -98,10 +98,17 @@ async fn start_transaction_indexer(
         )
         .await;
 
+        info!("Backfilling historical blocks...");
+        let mut finished_backfill = false;
         loop {
             let transactions = poller.fetch_new_transactions().await;
             if transactions.is_empty() {
                 sleep(Duration::from_millis(20));
+                if !finished_backfill {
+                    info!("Finished backfilling historical blocks...");
+                    info!("Streaming live blocks...");
+                }
+                finished_backfill = true;
                 continue;
             }
             let transactions = futures::stream::iter(transactions);
