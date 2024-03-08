@@ -8,11 +8,16 @@ use ingester::{
 };
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
-use migration::sea_orm::{DatabaseConnection, SqlxPostgresConnector};
+use migration::{
+    sea_orm::{DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
+    Migrator, MigratorTrait,
+};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
+    migrate::Migration,
     postgres::{PgConnectOptions, PgPoolOptions},
-    PgPool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    PgPool, SqlitePool,
 };
 use std::env;
 use std::sync::Arc;
@@ -138,14 +143,28 @@ fn setup_logging(logging_format: LoggingFormat) {
     }
 }
 
+pub async fn setup_sqllite_pool() -> SqlitePool {
+    let options: SqliteConnectOptions = "sqlite::memory:".parse().unwrap();
+    SqlitePoolOptions::new()
+        .min_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap()
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     setup_logging(args.logging_format);
 
-    let db_conn = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(
-        setup_pg_pool(&args.db_url, args.max_db_conn).await,
+    // let db_conn = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(
+    //     setup_pg_pool(&args.db_url, args.max_db_conn).await,
+    // ));
+    let db_conn = Arc::new(SqlxSqliteConnector::from_sqlx_sqlite_pool(
+        setup_sqllite_pool().await,
     ));
+    Migrator::fresh(db_conn.as_ref()).await.unwrap();
+
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");
     start_transaction_indexer(

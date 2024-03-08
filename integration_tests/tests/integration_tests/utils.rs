@@ -12,10 +12,10 @@ use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
-    Statement,
+    SqlxSqliteConnector, Statement,
 };
 
-use dao::typedefs::hash::Hash;
+use dao::{generated::state_trees, typedefs::hash::Hash};
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
@@ -26,8 +26,10 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
+    sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     PgPool,
 };
+use std::sync::Arc;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
@@ -56,7 +58,7 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
 }
 
 pub struct TestSetup {
-    pub db_conn: DatabaseConnection,
+    pub db_conn: Arc<DatabaseConnection>,
     pub api: PhotonApi,
     pub name: String,
     pub client: RpcClient,
@@ -79,20 +81,17 @@ pub struct TestSetupOptions {
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
-    let local_db = "postgres://postgres@localhost/postgres";
-    let pool = setup_pg_pool(local_db.to_string()).await;
-    let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
+    // let local_db = "postgres://postgres@localhost/postgres";
+    // let pool = setup_pg_pool(local_db.to_string()).await;
+    // let db_conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
+    let db_conn = Arc::new(SqlxSqliteConnector::from_sqlx_sqlite_pool(
+        setup_sqllite_pool().await,
+    ));
     run_one_time_setup(&db_conn).await;
+    run_migrations_from_fresh(&db_conn).await;
     reset_tables(&db_conn).await.unwrap();
 
-    let api = PhotonApi::new(PhotonApiConfig {
-        max_conn: 1,
-        timeout_seconds: 15,
-        db_url: local_db.to_string(),
-    })
-    .await
-    .map_err(|e| panic!("Failed to setup Photon API: {}", e))
-    .unwrap();
+    let api = PhotonApi::from(db_conn.clone());
 
     let rpc_url = match opts.network {
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
@@ -122,6 +121,15 @@ pub async fn setup_pg_pool(database_url: String) -> PgPool {
         .unwrap()
 }
 
+pub async fn setup_sqllite_pool() -> SqlitePool {
+    let options: SqliteConnectOptions = "sqlite::memory:".parse().unwrap();
+    SqlitePoolOptions::new()
+        .min_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap()
+}
+
 pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
     for table in vec!["state_trees", "utxos"] {
         truncate_table(conn, table.to_string()).await?;
@@ -132,7 +140,7 @@ pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
 pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<ExecResult, DbErr> {
     conn.execute(Statement::from_string(
         DbBackend::Postgres,
-        format!("TRUNCATE TABLE {} CASCADE", table),
+        format!("DELETE FROM {}", table),
     ))
     .await
 }

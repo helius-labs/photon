@@ -45,6 +45,7 @@ sea-orm = {version = "0.10.6", features = [
   "macros",
   "runtime-tokio-rustls",
   "sqlx-postgres",
+  "sqlx-sqlite",
   "with-chrono",
   "mock",
 ]}
@@ -59,6 +60,7 @@ sqlx = {version = "0.6.2", features = [
   "macros",
   "runtime-tokio-rustls",
   "postgres",
+  "sqlite",
   "uuid",
   "offline",
   "json",
