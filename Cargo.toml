@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "dao",
-  "ingester",
   "migration",
   "photon",
 ]
@@ -21,7 +20,6 @@ env_logger = "0.10.0"
 function_name = "0.3.0"
 futures = "0.3.30"
 hyper = "0.14.23"
-ingester = {path = "ingester"}
 insta = {version = "1.34.0", features = ["json"]}
 itertools = "0.12.1"
 jsonrpsee = {version = "0.16.2", features = ["server", "macros"]}

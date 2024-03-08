@@ -2992,33 +2992,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ingester"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "borsh 0.10.3",
- "bs58 0.4.0",
- "dao",
- "futures",
- "lazy_static",
- "light-merkle-tree-event",
- "log",
- "psp-compressed-pda",
- "psp-compressed-token",
- "sea-orm",
- "serde",
- "serde_json",
- "solana-client",
- "solana-program",
- "solana-sdk",
- "solana-transaction-status",
- "sqlx",
- "thiserror",
- "tracing",
- "tracing-subscriber 0.3.18",
-]
-
-[[package]]
 name = "insta"
 version = "1.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4070,7 +4043,6 @@ dependencies = [
  "function_name",
  "futures",
  "hyper",
- "ingester",
  "insta",
  "itertools 0.12.1",
  "jsonrpsee",

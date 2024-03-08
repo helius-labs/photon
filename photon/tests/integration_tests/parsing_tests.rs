@@ -1,5 +1,5 @@
 use function_name::named;
-use ingester::{parser::parse_transaction, persist::persist_bundle};
+use photon::ingester::{parser::parse_transaction, persist::persist_bundle};
 use photon::api::api::ApiContract;
 use photon::api::method::get_utxos::GetUtxosRequest;
 
