@@ -19,8 +19,9 @@ use crate::{
             GetCompressedTokenInfoByOwnerResponse,
         },
         get_utxo::{get_utxo, GetUtxoRequest},
+        get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
         get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
-        utils::Utxo,
+        utils::{ProofResponse, Utxo},
     },
 };
 
@@ -49,6 +50,11 @@ pub trait ApiContract: Send + Sync + 'static {
         -> Result<GetUtxosResponse, PhotonApiError>;
 
     async fn get_utxo(&self, request: GetUtxoRequest) -> Result<Utxo, PhotonApiError>;
+
+    async fn get_utxo_proof(
+        &self,
+        payload: GetUtxoProofRequest,
+    ) -> Result<ProofResponse, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
@@ -122,6 +128,13 @@ impl ApiContract for PhotonApi {
 
     async fn get_utxo(&self, request: GetUtxoRequest) -> Result<Utxo, PhotonApiError> {
         get_utxo(&self.db_conn, request).await
+    }
+
+    async fn get_utxo_proof(
+        &self,
+        request: GetUtxoProofRequest,
+    ) -> Result<ProofResponse, PhotonApiError> {
+        get_utxo_proof(&self.db_conn, request).await
     }
 }
 
