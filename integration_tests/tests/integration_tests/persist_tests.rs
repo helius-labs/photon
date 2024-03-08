@@ -68,6 +68,7 @@ async fn test_persist_state_transitions(
     };
 
     let hash = utxo.hash();
+    let slot = 123;
 
     let bundle = PublicTransactionEventBundle {
         in_utxos: vec![],
@@ -94,7 +95,7 @@ async fn test_persist_state_transitions(
             })],
         },
         transaction: Signature::new_unique(),
-        slot: 123,
+        slot: slot,
     };
     persist_bundle(&setup.db_conn, bundle.into()).await.unwrap();
 
@@ -127,6 +128,7 @@ async fn test_persist_state_transitions(
     let raw_data = base64::decode(res.data).unwrap();
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports);
+    assert_eq!(res.slot_created, slot as u64);
 
     // Assert that we get an error if we input a non-existent UTXO.
     // TODO: Test spent utxos

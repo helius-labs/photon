@@ -16,6 +16,7 @@ pub struct Utxo {
     pub data: String,
     pub tree: Option<SerializablePubkey>,
     pub lamports: u64,
+    pub slot_created: u64,
 }
 
 pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
@@ -27,5 +28,6 @@ pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
         owner: utxo.owner.try_into()?,
         tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
         lamports: utxo.lamports as u64,
+        slot_created: utxo.slot_updated as u64,
     })
 }
