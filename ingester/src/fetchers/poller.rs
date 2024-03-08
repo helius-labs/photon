@@ -2,10 +2,13 @@ use std::{sync::Arc, thread::sleep, time::Duration};
 
 use anyhow::{anyhow, Result};
 use futures::{stream, StreamExt};
-use log::info;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
-use solana_sdk::{clock::UnixTimestamp, transaction::VersionedTransaction};
-use solana_transaction_status::{EncodedTransactionWithStatusMeta, UiConfirmedBlock};
+use solana_sdk::{
+    clock::UnixTimestamp, commitment_config::CommitmentConfig, transaction::VersionedTransaction,
+};
+use solana_transaction_status::{
+    EncodedTransactionWithStatusMeta, TransactionDetails, UiConfirmedBlock, UiTransactionEncoding,
+};
 
 use crate::transaction_info::{parse_instruction_groups, TransactionInfo};
 
@@ -38,6 +41,10 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> U
             .get_block_with_config(
                 slot,
                 RpcBlockConfig {
+                    encoding: Some(UiTransactionEncoding::Base64),
+                    transaction_details: Some(TransactionDetails::Full),
+                    rewards: None,
+                    commitment: Some(CommitmentConfig::confirmed()),
                     max_supported_transaction_version: Some(0),
                     ..RpcBlockConfig::default()
                 },
@@ -93,7 +100,6 @@ impl TransactionPoller {
         let new_blocks = self.fetch_new_blocks().await;
 
         if new_blocks.len() == 0 {
-            info!("No new blocks found");
             sleep(Duration::from_millis(100));
         }
 
@@ -123,7 +129,6 @@ fn _parse_transaction(
     let EncodedTransactionWithStatusMeta {
         transaction, meta, ..
     } = transaction;
-
     let versioned_transaction: VersionedTransaction = transaction
         .decode()
         .ok_or(anyhow!("Transaction cannot be decoded".to_string()))?;

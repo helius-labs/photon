@@ -101,7 +101,6 @@ async fn start_transaction_indexer(
         loop {
             let transactions = poller.fetch_new_transactions().await;
             if transactions.is_empty() {
-                info!("No new transactions found. Sleeping...");
                 sleep(Duration::from_millis(20));
                 continue;
             }

@@ -13,18 +13,18 @@ use std::fmt;
 use std::convert::TryFrom;
 
 use crate::error::IngesterError;
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instruction {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
     pub accounts: Vec<Pubkey>,
 }
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstructionGroup {
     pub outer_instruction: Instruction,
     pub inner_instructions: Vec<Instruction>,
 }
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionInfo {
     pub slot: Slot,
     pub block_time: Option<UnixTimestamp>,
