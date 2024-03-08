@@ -2,9 +2,11 @@ use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use api::{
     api::ApiContract,
+    error::PhotonApiError,
     method::{
         get_compressed_account::GetCompressedAccountRequest,
         get_compressed_token_accounts_by_owner::GetCompressedTokenInfoByOwnerRequest,
+        get_utxo::GetUtxoRequest,
     },
 };
 use dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -111,6 +113,35 @@ async fn test_persist_state_transitions(
     let raw_data = base64::decode(res.data).unwrap();
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports as i64);
+
+    // Verify GetUtxo
+    let res = setup
+        .api
+        .get_utxo(GetUtxoRequest {
+            hash: Hash::from(hash.clone()),
+        })
+        .await
+        .unwrap();
+
+    #[allow(deprecated)]
+    let raw_data = base64::decode(res.data).unwrap();
+    assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
+    assert_eq!(res.lamports, utxo.lamports);
+
+    // Assert that we get an error if we input a non-existent UTXO.
+    // TODO: Test spent utxos
+    let err = setup
+        .api
+        .get_utxo(GetUtxoRequest {
+            hash: Hash::from(Pubkey::new_unique().to_bytes()),
+        })
+        .await
+        .unwrap_err();
+
+    match err {
+        PhotonApiError::RecordNotFound(_) => {}
+        _ => panic!("Expected NotFound error"),
+    }
 }
 
 #[named]
