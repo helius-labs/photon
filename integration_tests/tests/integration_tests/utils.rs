@@ -5,7 +5,7 @@ use std::{
     sync::Mutex,
 };
 
-use api::api::{PhotonApi, PhotonApiConfig};
+use api::api::PhotonApi;
 use ingester::transaction_info::TransactionInfo;
 
 use migration::{Migrator, MigratorTrait};
@@ -16,18 +16,16 @@ use sea_orm::{
     SqlxSqliteConnector, Statement,
 };
 
-use dao::{generated::state_trees, typedefs::hash::Hash};
+use dao::typedefs::hash::Hash;
+pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
 use solana_sdk::{
     commitment_config::{CommitmentConfig, CommitmentLevel},
-    instruction::CompiledInstruction,
     signature::Signature,
 };
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, InnerInstruction, UiTransactionEncoding,
-};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
@@ -36,8 +34,6 @@ use sqlx::{
 use std::sync::Arc;
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
-const SUPPORTED_DB_BACKENDS: [DatabaseBackend; 2] =
-    [DatabaseBackend::Postgres, DatabaseBackend::Sqlite];
 
 fn setup_logging() {
     let env_filter =
@@ -75,7 +71,9 @@ pub struct TestSetup {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Network {
+    #[allow(unused)]
     Mainnet,
+    #[allow(unused)]
     Devnet,
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
@@ -85,21 +83,26 @@ pub enum Network {
 #[derive(Clone, Copy)]
 pub struct TestSetupOptions {
     pub network: Network,
-    pub database_backed: DatabaseBackend,
+    pub db_backend: DatabaseBackend,
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
-    let local_db = "postgres://postgres@localhost/postgres";
-    let pool = setup_pg_pool(local_db.to_string()).await;
-    let db_conn = Arc::new(match opts.database_backed {
-        DatabaseBackend::Postgres => SqlxPostgresConnector::from_sqlx_postgres_pool(pool),
+    let db_conn = Arc::new(match opts.db_backend {
+        DatabaseBackend::Postgres => {
+            let local_db = "postgres://postgres@localhost/postgres";
+            if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
+                panic!("Refusing to run tests on non-local database out of caution");
+            }
+            let pool = setup_pg_pool(local_db.to_string()).await;
+            SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+        }
         DatabaseBackend::Sqlite => {
             SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
         }
         _ => unimplemented!(),
     });
     run_one_time_setup(&db_conn).await;
-    match opts.database_backed {
+    match opts.db_backend {
         DatabaseBackend::Postgres => {
             reset_tables(&db_conn).await.unwrap();
         }
@@ -132,7 +135,7 @@ pub async fn setup(name: String, database_backend: DatabaseBackend) -> TestSetup
         name,
         TestSetupOptions {
             network: Network::Mainnet,
-            database_backed: database_backend,
+            db_backend: database_backend,
         },
     )
     .await
@@ -157,7 +160,7 @@ pub async fn setup_sqllite_pool() -> SqlitePool {
 }
 
 pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
-    for table in vec!["state_trees", "utxos"] {
+    for table in vec!["state_trees", "utxos", "token_owners"] {
         truncate_table(conn, table.to_string()).await?;
     }
     Ok(())

@@ -9,7 +9,7 @@ use ingester::{
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use migration::{
-    sea_orm::{DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
+    sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -50,9 +50,9 @@ struct Args {
     #[arg(short, long, default_value = "http://127.0.0.1:8899")]
     rpc_url: String,
 
-    /// DB URL to store indexing data
-    #[arg(short, long, default_value = "postgres://postgres@localhost/postgres")]
-    db_url: String,
+    /// DB URL to store indexing data. By default we use an in-memory SQLite database.
+    #[arg(short, long)]
+    db_url: Option<String>,
 
     /// The start slot to begin indexing from. Defaults to the current slot for testnet/mainnet/devnet
     /// and 0 for localnet.
@@ -143,13 +143,50 @@ fn setup_logging(logging_format: LoggingFormat) {
     }
 }
 
-pub async fn setup_sqllite_pool() -> SqlitePool {
-    let options: SqliteConnectOptions = "sqlite::memory:".parse().unwrap();
+async fn setup_sqllite_in_memory_pool(max_connections: u32) -> SqlitePool {
+    setup_sqllite_pool("sqlite::memory:", max_connections).await
+}
+
+async fn setup_sqllite_pool(db_url: &str, max_connections: u32) -> SqlitePool {
+    let options: SqliteConnectOptions = db_url.parse().unwrap();
     SqlitePoolOptions::new()
-        .min_connections(1)
+        .max_connections(max_connections)
         .connect_with(options)
         .await
         .unwrap()
+}
+
+pub fn parse_db_type(db_url: &str) -> DatabaseBackend {
+    if db_url.starts_with("postgres://") {
+        DatabaseBackend::Postgres
+    } else if db_url.starts_with("sqlite://") {
+        DatabaseBackend::Sqlite
+    } else {
+        unimplemented!("Unsupported database type: {}", db_url)
+    }
+}
+
+async fn setup_database_connection(
+    db_url: Option<String>,
+    max_connections: u32,
+) -> Arc<DatabaseConnection> {
+    Arc::new(match db_url {
+        Some(db_url) => {
+            let db_type = parse_db_type(&db_url);
+            match db_type {
+                DatabaseBackend::Postgres => SqlxPostgresConnector::from_sqlx_postgres_pool(
+                    setup_pg_pool(&db_url, max_connections).await,
+                ),
+                DatabaseBackend::Sqlite => SqlxSqliteConnector::from_sqlx_sqlite_pool(
+                    setup_sqllite_pool(&db_url, max_connections).await,
+                ),
+                _ => unimplemented!("Unsupported database type: {}", db_url),
+            }
+        }
+        None => SqlxSqliteConnector::from_sqlx_sqlite_pool(
+            setup_sqllite_in_memory_pool(max_connections).await,
+        ),
+    })
 }
 
 #[tokio::main]
@@ -157,13 +194,11 @@ async fn main() {
     let args = Args::parse();
     setup_logging(args.logging_format);
 
-    // let db_conn = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(
-    //     setup_pg_pool(&args.db_url, args.max_db_conn).await,
-    // ));
-    let db_conn = Arc::new(SqlxSqliteConnector::from_sqlx_sqlite_pool(
-        setup_sqllite_pool().await,
-    ));
-    Migrator::fresh(db_conn.as_ref()).await.unwrap();
+    let db_conn = setup_database_connection(args.db_url.clone(), args.max_db_conn).await;
+    if args.db_url.is_none() {
+        info!("Running migrations...");
+        Migrator::up(db_conn.as_ref(), None).await.unwrap();
+    }
 
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");
