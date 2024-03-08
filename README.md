@@ -15,7 +15,7 @@ cargo run
 // Against devnet
 cargo run -- --rpc-url=https://api.devnet.solana.com
 
-// Using your local Postgres database instead of the default in in-memory SQLlite db
+// Using your local Postgres database instead of the default in in-memory SQLite db
 cargon run -- --db-urlpostgres://postgres@localhost/postgres
 ```
 
