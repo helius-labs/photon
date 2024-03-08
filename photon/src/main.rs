@@ -1,6 +1,5 @@
 use std::{fmt, thread::sleep, time::Duration};
 
-use api::api::PhotonApi;
 use clap::{Parser, ValueEnum};
 use ingester::{
     fetchers::poller::{fetch_current_slot_with_infinite_retry, Options, TransactionPoller},
@@ -12,6 +11,7 @@ use migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
+use photon::api::{self, api::PhotonApi};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},

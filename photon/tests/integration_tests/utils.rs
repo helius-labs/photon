@@ -5,8 +5,8 @@ use std::{
     sync::Mutex,
 };
 
-use api::api::PhotonApi;
 use ingester::transaction_info::TransactionInfo;
+use photon::api::api::PhotonApi;
 
 use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;

@@ -10,7 +10,6 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.79"
-api = {path = "../api"}
 async-trait = "0.1.53"
 base64 = "0.21.0"
 borsh = "0.10.3"

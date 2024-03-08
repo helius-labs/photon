@@ -1,6 +1,8 @@
-use api::{api::ApiContract, method::get_utxos::GetUtxosRequest};
 use function_name::named;
 use ingester::{parser::parse_transaction, persist::persist_bundle};
+use photon::api::api::ApiContract;
+use photon::api::method::get_utxos::GetUtxosRequest;
+
 use serial_test::serial;
 
 use crate::utils::*;

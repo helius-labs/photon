@@ -404,36 +404,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ad32ce52e4161730f7098c077cd2ed6229b5804ccf99e5366be1ab72a98b4e1"
 
 [[package]]
-name = "api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.21.7",
- "bs58 0.4.0",
- "cadence-macros",
- "dao",
- "env_logger 0.10.2",
- "hyper",
- "jsonrpsee",
- "jsonrpsee-core",
- "log",
- "schemars",
- "schemars_derive",
- "sea-orm",
- "serde",
- "serde_json",
- "solana-sdk",
- "sqlx",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber 0.3.18",
-]
-
-[[package]]
 name = "ark-bls12-381"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4089,7 +4059,6 @@ name = "photon"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "api",
  "async-trait",
  "base64 0.21.7",
  "borsh 0.10.3",
