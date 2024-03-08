@@ -14,7 +14,6 @@ use migration::{
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
-    migrate::Migration,
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     PgPool, SqlitePool,
