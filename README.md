@@ -2,7 +2,27 @@
 
 Lightweight indexer for general & token compression. WIP.
 
-# Setup
+## Running Photon 
+
+To run the photon indexer run:
+
+```
+cd photon
+
+// By default photon runs against localnet
+cargo run
+
+// Against devnet
+cargo run -- --rpc-url=https://api.devnet.solana.com
+```
+
+To see configurations options run
+```
+cd photon 
+cargo run --help
+```
+
+## Setup
 
 To be able to compile dependencies please run:
 

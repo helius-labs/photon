@@ -1,0 +1,18 @@
+[package]
+edition = "2021"
+name = "photon"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+api = {workspace = true}
+clap = {workspace = true}
+futures = {workspace = true}
+ingester = {workspace = true}
+jsonrpsee = {workspace = true}
+log = {workspace = true}
+migration = {workspace = true}
+solana-client = {workspace = true}
+sqlx = {workspace = true}
+tokio = {workspace = true}
+tracing-subscriber = {workspace = true}

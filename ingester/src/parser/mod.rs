@@ -19,15 +19,15 @@ const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 
 pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, IngesterError> {
-    info!("Parsing transaction: {}", tx);
     let mut event_bundles = Vec::new();
-    for instruction_group in tx.instruction_groups {
+    let mut logged_transaction = false;
+    for instruction_group in tx.clone().instruction_groups {
         let mut ordered_intructions = Vec::new();
         ordered_intructions.push(instruction_group.outer_instruction);
         ordered_intructions.extend(instruction_group.inner_instructions);
 
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if index < ordered_intructions.len() - 2 {
+            if ordered_intructions.len() - index > 2 {
                 let next_instruction = &ordered_intructions[index + 1];
                 let next_next_instruction = &ordered_intructions[index + 2];
                 // We need to check if the account compression instruction contains a noop account to determine
@@ -38,6 +38,13 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                     && next_instruction.program_id == NOOP_PROGRAM_ID
                     && next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
+                    if !logged_transaction {
+                        info!(
+                            "Indexing transaction with slot {} and id {}",
+                            tx.slot, tx.signature
+                        );
+                        logged_transaction = true;
+                    }
                     let changelogs = Changelogs::deserialize(&mut next_instruction.data.as_slice())
                         .map_err(|e| {
                             IngesterError::ParserError(format!(
