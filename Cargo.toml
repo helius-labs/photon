@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "api",
-  "integration_tests",
   "dao",
   "ingester",
   "migration",

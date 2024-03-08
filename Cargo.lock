@@ -3049,48 +3049,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a7c22c4d34ef4788c351e971c52bfdfe7ea2766f8c5466bc175dd46e52ac22e"
+dependencies = [
+ "console",
+ "lazy_static",
+ "linked-hash-map",
+ "serde",
+ "similar",
+ "yaml-rust",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "integration_tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "api",
- "base64 0.21.7",
- "borsh 0.10.3",
- "bs58 0.4.0",
- "dao",
- "function_name",
- "ingester",
- "itertools 0.12.1",
- "lazy_static",
- "light-merkle-tree-event",
- "light-poseidon",
- "log",
- "migration",
- "once_cell",
- "psp-compressed-pda",
- "psp-compressed-token",
- "rstest",
- "sea-orm",
- "serde",
- "serde_json",
- "serial_test",
- "solana-client",
- "solana-sdk",
- "solana-transaction-status",
- "sqlx",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.18",
 ]
 
 [[package]]
@@ -3521,6 +3499,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3923,6 +3907,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
+name = "open-rpc-derive"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae3de03a56750973a83c76a40fb4b81969d42fad152cd0e787e25c79dcf54e3f"
+dependencies = [
+ "open-rpc-schema",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "open-rpc-schema"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6919654a78166b8d8f266f702ce763c0880c11a2e75e1de9cc3e51704abf620"
+dependencies = [
+ "schemars",
+ "schemars_derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4080,16 +4088,51 @@ dependencies = [
 name = "photon"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "api",
+ "async-trait",
+ "base64 0.21.7",
+ "borsh 0.10.3",
+ "bs58 0.4.0",
+ "cadence-macros",
  "clap 4.5.2",
+ "dao",
+ "env_logger 0.10.2",
+ "function_name",
  "futures",
+ "hyper",
  "ingester",
+ "insta",
+ "itertools 0.12.1",
  "jsonrpsee",
+ "jsonrpsee-core",
+ "lazy_static",
+ "light-merkle-tree-event",
+ "light-poseidon",
  "log",
  "migration",
+ "once_cell",
+ "open-rpc-derive",
+ "open-rpc-schema",
+ "psp-compressed-pda",
+ "psp-compressed-token",
+ "rstest",
+ "schemars",
+ "schemars_derive",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "serial_test",
  "solana-client",
+ "solana-program",
+ "solana-sdk",
+ "solana-transaction-status",
  "sqlx",
+ "thiserror",
  "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
  "tracing-subscriber 0.3.18",
 ]
 
@@ -5418,6 +5461,12 @@ name = "simdutf8"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
+
+[[package]]
+name = "similar"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32fea41aca09ee824cc9724996433064c89f7777e60762749a4170a14abbfa21"
 
 [[package]]
 name = "sized-chunks"
@@ -7647,6 +7696,15 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time",
+]
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+ "linked-hash-map",
 ]
 
 [[package]]
