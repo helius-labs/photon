@@ -8,8 +8,8 @@ use std::{
 use photon::api::api::PhotonApi;
 use photon::ingester::transaction_info::TransactionInfo;
 
-use migration::{Migrator, MigratorTrait};
 use once_cell::sync::Lazy;
+use photon::migration::{Migrator, MigratorTrait};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
