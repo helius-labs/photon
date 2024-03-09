@@ -239,7 +239,6 @@ pub async fn persist_token_data(
         state,
         is_native,
         delegated_amount,
-        close_authority,
     } = token_tlv_data;
 
     let model = token_owners::ActiveModel {
@@ -250,7 +249,7 @@ pub async fn persist_token_data(
         frozen: Set(state == AccountState::Frozen),
         delegated_amount: Set(delegated_amount as i64),
         is_native: Set(is_native.map(|n| n as i64)),
-        close_authority: Set(close_authority.map(|c| c.to_bytes().to_vec())),
+        // TODO: Add close authority
         ..Default::default()
     };
     // TODO: We are not addressing the case where the record already exists.
