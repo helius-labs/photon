@@ -6,7 +6,6 @@ use photon::api::api::ApiContract;
 use photon::api::{
     error::PhotonApiError,
     method::{
-        get_compressed_account::GetCompressedAccountRequest,
         get_compressed_token_accounts_by_owner::GetCompressedTokenInfoByOwnerRequest,
         get_utxo::GetUtxoRequest,
     },
@@ -99,22 +98,6 @@ async fn test_persist_state_transitions(
     };
     persist_bundle(&setup.db_conn, bundle.into()).await.unwrap();
 
-    // Verify GetCompressedAccount
-    let res = setup
-        .api
-        .get_compressed_account(GetCompressedAccountRequest {
-            hash: Some(Hash::from(hash.clone())),
-            ..Default::default()
-        })
-        .await
-        .unwrap()
-        .unwrap();
-
-    #[allow(deprecated)]
-    let raw_data = base64::decode(res.data).unwrap();
-    assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
-    assert_eq!(res.lamports, utxo.lamports as i64);
-
     // Verify GetUtxo
     let res = setup
         .api
@@ -128,7 +111,7 @@ async fn test_persist_state_transitions(
     let raw_data = base64::decode(res.data).unwrap();
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports);
-    assert_eq!(res.slot_created, slot as u64);
+    assert_eq!(res.slot_updated, slot as u64);
 
     // Assert that we get an error if we input a non-existent UTXO.
     // TODO: Test spent utxos

@@ -77,7 +77,6 @@ impl Into<[u8; 32]> for Hash {
     }
 }
 
-
 impl TryFrom<Vec<u8>> for Hash {
     type Error = ParseHashError;
 
