@@ -212,7 +212,7 @@ async fn main() {
     )
     .await;
 
-    info!("Starting API server...");
+    info!("Starting API server with port {}...", args.port);
     let api_handler = start_api_server(db_conn, args.port).await;
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
