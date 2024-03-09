@@ -168,7 +168,6 @@ async fn test_persist_token_data(
         state: AccountState::Frozen,
         is_native: Some(1),
         delegated_amount: 0,
-        close_authority: Some(Pubkey::new_unique()),
     };
 
     let token_tlv_data2: TokenTlvData = TokenTlvData {
@@ -179,7 +178,6 @@ async fn test_persist_token_data(
         state: AccountState::Initialized,
         is_native: None,
         delegated_amount: 1,
-        close_authority: None,
     };
 
     let token_tlv_data3: TokenTlvData = TokenTlvData {
@@ -190,7 +188,6 @@ async fn test_persist_token_data(
         state: AccountState::Frozen,
         is_native: Some(1000),
         delegated_amount: 0,
-        close_authority: Some(Pubkey::new_unique()),
     };
     for token_tlv_data in vec![
         token_tlv_data1.clone(),
@@ -233,12 +230,6 @@ async fn test_persist_token_data(
         token_tlv_data1.delegate.map(SerializablePubkey::from)
     );
     assert_eq!(res.is_native, true);
-    assert_eq!(
-        res.close_authority,
-        token_tlv_data1
-            .close_authority
-            .map(SerializablePubkey::from)
-    );
 
     let res = setup
         .api
