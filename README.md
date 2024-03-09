@@ -58,7 +58,7 @@ cargo run --bin migration -- up
 
 Run the following command to generate the DB models.
 ```
-sea-orm-cli generate entity -o photon/src/dao/generated
+sea-orm-cli generate entity -o src/dao/generated
 ```
 
 ## Integration Tests
