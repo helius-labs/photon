@@ -16,7 +16,7 @@ cargo run -- --rpc-url=https://api.devnet.solana.com
 # Using your local Postgres database instead of the default in in-memory SQLite db
 cargon run -- --db-urlpostgres://postgres@localhost/postgres
 
-# Specifying a start slot. Default start slot is 0 for localnet and the current slot for devnet/mainnet.
+# Specifying a start slot. Defaults to 0 for localnet and current for devnet/mainnet
 cargo run -- --start-slot=123 
 
 # To see more configuration options
