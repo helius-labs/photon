@@ -1,6 +1,5 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use function_name::named;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
 use photon::api::api::ApiContract;
@@ -12,6 +11,7 @@ use photon::api::{
         get_utxo::GetUtxoRequest,
     },
 };
+use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
 use photon::ingester::persist::persist_bundle;
 use photon::ingester::persist::persist_token_data;

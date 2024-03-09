@@ -1925,19 +1925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dao"
-version = "0.1.0"
-dependencies = [
- "bs58 0.4.0",
- "schemars",
- "sea-orm",
- "serde",
- "serde_json",
- "solana-sdk",
- "thiserror",
-]
-
-[[package]]
 name = "darling"
 version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4031,7 +4018,6 @@ dependencies = [
  "bs58 0.4.0",
  "cadence-macros",
  "clap 4.5.2",
- "dao",
  "env_logger 0.10.2",
  "function_name",
  "futures",

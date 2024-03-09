@@ -16,7 +16,7 @@ use sea_orm::{
     SqlxSqliteConnector, Statement,
 };
 
-use dao::typedefs::hash::Hash;
+use photon::dao::typedefs::hash::Hash;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
