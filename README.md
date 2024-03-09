@@ -1,6 +1,6 @@
 # Photon
 
-Solana indexer for general & token compression
+Solana indexer for general compression
 
 ## Running Photon 
 
