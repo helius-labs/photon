@@ -4,62 +4,28 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
-use crate::dao::typedefs::hash::Hash;
+use super::utils::{parse_utxo_model, Utxo};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountRequest {
-    pub hash: Option<Hash>,
-    pub account_id: Option<SerializablePubkey>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountResponse {
-    pub hash: Hash,
-    pub account: Option<SerializablePubkey>,
-    pub data: String,
-    pub owner: SerializablePubkey,
-    pub lamports: i64,
-    pub tree: Option<SerializablePubkey>,
-    pub seq: Option<i64>,
-    pub slot_updated: i64,
+    pub address: SerializablePubkey,
 }
 
 pub async fn get_compressed_account(
     conn: &DatabaseConnection,
     request: GetCompressedAccountRequest,
-) -> Result<Option<GetCompressedAccountResponse>, PhotonApiError> {
-    let GetCompressedAccountRequest { hash, account_id } = request;
-
-    let filter = if let Some(h) = hash {
-        Ok(utxos::Column::Hash.eq::<Vec<u8>>(h.into()))
-    } else if let Some(a) = account_id {
-        Ok(utxos::Column::Account.eq::<Vec<u8>>(a.into()))
-    } else {
-        Err(PhotonApiError::ValidationError(
-            "Must provide either `hash` or `account_id`".to_string(),
-        ))
-    }?;
-
-    let result = utxos::Entity::find().filter(filter).one(conn).await?;
-
-    if let Some(utxo) = result {
-        let res = GetCompressedAccountResponse {
-            hash: utxo.hash.try_into()?,
-            account: utxo.account.map(SerializablePubkey::try_from).transpose()?,
-            #[allow(deprecated)]
-            data: base64::encode(utxo.data),
-            owner: utxo.owner.try_into()?,
-            lamports: utxo.lamports,
-            tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
-            seq: utxo.seq,
-            slot_updated: utxo.slot_updated,
-        };
-
-        Ok(Some(res))
-    } else {
-        Ok(None)
-    }
+) -> Result<Utxo, PhotonApiError> {
+    let GetCompressedAccountRequest { address } = request;
+    parse_utxo_model(
+        utxos::Entity::find()
+            .filter(utxos::Column::Account.eq::<Vec<u8>>(address.clone().into()))
+            .one(conn)
+            .await?
+            .ok_or(PhotonApiError::RecordNotFound(format!(
+                "Account {} not found",
+                address
+            )))?,
+    )
 }

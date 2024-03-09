@@ -13,8 +13,7 @@ use super::utils::{build_full_proof, get_proof_path, ProofResponse};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountProofRequest {
-    pub hash: Option<Hash>,
-    pub account_id: Option<SerializablePubkey>,
+    pub address: SerializablePubkey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -30,29 +29,20 @@ pub struct GetCompressedAccountProofResponse {
 pub async fn get_compressed_account_proof(
     conn: &DatabaseConnection,
     request: GetCompressedAccountProofRequest,
-) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError> {
-    let GetCompressedAccountProofRequest { hash, account_id } = request;
+) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
+    let GetCompressedAccountProofRequest { address } = request;
 
     // Extract the leaf hash from the user or look it up via the provided account_id.
-    let leaf_hash: Vec<u8>;
-    if let Some(h) = hash.clone() {
-        leaf_hash = h.into();
-    } else if let Some(a) = account_id {
-        let acc_vec: Vec<u8> = a.into();
-        let res = utxos::Entity::find()
-            .filter(utxos::Column::Account.eq(acc_vec))
-            .one(conn)
-            .await?;
-        if let Some(utxo) = res {
-            leaf_hash = utxo.hash;
-        } else {
-            return Ok(None);
-        }
-    } else {
-        return Err(PhotonApiError::ValidationError(
-            "Must provide either `hash` or `account_id`".to_string(),
-        ));
-    }
+    let acc_vec: Vec<u8> = address.clone().into();
+    let leaf_hash = utxos::Entity::find()
+        .filter(utxos::Column::Account.eq(acc_vec))
+        .one(conn)
+        .await?
+        .ok_or(PhotonApiError::RecordNotFound(format!(
+            "Account {} not found",
+            address
+        )))?
+        .hash;
 
     let leaf_node = state_trees::Entity::find()
         .filter(
@@ -61,11 +51,12 @@ pub async fn get_compressed_account_proof(
                 .and(state_trees::Column::Level.eq(0)),
         )
         .one(conn)
-        .await?;
-    if leaf_node.is_none() {
-        return Ok(None);
-    }
-    let leaf_node = leaf_node.unwrap();
+        .await?
+        .ok_or(PhotonApiError::RecordNotFound(format!(
+            "Leaf node not found for account {}",
+            address
+        )))?;
+
     let tree = leaf_node.tree;
     let required_node_indices = get_proof_path(leaf_node.node_idx);
 
@@ -87,5 +78,5 @@ pub async fn get_compressed_account_proof(
         root,
         proof,
     };
-    Ok(Some(res))
+    Ok(res)
 }

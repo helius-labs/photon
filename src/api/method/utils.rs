@@ -11,24 +11,26 @@ use super::super::error::PhotonApiError;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Utxo {
     pub hash: Hash,
-    pub account: Option<SerializablePubkey>,
-    pub owner: SerializablePubkey,
+    pub address: Option<SerializablePubkey>,
     pub data: String,
-    pub tree: Option<SerializablePubkey>,
+    pub owner: SerializablePubkey,
     pub lamports: u64,
-    pub slot_created: u64,
+    pub tree: Option<SerializablePubkey>,
+    pub seq: Option<u64>,
+    pub slot_updated: u64,
 }
 
 pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
     Ok(Utxo {
         hash: utxo.hash.try_into()?,
-        account: utxo.account.map(SerializablePubkey::try_from).transpose()?,
+        address: utxo.account.map(SerializablePubkey::try_from).transpose()?,
         #[allow(deprecated)]
         data: base64::encode(utxo.data),
         owner: utxo.owner.try_into()?,
         tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
         lamports: utxo.lamports as u64,
-        slot_created: utxo.slot_updated as u64,
+        slot_updated: utxo.slot_updated as u64,
+        seq: utxo.seq.map(|seq| seq as u64),
     })
 }
 

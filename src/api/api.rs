@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
+use sea_orm::{
+    ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement,
+};
 use sqlx::{postgres::PgPoolOptions, Executor};
 
 use super::{
     error::PhotonApiError,
     method::{
-        get_compressed_account::{
-            get_compressed_account, GetCompressedAccountRequest, GetCompressedAccountResponse,
-        },
+        get_compressed_account::{get_compressed_account, GetCompressedAccountRequest},
         get_compressed_account_proof::{
             get_compressed_account_proof, GetCompressedAccountProofRequest,
             GetCompressedAccountProofResponse,
@@ -34,12 +34,12 @@ pub trait ApiContract: Send + Sync + 'static {
     async fn get_compressed_account(
         &self,
         payload: GetCompressedAccountRequest,
-    ) -> Result<Option<GetCompressedAccountResponse>, PhotonApiError>;
+    ) -> Result<Utxo, PhotonApiError>;
 
     async fn get_compressed_account_proof(
         &self,
         payload: GetCompressedAccountProofRequest,
-    ) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError>;
+    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError>;
 
     async fn get_compressed_account_token_accounts_by_owner(
         &self,
@@ -95,20 +95,27 @@ impl ApiContract for PhotonApi {
     }
 
     async fn readiness(&self) -> Result<(), PhotonApiError> {
-        todo!();
+        self.db_conn
+            .execute(Statement::from_string(
+                self.db_conn.as_ref().get_database_backend(),
+                "SELECT 1".to_string(),
+            ))
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn get_compressed_account(
         &self,
         request: GetCompressedAccountRequest,
-    ) -> Result<Option<GetCompressedAccountResponse>, PhotonApiError> {
+    ) -> Result<Utxo, PhotonApiError> {
         get_compressed_account(&self.db_conn, request).await
     }
 
     async fn get_compressed_account_proof(
         &self,
         request: GetCompressedAccountProofRequest,
-    ) -> Result<Option<GetCompressedAccountProofResponse>, PhotonApiError> {
+    ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
         get_compressed_account_proof(&self.db_conn, request).await
     }
 

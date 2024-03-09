@@ -25,6 +25,12 @@ impl TryFrom<&str> for SerializablePubkey {
     }
 }
 
+impl fmt::Display for SerializablePubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.0)
+    }
+}
+
 impl From<SolanaPubkey> for SerializablePubkey {
     fn from(pubkey: SolanaPubkey) -> Self {
         SerializablePubkey(pubkey)
