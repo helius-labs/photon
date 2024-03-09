@@ -7,19 +7,19 @@ Solana indexer for general & token compression
 To run the photon indexer run:
 
 ```bash
-// Against localnet
+# Against localnet
 cargo run
 
-// Against devnet
+# Against devnet
 cargo run -- --rpc-url=https://api.devnet.solana.com
 
-// Using your local Postgres database instead of the default in in-memory SQLite db
+# Using your local Postgres database instead of the default in in-memory SQLite db
 cargon run -- --db-urlpostgres://postgres@localhost/postgres
 
-// Specifying a start slot. Default start slot is 0 for localnet and the current slot for devnet/mainnet.
+# Specifying a start slot. Default start slot is 0 for localnet and the current slot for devnet/mainnet.
 cargo run -- --start-slot=123 
 
-// To see more configuration options
+# To see more configuration options
 cargo run -- --help
 ```
 
@@ -48,7 +48,7 @@ We support both Postgres and SQLite through sea-orm.
 
 To run migrations run:
 ```bash
-export DATABASE_URL="postgres://postgres@localhost/postgres" // Or your SQLlite database url
+export DATABASE_URL="postgres://postgres@localhost/postgres" # Or your SQLlite database url
 cargo run --bin migration -- up
 ```
 
