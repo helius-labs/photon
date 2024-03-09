@@ -1,6 +1,6 @@
 [package]
 default-run = "main"
-description = "Photon: a compressed transaction Solana indexer"
+description = "Solana indexer for general compression"
 edition = "2021"
 license = "Apache-2.0"
 name = "photon"
