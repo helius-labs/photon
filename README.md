@@ -53,12 +53,12 @@ cargo install sea-orm-cli --version 0.10.6
 Run the following command to install the database:
 ```
 export DATABASE_URL="postgres://postgres@localhost/postgres"
-cargo run -p migration -- up
+cargo run --bin migration -- up
 ```
 
 Run the following command to generate the DB models.
 ```
-sea-orm-cli generate entity -o dao/src/generated
+sea-orm-cli generate entity -o src/dao/generated
 ```
 
 ## Integration Tests
