@@ -34,6 +34,7 @@ pub enum UTXOs {
 pub enum TokenOwners {
     Table,
     Id,
+    Hash,
     Owner,
     Mint,
     Amount,

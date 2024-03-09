@@ -8,10 +8,14 @@ use jsonrpsee::{
 use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
-use super::api::{ApiContract, PhotonApi};
 use super::method::{
     get_compressed_account::GetCompressedAccountRequest,
     get_compressed_account_proof::GetCompressedAccountProofRequest,
+    get_utxo_proof::GetUtxoProofRequest, get_utxos::GetUtxosRequest,
+};
+use super::{
+    api::{ApiContract, PhotonApi},
+    method::get_utxo::GetUtxoRequest,
 };
 
 pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
@@ -68,6 +72,24 @@ pub fn build_rpc_module(
                 .map_err(Into::into)
         },
     )?;
+
+    module.register_async_method("getUtxo", |rpc_params, rpc_context| async move {
+        let payload = rpc_params.parse::<GetUtxoRequest>()?;
+        rpc_context.get_utxo(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method("getUtxos", |rpc_params, rpc_context| async move {
+        let payload = rpc_params.parse::<GetUtxosRequest>()?;
+        rpc_context.get_utxos(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method("getUtxoProof", |rpc_params, rpc_context| async move {
+        let payload = rpc_params.parse::<GetUtxoProofRequest>()?;
+        rpc_context
+            .get_utxo_proof(payload)
+            .await
+            .map_err(Into::into)
+    })?;
 
     Ok(module)
 }
