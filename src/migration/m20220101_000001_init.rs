@@ -137,6 +137,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(TokenOwners::Hash).binary().not_null())
                     .col(ColumnDef::new(TokenOwners::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenOwners::Mint).binary().not_null())
                     // TODO: Change this to a u64 here to avoid balance overflow.
@@ -152,6 +153,35 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(TokenOwners::CloseAuthority).binary())
+                    .col(ColumnDef::new(TokenOwners::Spent).boolean().not_null())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("token_owners_utxo_fk")
+                            .from(TokenOwners::Table, TokenOwners::Hash)
+                            .to(UTXOs::Table, UTXOs::Hash)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .col(
+                        ColumnDef::new(TokenOwners::SlotUpdated)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TokenOwners::CreatedAt)
+                            .timestamp()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("token_owners_hash_idx")
+                    .table(TokenOwners::Table)
+                    .col(TokenOwners::Hash)
+                    .unique()
                     .to_owned(),
             )
             .await?;

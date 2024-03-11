@@ -34,6 +34,7 @@ pub enum UTXOs {
 pub enum TokenOwners {
     Table,
     Id,
+    Hash,
     Owner,
     Mint,
     Amount,
@@ -42,4 +43,9 @@ pub enum TokenOwners {
     IsNative,
     DelegatedAmount,
     CloseAuthority,
+    // Duplicate to Spent in UTXOs. Added to simplify the handling of concurrent insertions and deletions
+    // of token utxos.
+    Spent,
+    SlotUpdated,
+    CreatedAt
 }

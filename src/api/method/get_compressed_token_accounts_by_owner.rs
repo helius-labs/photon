@@ -8,7 +8,7 @@ use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenInfoByOwnerRequest {
+pub struct GetCompressedTokenAccountsByOwnerRequest {
     pub owner: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
 }
@@ -26,7 +26,7 @@ pub struct TokenUxto {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenInfoByOwnerResponse {
+pub struct GetCompressedTokenAccountsByOwnerResponse {
     pub total: i64,
     pub items: Vec<TokenUxto>,
 }
@@ -50,9 +50,9 @@ fn _parse_model(token_owner: token_owners::Model) -> Result<TokenUxto, PhotonApi
 
 pub async fn get_compressed_account_token_accounts_by_owner(
     conn: &DatabaseConnection,
-    request: GetCompressedTokenInfoByOwnerRequest,
-) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError> {
-    let GetCompressedTokenInfoByOwnerRequest { owner, mint } = request;
+    request: GetCompressedTokenAccountsByOwnerRequest,
+) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError> {
+    let GetCompressedTokenAccountsByOwnerRequest { owner, mint } = request;
 
     let mut filter = token_owners::Column::Owner.eq::<Vec<u8>>(owner.into());
     if let Some(m) = mint {
@@ -69,5 +69,5 @@ pub async fn get_compressed_account_token_accounts_by_owner(
         result.into_iter().map(_parse_model).collect();
     let items = items?;
 
-    Ok(GetCompressedTokenInfoByOwnerResponse { total, items })
+    Ok(GetCompressedTokenAccountsByOwnerResponse { total, items })
 }
