@@ -1,11 +1,11 @@
-use crate::dao::generated::token_owners;
 use schemars::JsonSchema;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 
+use super::utils::OwnerOrDelegate;
 use super::{
     super::error::PhotonApiError,
-    utils::{parse_token_owners_model, TokenAccountList, TokenUxto},
+    utils::{fetch_token_accounts, TokenAccountList},
 };
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
@@ -21,20 +21,5 @@ pub async fn get_compressed_token_accounts_by_owner(
     request: GetCompressedTokenAccountsByOwnerRequest,
 ) -> Result<TokenAccountList, PhotonApiError> {
     let GetCompressedTokenAccountsByOwnerRequest { owner, mint } = request;
-
-    let mut filter = token_owners::Column::Owner.eq::<Vec<u8>>(owner.into());
-    if let Some(m) = mint {
-        filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(m.into()));
-    }
-
-    let result = token_owners::Entity::find()
-        .filter(filter)
-        .all(conn)
-        .await?;
-
-    let items: Result<Vec<TokenUxto>, PhotonApiError> =
-        result.into_iter().map(parse_token_owners_model).collect();
-    let items = items?;
-
-    Ok(TokenAccountList { items })
+    fetch_token_accounts(conn, OwnerOrDelegate::Owner(owner), mint).await
 }

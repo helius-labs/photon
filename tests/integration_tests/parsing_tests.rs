@@ -104,6 +104,7 @@ async fn test_e2e_token_mint(
         delegate: None,
         is_native: false,
         close_authority: None,
+        frozen: false,
     };
     assert_eq!(token_utxo, &expected_token_utxo);
 }
