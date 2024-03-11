@@ -1,15 +1,20 @@
 use std::{
     env,
+    iter::Zip,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Mutex,
 };
 
-use photon::api::api::PhotonApi;
+use photon::api::{
+    api::PhotonApi,
+    method::utils::{TokenAccountList, TokenUxto},
+};
 use photon::ingester::transaction_info::TransactionInfo;
 
 use once_cell::sync::Lazy;
 use photon::migration::{Migrator, MigratorTrait};
+use psp_compressed_token::{AccountState, TokenTlvData};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
@@ -260,4 +265,40 @@ pub fn trim_test_name(name: &str) -> String {
         .next()
         .unwrap()
         .to_string()
+}
+
+fn order_tlvs(mut tlvs: Vec<TokenTlvData>) -> Vec<TokenTlvData> {
+    let mut without_duplicates = tlvs.clone();
+    without_duplicates.dedup_by(|a, b| a.mint == b.mint);
+    if without_duplicates.len() != tlvs.len() {
+        panic!(
+            "Duplicate mint in tlvs: {:?}. Need hashes to further order token tlv data.",
+            tlvs
+        );
+    }
+    tlvs.sort_by(|a, b| a.mint.cmp(&b.mint));
+    tlvs
+}
+
+pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<TokenTlvData>) {
+    if response.items.len() != tlvs.len() {
+        panic!(
+            "Mismatch in number of accounts. Expected: {}, Actual: {}",
+            tlvs.len(),
+            response.items.len()
+        );
+    }
+
+    let token_accounts = response.items;
+    for (account, tlv) in token_accounts.iter().zip(tlvs.iter()) {
+        let account = account.clone();
+        let tlv = tlv.clone();
+        assert_eq!(account.mint, tlv.mint.into());
+        assert_eq!(account.owner, tlv.owner.into());
+        assert_eq!(account.amount, tlv.amount);
+        assert_eq!(account.delegate, tlv.delegate.map(Into::into));
+        assert_eq!(account.is_native, tlv.is_native.is_some());
+        assert_eq!(account.frozen, tlv.state == AccountState::Frozen);
+        assert_eq!(account.is_native, tlv.is_native.is_some());
+    }
 }

@@ -197,6 +197,17 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("token_owners_owner_delegate_idx")
+                    .table(TokenOwners::Table)
+                    .col(TokenOwners::Owner)
+                    .col(TokenOwners::Delegate)
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 

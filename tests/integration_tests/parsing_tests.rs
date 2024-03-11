@@ -10,7 +10,7 @@ use photon::ingester::{parser::parse_transaction, persist::persist_bundle};
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
-use photon::api::method::get_compressed_token_accounts_by_owner::TokenUxto;
+use photon::api::method::utils::TokenUxto;
 use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
 
@@ -52,7 +52,7 @@ async fn test_e2e_utxo_parsing(
         .await
         .unwrap();
 
-    assert_eq!(utxos.total, 1);
+    assert_eq!(utxos.items.len(), 1);
 }
 
 #[named]
@@ -88,14 +88,14 @@ async fn test_e2e_token_mint(
 
     let token_accounts = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: owner.try_into().unwrap(),
             mint: None,
         })
         .await
         .unwrap();
 
-    assert_eq!(token_accounts.total, 1);
+    assert_eq!(token_accounts.items.len(), 1);
     let token_utxo = token_accounts.items.get(0).unwrap();
     let expected_token_utxo = TokenUxto {
         owner: owner.try_into().unwrap(),
@@ -104,6 +104,7 @@ async fn test_e2e_token_mint(
         delegate: None,
         is_native: false,
         close_authority: None,
+        frozen: false,
     };
     assert_eq!(token_utxo, &expected_token_utxo);
 }

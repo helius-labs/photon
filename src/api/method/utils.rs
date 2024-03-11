@@ -1,5 +1,6 @@
-use crate::dao::generated::{state_trees, utxos};
+use crate::dao::generated::{state_trees, token_owners, utxos};
 use schemars::JsonSchema;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
@@ -31,6 +32,79 @@ pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
         lamports: utxo.lamports as u64,
         slot_updated: utxo.slot_updated as u64,
         seq: utxo.seq.map(|seq| seq as u64),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenUxto {
+    pub owner: SerializablePubkey,
+    pub mint: SerializablePubkey,
+    pub amount: u64,
+    pub delegate: Option<SerializablePubkey>,
+    pub is_native: bool,
+    pub close_authority: Option<SerializablePubkey>,
+    pub frozen: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenAccountList {
+    // TODO: Add cursor
+    pub items: Vec<TokenUxto>,
+}
+
+pub enum OwnerOrDelegate {
+    Owner(SerializablePubkey),
+    Delegate(SerializablePubkey),
+}
+
+pub async fn fetch_token_accounts(
+    conn: &sea_orm::DatabaseConnection,
+    owner_or_delegate: OwnerOrDelegate,
+    mint: Option<SerializablePubkey>,
+) -> Result<TokenAccountList, PhotonApiError> {
+    let mut filter = match owner_or_delegate {
+        OwnerOrDelegate::Owner(owner) => token_owners::Column::Owner.eq::<Vec<u8>>(owner.into()),
+        OwnerOrDelegate::Delegate(delegate) => {
+            token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into())
+        }
+    };
+    if let Some(m) = mint {
+        filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(m.into()));
+    }
+
+    let result = token_owners::Entity::find()
+        .filter(filter)
+        .order_by_asc(token_owners::Column::Mint)
+        .order_by_asc(token_owners::Column::Hash)
+        .all(conn)
+        .await?;
+
+    let items: Result<Vec<TokenUxto>, PhotonApiError> =
+        result.into_iter().map(parse_token_owners_model).collect();
+    let items = items?;
+
+    Ok(TokenAccountList { items })
+}
+
+pub fn parse_token_owners_model(
+    token_owner: token_owners::Model,
+) -> Result<TokenUxto, PhotonApiError> {
+    Ok(TokenUxto {
+        owner: token_owner.owner.try_into()?,
+        mint: token_owner.mint.try_into()?,
+        amount: token_owner.amount as u64,
+        delegate: token_owner
+            .delegate
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
+        is_native: token_owner.is_native.is_some(),
+        close_authority: token_owner
+            .close_authority
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
+        frozen: token_owner.frozen,
     })
 }
 

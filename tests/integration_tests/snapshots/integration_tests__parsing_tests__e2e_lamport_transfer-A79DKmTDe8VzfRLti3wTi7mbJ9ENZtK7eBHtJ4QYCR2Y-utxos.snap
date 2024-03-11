@@ -3,7 +3,6 @@ source: tests/integration_tests/parsing_tests.rs
 expression: utxos
 ---
 {
-  "total": 1,
   "items": [
     {
       "hash": "2KcPHMVx7meTfejzUuuWhL2JvfVG1SRWB3ofYEHnEX1q",
