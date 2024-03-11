@@ -1,12 +1,15 @@
+use core::panic;
+
 use function_name::named;
 use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
 use photon::api::method::get_utxos::GetUtxosRequest;
-use photon::dao::generated::token_owners;
+use photon::dao::generated::{token_owners, utxos};
 use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
 use photon::ingester::{parser::parse_transaction, persist::persist_bundle};
 
 use crate::utils::*;
+use insta::assert_json_snapshot;
 use photon::api::method::get_compressed_token_accounts_by_owner::TokenUxto;
 use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
@@ -15,7 +18,7 @@ use solana_sdk::pubkey::Pubkey;
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_e2e(
+async fn test_e2e_utxo_parsing(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     let name = trim_test_name(function_name!());
@@ -56,7 +59,7 @@ async fn test_e2e(
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_e2e_token_transfer(
+async fn test_e2e_token_mint(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     let name = trim_test_name(function_name!());
@@ -81,15 +84,6 @@ async fn test_e2e_token_transfer(
         persist_bundle(&setup.db_conn, event).await.unwrap();
     }
 
-    <token_owners::Entity as sea_orm::EntityTrait>::find()
-        .all(setup.db_conn.as_ref())
-        .await
-        .unwrap()
-        .iter()
-        .for_each(|token_owner: &token_owners::Model| {
-            println!("{:?}", Pubkey::try_from(token_owner.owner.clone()).unwrap());
-        });
-
     let owner = "GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD";
 
     let token_accounts = setup
@@ -112,4 +106,48 @@ async fn test_e2e_token_transfer(
         close_authority: None,
     };
     assert_eq!(token_utxo, &expected_token_utxo);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_e2e_lamport_transfer(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let tx = cached_fetch_transaction(
+        &setup,
+        "2FWS4xBAHiZKfZ9gwcq6i1wqvoYX2acj49wAHoP6CtqshQaFjgnSxcMUPANPMU3q8qoESUacmYNHG9LCCh3X59fB",
+    )
+    .await;
+
+    let events = parse_transaction(tx).unwrap();
+    assert_eq!(events.len(), 1);
+    for event in events {
+        persist_bundle(&setup.db_conn, event).await.unwrap();
+    }
+
+    let owner1 = "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y";
+    let owner2 = "K75mYjtM3zrpBqBwEtQ1RsM39YULMMMoP1pm5ZQkF2h";
+
+    for owner in [owner1, owner2] {
+        let utxos = setup
+            .api
+            .get_utxos(GetUtxosRequest {
+                owner: SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
+            })
+            .await
+            .unwrap();
+        assert_json_snapshot!(format!("{}-{}-utxos", name, owner), utxos);
+    }
 }
