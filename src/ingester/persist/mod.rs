@@ -6,17 +6,21 @@ use crate::dao::{
     generated::{state_trees, token_owners, utxos},
     typedefs::hash::Hash,
 };
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use light_merkle_tree_event::{ChangelogEvent, PathNode};
 use log::debug;
 use psp_compressed_pda::utxo::Utxo;
 use psp_compressed_token::{AccountState, TokenTlvData};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ConnectionTrait, DatabaseConnection,
-    DatabaseTransaction, DbBackend, EntityTrait, QueryTrait, Set, TransactionTrait,
+    sea_query::OnConflict, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    QueryTrait, Set, TransactionTrait,
 };
 
 use error::IngesterError;
+use solana_program::pubkey;
+use solana_sdk::pubkey::Pubkey;
+
+const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 
 pub async fn persist_bundle(
     conn: &DatabaseConnection,
@@ -34,6 +38,39 @@ struct PathUpdate<'a> {
     tree: [u8; 32],
     path: &'a Vec<PathNode>,
     seq: i64,
+}
+
+pub struct UtxoWithParsedTokenData {
+    pub utxo: Utxo,
+    pub token_data: Option<TokenTlvData>,
+}
+
+fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> {
+    Ok(match &utxo.data {
+        Some(tlv) => {
+            let tlv_data_element = tlv.tlv_elements.get(0);
+            match tlv_data_element {
+                Some(data_element) if data_element.owner == COMPRESSED_TOKEN_PROGRAM => {
+                    let token_data = Some(
+                        TokenTlvData::try_from_slice(&data_element.data).map_err(|_| {
+                            IngesterError::ParserError("Failed to parse token data".to_string())
+                        })?,
+                    );
+                    if tlv.tlv_elements.len() > 1 {
+                        return Err(IngesterError::MalformedEvent {
+                            msg: format!(
+                                "More than one TLV element found in UTXO: {}",
+                                Hash::from(utxo.hash())
+                            ),
+                        });
+                    }
+                    token_data
+                }
+                _ => None,
+            }
+        }
+        None => None,
+    })
 }
 
 async fn persist_state_transition(
@@ -54,6 +91,7 @@ async fn persist_state_transition(
     for in_utxo in in_utxos {
         spend_input_utxo(&txn, &in_utxo, slot).await?;
     }
+
     let path_updates = changelogs
         .iter()
         .map(|cl| match cl {
@@ -100,10 +138,10 @@ async fn spend_input_utxo(
 
     utxos::Entity::insert(utxos::ActiveModel {
         hash: Set(hash.to_vec()),
+        spent: Set(true),
         data: Set(vec![]),
         owner: Set(vec![]),
         lamports: Set(0),
-        spent: Set(true),
         slot_updated: Set(slot_updated),
         ..Default::default()
     })
@@ -120,6 +158,29 @@ async fn spend_input_utxo(
     )
     .exec(txn)
     .await?;
+
+    let token_data = parse_token_data(in_utxo)?;
+
+    if token_data.is_some() {
+        token_owners::Entity::insert(token_owners::ActiveModel {
+            hash: Set(hash.to_vec()),
+            spent: Set(true),
+            amount: Set(0),
+            slot_updated: Set(slot_updated),
+            ..Default::default()
+        })
+        .on_conflict(
+            OnConflict::column(token_owners::Column::Hash)
+                .update_columns([
+                    token_owners::Column::Hash,
+                    token_owners::Column::Amount,
+                    token_owners::Column::Spent,
+                ])
+                .to_owned(),
+        )
+        .exec(txn)
+        .await?;
+    }
 
     Ok(())
 }
@@ -154,17 +215,62 @@ async fn append_output_utxo(
         ..Default::default()
     };
 
-    // The state tree is append-only for output UTXOs.
-    // Therefore we never anticpate conflicts unless the record is already inserted
-    // or has been marked as spent.
-    let stmt = utxos::Entity::insert(model)
+    // The state tree is append-only so conflicts only occur if a record is already inserted or
+    // marked as spent spent.
+    utxos::Entity::insert(model)
         .on_conflict(
             OnConflict::column(utxos::Column::Hash)
                 .do_nothing()
                 .to_owned(),
         )
-        .build(DbBackend::Postgres);
-    txn.execute(stmt).await?;
+        .exec(txn)
+        .await?;
+
+    if let Some(token_data) = parse_token_data(out_utxo)? {
+        persist_token_data(txn, out_utxo.hash().into(), slot_updated, token_data).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn persist_token_data(
+    txn: &DatabaseTransaction,
+    hash: Hash,
+    slot_updated: i64,
+    token_tlv_data: TokenTlvData,
+) -> Result<(), IngesterError> {
+    let TokenTlvData {
+        mint,
+        owner,
+        amount,
+        delegate,
+        state,
+        is_native,
+        delegated_amount,
+    } = token_tlv_data;
+
+    let model = token_owners::ActiveModel {
+        hash: Set(hash.into()),
+        mint: Set(mint.to_bytes().to_vec()),
+        owner: Set(owner.to_bytes().to_vec()),
+        amount: Set(amount as i64),
+        delegate: Set(delegate.map(|d| d.to_bytes().to_vec())),
+        frozen: Set(state == AccountState::Frozen),
+        delegated_amount: Set(delegated_amount as i64),
+        is_native: Set(is_native.map(|n| n as i64)),
+        spent: Set(false),
+        slot_updated: Set(slot_updated),
+        ..Default::default()
+    };
+
+    token_owners::Entity::insert(model)
+        .on_conflict(
+            OnConflict::column(token_owners::Column::Hash)
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec(txn)
+        .await?;
 
     Ok(())
 }
@@ -213,7 +319,7 @@ async fn persist_path_updates(
                 ])
                 .to_owned(),
         )
-        .build(DbBackend::Postgres);
+        .build(txn.get_database_backend());
     query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
     txn.execute(query).await?;
 
@@ -222,38 +328,4 @@ async fn persist_path_updates(
 
 fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
     index - 2i64.pow(tree_height)
-}
-
-// Work in progress. I am using the latest TokenTlvData, but haven't parsed in
-// the latest PublicTransactionState bundles.
-pub async fn persist_token_data(
-    conn: &DatabaseConnection,
-    token_tlv_data: TokenTlvData,
-) -> Result<(), IngesterError> {
-    let txn = conn.begin().await?;
-    let TokenTlvData {
-        mint,
-        owner,
-        amount,
-        delegate,
-        state,
-        is_native,
-        delegated_amount,
-    } = token_tlv_data;
-
-    let model = token_owners::ActiveModel {
-        mint: Set(mint.to_bytes().to_vec()),
-        owner: Set(owner.to_bytes().to_vec()),
-        amount: Set(amount as i64),
-        delegate: Set(delegate.map(|d| d.to_bytes().to_vec())),
-        frozen: Set(state == AccountState::Frozen),
-        delegated_amount: Set(delegated_amount as i64),
-        is_native: Set(is_native.map(|n| n as i64)),
-        // TODO: Add close authority
-        ..Default::default()
-    };
-    // TODO: We are not addressing the case where the record already exists.
-    model.insert(&txn).await?;
-    txn.commit().await?;
-    Ok(())
 }

@@ -10,6 +10,7 @@ use photon::api::{
         get_utxo::GetUtxoRequest,
     },
 };
+use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
 use photon::ingester::persist::persist_bundle;
@@ -20,6 +21,7 @@ use psp_compressed_pda::{
 };
 use psp_compressed_token::AccountState;
 use psp_compressed_token::TokenTlvData;
+use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
@@ -172,15 +174,31 @@ async fn test_persist_token_data(
         is_native: Some(1000),
         delegated_amount: 0,
     };
+    let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+        .await
+        .unwrap();
+
     for token_tlv_data in vec![
         token_tlv_data1.clone(),
         token_tlv_data2.clone(),
         token_tlv_data3.clone(),
     ] {
-        persist_token_data(&setup.db_conn, token_tlv_data.clone())
+        let hash = Hash::new_unique();
+        let model = utxos::ActiveModel {
+            hash: Set(hash.clone().into()),
+            spent: Set(false),
+            data: Set(to_vec(&token_tlv_data).unwrap()),
+            owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
+            lamports: Set(10),
+            slot_updated: Set(10),
+            ..Default::default()
+        };
+        utxos::Entity::insert(model).exec(&txn).await.unwrap();
+        persist_token_data(&txn, hash, 10, token_tlv_data.clone())
             .await
             .unwrap();
     }
+    txn.commit().await.unwrap();
 
     let res = setup
         .api

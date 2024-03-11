@@ -34,6 +34,11 @@ impl Hash {
     pub fn to_base58(&self) -> String {
         bs58::encode(self.0).into_string()
     }
+
+    pub fn new_unique() -> Self {
+        // Slightly hacky way to get 32 random bytes
+        Hash(Pubkey::new_unique().to_bytes())
+    }
 }
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, Eq)]

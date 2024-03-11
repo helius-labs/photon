@@ -88,7 +88,6 @@ async fn test_e2e_token_transfer(
             println!("{:?}", Pubkey::try_from(token_owner.owner.clone()).unwrap());
         });
 
-    panic!("Bla bla");
     // let utxos = setup
     //     .api
     //     .get_utxos(GetUtxosRequest {
