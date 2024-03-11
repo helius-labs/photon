@@ -11,6 +11,8 @@ use tower_http::cors::{Any, CorsLayer};
 use super::method::{
     get_compressed_account::GetCompressedAccountRequest,
     get_compressed_account_proof::GetCompressedAccountProofRequest,
+    get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest,
+    get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
     get_utxo_proof::GetUtxoProofRequest, get_utxos::GetUtxosRequest,
 };
 use super::{
@@ -90,6 +92,28 @@ pub fn build_rpc_module(
             .await
             .map_err(Into::into)
     })?;
+
+    module.register_async_method(
+        "getCompressedTokenAccountsByOwner",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetCompressedTokenAccountsByOwnerRequest>()?;
+            rpc_context
+                .get_compressed_token_accounts_by_owner(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedTokenAccountsByDelegate",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetCompressedTokenAccountsByDelegateRequest>()?;
+            rpc_context
+                .get_compressed_token_accounts_by_delegate(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
 
     Ok(module)
 }

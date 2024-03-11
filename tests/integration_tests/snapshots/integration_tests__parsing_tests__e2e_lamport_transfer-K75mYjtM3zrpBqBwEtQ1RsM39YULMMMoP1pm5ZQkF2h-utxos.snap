@@ -3,6 +3,5 @@ source: tests/integration_tests/parsing_tests.rs
 expression: utxos
 ---
 {
-  "total": 0,
   "items": []
 }

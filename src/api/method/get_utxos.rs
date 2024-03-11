@@ -17,7 +17,7 @@ pub struct GetUtxosRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetUtxosResponse {
-    pub total: i64,
+    // TODO: Add cursor
     pub items: Vec<Utxo>,
 }
 
@@ -33,7 +33,6 @@ pub async fn get_utxos(
     let result = utxos::Entity::find().filter(filter).all(conn).await?;
 
     Ok(GetUtxosResponse {
-        total: result.len() as i64,
         items: result
             .into_iter()
             .map(parse_utxo_model)

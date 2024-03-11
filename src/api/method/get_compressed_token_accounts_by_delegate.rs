@@ -11,18 +11,18 @@ use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenAccountsByOwnerRequest {
-    pub owner: SerializablePubkey,
+pub struct GetCompressedTokenAccountsByDelegateRequest {
+    pub delegate: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
 }
 
-pub async fn get_compressed_token_accounts_by_owner(
+pub async fn get_compressed_account_token_accounts_by_delegate(
     conn: &DatabaseConnection,
-    request: GetCompressedTokenAccountsByOwnerRequest,
+    request: GetCompressedTokenAccountsByDelegateRequest,
 ) -> Result<TokenAccountList, PhotonApiError> {
-    let GetCompressedTokenAccountsByOwnerRequest { owner, mint } = request;
+    let GetCompressedTokenAccountsByDelegateRequest { delegate, mint } = request;
 
-    let mut filter = token_owners::Column::Owner.eq::<Vec<u8>>(owner.into());
+    let mut filter = token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into());
     if let Some(m) = mint {
         filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(m.into()));
     }

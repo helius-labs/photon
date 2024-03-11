@@ -202,18 +202,18 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             ..Default::default()
         })
         .await
         .unwrap();
 
-    assert_eq!(res.total, 2);
+    assert_eq!(res.items.len(), 2);
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint1.clone())),
             ..Default::default()
@@ -221,7 +221,7 @@ async fn test_persist_token_data(
         .await
         .unwrap();
 
-    assert_eq!(res.total, 1);
+    assert_eq!(res.items.len(), 1);
     let res = res.items[0].clone();
     assert_eq!(res.mint, mint1.into());
     assert_eq!(res.owner, owner1.into());
@@ -234,7 +234,7 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint2.clone())),
             ..Default::default()
@@ -242,7 +242,7 @@ async fn test_persist_token_data(
         .await
         .unwrap();
 
-    assert_eq!(res.total, 1);
+    assert_eq!(res.items.len(), 1);
     let res = res.items[0].clone();
     assert_eq!(res.mint, mint2.into());
     assert_eq!(res.owner, owner1.into());

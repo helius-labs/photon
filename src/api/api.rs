@@ -12,14 +12,17 @@ use super::{
             get_compressed_account_proof, GetCompressedAccountProofRequest,
             GetCompressedAccountProofResponse,
         },
+        get_compressed_token_accounts_by_delegate::{
+            get_compressed_account_token_accounts_by_delegate,
+            GetCompressedTokenAccountsByDelegateRequest,
+        },
         get_compressed_token_accounts_by_owner::{
-            get_compressed_account_token_accounts_by_owner,
-            GetCompressedTokenAccountsByOwnerRequest, GetCompressedTokenAccountsByOwnerResponse,
+            get_compressed_token_accounts_by_owner, GetCompressedTokenAccountsByOwnerRequest,
         },
         get_utxo::{get_utxo, GetUtxoRequest},
         get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
         get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
-        utils::{ProofResponse, Utxo},
+        utils::{ProofResponse, TokenAccountList, Utxo},
     },
 };
 
@@ -39,10 +42,15 @@ pub trait ApiContract: Send + Sync + 'static {
         payload: GetCompressedAccountProofRequest,
     ) -> Result<GetCompressedAccountProofResponse, PhotonApiError>;
 
-    async fn get_compressed_account_token_accounts_by_owner(
+    async fn get_compressed_token_accounts_by_owner(
         &self,
         payload: GetCompressedTokenAccountsByOwnerRequest,
-    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError>;
+    ) -> Result<TokenAccountList, PhotonApiError>;
+
+    async fn get_compressed_token_accounts_by_delegate(
+        &self,
+        _request: GetCompressedTokenAccountsByDelegateRequest,
+    ) -> Result<TokenAccountList, PhotonApiError>;
 
     async fn get_utxos(&self, payload: GetUtxosRequest)
         -> Result<GetUtxosResponse, PhotonApiError>;
@@ -117,11 +125,18 @@ impl ApiContract for PhotonApi {
         get_compressed_account_proof(&self.db_conn, request).await
     }
 
-    async fn get_compressed_account_token_accounts_by_owner(
+    async fn get_compressed_token_accounts_by_owner(
         &self,
         request: GetCompressedTokenAccountsByOwnerRequest,
-    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError> {
-        get_compressed_account_token_accounts_by_owner(&self.db_conn, request).await
+    ) -> Result<TokenAccountList, PhotonApiError> {
+        get_compressed_token_accounts_by_owner(&self.db_conn, request).await
+    }
+
+    async fn get_compressed_token_accounts_by_delegate(
+        &self,
+        request: GetCompressedTokenAccountsByDelegateRequest,
+    ) -> Result<TokenAccountList, PhotonApiError> {
+        get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
 
     async fn get_utxos(

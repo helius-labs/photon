@@ -1,4 +1,4 @@
-use crate::dao::generated::{state_trees, utxos};
+use crate::dao::generated::{state_trees, token_owners, utxos};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,43 @@ pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
         lamports: utxo.lamports as u64,
         slot_updated: utxo.slot_updated as u64,
         seq: utxo.seq.map(|seq| seq as u64),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenUxto {
+    pub owner: SerializablePubkey,
+    pub mint: SerializablePubkey,
+    pub amount: u64,
+    pub delegate: Option<SerializablePubkey>,
+    pub is_native: bool,
+    pub close_authority: Option<SerializablePubkey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenAccountList {
+    // TODO: Add cursor
+    pub items: Vec<TokenUxto>,
+}
+
+pub fn parse_token_owners_model(
+    token_owner: token_owners::Model,
+) -> Result<TokenUxto, PhotonApiError> {
+    Ok(TokenUxto {
+        owner: token_owner.owner.try_into()?,
+        mint: token_owner.mint.try_into()?,
+        amount: token_owner.amount as u64,
+        delegate: token_owner
+            .delegate
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
+        is_native: token_owner.is_native.is_some(),
+        close_authority: token_owner
+            .close_authority
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
     })
 }
 
