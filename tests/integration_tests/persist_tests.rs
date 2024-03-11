@@ -6,7 +6,7 @@ use photon::api::api::ApiContract;
 use photon::api::{
     error::PhotonApiError,
     method::{
-        get_compressed_token_accounts_by_owner::GetCompressedTokenInfoByOwnerRequest,
+        get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
         get_utxo::GetUtxoRequest,
     },
 };
@@ -202,7 +202,7 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             ..Default::default()
         })
@@ -213,7 +213,7 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint1.clone())),
             ..Default::default()
@@ -234,7 +234,7 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenInfoByOwnerRequest {
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
             owner: SerializablePubkey::from(owner1.clone()),
             mint: Some(SerializablePubkey::from(mint2.clone())),
             ..Default::default()

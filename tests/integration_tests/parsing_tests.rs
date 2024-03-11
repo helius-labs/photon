@@ -1,13 +1,15 @@
 use function_name::named;
 use photon::api::api::ApiContract;
+use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
 use photon::api::method::get_utxos::GetUtxosRequest;
 use photon::dao::generated::token_owners;
+use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
 use photon::ingester::{parser::parse_transaction, persist::persist_bundle};
 
+use crate::utils::*;
+use photon::api::method::get_compressed_token_accounts_by_owner::TokenUxto;
 use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
-
-use crate::utils::*;
 
 #[named]
 #[rstest]
@@ -88,15 +90,26 @@ async fn test_e2e_token_transfer(
             println!("{:?}", Pubkey::try_from(token_owner.owner.clone()).unwrap());
         });
 
-    // let utxos = setup
-    //     .api
-    //     .get_utxos(GetUtxosRequest {
-    //         owner: "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
-    //             .try_into()
-    //             .unwrap(),
-    //     })
-    //     .await
-    //     .unwrap();
+    let owner = "GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD";
 
-    // assert_eq!(utxos.total, 1);
+    let token_accounts = setup
+        .api
+        .get_compressed_account_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
+            owner: owner.try_into().unwrap(),
+            mint: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(token_accounts.total, 1);
+    let token_utxo = token_accounts.items.get(0).unwrap();
+    let expected_token_utxo = TokenUxto {
+        owner: owner.try_into().unwrap(),
+        mint: SerializablePubkey::try_from("GDvagojL2e9B7Eh7CHwHjQwcJAAtiMpbvCvtzDTCpogP").unwrap(),
+        amount: 200,
+        delegate: None,
+        is_native: false,
+        close_authority: None,
+    };
+    assert_eq!(token_utxo, &expected_token_utxo);
 }

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sea_orm::{
-    ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use sqlx::{postgres::PgPoolOptions, Executor};
 
 use super::{
@@ -15,8 +13,8 @@ use super::{
             GetCompressedAccountProofResponse,
         },
         get_compressed_token_accounts_by_owner::{
-            get_compressed_account_token_accounts_by_owner, GetCompressedTokenInfoByOwnerRequest,
-            GetCompressedTokenInfoByOwnerResponse,
+            get_compressed_account_token_accounts_by_owner,
+            GetCompressedTokenAccountsByOwnerRequest, GetCompressedTokenAccountsByOwnerResponse,
         },
         get_utxo::{get_utxo, GetUtxoRequest},
         get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
@@ -43,8 +41,8 @@ pub trait ApiContract: Send + Sync + 'static {
 
     async fn get_compressed_account_token_accounts_by_owner(
         &self,
-        payload: GetCompressedTokenInfoByOwnerRequest,
-    ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError>;
+        payload: GetCompressedTokenAccountsByOwnerRequest,
+    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError>;
 
     async fn get_utxos(&self, payload: GetUtxosRequest)
         -> Result<GetUtxosResponse, PhotonApiError>;
@@ -121,8 +119,8 @@ impl ApiContract for PhotonApi {
 
     async fn get_compressed_account_token_accounts_by_owner(
         &self,
-        request: GetCompressedTokenInfoByOwnerRequest,
-    ) -> Result<GetCompressedTokenInfoByOwnerResponse, PhotonApiError> {
+        request: GetCompressedTokenAccountsByOwnerRequest,
+    ) -> Result<GetCompressedTokenAccountsByOwnerResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_owner(&self.db_conn, request).await
     }
 
