@@ -28,11 +28,11 @@ pub mod typedefs;
 
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
-    index_block_metadata(&db, block).await.unwrap();
-    // for transaction in &block.transactions {
-    //     index_transaction(&txn, &transaction, block.slot).await?;
-    // }
-    txn.commit().await.unwrap();
+    index_block_metadata(&db, block).await?;
+    for transaction in &block.transactions {
+        index_transaction(&txn, &transaction, block.slot).await?;
+    }
+    txn.commit().await?;
 
     Ok(())
 }
@@ -72,11 +72,16 @@ async fn index_transaction(
     slot: u64,
 ) -> Result<(), IngesterError> {
     let event_bundles = parse_transaction(transaction_info, slot)?;
+    let stream = futures::stream::iter(event_bundles);
 
-    for event_bundle in event_bundles {
-        let result = persist::persist_bundle(txn, event_bundle).await.unwrap();
-    }
-    Ok(())
+    // We use a default parameter to avoid parameter input overload. High concurrency is likely
+    // ineffective due to database locking since the events in a transaction likely affect the same tree.
+    let max_concurrent_calls = 5;
+    stream
+        .map(|bundle| async { persist::persist_bundle(txn, bundle).await })
+        .buffer_unordered(max_concurrent_calls)
+        .try_collect::<()>()
+        .await
 }
 
 pub async fn index_block_batch(db: &DatabaseConnection, block_batch: Vec<BlockInfo>) {
