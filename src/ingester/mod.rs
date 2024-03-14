@@ -1,4 +1,4 @@
-use std::future::IntoFuture;
+
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -10,12 +10,12 @@ use sea_orm::sea_query::OnConflict;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
 use sea_orm::DatabaseTransaction;
-use sea_orm::DbErr;
+
 use sea_orm::EntityTrait;
 use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
-use sqlx::error::DatabaseError;
+
 use typedefs::block_info::TransactionInfo;
 
 use self::typedefs::block_info::BlockInfo;
