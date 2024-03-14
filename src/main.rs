@@ -6,7 +6,7 @@ use log::{error, info};
 use photon::api::{self, api::PhotonApi};
 use photon::ingester::{
     fetchers::poller::{fetch_current_slot_with_infinite_retry, Options, TransactionPoller},
-    index_transaction_stream,
+    index_block_stream,
 };
 use photon::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
@@ -105,8 +105,8 @@ async fn start_transaction_indexer(
         info!("Backfilling historical blocks...");
         let mut finished_backfill = false;
         loop {
-            let transactions = poller.fetch_new_transactions().await;
-            if transactions.is_empty() {
+            let blocks = poller.fetch_new_block_batch(5).await;
+            if blocks.is_empty() {
                 sleep(Duration::from_millis(20));
                 if !finished_backfill {
                     info!("Finished backfilling historical blocks...");

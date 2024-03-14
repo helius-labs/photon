@@ -12,8 +12,7 @@ use log::debug;
 use psp_compressed_pda::utxo::Utxo;
 use psp_compressed_token::{AccountState, TokenTlvData};
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
-    QueryTrait, Set, TransactionTrait,
+    sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
 
 use error::IngesterError;
@@ -23,13 +22,13 @@ use solana_sdk::pubkey::Pubkey;
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 
 pub async fn persist_bundle(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     event: EventBundle,
 ) -> Result<(), IngesterError> {
     match event {
         EventBundle::PublicTransactionEvent(e) => {
             debug!("Persisting PublicTransactionEvent: {:?}", e);
-            persist_state_transition(conn, e).await
+            persist_state_transition(txn, e).await
         }
     }
 }
@@ -74,7 +73,7 @@ fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> 
 }
 
 async fn persist_state_transition(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     bundle: PublicTransactionEventBundle,
 ) -> Result<(), IngesterError> {
     let PublicTransactionEventBundle {
@@ -85,7 +84,6 @@ async fn persist_state_transition(
         slot,
     } = bundle;
     let changelogs = changelogs.changelogs;
-    let txn = conn.begin().await?;
     // TODO: Do batch inserts here
     let slot = slot as i64;
     for in_utxo in in_utxos {
@@ -122,10 +120,9 @@ async fn persist_state_transition(
         let path = &path_updates[i];
         let tree = path.tree;
         let seq = path.seq;
-        append_output_utxo(&txn, out_utxo, slot, tree, seq as i64).await?;
+        append_output_utxo(txn, out_utxo, slot, tree, seq as i64).await?;
     }
-    persist_path_updates(&txn, path_updates, slot).await?;
-    txn.commit().await?;
+    persist_path_updates(txn, path_updates, slot).await?;
     Ok(())
 }
 

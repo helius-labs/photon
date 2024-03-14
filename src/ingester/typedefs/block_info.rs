@@ -6,13 +6,14 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransactionWithStatusMeta, UiInstruction, UiTransactionStatusMeta,
+    EncodedTransactionWithStatusMeta, UiConfirmedBlock, UiInstruction, UiTransactionStatusMeta,
 };
 use std::fmt;
 
 use std::convert::TryFrom;
 
-use super::error::IngesterError;
+use super::super::error::IngesterError;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instruction {
     pub program_id: Pubkey,
@@ -26,10 +27,61 @@ pub struct InstructionGroup {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionInfo {
-    pub slot: Slot,
-    pub block_time: Option<UnixTimestamp>,
     pub instruction_groups: Vec<InstructionGroup>,
     pub signature: Signature,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockInfo {
+    pub slot: Slot,
+    pub block_time: Option<UnixTimestamp>,
+    // In Solana, slots can be skipped. So there are not necessarily sequential.
+    pub parent_slot: Slot,
+    pub transactions: Vec<TransactionInfo>,
+}
+
+pub fn parse_ui_confirmed_blocked(
+    block: UiConfirmedBlock,
+    slot: Slot,
+) -> Result<BlockInfo, IngesterError> {
+    let UiConfirmedBlock {
+        parent_slot,
+        block_time,
+        transactions,
+        ..
+    } = block;
+
+    let transactions: Result<Vec<_>, _> = transactions
+        .unwrap_or(Vec::new())
+        .into_iter()
+        .map(_parse_transaction)
+        .collect();
+
+    Ok(BlockInfo {
+        parent_slot,
+        block_time,
+        slot,
+        transactions: transactions?,
+    })
+}
+
+fn _parse_transaction(
+    transaction: EncodedTransactionWithStatusMeta,
+) -> Result<TransactionInfo, IngesterError> {
+    let EncodedTransactionWithStatusMeta {
+        transaction, meta, ..
+    } = transaction;
+
+    let versioned_transaction: VersionedTransaction = transaction.decode().ok_or(
+        IngesterError::ParserError("Transaction cannot be decoded".to_string()),
+    )?;
+
+    let signature = versioned_transaction.signatures[0];
+    let instruction_groups = parse_instruction_groups(versioned_transaction, meta)?;
+    Ok(TransactionInfo {
+        instruction_groups,
+        signature,
+    })
 }
 
 impl fmt::Display for Instruction {
@@ -57,8 +109,7 @@ impl fmt::Display for TransactionInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TransactionInfo {{ slot: {}, instruction_groups: [{}] }}",
-            self.slot,
+            "TransactionInfo {{ instruction_groups: [{}] }}",
             self.instruction_groups
                 .iter()
                 .map(InstructionGroup::to_string)
@@ -72,11 +123,7 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
     type Error = IngesterError;
 
     fn try_from(tx: EncodedConfirmedTransactionWithStatusMeta) -> Result<Self, Self::Error> {
-        let EncodedConfirmedTransactionWithStatusMeta {
-            slot,
-            block_time,
-            transaction,
-        } = tx;
+        let EncodedConfirmedTransactionWithStatusMeta { transaction, .. } = tx;
 
         let EncodedTransactionWithStatusMeta {
             transaction, meta, ..
@@ -88,8 +135,6 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
         let signature = versioned_transaction.signatures[0];
 
         Ok(TransactionInfo {
-            slot,
-            block_time,
             instruction_groups: parse_instruction_groups(versioned_transaction, meta)?,
             signature: signature,
         })
