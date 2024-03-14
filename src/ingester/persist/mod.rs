@@ -214,14 +214,18 @@ async fn append_output_utxo(
 
     // The state tree is append-only so conflicts only occur if a record is already inserted or
     // marked as spent spent.
-    utxos::Entity::insert(model)
+    //
+    // We first build the query and then execute it because SeaORM has a bug where it always throws
+    // an error if we do not insert a record in an insert statement. However, in this case, it's
+    // expected not to insert anything if the key already exists.
+    let query = utxos::Entity::insert(model)
         .on_conflict(
             OnConflict::column(utxos::Column::Hash)
                 .do_nothing()
                 .to_owned(),
         )
-        .exec(txn)
-        .await?;
+        .build(txn.get_database_backend());
+    txn.execute(query).await?;
 
     if let Some(token_data) = parse_token_data(out_utxo)? {
         persist_token_data(txn, out_utxo.hash().into(), slot_updated, token_data).await?;
@@ -260,14 +264,17 @@ pub async fn persist_token_data(
         ..Default::default()
     };
 
-    token_owners::Entity::insert(model)
+    // We first build the query and then execute it because SeaORM has a bug where it always throws
+    // an error if we do not insert a record in an insert statement. However, in this case, it's
+    // expected not to insert anything if the key already exists.
+    let query = token_owners::Entity::insert(model)
         .on_conflict(
             OnConflict::column(token_owners::Column::Hash)
                 .do_nothing()
                 .to_owned(),
         )
-        .exec(txn)
-        .await?;
+        .build(txn.get_database_backend());
+    txn.execute(query).await?;
 
     Ok(())
 }

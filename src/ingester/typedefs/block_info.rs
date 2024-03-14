@@ -8,9 +8,11 @@ use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
     EncodedTransactionWithStatusMeta, UiConfirmedBlock, UiInstruction, UiTransactionStatusMeta,
 };
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use std::convert::TryFrom;
+
+use crate::dao::typedefs::hash::Hash;
 
 use super::super::error::IngesterError;
 
@@ -34,10 +36,13 @@ pub struct TransactionInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockInfo {
     pub slot: Slot,
-    pub block_time: Option<UnixTimestamp>,
     // In Solana, slots can be skipped. So there are not necessarily sequential.
     pub parent_slot: Slot,
     pub transactions: Vec<TransactionInfo>,
+    pub block_time: UnixTimestamp,
+    pub blockhash: Hash,
+    pub parent_blockhash: Hash,
+    pub block_height: u64,
 }
 
 pub fn parse_ui_confirmed_blocked(
@@ -48,6 +53,9 @@ pub fn parse_ui_confirmed_blocked(
         parent_slot,
         block_time,
         transactions,
+        blockhash,
+        previous_blockhash,
+        block_height,
         ..
     } = block;
 
@@ -59,9 +67,18 @@ pub fn parse_ui_confirmed_blocked(
 
     Ok(BlockInfo {
         parent_slot,
-        block_time,
+        block_time: block_time
+            .ok_or(IngesterError::ParserError("Missing block_time".to_string()))?,
         slot,
         transactions: transactions?,
+        blockhash: Hash::try_from(blockhash.as_str())
+            .map_err(|e| IngesterError::ParserError(format!("Failed to parse blockhash: {}", e)))?,
+        parent_blockhash: Hash::try_from(previous_blockhash.as_str()).map_err(|e| {
+            IngesterError::ParserError(format!("Failed to parse previous_blockhash: {}", e))
+        })?,
+        block_height: block_height.ok_or(IngesterError::ParserError(
+            "Missing block_height".to_string(),
+        ))?,
     })
 }
 
@@ -145,7 +162,26 @@ pub fn parse_instruction_groups(
     versioned_transaction: VersionedTransaction,
     meta: Option<UiTransactionStatusMeta>,
 ) -> Result<Vec<InstructionGroup>, IngesterError> {
-    let accounts = versioned_transaction.message.static_account_keys();
+    let mut accounts = Vec::from(versioned_transaction.message.static_account_keys());
+    if versioned_transaction
+        .message
+        .address_table_lookups()
+        .is_some()
+    {
+        if let Some(meta) = &meta {
+            if let OptionSerializer::Some(loaded_addresses) = meta.loaded_addresses.clone() {
+                for address in loaded_addresses
+                    .writable
+                    .iter()
+                    .chain(loaded_addresses.readonly.iter())
+                {
+                    let pubkey = Pubkey::from_str(&address)
+                        .map_err(|e| IngesterError::ParserError(e.to_string()))?;
+                    accounts.push(pubkey);
+                }
+            }
+        }
+    }
 
     // Parse outer instructions and bucket them into groups
     let mut instruction_groups: Vec<InstructionGroup> = versioned_transaction

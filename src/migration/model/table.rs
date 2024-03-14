@@ -47,5 +47,17 @@ pub enum TokenOwners {
     // of token utxos.
     Spent,
     SlotUpdated,
-    CreatedAt
+    CreatedAt,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum Blocks {
+    Table,
+    Id,
+    Slot,
+    ParentSlot,
+    Blockhash,
+    ParentBlockhash,
+    BlockHeight,
+    BlockTime,
 }
