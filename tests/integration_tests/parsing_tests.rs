@@ -34,7 +34,7 @@ async fn test_e2e_utxo_parsing(
     )
     .await;
 
-    let events = parse_transaction(tx, 0).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
         persist_bundle_using_connection(setup.db_conn.as_ref(), event)
@@ -77,7 +77,7 @@ async fn test_e2e_token_mint(
     )
     .await;
 
-    let events = parse_transaction(tx, 0).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
         persist_bundle_using_connection(&setup.db_conn.as_ref(), event)
@@ -133,7 +133,7 @@ async fn test_e2e_lamport_transfer(
     )
     .await;
 
-    let events = parse_transaction(tx, 0).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
         persist_bundle_using_connection(&setup.db_conn, event)

@@ -14,7 +14,6 @@ pub struct TransactionPoller {
 
 pub struct Options {
     pub start_slot: u64,
-    pub max_block_fetching_concurrency: usize,
 }
 
 pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {

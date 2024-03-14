@@ -1,17 +1,12 @@
 use std::{
     env,
-    iter::Zip,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Mutex,
 };
 
-use photon::ingester::transaction_info::TransactionInfo;
 use photon::{
-    api::{
-        api::PhotonApi,
-        method::utils::{TokenAccountList, TokenUxto},
-    },
+    api::{api::PhotonApi, method::utils::TokenAccountList},
     ingester::{parser::bundle::EventBundle, persist::persist_bundle},
 };
 
@@ -25,6 +20,7 @@ use sea_orm::{
 };
 
 use photon::dao::typedefs::hash::Hash;
+use photon::ingester::typedefs::block_info::TransactionInfo;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
