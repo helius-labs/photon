@@ -3,11 +3,17 @@ use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
 use photon::api::method::get_utxos::GetUtxosRequest;
 use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use photon::ingester::index_block;
 use photon::ingester::parser::parse_transaction;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
 use photon::api::method::utils::TokenUxto;
+use photon::dao::generated::blocks;
+use photon::dao::typedefs::hash::Hash;
+use sea_orm::ColumnTrait;
+use sea_orm::EntityTrait;
+use sea_orm::QueryFilter;
 use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
 
@@ -154,4 +160,51 @@ async fn test_e2e_lamport_transfer(
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-utxos", name, owner), utxos);
     }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_index_block_metadata(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Mainnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let block = cached_fetch_block(&setup, 254170887).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    let filter = blocks::Column::Slot.eq(block.slot);
+
+    let block_model = blocks::Entity::find()
+        .filter(filter)
+        .one(setup.db_conn.as_ref())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(block_model.slot, 254170887);
+    assert_eq!(block_model.parent_slot, 254170886);
+    assert_eq!(
+        Hash::try_from(block_model.parent_blockhash)
+            .unwrap()
+            .to_string(),
+        "9BMHTdybcGah8PWtCzu8tVFDBXmiEHZZDf3FaZ651Nf"
+    );
+    assert_eq!(
+        Hash::try_from(block_model.blockhash).unwrap().to_string(),
+        "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
+    );
+    assert_eq!(block_model.block_height, 234724352);
+    assert_eq!(block_model.block_time, 1710441678);
+
+    // Verify that we don't get an error if we try to index the same block again
+    index_block(&setup.db_conn, &block).await.unwrap();
 }

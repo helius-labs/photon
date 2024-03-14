@@ -5,6 +5,8 @@ use sea_orm_migration::{
 
 use crate::migration::model::table::{StateTrees, TokenOwners, UTXOs};
 
+use super::model::table::Blocks;
+
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
@@ -208,6 +210,39 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(Blocks::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(Blocks::Id)
+                            .big_integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(Blocks::Slot).big_integer().not_null())
+                    .col(ColumnDef::new(Blocks::ParentSlot).big_integer().not_null())
+                    .col(ColumnDef::new(Blocks::ParentBlockhash).binary().not_null())
+                    .col(ColumnDef::new(Blocks::Blockhash).binary().not_null())
+                    .col(ColumnDef::new(Blocks::BlockHeight).big_integer().not_null())
+                    .col(ColumnDef::new(Blocks::BlockTime).big_integer().not_null())
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("blocks_slot_idx")
+                    .table(Blocks::Table)
+                    .col(Blocks::Slot)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -222,6 +257,10 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(TokenOwners::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(Blocks::Table).to_owned())
             .await?;
 
         Ok(())

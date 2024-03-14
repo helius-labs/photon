@@ -7,7 +7,11 @@ use std::{
 
 use photon::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
-    ingester::{parser::bundle::EventBundle, persist::persist_bundle},
+    ingester::{
+        parser::bundle::EventBundle,
+        persist::persist_bundle,
+        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+    },
 };
 
 use once_cell::sync::Lazy;
@@ -26,16 +30,27 @@ use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
 use solana_sdk::{
+    clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
     signature::Signature,
 };
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use solana_transaction_status::{
+    EncodedConfirmedTransactionWithStatusMeta, UiConfirmedBlock, UiTransactionEncoding,
+};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
     PgPool,
 };
 use std::sync::Arc;
+
+const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
+    encoding: Some(UiTransactionEncoding::Base64),
+    commitment: Some(CommitmentConfig {
+        commitment: CommitmentLevel::Confirmed,
+    }),
+    max_supported_transaction_version: Some(0),
+};
 
 static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 
@@ -164,7 +179,25 @@ pub async fn setup_sqllite_pool() -> SqlitePool {
 }
 
 pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
-    for table in vec!["state_trees", "utxos", "token_owners"] {
+    let query = match conn.get_database_backend() {
+        sea_orm::DatabaseBackend::Postgres => "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema' AND tablename != 'seaql_migrations'",
+        sea_orm::DatabaseBackend::Sqlite => "SELECT name as tablename FROM sqlite_master WHERE type='table'",
+        _ => unimplemented!()
+        // Add other database backends here if needed
+    };
+
+    let tables: Vec<String> = conn
+        .query_all(Statement::from_string(
+            conn.get_database_backend(),
+            query.to_string(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get("", "tablename").unwrap())
+        .collect::<Vec<String>>();
+
+    for table in tables {
         truncate_table(conn, table.to_string()).await?;
     }
     Ok(())
@@ -212,20 +245,12 @@ pub async fn fetch_transaction(
     client: &RpcClient,
     sig: Signature,
 ) -> EncodedConfirmedTransactionWithStatusMeta {
-    const CONFIG: RpcTransactionConfig = RpcTransactionConfig {
-        encoding: Some(UiTransactionEncoding::Base64),
-        commitment: Some(CommitmentConfig {
-            commitment: CommitmentLevel::Confirmed,
-        }),
-        max_supported_transaction_version: Some(0),
-    };
-
     // We do not immediately deserialize because VersionedTransactionWithStatusMeta does not
     // implement Deserialize
     let txn: EncodedConfirmedTransactionWithStatusMeta = client
         .send(
             RpcRequest::GetTransaction,
-            serde_json::json!([sig.to_string(), CONFIG,]),
+            serde_json::json!([sig.to_string(), RPC_CONFIG,]),
         )
         .await
         .unwrap();
@@ -255,6 +280,31 @@ pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> Transactio
         tx
     };
     tx.try_into().unwrap()
+}
+
+async fn fetch_block(client: &RpcClient, slot: Slot) -> UiConfirmedBlock {
+    client
+        .send(RpcRequest::GetBlock, serde_json::json!([slot, RPC_CONFIG,]))
+        .await
+        .unwrap()
+}
+
+pub async fn cached_fetch_block(setup: &TestSetup, slot: Slot) -> BlockInfo {
+    let dir = get_relative_project_path(&format!("tests/data/blocks/{}", setup.name));
+    if !Path::new(&dir).exists() {
+        std::fs::create_dir(&dir).unwrap();
+    }
+    let file_path = dir.join(format!("{}", slot));
+
+    let block: UiConfirmedBlock = if file_path.exists() {
+        let txn_string = std::fs::read(file_path).unwrap();
+        serde_json::from_slice(&txn_string).unwrap()
+    } else {
+        let block = fetch_block(&setup.client, slot).await;
+        std::fs::write(file_path, serde_json::to_string(&block).unwrap()).unwrap();
+        block
+    };
+    parse_ui_confirmed_blocked(block, slot).unwrap()
 }
 
 pub fn trim_test_name(name: &str) -> String {
