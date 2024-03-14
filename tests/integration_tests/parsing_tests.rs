@@ -1,12 +1,9 @@
-use core::panic;
-
 use function_name::named;
 use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
 use photon::api::method::get_utxos::GetUtxosRequest;
-use photon::dao::generated::{token_owners, utxos};
 use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
-use photon::ingester::{parser::parse_transaction, persist::persist_bundle};
+use photon::ingester::parser::parse_transaction;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
@@ -37,10 +34,12 @@ async fn test_e2e_utxo_parsing(
     )
     .await;
 
-    let events = parse_transaction(tx).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
-        persist_bundle(&setup.db_conn, event).await.unwrap();
+        persist_bundle_using_connection(setup.db_conn.as_ref(), event)
+            .await
+            .unwrap();
     }
     let utxos = setup
         .api
@@ -78,10 +77,12 @@ async fn test_e2e_token_mint(
     )
     .await;
 
-    let events = parse_transaction(tx).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
-        persist_bundle(&setup.db_conn, event).await.unwrap();
+        persist_bundle_using_connection(&setup.db_conn.as_ref(), event)
+            .await
+            .unwrap();
     }
 
     let owner = "GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD";
@@ -132,10 +133,12 @@ async fn test_e2e_lamport_transfer(
     )
     .await;
 
-    let events = parse_transaction(tx).unwrap();
+    let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
-        persist_bundle(&setup.db_conn, event).await.unwrap();
+        persist_bundle_using_connection(&setup.db_conn, event)
+            .await
+            .unwrap();
     }
 
     let owner1 = "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y";

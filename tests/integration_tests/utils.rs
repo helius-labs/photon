@@ -1,16 +1,14 @@
 use std::{
     env,
-    iter::Zip,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Mutex,
 };
 
-use photon::api::{
-    api::PhotonApi,
-    method::utils::{TokenAccountList, TokenUxto},
+use photon::{
+    api::{api::PhotonApi, method::utils::TokenAccountList},
+    ingester::{parser::bundle::EventBundle, persist::persist_bundle},
 };
-use photon::ingester::transaction_info::TransactionInfo;
 
 use once_cell::sync::Lazy;
 use photon::migration::{Migrator, MigratorTrait};
@@ -18,10 +16,11 @@ use psp_compressed_token::{AccountState, TokenTlvData};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
-    SqlxSqliteConnector, Statement,
+    SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
 use photon::dao::typedefs::hash::Hash;
+use photon::ingester::typedefs::block_info::TransactionInfo;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
@@ -290,7 +289,7 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     }
 
     let token_accounts = response.items;
-    for (account, tlv) in token_accounts.iter().zip(tlvs.iter()) {
+    for (account, tlv) in token_accounts.iter().zip(order_tlvs(tlvs).iter()) {
         let account = account.clone();
         let tlv = tlv.clone();
         assert_eq!(account.mint, tlv.mint.into());
@@ -301,4 +300,15 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
         assert_eq!(account.frozen, tlv.state == AccountState::Frozen);
         assert_eq!(account.is_native, tlv.is_native.is_some());
     }
+}
+
+/// Persist using a database connection instead of a transaction. Should only be use for tests.
+pub async fn persist_bundle_using_connection(
+    db: &DatabaseConnection,
+    bundle: EventBundle,
+) -> Result<(), sea_orm::DbErr> {
+    let txn = db.begin().await.unwrap();
+    persist_bundle(&txn, bundle).await.unwrap();
+    txn.commit().await.unwrap();
+    Ok(())
 }

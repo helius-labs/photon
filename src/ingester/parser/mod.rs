@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use super::{
     error::IngesterError, parser::bundle::PublicTransactionEventBundle,
-    transaction_info::TransactionInfo,
+    typedefs::block_info::TransactionInfo,
 };
 
 use self::bundle::EventBundle;
@@ -18,7 +18,10 @@ const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("5QPEJ5zDsVou9FQS3KCauKswM3VwBEBu4dpL9xTqkWwN");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 
-pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, IngesterError> {
+pub fn parse_transaction(
+    tx: &TransactionInfo,
+    slot: u64,
+) -> Result<Vec<EventBundle>, IngesterError> {
     let mut event_bundles = Vec::new();
     let mut logged_transaction = false;
     for instruction_group in tx.clone().instruction_groups {
@@ -41,7 +44,7 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                     if !logged_transaction {
                         info!(
                             "Indexing transaction with slot {} and id {}",
-                            tx.slot, tx.signature
+                            slot, tx.signature
                         );
                         logged_transaction = true;
                     }
@@ -67,7 +70,7 @@ pub fn parse_transaction(tx: TransactionInfo) -> Result<Vec<EventBundle>, Ingest
                         in_utxos: public_transaction_event.in_utxos,
                         out_utxos: public_transaction_event.out_utxos,
                         changelogs: changelogs,
-                        slot: tx.slot,
+                        slot: slot,
                         transaction: tx.signature,
                     };
 

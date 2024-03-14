@@ -4,10 +4,10 @@ use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon::api::{self, api::PhotonApi};
-use photon::ingester::{
-    fetchers::poller::{fetch_current_slot_with_infinite_retry, Options, TransactionPoller},
-    index_transaction_stream,
+use photon::ingester::fetchers::poller::{
+    fetch_current_slot_with_infinite_retry, Options, TransactionPoller,
 };
+use photon::ingester::index_block_batch;
 use photon::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
@@ -81,7 +81,6 @@ async fn start_transaction_indexer(
     rpc_client: RpcClient,
     is_localnet: bool,
     start_slot: Option<u64>,
-    max_indexing_concurrency: u32,
 ) -> tokio::task::JoinHandle<()> {
     let rpc_client = Arc::new(rpc_client);
     tokio::spawn(async move {
@@ -91,22 +90,15 @@ async fn start_transaction_indexer(
             (None, true) => 0,
             (None, false) => fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await,
         };
-        let mut poller = TransactionPoller::new(
-            rpc_client,
-            Options {
-                start_slot,
-                // Indexing throughput is more influenced by concurrent transaction indexing than
-                // RPC block fetching. So just use a reasonable default here.
-                max_block_fetching_concurrency: 5,
-            },
-        )
-        .await;
+        let mut poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
 
         info!("Backfilling historical blocks...");
         let mut finished_backfill = false;
         loop {
-            let transactions = poller.fetch_new_transactions().await;
-            if transactions.is_empty() {
+            // Indexing throughput is more influenced by concurrent transaction indexing than
+            // RPC block fetching. So just use a reasonable default here.
+            let blocks = poller.fetch_new_block_batch(5).await;
+            if blocks.is_empty() {
                 sleep(Duration::from_millis(20));
                 if !finished_backfill {
                     info!("Finished backfilling historical blocks...");
@@ -115,14 +107,8 @@ async fn start_transaction_indexer(
                 finished_backfill = true;
                 continue;
             }
-            let transactions = futures::stream::iter(transactions);
 
-            index_transaction_stream(
-                db.clone(),
-                Box::pin(transactions),
-                max_indexing_concurrency as usize,
-            )
-            .await;
+            index_block_batch(db.as_ref(), blocks).await;
         }
     })
 }
@@ -206,9 +192,6 @@ async fn main() {
         RpcClient::new(args.rpc_url),
         is_localnet,
         args.start_slot,
-        // Set the max number of concurrent transactions to the index to the number of db connections
-        // as we can concurrently index at most one transaction per db connection.
-        args.max_db_conn,
     )
     .await;
 

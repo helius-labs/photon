@@ -14,7 +14,6 @@ use photon::api::{
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
-use photon::ingester::persist::persist_bundle;
 use photon::ingester::persist::persist_token_data;
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
@@ -98,7 +97,9 @@ async fn test_persist_state_transitions(
         transaction: Signature::new_unique(),
         slot: slot,
     };
-    persist_bundle(&setup.db_conn, bundle.into()).await.unwrap();
+    persist_bundle_using_connection(&setup.db_conn, bundle.into())
+        .await
+        .unwrap();
 
     // Verify GetUtxo
     let res = setup

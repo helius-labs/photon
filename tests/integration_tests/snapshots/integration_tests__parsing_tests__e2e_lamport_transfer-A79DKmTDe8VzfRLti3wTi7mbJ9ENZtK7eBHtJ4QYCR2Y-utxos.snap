@@ -12,7 +12,7 @@ expression: utxos
       "lamports": 420000000,
       "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "seq": 2,
-      "slotUpdated": 46
+      "slotUpdated": 0
     }
   ]
 }
