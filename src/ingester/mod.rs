@@ -1,4 +1,3 @@
-
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -52,7 +51,6 @@ async fn index_block_metadata(
     };
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
-    // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
     let query = blocks::Entity::insert(model)
         .on_conflict(

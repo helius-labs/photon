@@ -18,6 +18,7 @@ use sea_orm::{
 use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
+pub mod reduce_event_bundles;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 
