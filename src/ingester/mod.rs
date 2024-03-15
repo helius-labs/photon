@@ -2,7 +2,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use error::IngesterError;
-use futures::stream::StreamExt;
 
 use parser::parse_transaction;
 use sea_orm::sea_query::OnConflict;
@@ -14,8 +13,6 @@ use sea_orm::EntityTrait;
 use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
-
-
 
 use self::persist::persist_state_update;
 use self::persist::state_update::StateUpdate;
