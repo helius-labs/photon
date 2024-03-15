@@ -14,7 +14,7 @@ use photon::api::{
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
-use photon::ingester::persist::persist_token_data;
+use photon::ingester::persist::{persist_token_datas, EnrichedTokenData};
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
     utxo::Utxo,
@@ -188,7 +188,10 @@ async fn test_persist_token_data(
         .await
         .unwrap();
 
+    let mut token_datas = Vec::new();
+
     for token_tlv_data in all_token_tlv_data.iter() {
+        let slot = 11;
         let hash = Hash::new_unique();
         let model = utxos::ActiveModel {
             hash: Set(hash.clone().into()),
@@ -196,14 +199,18 @@ async fn test_persist_token_data(
             data: Set(to_vec(&token_tlv_data).unwrap()),
             owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
             lamports: Set(10),
-            slot_updated: Set(10),
+            slot_updated: Set(slot),
             ..Default::default()
         };
         utxos::Entity::insert(model).exec(&txn).await.unwrap();
-        persist_token_data(&txn, hash, 10, token_tlv_data.clone())
-            .await
-            .unwrap();
+        token_datas.push(EnrichedTokenData {
+            hash,
+            token_tlv_data: token_tlv_data.clone(),
+            slot_updated: slot,
+        });
     }
+
+    persist_token_datas(&txn, token_datas).await.unwrap();
     txn.commit().await.unwrap();
 
     for owner in [owner1, owner2] {

@@ -181,7 +181,7 @@ async fn test_index_block_metadata(
 
     let block = cached_fetch_block(&setup, 254170887).await;
     index_block(&setup.db_conn, &block).await.unwrap();
-    let filter = blocks::Column::Slot.eq(block.slot);
+    let filter = blocks::Column::Slot.eq(block.metadata.slot);
 
     let block_model = blocks::Entity::find()
         .filter(filter)

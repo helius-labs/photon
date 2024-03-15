@@ -17,7 +17,10 @@ use sea_orm::TransactionTrait;
 
 use typedefs::block_info::TransactionInfo;
 
+use self::persist::persist_state_update;
+use self::persist::state_update::StateUpdate;
 use self::typedefs::block_info::BlockInfo;
+use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
 pub mod error;
 pub mod fetchers;
@@ -25,34 +28,45 @@ pub mod parser;
 pub mod persist;
 pub mod typedefs;
 
+fn derive_block_state_update(block: &BlockInfo) -> StateUpdate {
+    let mut state_updates: Vec<StateUpdate> = Vec::new();
+    for transaction in &block.transactions {
+        let event_bundles = parse_transaction(transaction, block.metadata.slot).unwrap();
+        for bundle in event_bundles {
+            state_updates.push(bundle.try_into().unwrap());
+        }
+    }
+    StateUpdate::merge_updates(state_updates)
+}
+
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
-    index_block_metadata(&db, block).await?;
-    for transaction in &block.transactions {
-        index_transaction(&txn, &transaction, block.slot).await?;
-    }
+    index_block_metadatas(&txn, vec![&block.metadata]).await?;
+    persist_state_update(&txn, derive_block_state_update(block)).await?;
     txn.commit().await?;
-
     Ok(())
 }
 
-async fn index_block_metadata(
-    tx: &DatabaseConnection,
-    block: &BlockInfo,
+async fn index_block_metadatas(
+    tx: &DatabaseTransaction,
+    blocks: Vec<&BlockMetadata>,
 ) -> Result<(), IngesterError> {
-    let model = blocks::ActiveModel {
-        slot: Set(block.slot as i64),
-        parent_slot: Set(block.parent_slot as i64),
-        block_time: Set(block.block_time as i64),
-        blockhash: Set(block.blockhash.clone().into()),
-        parent_blockhash: Set(block.parent_blockhash.clone().into()),
-        block_height: Set(block.block_height as i64),
-        ..Default::default()
-    };
+    let block_models: Vec<blocks::ActiveModel> = blocks
+        .iter()
+        .map(|block| blocks::ActiveModel {
+            slot: Set(block.slot as i64),
+            parent_slot: Set(block.parent_slot as i64),
+            block_time: Set(block.block_time as i64),
+            blockhash: Set(block.blockhash.clone().into()),
+            parent_blockhash: Set(block.parent_blockhash.clone().into()),
+            block_height: Set(block.block_height as i64),
+            ..Default::default()
+        })
+        .collect();
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // expected not to insert anything if the key already exists.
-    let query = blocks::Entity::insert(model)
+    let query = blocks::Entity::insert_many(block_models)
         .on_conflict(
             OnConflict::column(blocks::Column::Slot)
                 .do_nothing()
@@ -82,10 +96,20 @@ async fn index_transaction(
         .await
 }
 
-pub async fn index_block_batch(db: &DatabaseConnection, block_batch: Vec<BlockInfo>) {
+pub async fn index_block_batch(
+    db: &DatabaseConnection,
+    block_batch: Vec<BlockInfo>,
+) -> Result<(), IngesterError> {
+    let tx = db.begin().await?;
+    let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
+    index_block_metadatas(&tx, block_metadatas).await?;
+    let mut state_updates = Vec::new();
     for block in block_batch {
-        index_block_with_infinite_retries(db, &block).await;
+        state_updates.push(derive_block_state_update(&block));
     }
+    persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 async fn index_block_with_infinite_retries(db: &DatabaseConnection, block: &BlockInfo) {
