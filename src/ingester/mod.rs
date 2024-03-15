@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use error::IngesterError;
 use futures::stream::StreamExt;
-use futures::TryStreamExt;
+
 use parser::parse_transaction;
 use sea_orm::sea_query::OnConflict;
 use sea_orm::ConnectionTrait;
@@ -15,7 +15,7 @@ use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
 
-use typedefs::block_info::TransactionInfo;
+
 
 use self::persist::persist_state_update;
 use self::persist::state_update::StateUpdate;
