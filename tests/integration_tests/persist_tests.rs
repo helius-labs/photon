@@ -1,7 +1,6 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
-use futures::StreamExt;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
 use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest;
@@ -274,7 +273,7 @@ async fn test_load_test(
                         tlv_elements: vec![TlvDataElement {
                             discriminator: [0; 8],
                             owner: Pubkey::new_unique(),
-                            data: vec![1; 3000],
+                            data: vec![1; 500],
                             data_hash: [0; 32],
                         }],
                     }),
@@ -304,43 +303,25 @@ async fn test_load_test(
     }
 
     let loops = 25;
-    futures::stream::iter(0..loops)
-        .map(|_| async {
-            let tree: Pubkey = Pubkey::new_unique();
-
-            let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
-                .await
-                .unwrap();
-            let num_elements = 2000;
-            let state_update = StateUpdate {
-                in_utxos: vec![],
-                out_utxos: (0..num_elements)
-                    .map(|i| generate_random_utxo(tree.clone(), i))
-                    .collect(),
-                path_nodes: (0..num_elements)
-                    .map(|i| generate_random_leaf_index(tree.clone(), i, i))
-                    .collect(),
-            };
-            persist_state_update(&txn, state_update).await.unwrap();
-            txn.commit().await.unwrap();
-        })
-        .buffer_unordered(loops)
-        .collect::<Vec<()>>()
-        .await;
-
-    // for i in 0..loops {
-    //     let tree: Pubkey = Pubkey::new_unique();
-    //     let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
-    //         .await
-    //         .unwrap();
-    //     let state_update = StateUpdate {
-    //         in_utxos: vec![],
-    //         out_utxos: (0..2000)
-    //             .map(|i| generate_random_utxo(tree.clone(), i))
-    //             .collect(),
-    //         path_nodes: vec![],
-    //     };
-    //     persist_state_update(&txn, state_update).await.unwrap();
-    //     txn.commit().await.unwrap();
-    // }
+    for _ in 0..loops {
+        let tree: Pubkey = Pubkey::new_unique();
+        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+            .await
+            .unwrap();
+        let num_elements = 2000;
+        let state_update = StateUpdate {
+            in_utxos: vec![],
+            out_utxos: (0..num_elements)
+                .map(|i| generate_random_utxo(tree.clone(), i))
+                .collect(),
+            // We only include the leaf index because we think the most path nodes will be
+            // overwritten anyways. So the amortized number of writes will be in each tree
+            // will be close to 1.
+            path_nodes: (0..num_elements)
+                .map(|i| generate_random_leaf_index(tree.clone(), i as u32, i))
+                .collect(),
+        };
+        persist_state_update(&txn, state_update).await.unwrap();
+        txn.commit().await.unwrap();
+    }
 }

@@ -109,21 +109,28 @@ impl TryFrom<EventBundle> for StateUpdate {
                     });
                 }
 
-                state_update
-                    .path_nodes
-                    .extend(path_updates.into_iter().flat_map(|p| {
-                        p.path
-                            .into_iter()
-                            .enumerate()
-                            .map(move |(i, node)| EnrichedPathNode {
-                                node,
-                                slot: e.slot as i64,
-                                tree: p.tree,
-                                seq: p.seq,
-                                level: i,
-                                tree_depth: p.path.len(),
-                            })
-                    }));
+                state_update.path_nodes.extend(
+                    path_updates
+                        .into_iter()
+                        .map(|p| {
+                            let tree_height = p.path.len();
+                            p.path
+                                .into_iter()
+                                .enumerate()
+                                .map(move |(i, node)| EnrichedPathNode {
+                                    node: PathNode {
+                                        node: node.node.clone(),
+                                        index: node.index,
+                                    },
+                                    slot: e.slot as i64,
+                                    tree: p.tree,
+                                    seq: p.seq,
+                                    level: i,
+                                    tree_depth: tree_height,
+                                })
+                        })
+                        .flatten(),
+                );
                 state_update.prune_redundant_updates();
                 Ok(state_update)
             }
