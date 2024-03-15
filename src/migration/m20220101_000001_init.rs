@@ -83,6 +83,16 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(UTXOs::Id)
                             .big_integer()
+<<<<<<< Updated upstream
+=======
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(UTXOs::Hash)
+                            .binary()
+>>>>>>> Stashed changes
                             .not_null()
                             .auto_increment()
                             .primary_key(),
