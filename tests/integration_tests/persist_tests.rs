@@ -1,6 +1,7 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
+use futures::StreamExt;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
 use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest;
@@ -14,7 +15,7 @@ use photon::api::{
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
-use photon::ingester::persist::state_update::UtxoWithSlot;
+use photon::ingester::persist::state_update::{EnrichedPathNode, UtxoWithSlot};
 use photon::ingester::persist::state_update::{EnrichedUtxo, StateUpdate};
 use photon::ingester::persist::{persist_state_update, persist_token_datas, EnrichedTokenData};
 use psp_compressed_pda::{
@@ -255,7 +256,7 @@ async fn test_persist_token_data(
 
 #[named]
 #[rstest]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 25)]
 #[serial]
 #[ignore]
 /// Test for testing how fast we can index UTXOs.
@@ -264,7 +265,6 @@ async fn test_load_test(
 ) {
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
-    let tree: Pubkey = Pubkey::new_unique();
 
     fn generate_random_utxo(tree: Pubkey, seq: i64) -> EnrichedUtxo {
         EnrichedUtxo {
@@ -274,7 +274,7 @@ async fn test_load_test(
                         tlv_elements: vec![TlvDataElement {
                             discriminator: [0; 8],
                             owner: Pubkey::new_unique(),
-                            data: vec![1; 500],
+                            data: vec![1; 3000],
                             data_hash: [0; 32],
                         }],
                     }),
@@ -288,18 +288,56 @@ async fn test_load_test(
             seq,
         }
     }
-    for _ in 0..10 {
-        let state_update = StateUpdate {
-            in_utxos: vec![],
-            out_utxos: (0..1000)
-                .map(|i| generate_random_utxo(tree.clone(), i))
-                .collect(),
-            path_nodes: vec![],
-        };
-        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
-            .await
-            .unwrap();
-        persist_state_update(&txn, state_update).await.unwrap();
-        txn.commit().await.unwrap();
+
+    fn generate_random_node(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
+        EnrichedPathNode {
+            node: PathNode {
+                node: Pubkey::new_unique().to_bytes(),
+                index: node_index,
+            },
+            slot: 0,
+            tree: tree.to_bytes(),
+            seq,
+            level: 0,
+        }
     }
+
+    let loops = 25;
+    futures::stream::iter(0..loops)
+        .map(|_| async {
+            let tree: Pubkey = Pubkey::new_unique();
+
+            let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+                .await
+                .unwrap();
+            let num_elements = 2000;
+            let state_update = StateUpdate {
+                in_utxos: vec![],
+                out_utxos: (0..num_elements)
+                    .map(|i| generate_random_utxo(tree.clone(), i))
+                    .collect(),
+                path_nodes: vec![],
+            };
+            persist_state_update(&txn, state_update).await.unwrap();
+            txn.commit().await.unwrap();
+        })
+        .buffer_unordered(loops)
+        .collect::<Vec<()>>()
+        .await;
+
+    // for i in 0..loops {
+    //     let tree: Pubkey = Pubkey::new_unique();
+    //     let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+    //         .await
+    //         .unwrap();
+    //     let state_update = StateUpdate {
+    //         in_utxos: vec![],
+    //         out_utxos: (0..2000)
+    //             .map(|i| generate_random_utxo(tree.clone(), i))
+    //             .collect(),
+    //         path_nodes: vec![],
+    //     };
+    //     persist_state_update(&txn, state_update).await.unwrap();
+    //     txn.commit().await.unwrap();
+    // }
 }
