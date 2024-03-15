@@ -14,7 +14,9 @@ use photon::api::{
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
-use photon::ingester::persist::{persist_token_datas, EnrichedTokenData};
+use photon::ingester::persist::state_update::UtxoWithSlot;
+use photon::ingester::persist::state_update::{EnrichedUtxo, StateUpdate};
+use photon::ingester::persist::{persist_state_update, persist_token_datas, EnrichedTokenData};
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
     utxo::Utxo,
@@ -24,6 +26,7 @@ use psp_compressed_token::TokenTlvData;
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use std::vec;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -247,5 +250,56 @@ async fn test_persist_token_data(
             .unwrap();
 
         verify_responses_match_tlv_data(res, delegate_tlv)
+    }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+#[ignore]
+/// Test for testing how fast we can index UTXOs.
+async fn test_load_test(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+    let tree: Pubkey = Pubkey::new_unique();
+
+    fn generate_random_utxo(tree: Pubkey, seq: i64) -> EnrichedUtxo {
+        EnrichedUtxo {
+            utxo: UtxoWithSlot {
+                utxo: Utxo {
+                    data: Some(Tlv {
+                        tlv_elements: vec![TlvDataElement {
+                            discriminator: [0; 8],
+                            owner: Pubkey::new_unique(),
+                            data: vec![1; 500],
+                            data_hash: [0; 32],
+                        }],
+                    }),
+                    owner: Pubkey::new_unique(),
+                    blinding: [0; 32],
+                    lamports: 1000,
+                },
+                slot: 0,
+            },
+            tree: tree.to_bytes(),
+            seq,
+        }
+    }
+    for _ in 0..10 {
+        let state_update = StateUpdate {
+            in_utxos: vec![],
+            out_utxos: (0..1000)
+                .map(|i| generate_random_utxo(tree.clone(), i))
+                .collect(),
+            path_nodes: vec![],
+        };
+        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+            .await
+            .unwrap();
+        persist_state_update(&txn, state_update).await.unwrap();
+        txn.commit().await.unwrap();
     }
 }
