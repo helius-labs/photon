@@ -6,6 +6,7 @@ use crate::dao::{
     typedefs::hash::Hash,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use log::info;
 use psp_compressed_pda::utxo::Utxo;
 use psp_compressed_token::{AccountState, TokenTlvData};
 use sea_orm::{
@@ -36,8 +37,18 @@ pub async fn persist_state_update(
         path_nodes,
     } = state_update;
 
+    info!(
+        "Persisting state update with {} in UTXOs, {} out UTXOs, and {} path nodes",
+        in_utxos.len(),
+        out_utxos.len(),
+        path_nodes.len()
+    );
+
+    info!("Persisting spent utxos...");
     spend_input_utxos(txn, &in_utxos).await?;
+    info!("Persisting output utxos...");
     append_output_utxo(txn, &out_utxos).await?;
+    info!("Persisting path nodes...");
     persist_path_nodes(txn, path_nodes).await?;
 
     Ok(())
@@ -88,26 +99,27 @@ async fn spend_input_utxos(
         })
         .collect();
 
-    utxos::Entity::insert_many(in_utxo_models)
-        .on_conflict(
-            OnConflict::column(utxos::Column::Hash)
-                .update_columns([
-                    utxos::Column::Hash,
-                    utxos::Column::Data,
-                    utxos::Column::Lamports,
-                    utxos::Column::Spent,
-                    utxos::Column::SlotUpdated,
-                ])
-                .to_owned(),
-        )
-        .exec(txn)
-        .await?;
-
-    let mut models = Vec::new();
+    if !in_utxo_models.is_empty() {
+        utxos::Entity::insert_many(in_utxo_models)
+            .on_conflict(
+                OnConflict::column(utxos::Column::Hash)
+                    .update_columns([
+                        utxos::Column::Hash,
+                        utxos::Column::Data,
+                        utxos::Column::Lamports,
+                        utxos::Column::Spent,
+                        utxos::Column::SlotUpdated,
+                    ])
+                    .to_owned(),
+            )
+            .exec(txn)
+            .await?;
+    }
+    let mut token_models = Vec::new();
     for in_utxo in in_utxos {
         let token_data = parse_token_data(&in_utxo.utxo)?;
         if token_data.is_some() {
-            models.push(token_owners::ActiveModel {
+            token_models.push(token_owners::ActiveModel {
                 hash: Set(in_utxo.utxo.hash().to_vec()),
                 spent: Set(true),
                 amount: Set(0),
@@ -116,19 +128,21 @@ async fn spend_input_utxos(
             });
         }
     }
-
-    token_owners::Entity::insert_many(models)
-        .on_conflict(
-            OnConflict::column(token_owners::Column::Hash)
-                .update_columns([
-                    token_owners::Column::Hash,
-                    token_owners::Column::Amount,
-                    token_owners::Column::Spent,
-                ])
-                .to_owned(),
-        )
-        .exec(txn)
-        .await?;
+    if !token_models.is_empty() {
+        info!("Marking {} token UTXOs as spent...", token_models.len());
+        token_owners::Entity::insert_many(token_models)
+            .on_conflict(
+                OnConflict::column(token_owners::Column::Hash)
+                    .update_columns([
+                        token_owners::Column::Hash,
+                        token_owners::Column::Amount,
+                        token_owners::Column::Spent,
+                    ])
+                    .to_owned(),
+            )
+            .exec(txn)
+            .await?;
+    }
 
     Ok(())
 }
@@ -198,14 +212,23 @@ async fn append_output_utxo(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    let query = utxos::Entity::insert_many(out_utxo_models)
-        .on_conflict(
-            OnConflict::column(utxos::Column::Hash)
-                .do_nothing()
-                .to_owned(),
-        )
-        .build(txn.get_database_backend());
-    txn.execute(query).await?;
+    if out_utxo_models.len() > 0 {
+        let query = utxos::Entity::insert_many(out_utxo_models)
+            .on_conflict(
+                OnConflict::column(utxos::Column::Hash)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+        if token_datas.len() > 0 {
+            info!(
+                "Persisting token data for {} UTXOs for ...",
+                token_datas.len()
+            );
+            persist_token_datas(txn, token_datas).await?;
+        }
+    }
 
     Ok(())
 }
@@ -258,6 +281,9 @@ async fn persist_path_nodes(
     txn: &DatabaseTransaction,
     nodes: Vec<EnrichedPathNode>,
 ) -> Result<(), IngesterError> {
+    if nodes.is_empty() {
+        return Ok(());
+    }
     let node_models = nodes
         .into_iter()
         .map(|node| state_trees::ActiveModel {

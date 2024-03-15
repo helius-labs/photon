@@ -78,27 +78,9 @@ async fn index_block_metadatas(
     Ok(())
 }
 
-async fn index_transaction(
-    txn: &DatabaseTransaction,
-    transaction_info: &TransactionInfo,
-    slot: u64,
-) -> Result<(), IngesterError> {
-    let event_bundles = parse_transaction(transaction_info, slot)?;
-    let stream = futures::stream::iter(event_bundles);
-
-    // We use a default parameter to avoid parameter input overload. High concurrency is likely
-    // ineffective due to database locking since the events in a transaction likely affect the same tree.
-    let max_concurrent_calls = 5;
-    stream
-        .map(|bundle| async { persist::persist_bundle(txn, bundle).await })
-        .buffer_unordered(max_concurrent_calls)
-        .try_collect::<()>()
-        .await
-}
-
 pub async fn index_block_batch(
     db: &DatabaseConnection,
-    block_batch: Vec<BlockInfo>,
+    block_batch: &Vec<BlockInfo>,
 ) -> Result<(), IngesterError> {
     let tx = db.begin().await?;
     let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
@@ -112,9 +94,12 @@ pub async fn index_block_batch(
     Ok(())
 }
 
-async fn index_block_with_infinite_retries(db: &DatabaseConnection, block: &BlockInfo) {
+pub async fn index_block_batch_with_infinite_retries(
+    db: &DatabaseConnection,
+    block_batch: Vec<BlockInfo>,
+) {
     loop {
-        match index_block(db, &block).await {
+        match index_block_batch(db, &block_batch).await {
             Ok(()) => return (),
             Err(e) => {
                 log::error!("Failed to index block: {}", e);
