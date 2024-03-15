@@ -22,6 +22,7 @@ pub struct EnrichedPathNode {
     pub tree: [u8; 32],
     pub seq: i64,
     pub level: usize,
+    pub tree_depth: usize,
 }
 
 struct PathUpdate {
@@ -120,6 +121,7 @@ impl TryFrom<EventBundle> for StateUpdate {
                                 tree: p.tree,
                                 seq: p.seq,
                                 level: i,
+                                tree_depth: p.path.len(),
                             })
                     }));
                 state_update.prune_redundant_updates();

@@ -291,10 +291,14 @@ async fn persist_path_nodes(
             level: Set(node.level as i64),
             node_idx: Set(node.node.index as i64),
             hash: Set(node.node.node.to_vec()),
-            leaf_idx: Set(Some(node_idx_to_leaf_idx(
-                node.node.index as i64,
-                node.level as u32,
-            ))),
+            leaf_idx: Set(if node.level == 0 {
+                Some(node_idx_to_leaf_idx(
+                    node.node.index as i64,
+                    node.tree_depth as u32,
+                ))
+            } else {
+                None
+            }),
             seq: Set(node.seq as i64),
             slot_updated: Set(node.slot),
             ..Default::default()

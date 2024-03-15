@@ -289,7 +289,7 @@ async fn test_load_test(
         }
     }
 
-    fn generate_random_node(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
+    fn generate_random_leaf_index(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
         EnrichedPathNode {
             node: PathNode {
                 node: Pubkey::new_unique().to_bytes(),
@@ -299,6 +299,7 @@ async fn test_load_test(
             tree: tree.to_bytes(),
             seq,
             level: 0,
+            tree_depth: 20,
         }
     }
 
@@ -316,7 +317,9 @@ async fn test_load_test(
                 out_utxos: (0..num_elements)
                     .map(|i| generate_random_utxo(tree.clone(), i))
                     .collect(),
-                path_nodes: vec![],
+                path_nodes: (0..num_elements)
+                    .map(|i| generate_random_leaf_index(tree.clone(), i, i))
+                    .collect(),
             };
             persist_state_update(&txn, state_update).await.unwrap();
             txn.commit().await.unwrap();
