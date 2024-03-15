@@ -7,7 +7,7 @@ use photon::api::{self, api::PhotonApi};
 use photon::ingester::fetchers::poller::{
     fetch_current_slot_with_infinite_retry, Options, TransactionPoller,
 };
-use photon::ingester::index_block_batch;
+use photon::ingester::index_block_batch_with_infinite_retries;
 use photon::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
@@ -107,8 +107,7 @@ async fn start_transaction_indexer(
                 finished_backfill = true;
                 continue;
             }
-
-            index_block_batch(db.as_ref(), blocks).await;
+            index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
         }
     })
 }

@@ -35,10 +35,15 @@ pub struct TransactionInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockInfo {
+    pub metadata: BlockMetadata,
+    pub transactions: Vec<TransactionInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockMetadata {
     pub slot: Slot,
     // In Solana, slots can be skipped. So there are not necessarily sequential.
     pub parent_slot: Slot,
-    pub transactions: Vec<TransactionInfo>,
     pub block_time: UnixTimestamp,
     pub blockhash: Hash,
     pub parent_blockhash: Hash,
@@ -66,19 +71,22 @@ pub fn parse_ui_confirmed_blocked(
         .collect();
 
     Ok(BlockInfo {
-        parent_slot,
-        block_time: block_time
-            .ok_or(IngesterError::ParserError("Missing block_time".to_string()))?,
-        slot,
         transactions: transactions?,
-        blockhash: Hash::try_from(blockhash.as_str())
-            .map_err(|e| IngesterError::ParserError(format!("Failed to parse blockhash: {}", e)))?,
-        parent_blockhash: Hash::try_from(previous_blockhash.as_str()).map_err(|e| {
-            IngesterError::ParserError(format!("Failed to parse previous_blockhash: {}", e))
-        })?,
-        block_height: block_height.ok_or(IngesterError::ParserError(
-            "Missing block_height".to_string(),
-        ))?,
+        metadata: BlockMetadata {
+            parent_slot,
+            block_time: block_time
+                .ok_or(IngesterError::ParserError("Missing block_time".to_string()))?,
+            slot,
+            blockhash: Hash::try_from(blockhash.as_str()).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to parse blockhash: {}", e))
+            })?,
+            parent_blockhash: Hash::try_from(previous_blockhash.as_str()).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to parse previous_blockhash: {}", e))
+            })?,
+            block_height: block_height.ok_or(IngesterError::ParserError(
+                "Missing block_height".to_string(),
+            ))?,
+        },
     })
 }
 

@@ -14,7 +14,9 @@ use photon::api::{
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
-use photon::ingester::persist::persist_token_data;
+use photon::ingester::persist::state_update::{EnrichedPathNode, UtxoWithSlot};
+use photon::ingester::persist::state_update::{EnrichedUtxo, StateUpdate};
+use photon::ingester::persist::{persist_state_update, persist_token_datas, EnrichedTokenData};
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
     utxo::Utxo,
@@ -24,6 +26,7 @@ use psp_compressed_token::TokenTlvData;
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use std::vec;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -188,7 +191,10 @@ async fn test_persist_token_data(
         .await
         .unwrap();
 
+    let mut token_datas = Vec::new();
+
     for token_tlv_data in all_token_tlv_data.iter() {
+        let slot = 11;
         let hash = Hash::new_unique();
         let model = utxos::ActiveModel {
             hash: Set(hash.clone().into()),
@@ -196,14 +202,18 @@ async fn test_persist_token_data(
             data: Set(to_vec(&token_tlv_data).unwrap()),
             owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
             lamports: Set(10),
-            slot_updated: Set(10),
+            slot_updated: Set(slot),
             ..Default::default()
         };
         utxos::Entity::insert(model).exec(&txn).await.unwrap();
-        persist_token_data(&txn, hash, 10, token_tlv_data.clone())
-            .await
-            .unwrap();
+        token_datas.push(EnrichedTokenData {
+            hash,
+            token_tlv_data: token_tlv_data.clone(),
+            slot_updated: slot,
+        });
     }
+
+    persist_token_datas(&txn, token_datas).await.unwrap();
     txn.commit().await.unwrap();
 
     for owner in [owner1, owner2] {
@@ -240,5 +250,78 @@ async fn test_persist_token_data(
             .unwrap();
 
         verify_responses_match_tlv_data(res, delegate_tlv)
+    }
+}
+
+#[named]
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 25)]
+#[serial]
+#[ignore]
+/// Test for testing how fast we can index UTXOs.
+async fn test_load_test(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+
+    fn generate_random_utxo(tree: Pubkey, seq: i64) -> EnrichedUtxo {
+        EnrichedUtxo {
+            utxo: UtxoWithSlot {
+                utxo: Utxo {
+                    data: Some(Tlv {
+                        tlv_elements: vec![TlvDataElement {
+                            discriminator: [0; 8],
+                            owner: Pubkey::new_unique(),
+                            data: vec![1; 500],
+                            data_hash: [0; 32],
+                        }],
+                    }),
+                    owner: Pubkey::new_unique(),
+                    blinding: [0; 32],
+                    lamports: 1000,
+                },
+                slot: 0,
+            },
+            tree: tree.to_bytes(),
+            seq,
+        }
+    }
+
+    fn generate_random_leaf_index(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
+        EnrichedPathNode {
+            node: PathNode {
+                node: Pubkey::new_unique().to_bytes(),
+                index: node_index,
+            },
+            slot: 0,
+            tree: tree.to_bytes(),
+            seq,
+            level: 0,
+            tree_depth: 20,
+        }
+    }
+
+    let loops = 25;
+    for _ in 0..loops {
+        let tree: Pubkey = Pubkey::new_unique();
+        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+            .await
+            .unwrap();
+        let num_elements = 2000;
+        let state_update = StateUpdate {
+            in_utxos: vec![],
+            out_utxos: (0..num_elements)
+                .map(|i| generate_random_utxo(tree.clone(), i))
+                .collect(),
+            // We only include the leaf index because we think the most path nodes will be
+            // overwritten anyways. So the amortized number of writes will be in each tree
+            // will be close to 1.
+            path_nodes: (0..num_elements)
+                .map(|i| generate_random_leaf_index(tree.clone(), i as u32, i))
+                .collect(),
+        };
+        persist_state_update(&txn, state_update).await.unwrap();
+        txn.commit().await.unwrap();
     }
 }
