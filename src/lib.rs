@@ -1,3 +1,4 @@
+// Required for capturing backtraces
 pub mod api;
 pub mod dao;
 pub mod ingester;

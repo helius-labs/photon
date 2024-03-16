@@ -75,7 +75,7 @@ impl TransactionPoller {
             .buffer_unordered(batch_size)
             .collect()
             .await;
-        blocks.sort_by(|a, b| a.slot.cmp(&b.slot));
+        blocks.sort_by(|a, b| a.metadata.slot.cmp(&b.metadata.slot));
 
         self.slot = new_slot;
         blocks
