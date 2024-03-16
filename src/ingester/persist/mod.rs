@@ -19,6 +19,9 @@ use solana_sdk::pubkey::Pubkey;
 pub mod state_update;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
+// To avoid exceeding the 25k total parameter limit, we set the insert limit to 1k (as we have fewer
+// than 10 columns per table).
+pub const MAX_SQL_INSERTS: usize = 1000;
 
 pub async fn persist_bundle(
     txn: &DatabaseTransaction,
@@ -45,11 +48,18 @@ pub async fn persist_state_update(
     );
 
     info!("Persisting spent utxos...");
-    spend_input_utxos(txn, &in_utxos).await?;
+    for chunk in in_utxos.chunks(MAX_SQL_INSERTS) {
+        spend_input_utxos(txn, chunk).await?;
+    }
     info!("Persisting output utxos...");
+    for chunk in out_utxos.chunks(MAX_SQL_INSERTS) {
+        append_output_utxo(txn, chunk).await?;
+    }
     append_output_utxo(txn, &out_utxos).await?;
     info!("Persisting path nodes...");
-    persist_path_nodes(txn, path_nodes).await?;
+    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
+        persist_path_nodes(txn, chunk).await?;
+    }
 
     Ok(())
 }
@@ -84,7 +94,7 @@ fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> 
 
 async fn spend_input_utxos(
     txn: &DatabaseTransaction,
-    in_utxos: &Vec<UtxoWithSlot>,
+    in_utxos: &[UtxoWithSlot],
 ) -> Result<(), IngesterError> {
     let in_utxo_models: Vec<utxos::ActiveModel> = in_utxos
         .iter()
@@ -157,7 +167,7 @@ pub struct EnrichedTokenData {
 
 async fn append_output_utxo(
     txn: &DatabaseTransaction,
-    out_utxos: &Vec<EnrichedUtxo>,
+    out_utxos: &[EnrichedUtxo],
 ) -> Result<(), IngesterError> {
     let mut out_utxo_models = Vec::new();
     let mut token_datas = Vec::new();
@@ -279,7 +289,7 @@ pub async fn persist_token_datas(
 
 async fn persist_path_nodes(
     txn: &DatabaseTransaction,
-    nodes: Vec<EnrichedPathNode>,
+    nodes: &[EnrichedPathNode],
 ) -> Result<(), IngesterError> {
     if nodes.is_empty() {
         return Ok(());

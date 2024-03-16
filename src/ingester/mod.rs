@@ -16,6 +16,7 @@ use sea_orm::TransactionTrait;
 
 use self::persist::persist_state_update;
 use self::persist::state_update::StateUpdate;
+use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
@@ -48,29 +49,31 @@ async fn index_block_metadatas(
     tx: &DatabaseTransaction,
     blocks: Vec<&BlockMetadata>,
 ) -> Result<(), IngesterError> {
-    let block_models: Vec<blocks::ActiveModel> = blocks
-        .iter()
-        .map(|block| blocks::ActiveModel {
-            slot: Set(block.slot as i64),
-            parent_slot: Set(block.parent_slot as i64),
-            block_time: Set(block.block_time as i64),
-            blockhash: Set(block.blockhash.clone().into()),
-            parent_blockhash: Set(block.parent_blockhash.clone().into()),
-            block_height: Set(block.block_height as i64),
-            ..Default::default()
-        })
-        .collect();
+    for block_chunk in blocks.chunks(MAX_SQL_INSERTS) {
+        let block_models: Vec<blocks::ActiveModel> = block_chunk
+            .iter()
+            .map(|block| blocks::ActiveModel {
+                slot: Set(block.slot as i64),
+                parent_slot: Set(block.parent_slot as i64),
+                block_time: Set(block.block_time as i64),
+                blockhash: Set(block.blockhash.clone().into()),
+                parent_blockhash: Set(block.parent_blockhash.clone().into()),
+                block_height: Set(block.block_height as i64),
+                ..Default::default()
+            })
+            .collect();
 
-    // We first build the query and then execute it because SeaORM has a bug where it always throws
-    // expected not to insert anything if the key already exists.
-    let query = blocks::Entity::insert_many(block_models)
-        .on_conflict(
-            OnConflict::column(blocks::Column::Slot)
-                .do_nothing()
-                .to_owned(),
-        )
-        .build(tx.get_database_backend());
-    tx.execute(query).await?;
+        // We first build the query and then execute it because SeaORM has a bug where it always throws
+        // expected not to insert anything if the key already exists.
+        let query = blocks::Entity::insert_many(block_models)
+            .on_conflict(
+                OnConflict::column(blocks::Column::Slot)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .build(tx.get_database_backend());
+        tx.execute(query).await?;
+    }
 
     Ok(())
 }
