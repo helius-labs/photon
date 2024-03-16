@@ -81,19 +81,11 @@ impl MigrationTrait for Migration {
                     .table(UTXOs::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(UTXOs::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
-                    .col(
                         ColumnDef::new(UTXOs::Hash)
                             .binary()
                             .not_null()
-                            .auto_increment(),
+                            .primary_key(),
                     )
-                    .col(ColumnDef::new(UTXOs::Hash).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Data).binary().not_null())
                     .col(ColumnDef::new(UTXOs::Account).binary())
                     .col(ColumnDef::new(UTXOs::Owner).binary().not_null())
@@ -107,17 +99,6 @@ impl MigrationTrait for Migration {
                             .timestamp()
                             .default(Expr::current_timestamp()),
                     )
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("utxos_hash_idx")
-                    .table(UTXOs::Table)
-                    .col(UTXOs::Hash)
-                    .unique()
                     .to_owned(),
             )
             .await?;
