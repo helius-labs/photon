@@ -87,3 +87,10 @@ tracing-subscriber = {version = "0.3.16", features = [
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
+
+[profile.dev]
+# Do not produce debug info for ~40% faster incremental compilation.
+debug = 0
+# Some standard library files already come precompiled with debuginfo. We strip it for faster linking
+# and smaller binaries.
+strip = "debuginfo"
