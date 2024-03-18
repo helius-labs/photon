@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     super::error::PhotonApiError,
-    utils::{fetch_token_accounts, OwnerOrDelegate, TokenAccountList},
+    utils::{fetch_token_accounts, OwnerOrDelegate, TokenAccountListResponse},
 };
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
@@ -18,7 +18,7 @@ pub struct GetCompressedTokenAccountsByDelegateRequest {
 pub async fn get_compressed_account_token_accounts_by_delegate(
     conn: &DatabaseConnection,
     request: GetCompressedTokenAccountsByDelegateRequest,
-) -> Result<TokenAccountList, PhotonApiError> {
+) -> Result<TokenAccountListResponse, PhotonApiError> {
     let GetCompressedTokenAccountsByDelegateRequest { delegate, mint } = request;
     fetch_token_accounts(conn, OwnerOrDelegate::Delegate(delegate), mint).await
 }

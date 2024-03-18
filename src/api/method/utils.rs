@@ -26,6 +26,8 @@ pub struct Utxo {
     pub slot_updated: u64,
 }
 
+pub type UtxoResponse = ResponseWithContext<Utxo>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountRequest {
@@ -65,6 +67,8 @@ pub struct TokenAccountList {
     pub items: Vec<TokenUxto>,
 }
 
+pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
+
 pub enum OwnerOrDelegate {
     Owner(SerializablePubkey),
     Delegate(SerializablePubkey),
@@ -74,7 +78,8 @@ pub async fn fetch_token_accounts(
     conn: &sea_orm::DatabaseConnection,
     owner_or_delegate: OwnerOrDelegate,
     mint: Option<SerializablePubkey>,
-) -> Result<TokenAccountList, PhotonApiError> {
+) -> Result<TokenAccountListResponse, PhotonApiError> {
+    let context = Context::extract(conn).await?;
     let mut filter = match owner_or_delegate {
         OwnerOrDelegate::Owner(owner) => token_owners::Column::Owner.eq::<Vec<u8>>(owner.into()),
         OwnerOrDelegate::Delegate(delegate) => {
@@ -96,7 +101,10 @@ pub async fn fetch_token_accounts(
         result.into_iter().map(parse_token_owners_model).collect();
     let items = items?;
 
-    Ok(TokenAccountList { items })
+    Ok(TokenAccountListResponse {
+        value: TokenAccountList { items },
+        context,
+    })
 }
 
 pub fn parse_token_owners_model(
@@ -151,6 +159,12 @@ pub struct ResponseWithContext<T> {
     pub value: T,
 }
 
+#[derive(FromQueryResult)]
+struct ContextModel {
+    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
+    slot: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
@@ -159,14 +173,18 @@ pub struct Context {
 
 impl Context {
     pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
-        Ok(blocks::Entity::find()
+        let context = blocks::Entity::find()
+            .select_only()
             .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
-            .into_model::<Context>()
+            .into_model::<ContextModel>()
             .one(db)
             .await?
             .ok_or(PhotonApiError::RecordNotFound(
                 "No data has been indexed".to_string(),
-            ))?)
+            ))?;
+        Ok(Context {
+            slot: context.slot as u64,
+        })
     }
 }
 

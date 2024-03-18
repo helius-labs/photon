@@ -3,34 +3,32 @@ use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
 
-use super::super::error::PhotonApiError;
+use super::{
+    super::error::PhotonApiError,
+    utils::{CompressedAccountRequest, Context, ResponseWithContext},
+};
 use crate::dao::typedefs::hash::Hash;
-
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::utils::{build_full_proof, get_proof_path, ProofResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountProofRequest {
-    pub address: SerializablePubkey,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountProofResponse {
+pub struct AccountProof {
     pub hash: Hash,
     pub root: Hash,
     pub proof: Vec<Hash>,
 }
 
+pub type GetCompressedAccountProofResponse = ResponseWithContext<AccountProof>;
+
 // TODO: Optimize the DB queries to reduce latency.
 // We make three calls when account_id but we only need to make two.
 pub async fn get_compressed_account_proof(
     conn: &DatabaseConnection,
-    request: GetCompressedAccountProofRequest,
+    request: CompressedAccountRequest,
 ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
-    let GetCompressedAccountProofRequest { address } = request;
+    let context = Context::extract(conn).await?;
+    let CompressedAccountRequest { address } = request;
 
     // Extract the leaf hash from the user or look it up via the provided account_id.
     let acc_vec: Vec<u8> = address.clone().into();
@@ -73,10 +71,13 @@ pub async fn get_compressed_account_proof(
         .await?;
 
     let ProofResponse { root, proof } = build_full_proof(proof_nodes, required_node_indices)?;
-    let res = GetCompressedAccountProofResponse {
+    let account_proof = AccountProof {
         hash: Hash::try_from(leaf_node.hash)?.into(),
         root,
         proof,
     };
-    Ok(res)
+    Ok(GetCompressedAccountProofResponse {
+        value: account_proof,
+        context,
+    })
 }

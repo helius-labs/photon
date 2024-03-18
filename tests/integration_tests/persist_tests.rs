@@ -12,10 +12,12 @@ use photon::api::{
 };
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
+use photon::ingester::index_block;
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
 use photon::ingester::persist::state_update::{EnrichedPathNode, UtxoWithSlot};
 use photon::ingester::persist::state_update::{EnrichedUtxo, StateUpdate};
 use photon::ingester::persist::{persist_state_update, persist_token_datas, EnrichedTokenData};
+use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
     utxo::Utxo,
@@ -151,6 +153,20 @@ async fn test_persist_token_data(
     let delegate1 = Pubkey::new_unique();
     let delegate2 = Pubkey::new_unique();
 
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
     let token_tlv_data1: TokenTlvData = TokenTlvData {
         mint: mint1.clone(),
         owner: owner1.clone(),
@@ -228,7 +244,8 @@ async fn test_persist_token_data(
                 ..Default::default()
             })
             .await
-            .unwrap();
+            .unwrap()
+            .value;
         verify_responses_match_tlv_data(res, owner_tlv)
     }
     for delegate in [delegate1, delegate2] {
@@ -246,7 +263,8 @@ async fn test_persist_token_data(
                 },
             )
             .await
-            .unwrap();
+            .unwrap()
+            .value;
 
         verify_responses_match_tlv_data(res, delegate_tlv)
     }

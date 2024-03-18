@@ -2,17 +2,16 @@ use crate::dao::generated::utxos;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-
 use super::super::error::PhotonApiError;
-use super::utils::{parse_utxo_model, GetCompressedAccountRequest, Utxo};
-
+use super::utils::{parse_utxo_model, Context, GetCompressedAccountRequest, UtxoResponse};
 
 pub async fn get_compressed_account(
     conn: &DatabaseConnection,
     request: GetCompressedAccountRequest,
-) -> Result<Utxo, PhotonApiError> {
+) -> Result<UtxoResponse, PhotonApiError> {
+    let context = Context::extract(conn).await?;
     let GetCompressedAccountRequest { address } = request;
-    parse_utxo_model(
+    let utxo = parse_utxo_model(
         utxos::Entity::find()
             .filter(utxos::Column::Account.eq::<Vec<u8>>(address.clone().into()))
             .one(conn)
@@ -21,5 +20,9 @@ pub async fn get_compressed_account(
                 "Account {} not found",
                 address
             )))?,
-    )
+    )?;
+    Ok(UtxoResponse {
+        value: utxo,
+        context,
+    })
 }

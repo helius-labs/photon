@@ -10,6 +10,7 @@ use insta::assert_json_snapshot;
 use photon::api::method::utils::TokenUxto;
 use photon::dao::generated::blocks;
 use photon::dao::typedefs::hash::Hash;
+use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
@@ -75,6 +76,19 @@ async fn test_e2e_token_mint(
         },
     )
     .await;
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
 
     let tx = cached_fetch_transaction(
         &setup,
@@ -99,7 +113,8 @@ async fn test_e2e_token_mint(
             mint: None,
         })
         .await
-        .unwrap();
+        .unwrap()
+        .value;
 
     assert_eq!(token_accounts.items.len(), 1);
     let token_utxo = token_accounts.items.get(0).unwrap();

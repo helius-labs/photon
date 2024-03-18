@@ -9,11 +9,11 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
-    get_compressed_account_proof::GetCompressedAccountProofRequest,
     get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest,
     get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
-    get_utxo_proof::GetUtxoProofRequest, get_utxos::GetUtxosRequest,
-    utils::GetCompressedAccountRequest,
+    get_utxo_proof::GetUtxoProofRequest,
+    get_utxos::GetUtxosRequest,
+    utils::{CompressedAccountRequest, GetCompressedAccountRequest},
 };
 use super::{api::PhotonApi, method::get_utxo::GetUtxoRequest};
 
@@ -62,7 +62,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedAccountProof",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountProofRequest>()?;
+            let payload = rpc_params.parse::<CompressedAccountRequest>()?;
             rpc_context
                 .get_compressed_account_proof(payload)
                 .await

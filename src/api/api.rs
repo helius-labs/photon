@@ -9,8 +9,7 @@ use super::{
     method::{
         get_compressed_account::get_compressed_account,
         get_compressed_account_proof::{
-            get_compressed_account_proof, GetCompressedAccountProofRequest,
-            GetCompressedAccountProofResponse,
+            get_compressed_account_proof, GetCompressedAccountProofResponse,
         },
         get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
         get_compressed_token_account_balance::{
@@ -28,7 +27,10 @@ use super::{
         get_utxo::{get_utxo, GetUtxoRequest},
         get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
         get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
-        utils::{GetCompressedAccountRequest, ProofResponse, TokenAccountList, Utxo},
+        utils::{
+            CompressedAccountRequest, GetCompressedAccountRequest, ProofResponse, TokenAccountList,
+            TokenAccountListResponse, Utxo, UtxoResponse,
+        },
     },
 };
 
@@ -91,13 +93,13 @@ impl PhotonApi {
     pub async fn get_compressed_account(
         &self,
         request: GetCompressedAccountRequest,
-    ) -> Result<Utxo, PhotonApiError> {
+    ) -> Result<UtxoResponse, PhotonApiError> {
         get_compressed_account(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_account_proof(
         &self,
-        request: GetCompressedAccountProofRequest,
+        request: CompressedAccountRequest,
     ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
         get_compressed_account_proof(&self.db_conn, request).await
     }
@@ -105,14 +107,14 @@ impl PhotonApi {
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
         request: GetCompressedTokenAccountsByOwnerRequest,
-    ) -> Result<TokenAccountList, PhotonApiError> {
+    ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_token_accounts_by_owner(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_token_accounts_by_delegate(
         &self,
         request: GetCompressedTokenAccountsByDelegateRequest,
-    ) -> Result<TokenAccountList, PhotonApiError> {
+    ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
 
