@@ -49,12 +49,6 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountRequest {
-    pub address: SerializablePubkey,
-}
-
 pub type UtxoResponse = ResponseWithContext<Utxo>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -184,6 +178,18 @@ pub enum AccountIdentifier {
 
 impl CompressedAccountRequest {
     pub fn get_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
+        if let Some(address) = &self.address {
+            Ok(AccountIdentifier::Address(address.clone()))
+        } else if let Some(hash) = &self.hash {
+            Ok(AccountIdentifier::Hash(hash.clone()))
+        } else {
+            Err(PhotonApiError::ValidationError(
+                "Either address or hash must be provided".to_string(),
+            ))
+        }
+    }
+
+    pub fn get_utxo_filter(&self) -> Result<AccountIdentifier, PhotonApiError> {
         if let Some(address) = &self.address {
             Ok(AccountIdentifier::Address(address.clone()))
         } else if let Some(hash) = &self.hash {

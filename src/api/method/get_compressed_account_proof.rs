@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     super::error::PhotonApiError,
-    utils::{CompressedAccountRequest, Context, ResponseWithContext},
+    utils::{AccountIdentifier, CompressedAccountRequest, Context, ResponseWithContext},
 };
 use crate::dao::typedefs::hash::Hash;
 
@@ -28,31 +28,35 @@ pub async fn get_compressed_account_proof(
     request: CompressedAccountRequest,
 ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let CompressedAccountRequest { address } = request;
-
+    let id = request.get_id()?;
     // Extract the leaf hash from the user or look it up via the provided account_id.
-    let acc_vec: Vec<u8> = address.clone().into();
-    let leaf_hash = utxos::Entity::find()
-        .filter(utxos::Column::Account.eq(acc_vec))
-        .one(conn)
-        .await?
-        .ok_or(PhotonApiError::RecordNotFound(format!(
-            "Account {} not found",
-            address
-        )))?
-        .hash;
+
+    let leaf_hash = match id {
+        AccountIdentifier::Address(address) => Hash::try_from(
+            utxos::Entity::find()
+                .filter(utxos::Column::Account.eq::<Vec<u8>>(address.clone().into()))
+                .one(conn)
+                .await?
+                .ok_or(PhotonApiError::RecordNotFound(format!(
+                    "Account {} not found",
+                    address
+                )))?
+                .hash,
+        )?,
+        AccountIdentifier::Hash(hash) => hash,
+    };
 
     let leaf_node = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
-                .eq(leaf_hash)
+                .eq(leaf_hash.to_vec())
                 .and(state_trees::Column::Level.eq(0)),
         )
         .one(conn)
         .await?
         .ok_or(PhotonApiError::RecordNotFound(format!(
-            "Leaf node not found for account {}",
-            address
+            "Leaf node not found for hash {}",
+            leaf_hash
         )))?;
 
     let tree = leaf_node.tree;

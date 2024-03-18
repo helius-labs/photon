@@ -3,11 +3,11 @@ use crate::dao::generated::utxos;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::super::error::PhotonApiError;
-use super::utils::{parse_utxo_model, Context, GetCompressedAccountRequest, UtxoResponse};
+use super::utils::{parse_utxo_model, Context, CompressedAccountRequest, UtxoResponse};
 
 pub async fn get_compressed_account(
     conn: &DatabaseConnection,
-    request: GetCompressedAccountRequest,
+    request: CompressedAccountRequest,
 ) -> Result<UtxoResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let GetCompressedAccountRequest { address } = request;
