@@ -28,7 +28,7 @@ use super::{
         get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
         get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
         utils::{
-            CompressedAccountRequest, GetCompressedAccountRequest, ProofResponse, TokenAccountList,
+            CompressedAccountRequest, GetCompressedAccountRequest, ProofResponse,
             TokenAccountListResponse, Utxo, UtxoResponse,
         },
     },
