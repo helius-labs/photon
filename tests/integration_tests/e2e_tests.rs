@@ -1,5 +1,4 @@
 use function_name::named;
-use photon::api::api::ApiContract;
 use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
 use photon::api::method::get_utxos::GetUtxosRequest;
 use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;

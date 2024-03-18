@@ -15,10 +15,7 @@ use super::method::{
     get_utxo_proof::GetUtxoProofRequest, get_utxos::GetUtxosRequest,
     utils::GetCompressedAccountRequest,
 };
-use super::{
-    api::{ApiContract, PhotonApi},
-    method::get_utxo::GetUtxoRequest,
-};
+use super::{api::PhotonApi, method::get_utxo::GetUtxoRequest};
 
 pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -34,13 +31,11 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
         .set_middleware(middleware)
         .build(addr)
         .await?;
-    let rpc_module = build_rpc_module(Box::new(api))?;
+    let rpc_module = build_rpc_module(api)?;
     server.start(rpc_module).map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn build_rpc_module(
-    contract: Box<dyn ApiContract>,
-) -> Result<RpcModule<Box<dyn ApiContract>>, anyhow::Error> {
+pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, anyhow::Error> {
     let mut module = RpcModule::new(contract);
 
     module.register_async_method("liveness", |_rpc_params, rpc_context| async move {
