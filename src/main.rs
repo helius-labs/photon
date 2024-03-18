@@ -12,7 +12,7 @@ use photon::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
-use solana_client::nonblocking::rpc_client::{self, RpcClient};
+use solana_client::nonblocking::rpc_client::{RpcClient};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
