@@ -11,7 +11,7 @@ use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
-use sea_orm_migration::sea_query::{Expr};
+use sea_orm_migration::sea_query::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
