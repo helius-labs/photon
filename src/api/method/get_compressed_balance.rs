@@ -1,17 +1,10 @@
 use crate::dao::generated::utxos;
-use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
-use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
-use super::utils::{BalanceModel, Context, GetCompressedAccountRequest};
+use super::utils::{BalanceModel, Context, GetCompressedAccountRequest, ResponseWithContext};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountBalance {
-    value: i64,
-    context: Context,
-}
+pub type GetCompressedAccountBalance = ResponseWithContext<i64>;
 
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,

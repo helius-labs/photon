@@ -145,6 +145,12 @@ pub struct BalanceModel {
     pub amount: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ResponseWithContext<T> {
+    pub context: Context,
+    pub value: T,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {

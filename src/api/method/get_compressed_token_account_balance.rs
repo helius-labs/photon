@@ -4,20 +4,18 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySe
 use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
+use super::utils::ResponseWithContext;
 use super::utils::{BalanceModel, Context, GetCompressedAccountRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenAccountBalanceResponseValue {
+// This is a struct because in the future we might add other fields here like decimals or uiAmount,
+// which is a string representation with decimals in the form of "10.00"
+pub struct TokenAccountBalance {
     amount: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenAccountBalanceResponse {
-    value: GetCompressedTokenAccountBalanceResponseValue,
-    context: Context,
-}
+pub type GetCompressedTokenAccountBalanceResponse = ResponseWithContext<TokenAccountBalance>;
 
 pub async fn get_compressed_token_account_balance(
     conn: &DatabaseConnection,
@@ -37,7 +35,7 @@ pub async fn get_compressed_token_account_balance(
             address
         )))?;
     Ok(GetCompressedTokenAccountBalanceResponse {
-        value: GetCompressedTokenAccountBalanceResponseValue {
+        value: TokenAccountBalance {
             amount: balance.amount.to_string(),
         },
         context,
