@@ -113,7 +113,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
                 panic!("Refusing to run tests on non-local database out of caution");
             }
             let pool = setup_pg_pool(local_db.to_string()).await;
-            SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+            SqlxPostgresConnector::from_sqlx_postgres_pool(pool) 
         }
         DatabaseBackend::Sqlite => {
             SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)

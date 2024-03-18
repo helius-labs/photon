@@ -193,7 +193,8 @@ async fn test_index_block_metadata(
     )
     .await;
 
-    let block = cached_fetch_block(&setup, 254170887).await;
+    let slot = 254170887;
+    let block = cached_fetch_block(&setup, slot).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     let filter = blocks::Column::Slot.eq(block.metadata.slot);
 
@@ -221,4 +222,10 @@ async fn test_index_block_metadata(
 
     // Verify that we don't get an error if we try to index the same block again
     index_block(&setup.db_conn, &block).await.unwrap();
+    assert_eq!(setup.api.get_slot().await.unwrap(), slot);
+
+    // Verify that get_slot() gets updated a new block is indexed.
+    let block = cached_fetch_block(&setup, slot + 1).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    assert_eq!(setup.api.get_slot().await.unwrap(), slot + 1);
 }
