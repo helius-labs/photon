@@ -13,6 +13,49 @@ use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ResponseWithContext<T> {
+    pub context: Context,
+    pub value: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Context {
+    pub slot: u64,
+}
+
+#[derive(FromQueryResult)]
+struct ContextModel {
+    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
+    slot: i64,
+}
+
+impl Context {
+    pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
+        let context = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
+            .into_model::<ContextModel>()
+            .one(db)
+            .await?
+            .ok_or(PhotonApiError::RecordNotFound(
+                "No data has been indexed".to_string(),
+            ))?;
+        Ok(Context {
+            slot: context.slot as u64,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetCompressedAccountRequest {
+    pub address: SerializablePubkey,
+}
+
+pub type UtxoResponse = ResponseWithContext<Utxo>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Utxo {
@@ -24,14 +67,6 @@ pub struct Utxo {
     pub tree: Option<SerializablePubkey>,
     pub seq: Option<u64>,
     pub slot_updated: u64,
-}
-
-pub type UtxoResponse = ResponseWithContext<Utxo>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountRequest {
-    pub address: SerializablePubkey,
 }
 
 pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
@@ -47,6 +82,8 @@ pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
         seq: utxo.seq.map(|seq| seq as u64),
     })
 }
+
+pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -66,8 +103,6 @@ pub struct TokenAccountList {
     // TODO: Add cursor
     pub items: Vec<TokenUxto>,
 }
-
-pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
 
 pub enum OwnerOrDelegate {
     Owner(SerializablePubkey),
@@ -133,6 +168,18 @@ pub struct CompressedAccountRequest {
     pub address: SerializablePubkey,
 }
 
+#[derive(FromQueryResult)]
+pub struct BalanceModel {
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ProofResponse {
+    pub root: Hash,
+    pub proof: Vec<Hash>,
+}
+
 pub fn get_proof_path(index: i64) -> Vec<i64> {
     let mut indexes = vec![];
     let mut idx = index;
@@ -147,54 +194,6 @@ pub fn get_proof_path(index: i64) -> Vec<i64> {
     indexes.push(1);
     indexes
 }
-
-#[derive(FromQueryResult)]
-pub struct BalanceModel {
-    pub amount: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ResponseWithContext<T> {
-    pub context: Context,
-    pub value: T,
-}
-
-#[derive(FromQueryResult)]
-struct ContextModel {
-    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
-    slot: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Context {
-    pub slot: u64,
-}
-
-impl Context {
-    pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
-        let context = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
-            .into_model::<ContextModel>()
-            .one(db)
-            .await?
-            .ok_or(PhotonApiError::RecordNotFound(
-                "No data has been indexed".to_string(),
-            ))?;
-        Ok(Context {
-            slot: context.slot as u64,
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ProofResponse {
-    pub root: Hash,
-    pub proof: Vec<Hash>,
-}
-
 pub fn build_full_proof(
     proof_nodes: Vec<state_trees::Model>,
     required_node_indices: Vec<i64>,
