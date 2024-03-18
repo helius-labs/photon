@@ -2,15 +2,20 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
 
 use super::{
     error::PhotonApiError,
     method::{
-        get_compressed_account::{get_compressed_account, GetCompressedAccountRequest},
+        get_compressed_account::get_compressed_account,
         get_compressed_account_proof::{
             get_compressed_account_proof, GetCompressedAccountProofRequest,
             GetCompressedAccountProofResponse,
+        },
+        get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
+        get_compressed_token_account_balance::{
+            get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
         get_compressed_token_accounts_by_delegate::{
             get_compressed_account_token_accounts_by_delegate,
@@ -19,10 +24,12 @@ use super::{
         get_compressed_token_accounts_by_owner::{
             get_compressed_token_accounts_by_owner, GetCompressedTokenAccountsByOwnerRequest,
         },
+        get_health::get_health,
+        get_slot::get_slot,
         get_utxo::{get_utxo, GetUtxoRequest},
         get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
         get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
-        utils::{ProofResponse, TokenAccountList, Utxo},
+        utils::{GetCompressedAccountRequest, ProofResponse, TokenAccountList, Utxo},
     },
 };
 
@@ -49,32 +56,48 @@ pub trait ApiContract: Send + Sync + 'static {
 
     async fn get_compressed_token_accounts_by_delegate(
         &self,
-        _request: GetCompressedTokenAccountsByDelegateRequest,
+        payload: GetCompressedTokenAccountsByDelegateRequest,
     ) -> Result<TokenAccountList, PhotonApiError>;
 
     async fn get_utxos(&self, payload: GetUtxosRequest)
         -> Result<GetUtxosResponse, PhotonApiError>;
 
-    async fn get_utxo(&self, request: GetUtxoRequest) -> Result<Utxo, PhotonApiError>;
+    async fn get_utxo(&self, payload: GetUtxoRequest) -> Result<Utxo, PhotonApiError>;
 
     async fn get_utxo_proof(
         &self,
         payload: GetUtxoProofRequest,
     ) -> Result<ProofResponse, PhotonApiError>;
+
+    async fn get_compressed_token_account_balance(
+        &self,
+        payload: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedTokenAccountBalanceResponse, PhotonApiError>;
+
+    async fn get_compressed_balance(
+        &self,
+        payload: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedAccountBalance, PhotonApiError>;
+
+    async fn get_health(&self) -> Result<(), PhotonApiError>;
+
+    async fn get_slot(&self) -> Result<u64, PhotonApiError>;
 }
 
 pub struct PhotonApiConfig {
     pub db_url: String,
     pub max_conn: i32,
     pub timeout_seconds: i32,
+    pub rpc_url: String,
 }
 
 pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClient>,
 }
 
 impl PhotonApi {
-    pub async fn new(config: PhotonApiConfig) -> Result<Self, anyhow::Error> {
+    pub async fn new_from_config(config: PhotonApiConfig) -> Result<Self, anyhow::Error> {
         let PhotonApiConfig {
             db_url,
             max_conn,
@@ -82,15 +105,18 @@ impl PhotonApi {
             ..
         } = config;
         let db_conn = init_pool(&db_url, max_conn, timeout_seconds).await?;
+        let rpc_client = Arc::new(RpcClient::new(config.rpc_url));
         Ok(Self {
             db_conn: Arc::new(db_conn),
+            rpc_client,
         })
     }
-}
 
-impl From<Arc<DatabaseConnection>> for PhotonApi {
-    fn from(db_conn: Arc<DatabaseConnection>) -> Self {
-        Self { db_conn }
+    pub fn new(db_conn: Arc<DatabaseConnection>, rpc_client: Arc<RpcClient>) -> Self {
+        Self {
+            db_conn,
+            rpc_client,
+        }
     }
 }
 
@@ -155,6 +181,28 @@ impl ApiContract for PhotonApi {
         request: GetUtxoProofRequest,
     ) -> Result<ProofResponse, PhotonApiError> {
         get_utxo_proof(&self.db_conn, request).await
+    }
+
+    async fn get_compressed_token_account_balance(
+        &self,
+        request: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedTokenAccountBalanceResponse, PhotonApiError> {
+        get_compressed_token_account_balance(&self.db_conn, request).await
+    }
+
+    async fn get_compressed_balance(
+        &self,
+        request: GetCompressedAccountRequest,
+    ) -> Result<GetCompressedAccountBalance, PhotonApiError> {
+        get_compressed_balance(&self.db_conn, request).await
+    }
+
+    async fn get_health(&self) -> Result<(), PhotonApiError> {
+        get_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
+    }
+
+    async fn get_slot(&self) -> Result<u64, PhotonApiError> {
+        get_slot(self.db_conn.as_ref()).await
     }
 }
 

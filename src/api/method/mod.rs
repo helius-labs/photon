@@ -6,3 +6,7 @@ pub mod get_utxo;
 pub mod get_utxo_proof;
 pub mod get_utxos;
 pub mod utils;
+pub mod get_compressed_token_account_balance;
+pub mod get_compressed_balance;
+pub mod get_health;
+pub mod get_slot;

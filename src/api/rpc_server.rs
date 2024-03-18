@@ -9,11 +9,11 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
-    get_compressed_account::GetCompressedAccountRequest,
     get_compressed_account_proof::GetCompressedAccountProofRequest,
     get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest,
     get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
     get_utxo_proof::GetUtxoProofRequest, get_utxos::GetUtxosRequest,
+    utils::GetCompressedAccountRequest,
 };
 use super::{
     api::{ApiContract, PhotonApi},
@@ -114,6 +114,36 @@ pub fn build_rpc_module(
                 .map_err(Into::into)
         },
     )?;
+
+    module.register_async_method(
+        "getCompressedTokenAccountBalance",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetCompressedAccountRequest>()?;
+            rpc_context
+                .get_compressed_token_account_balance(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedBalance",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetCompressedAccountRequest>()?;
+            rpc_context
+                .get_compressed_balance(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method("getHealth", |_rpc_params, rpc_context| async move {
+        rpc_context.get_health().await.map_err(Into::into)
+    })?;
+
+    module.register_async_method("getSlot", |_rpc_params, rpc_context| async move {
+        rpc_context.get_slot().await.map_err(Into::into)
+    })?;
 
     Ok(module)
 }

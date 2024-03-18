@@ -1,12 +1,17 @@
-use crate::dao::generated::{state_trees, token_owners, utxos};
+use crate::dao::generated::{blocks, state_trees, token_owners, utxos};
+use crate::ingester::error::IngesterError;
 use schemars::JsonSchema;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
+    QuerySelect,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
+use sea_orm_migration::sea_query::{Alias, Expr, Func};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -19,6 +24,12 @@ pub struct Utxo {
     pub tree: Option<SerializablePubkey>,
     pub seq: Option<u64>,
     pub slot_updated: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetCompressedAccountRequest {
+    pub address: SerializablePubkey,
 }
 
 pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
@@ -108,6 +119,12 @@ pub fn parse_token_owners_model(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct CompressedAccountRequest {
+    pub address: SerializablePubkey,
+}
+
 pub fn get_proof_path(index: i64) -> Vec<i64> {
     let mut indexes = vec![];
     let mut idx = index;
@@ -121,6 +138,30 @@ pub fn get_proof_path(index: i64) -> Vec<i64> {
     }
     indexes.push(1);
     indexes
+}
+
+#[derive(FromQueryResult)]
+pub struct BalanceModel {
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Context {
+    pub slot: u64,
+}
+
+impl Context {
+    pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
+        Ok(blocks::Entity::find()
+            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
+            .into_model::<Context>()
+            .one(db)
+            .await?
+            .ok_or(PhotonApiError::RecordNotFound(
+                "No data has been indexed".to_string(),
+            ))?)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]

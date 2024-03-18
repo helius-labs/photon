@@ -4,14 +4,8 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
-use super::utils::{parse_utxo_model, Utxo};
+use super::utils::{parse_utxo_model, GetCompressedAccountRequest, Utxo};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountRequest {
-    pub address: SerializablePubkey,
-}
 
 pub async fn get_compressed_account(
     conn: &DatabaseConnection,

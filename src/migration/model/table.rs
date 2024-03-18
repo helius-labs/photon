@@ -35,6 +35,7 @@ pub enum TokenOwners {
     Table,
     Id,
     Hash,
+    Account,
     Owner,
     Mint,
     Amount,
