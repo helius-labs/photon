@@ -1,5 +1,5 @@
 use crate::dao::generated::{blocks, state_trees, token_owners, utxos};
-use crate::ingester::error::IngesterError;
+
 use schemars::JsonSchema;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
@@ -11,7 +11,7 @@ use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
-use sea_orm_migration::sea_query::{Alias, Expr, Func};
+use sea_orm_migration::sea_query::{Expr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

@@ -1,11 +1,10 @@
-use crate::dao::generated::utxos;
 use schemars::JsonSchema;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{DatabaseConnection};
 use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use super::super::error::PhotonApiError;
-use super::utils::{BalanceModel, Context, GetCompressedAccountRequest};
+use super::utils::Context;
 
 // TODO: Make this an environment variable.
 const HEALTH_CHECK_SLOT_DISTANCE: u64 = 5;

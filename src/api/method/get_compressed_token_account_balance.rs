@@ -1,16 +1,15 @@
-use crate::dao::generated::{token_owners, utxos};
+use crate::dao::generated::{token_owners};
 use schemars::JsonSchema;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QuerySelect,
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
 use super::utils::{
-    parse_token_owners_model, parse_utxo_model, BalanceModel, Context, GetCompressedAccountRequest,
-    Utxo,
+    BalanceModel, Context, GetCompressedAccountRequest,
 };
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
