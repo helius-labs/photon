@@ -173,7 +173,27 @@ pub fn parse_token_owners_model(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CompressedAccountRequest {
-    pub address: SerializablePubkey,
+    pub address: Option<SerializablePubkey>,
+    pub hash: Option<Hash>,
+}
+
+pub enum AccountIdentifier {
+    Address(SerializablePubkey),
+    Hash(Hash),
+}
+
+impl CompressedAccountRequest {
+    pub fn get_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
+        if let Some(address) = &self.address {
+            Ok(AccountIdentifier::Address(address.clone()))
+        } else if let Some(hash) = &self.hash {
+            Ok(AccountIdentifier::Hash(hash.clone()))
+        } else {
+            Err(PhotonApiError::ValidationError(
+                "Either address or hash must be provided".to_string(),
+            ))
+        }
+    }
 }
 
 #[derive(FromQueryResult)]
