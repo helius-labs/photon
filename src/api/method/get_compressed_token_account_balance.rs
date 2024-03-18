@@ -12,7 +12,7 @@ use super::utils::{BalanceModel, Context, GetCompressedAccountRequest};
 // This is a struct because in the future we might add other fields here like decimals or uiAmount,
 // which is a string representation with decimals in the form of "10.00"
 pub struct TokenAccountBalance {
-    amount: String,
+    pub amount: String,
 }
 
 pub type GetCompressedTokenAccountBalanceResponse = ResponseWithContext<TokenAccountBalance>;

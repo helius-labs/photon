@@ -6,6 +6,7 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -88,6 +89,8 @@ pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenUxto {
+    pub hash: Hash,
+    pub account: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
     pub amount: u64,
@@ -146,6 +149,11 @@ pub fn parse_token_owners_model(
     token_owner: token_owners::Model,
 ) -> Result<TokenUxto, PhotonApiError> {
     Ok(TokenUxto {
+        hash: token_owner.hash.try_into()?,
+        account: token_owner
+            .account
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
         owner: token_owner.owner.try_into()?,
         mint: token_owner.mint.try_into()?,
         amount: token_owner.amount as u64,

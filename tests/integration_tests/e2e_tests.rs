@@ -119,6 +119,10 @@ async fn test_e2e_token_mint(
     assert_eq!(token_accounts.items.len(), 1);
     let token_utxo = token_accounts.items.get(0).unwrap();
     let expected_token_utxo = TokenUxto {
+        hash: "2y27eTCZ53DiFubUqBtstcrFrDCvr1sqCJFYDnjFVuZrrCGXvQPfVVosBv7mYF3LeJRy73EiGzqPX2vWHDg4iRCk"
+            .try_into()
+            .unwrap(),
+        account: Some(SerializablePubkey::try_from("GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD").unwrap()),
         owner: owner.try_into().unwrap(),
         mint: SerializablePubkey::try_from("GDvagojL2e9B7Eh7CHwHjQwcJAAtiMpbvCvtzDTCpogP").unwrap(),
         amount: 200,

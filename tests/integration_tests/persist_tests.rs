@@ -3,6 +3,8 @@ use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
 use photon::api::method::get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest;
+use photon::api::method::get_health::GetCompressedAccountBalance;
+use photon::api::method::utils::GetCompressedAccountRequest;
 use photon::api::{
     error::PhotonApiError,
     method::{
@@ -213,6 +215,7 @@ async fn test_persist_token_data(
         let hash = Hash::new_unique();
         let model = utxos::ActiveModel {
             hash: Set(hash.clone().into()),
+            account: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
             spent: Set(false),
             data: Set(to_vec(&token_tlv_data).unwrap()),
             owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
@@ -246,7 +249,20 @@ async fn test_persist_token_data(
             .await
             .unwrap()
             .value;
-        verify_responses_match_tlv_data(res, owner_tlv)
+
+        verify_responses_match_tlv_data(res.clone(), owner_tlv);
+        for token_account in res.items {
+            let request = GetCompressedAccountRequest {
+                address: token_account.account.unwrap(),
+            };
+            let balance = setup
+                .api
+                .get_compressed_token_account_balance(request)
+                .await
+                .unwrap()
+                .value;
+            assert_eq!(balance.amount.parse::<u64>().unwrap(), token_account.amount);
+        }
     }
     for delegate in [delegate1, delegate2] {
         let delegate_tlv = all_token_tlv_data
