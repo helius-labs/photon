@@ -10,6 +10,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
     get_compressed_program_accounts::GetCompressedProgramAccountsRequest,
+    get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest,
     utils::CompressedAccountRequest,
 };
 use super::{api::PhotonApi, method::utils::GetCompressedAccountsByAuthority};
@@ -125,6 +126,17 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
             let payload = rpc_params.parse::<GetCompressedProgramAccountsRequest>()?;
             rpc_context
                 .get_compressed_program_accounts(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getMultipleCompressedAccounts",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetMultipleCompressedAccountsRequest>()?;
+            rpc_context
+                .get_multiple_compressed_accounts(payload)
                 .await
                 .map_err(Into::into)
         },

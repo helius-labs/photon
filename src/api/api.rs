@@ -22,6 +22,10 @@ use super::{
         get_compressed_token_accounts_by_delegate::get_compressed_account_token_accounts_by_delegate,
         get_compressed_token_accounts_by_owner::get_compressed_token_accounts_by_owner,
         get_health::get_health,
+        get_multiple_compressed_accounts::{
+            get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
+            GetMultipleCompressedAccountsResponse,
+        },
         get_slot::get_slot,
         utils::{
             CompressedAccountRequest, GetCompressedAccountsByAuthority, TokenAccountListResponse,
@@ -141,6 +145,13 @@ impl PhotonApi {
         request: GetCompressedProgramAccountsRequest,
     ) -> Result<GetCompressedProgramAccountsResponse, PhotonApiError> {
         get_compressed_program_accounts(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_multiple_compressed_accounts(
+        &self,
+        request: GetMultipleCompressedAccountsRequest,
+    ) -> Result<GetMultipleCompressedAccountsResponse, PhotonApiError> {
+        get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
     }
 }
 
