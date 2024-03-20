@@ -44,6 +44,21 @@ async fn test_persist_state_transitions(
 ) {
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -248,8 +263,8 @@ async fn test_persist_token_data(
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
         for token_account in res.items {
             let request = CompressedAccountRequest {
-                address: Some(token_account.account.unwrap()),
-                hash: None,
+                address: None,
+                hash: Some(token_account.hash),
             };
             let balance = setup
                 .api

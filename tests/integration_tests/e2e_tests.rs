@@ -33,6 +33,20 @@ async fn test_e2e_utxo_parsing(
     )
     .await;
 
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
     let tx = cached_fetch_transaction(
         &setup,
         "2y27eTCZ53DiFubUqBtstcrFrDCvr1sqCJFYDnjFVuZrrCGXvQPfVVosBv7mYF3LeJRy73EiGzqPX2vWHDg4iRCk",
@@ -120,10 +134,10 @@ async fn test_e2e_token_mint(
     assert_eq!(token_accounts.items.len(), 1);
     let token_utxo = token_accounts.items.get(0).unwrap();
     let expected_token_utxo = TokenUxto {
-        hash: "2y27eTCZ53DiFubUqBtstcrFrDCvr1sqCJFYDnjFVuZrrCGXvQPfVVosBv7mYF3LeJRy73EiGzqPX2vWHDg4iRCk"
+        hash: "2aHg84Unrimv4cNB4PYwEGt9vRvQaGsUBQCRwKTVuoP6"
             .try_into()
             .unwrap(),
-        account: Some(SerializablePubkey::try_from("GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD").unwrap()),
+        account: None,
         owner: owner.try_into().unwrap(),
         mint: SerializablePubkey::try_from("GDvagojL2e9B7Eh7CHwHjQwcJAAtiMpbvCvtzDTCpogP").unwrap(),
         amount: 200,
@@ -151,6 +165,20 @@ async fn test_e2e_lamport_transfer(
         },
     )
     .await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
 
     let tx = cached_fetch_transaction(
         &setup,
