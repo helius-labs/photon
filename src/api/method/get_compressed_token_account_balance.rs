@@ -1,11 +1,11 @@
 use crate::dao::generated::token_owners;
 use schemars::JsonSchema;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
 
 use super::super::error::PhotonApiError;
-use super::utils::ResponseWithContext;
-use super::utils::{BalanceModel, Context, GetCompressedAccountRequest};
+use super::utils::{AccountDataTable, ResponseWithContext};
+use super::utils::{BalanceModel, CompressedAccountRequest, Context};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -19,21 +19,19 @@ pub type GetCompressedTokenAccountBalanceResponse = ResponseWithContext<TokenAcc
 
 pub async fn get_compressed_token_account_balance(
     conn: &DatabaseConnection,
-    request: GetCompressedAccountRequest,
+    request: CompressedAccountRequest,
 ) -> Result<GetCompressedTokenAccountBalanceResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let GetCompressedAccountRequest { address } = request;
+    let id = request.parse_id()?;
     let balance = token_owners::Entity::find()
         .select_only()
         .column(token_owners::Column::Amount)
-        .filter(token_owners::Column::Account.eq::<Vec<u8>>(address.clone().into()))
+        .filter(id.get_filter(AccountDataTable::TokenOwners))
         .into_model::<BalanceModel>()
         .one(conn)
         .await?
-        .ok_or(PhotonApiError::RecordNotFound(format!(
-            "Account {} not found",
-            address
-        )))?;
+        .ok_or(id.get_record_not_found_error())?;
+
     Ok(GetCompressedTokenAccountBalanceResponse {
         value: TokenAccountBalance {
             amount: balance.amount.to_string(),

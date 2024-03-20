@@ -2,16 +2,8 @@ use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
-use photon::api::method::get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest;
-use photon::api::method::get_health::GetCompressedAccountBalance;
-use photon::api::method::utils::GetCompressedAccountRequest;
-use photon::api::{
-    error::PhotonApiError,
-    method::{
-        get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
-        get_utxo::GetUtxoRequest,
-    },
-};
+use photon::api::error::PhotonApiError;
+use photon::api::method::utils::{CompressedAccountRequest, GetCompressedAccountsByAuthority};
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::index_block;
@@ -110,11 +102,13 @@ async fn test_persist_state_transitions(
     // Verify GetUtxo
     let res = setup
         .api
-        .get_utxo(GetUtxoRequest {
-            hash: Hash::from(hash.clone()),
+        .get_compressed_account(CompressedAccountRequest {
+            address: None,
+            hash: Some(Hash::from(hash.clone())),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .value;
 
     #[allow(deprecated)]
     let raw_data = base64::decode(res.data).unwrap();
@@ -126,8 +120,9 @@ async fn test_persist_state_transitions(
     // TODO: Test spent utxos
     let err = setup
         .api
-        .get_utxo(GetUtxoRequest {
-            hash: Hash::from(Pubkey::new_unique().to_bytes()),
+        .get_compressed_account(CompressedAccountRequest {
+            hash: Some(Hash::from(Pubkey::new_unique().to_bytes())),
+            address: None,
         })
         .await
         .unwrap_err();
@@ -242,18 +237,19 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
-                owner: SerializablePubkey::from(owner.clone()),
-                ..Default::default()
-            })
+            .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+                SerializablePubkey::from(owner.clone()),
+                None,
+            ))
             .await
             .unwrap()
             .value;
 
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
         for token_account in res.items {
-            let request = GetCompressedAccountRequest {
-                address: token_account.account.unwrap(),
+            let request = CompressedAccountRequest {
+                address: Some(token_account.account.unwrap()),
+                hash: None,
             };
             let balance = setup
                 .api
@@ -272,12 +268,10 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_delegate(
-                GetCompressedTokenAccountsByDelegateRequest {
-                    delegate: SerializablePubkey::from(delegate.clone()),
-                    ..Default::default()
-                },
-            )
+            .get_compressed_token_accounts_by_delegate(GetCompressedAccountsByAuthority(
+                SerializablePubkey::from(delegate.clone()),
+                None,
+            ))
             .await
             .unwrap()
             .value;

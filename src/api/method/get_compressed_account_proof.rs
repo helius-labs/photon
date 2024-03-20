@@ -28,7 +28,7 @@ pub async fn get_compressed_account_proof(
     request: CompressedAccountRequest,
 ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let id = request.get_id()?;
+    let id = request.parse_id()?;
     // Extract the leaf hash from the user or look it up via the provided account_id.
 
     let leaf_hash = match id {

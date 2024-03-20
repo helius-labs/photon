@@ -1,6 +1,5 @@
 use function_name::named;
-use photon::api::method::get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest;
-use photon::api::method::get_utxos::GetUtxosRequest;
+use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
 use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
 use photon::ingester::index_block;
 use photon::ingester::parser::parse_transaction;
@@ -49,15 +48,15 @@ async fn test_e2e_utxo_parsing(
     }
     let utxos = setup
         .api
-        .get_utxos(GetUtxosRequest {
-            owner: "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
+        .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+            "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
                 .try_into()
                 .unwrap(),
-        })
+        ))
         .await
         .unwrap();
 
-    assert_eq!(utxos.items.len(), 1);
+    assert_eq!(utxos.value.items.len(), 1);
 }
 
 #[named]
@@ -67,6 +66,8 @@ async fn test_e2e_utxo_parsing(
 async fn test_e2e_token_mint(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon::api::method::utils::GetCompressedAccountsByAuthority;
+
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name,
@@ -108,10 +109,10 @@ async fn test_e2e_token_mint(
 
     let token_accounts = setup
         .api
-        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
-            owner: owner.try_into().unwrap(),
-            mint: None,
-        })
+        .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+            owner.try_into().unwrap(),
+            None,
+        ))
         .await
         .unwrap()
         .value;
@@ -171,9 +172,9 @@ async fn test_e2e_lamport_transfer(
     for owner in [owner1, owner2] {
         let utxos = setup
             .api
-            .get_utxos(GetUtxosRequest {
-                owner: SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
-            })
+            .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+                SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
+            ))
             .await
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-utxos", name, owner), utxos);

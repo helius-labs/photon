@@ -1,28 +1,27 @@
 use crate::dao::generated::utxos;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 
 use super::super::error::PhotonApiError;
-use super::utils::{BalanceModel, Context, GetCompressedAccountRequest, ResponseWithContext};
+use super::utils::AccountDataTable;
+use super::utils::{BalanceModel, CompressedAccountRequest, Context, ResponseWithContext};
 
 pub type GetCompressedAccountBalance = ResponseWithContext<i64>;
 
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,
-    request: GetCompressedAccountRequest,
+    request: CompressedAccountRequest,
 ) -> Result<GetCompressedAccountBalance, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let GetCompressedAccountRequest { address } = request;
+    let id = request.parse_id()?;
+
     let balance = utxos::Entity::find()
         .select_only()
         .column(utxos::Column::Lamports)
-        .filter(utxos::Column::Account.eq::<Vec<u8>>(address.clone().into()))
+        .filter(id.get_filter(AccountDataTable::Utxos))
         .into_model::<BalanceModel>()
         .one(conn)
         .await?
-        .ok_or(PhotonApiError::RecordNotFound(format!(
-            "Account {} not found",
-            address
-        )))?;
+        .ok_or(id.get_record_not_found_error())?;
 
     Ok(GetCompressedAccountBalance {
         value: balance.amount,

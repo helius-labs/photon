@@ -9,13 +9,10 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
-    get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest,
-    get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
-    get_utxo_proof::GetUtxoProofRequest,
-    get_utxos::GetUtxosRequest,
-    utils::{CompressedAccountRequest, GetCompressedAccountRequest},
+    get_compressed_program_accounts::GetCompressedProgramAccountsRequest,
+    utils::CompressedAccountRequest,
 };
-use super::{api::PhotonApi, method::get_utxo::GetUtxoRequest};
+use super::{api::PhotonApi, method::utils::GetCompressedAccountsByAuthority};
 
 pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -51,7 +48,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedAccount",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountRequest>()?;
+            let payload = rpc_params.parse::<CompressedAccountRequest>()?;
             rpc_context
                 .get_compressed_account(payload)
                 .await
@@ -70,28 +67,10 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
         },
     )?;
 
-    module.register_async_method("getUtxo", |rpc_params, rpc_context| async move {
-        let payload = rpc_params.parse::<GetUtxoRequest>()?;
-        rpc_context.get_utxo(payload).await.map_err(Into::into)
-    })?;
-
-    module.register_async_method("getUtxos", |rpc_params, rpc_context| async move {
-        let payload = rpc_params.parse::<GetUtxosRequest>()?;
-        rpc_context.get_utxos(payload).await.map_err(Into::into)
-    })?;
-
-    module.register_async_method("getUtxoProof", |rpc_params, rpc_context| async move {
-        let payload = rpc_params.parse::<GetUtxoProofRequest>()?;
-        rpc_context
-            .get_utxo_proof(payload)
-            .await
-            .map_err(Into::into)
-    })?;
-
     module.register_async_method(
         "getCompressedTokenAccountsByOwner",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedTokenAccountsByOwnerRequest>()?;
+            let payload = rpc_params.parse::<GetCompressedAccountsByAuthority>()?;
             rpc_context
                 .get_compressed_token_accounts_by_owner(payload)
                 .await
@@ -102,7 +81,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedTokenAccountsByDelegate",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedTokenAccountsByDelegateRequest>()?;
+            let payload = rpc_params.parse::<GetCompressedAccountsByAuthority>()?;
             rpc_context
                 .get_compressed_token_accounts_by_delegate(payload)
                 .await
@@ -113,7 +92,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedTokenAccountBalance",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountRequest>()?;
+            let payload = rpc_params.parse::<CompressedAccountRequest>()?;
             rpc_context
                 .get_compressed_token_account_balance(payload)
                 .await
@@ -124,7 +103,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedBalance",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountRequest>()?;
+            let payload = rpc_params.parse::<CompressedAccountRequest>()?;
             rpc_context
                 .get_compressed_balance(payload)
                 .await
@@ -139,6 +118,17 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method("getSlot", |_rpc_params, rpc_context| async move {
         rpc_context.get_slot().await.map_err(Into::into)
     })?;
+
+    module.register_async_method(
+        "getCompressedProgramAccounts",
+        |rpc_params, rpc_context| async move {
+            let payload = rpc_params.parse::<GetCompressedProgramAccountsRequest>()?;
+            rpc_context
+                .get_compressed_program_accounts(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
 
     Ok(module)
 }

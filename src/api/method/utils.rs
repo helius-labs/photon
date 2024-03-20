@@ -1,12 +1,12 @@
 use crate::dao::generated::{blocks, state_trees, token_owners, utxos};
 
 use schemars::JsonSchema;
+use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
     QuerySelect,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -101,20 +101,34 @@ pub struct TokenAccountList {
     pub items: Vec<TokenUxto>,
 }
 
-pub enum OwnerOrDelegate {
+pub enum Authority {
     Owner(SerializablePubkey),
     Delegate(SerializablePubkey),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetCompressedAccountsByAuthorityOptions {
+    pub mint: Option<SerializablePubkey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+// We avoid named fields to mimic the RPC API.
+pub struct GetCompressedAccountsByAuthority(
+    pub SerializablePubkey,
+    pub Option<GetCompressedAccountsByAuthorityOptions>,
+);
+
 pub async fn fetch_token_accounts(
     conn: &sea_orm::DatabaseConnection,
-    owner_or_delegate: OwnerOrDelegate,
+    owner_or_delegate: Authority,
     mint: Option<SerializablePubkey>,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let mut filter = match owner_or_delegate {
-        OwnerOrDelegate::Owner(owner) => token_owners::Column::Owner.eq::<Vec<u8>>(owner.into()),
-        OwnerOrDelegate::Delegate(delegate) => {
+        Authority::Owner(owner) => token_owners::Column::Owner.eq::<Vec<u8>>(owner.into()),
+        Authority::Delegate(delegate) => {
             token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into())
         }
     };
@@ -176,20 +190,43 @@ pub enum AccountIdentifier {
     Hash(Hash),
 }
 
-impl CompressedAccountRequest {
-    pub fn get_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
-        if let Some(address) = &self.address {
-            Ok(AccountIdentifier::Address(address.clone()))
-        } else if let Some(hash) = &self.hash {
-            Ok(AccountIdentifier::Hash(hash.clone()))
-        } else {
-            Err(PhotonApiError::ValidationError(
-                "Either address or hash must be provided".to_string(),
-            ))
+pub enum AccountDataTable {
+    Utxos,
+    TokenOwners,
+}
+
+impl AccountIdentifier {
+    pub fn get_filter(&self, table: AccountDataTable) -> SimpleExpr {
+        match table {
+            AccountDataTable::Utxos => match &self {
+                AccountIdentifier::Address(address) => {
+                    utxos::Column::Account.eq::<Vec<u8>>(address.clone().into())
+                }
+                AccountIdentifier::Hash(hash) => utxos::Column::Hash.eq(hash.to_vec()),
+            },
+            AccountDataTable::TokenOwners => match &self {
+                AccountIdentifier::Address(address) => {
+                    token_owners::Column::Owner.eq::<Vec<u8>>(address.clone().into())
+                }
+                AccountIdentifier::Hash(hash) => token_owners::Column::Hash.eq(hash.to_vec()),
+            },
         }
     }
 
-    pub fn get_utxo_filter(&self) -> Result<AccountIdentifier, PhotonApiError> {
+    pub fn get_record_not_found_error(&self) -> PhotonApiError {
+        match &self {
+            AccountIdentifier::Address(address) => {
+                PhotonApiError::RecordNotFound(format!("Account {} not found", address))
+            }
+            AccountIdentifier::Hash(hash) => {
+                PhotonApiError::RecordNotFound(format!("Account with hash {} not found", hash))
+            }
+        }
+    }
+}
+
+impl CompressedAccountRequest {
+    pub fn parse_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
         if let Some(address) = &self.address {
             Ok(AccountIdentifier::Address(address.clone()))
         } else if let Some(hash) = &self.hash {

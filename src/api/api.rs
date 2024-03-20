@@ -12,24 +12,20 @@ use super::{
             get_compressed_account_proof, GetCompressedAccountProofResponse,
         },
         get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
+        get_compressed_program_accounts::{
+            get_compressed_program_accounts, GetCompressedProgramAccountsRequest,
+            GetCompressedProgramAccountsResponse,
+        },
         get_compressed_token_account_balance::{
             get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
-        get_compressed_token_accounts_by_delegate::{
-            get_compressed_account_token_accounts_by_delegate,
-            GetCompressedTokenAccountsByDelegateRequest,
-        },
-        get_compressed_token_accounts_by_owner::{
-            get_compressed_token_accounts_by_owner, GetCompressedTokenAccountsByOwnerRequest,
-        },
+        get_compressed_token_accounts_by_delegate::get_compressed_account_token_accounts_by_delegate,
+        get_compressed_token_accounts_by_owner::get_compressed_token_accounts_by_owner,
         get_health::get_health,
         get_slot::get_slot,
-        get_utxo::{get_utxo, GetUtxoRequest},
-        get_utxo_proof::{get_utxo_proof, GetUtxoProofRequest},
-        get_utxos::{get_utxos, GetUtxosRequest, GetUtxosResponse},
         utils::{
-            CompressedAccountRequest, GetCompressedAccountRequest, ProofResponse,
-            TokenAccountListResponse, Utxo, UtxoResponse,
+            CompressedAccountRequest, GetCompressedAccountsByAuthority, TokenAccountListResponse,
+            UtxoResponse,
         },
     },
 };
@@ -92,7 +88,7 @@ impl PhotonApi {
 
     pub async fn get_compressed_account(
         &self,
-        request: GetCompressedAccountRequest,
+        request: CompressedAccountRequest,
     ) -> Result<UtxoResponse, PhotonApiError> {
         get_compressed_account(&self.db_conn, request).await
     }
@@ -106,46 +102,28 @@ impl PhotonApi {
 
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
-        request: GetCompressedTokenAccountsByOwnerRequest,
+        request: GetCompressedAccountsByAuthority,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_token_accounts_by_owner(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_token_accounts_by_delegate(
         &self,
-        request: GetCompressedTokenAccountsByDelegateRequest,
+        request: GetCompressedAccountsByAuthority,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
 
-    pub async fn get_utxos(
-        &self,
-        request: GetUtxosRequest,
-    ) -> Result<GetUtxosResponse, PhotonApiError> {
-        get_utxos(&self.db_conn, request).await
-    }
-
-    pub async fn get_utxo(&self, request: GetUtxoRequest) -> Result<Utxo, PhotonApiError> {
-        get_utxo(&self.db_conn, request).await
-    }
-
-    pub async fn get_utxo_proof(
-        &self,
-        request: GetUtxoProofRequest,
-    ) -> Result<ProofResponse, PhotonApiError> {
-        get_utxo_proof(&self.db_conn, request).await
-    }
-
     pub async fn get_compressed_token_account_balance(
         &self,
-        request: GetCompressedAccountRequest,
+        request: CompressedAccountRequest,
     ) -> Result<GetCompressedTokenAccountBalanceResponse, PhotonApiError> {
         get_compressed_token_account_balance(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_balance(
         &self,
-        request: GetCompressedAccountRequest,
+        request: CompressedAccountRequest,
     ) -> Result<GetCompressedAccountBalance, PhotonApiError> {
         get_compressed_balance(&self.db_conn, request).await
     }
@@ -156,6 +134,13 @@ impl PhotonApi {
 
     pub async fn get_slot(&self) -> Result<u64, PhotonApiError> {
         get_slot(self.db_conn.as_ref()).await
+    }
+
+    pub async fn get_compressed_program_accounts(
+        &self,
+        request: GetCompressedProgramAccountsRequest,
+    ) -> Result<GetCompressedProgramAccountsResponse, PhotonApiError> {
+        get_compressed_program_accounts(self.db_conn.as_ref(), request).await
     }
 }
 
