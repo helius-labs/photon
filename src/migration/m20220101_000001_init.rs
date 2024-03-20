@@ -140,6 +140,7 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(TokenOwners::Hash).binary().not_null())
+                    .col(ColumnDef::new(TokenOwners::Account).binary())
                     .col(ColumnDef::new(TokenOwners::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenOwners::Mint).binary().not_null())
                     // TODO: Change this to a u64 here to avoid balance overflow.
@@ -184,6 +185,16 @@ impl MigrationTrait for Migration {
                     .table(TokenOwners::Table)
                     .col(TokenOwners::Hash)
                     .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("token_owners_account_idx")
+                    .table(TokenOwners::Table)
+                    .col(TokenOwners::Account)
                     .to_owned(),
             )
             .await?;

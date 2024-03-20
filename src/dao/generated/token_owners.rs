@@ -8,6 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub hash: Vec<u8>,
+    pub account: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub amount: i64,

@@ -33,13 +33,13 @@ pub struct TransactionInfo {
     pub signature: Signature,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlockInfo {
     pub metadata: BlockMetadata,
     pub transactions: Vec<TransactionInfo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlockMetadata {
     pub slot: Slot,
     // In Solana, slots can be skipped. So there are not necessarily sequential.

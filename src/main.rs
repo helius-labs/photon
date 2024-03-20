@@ -78,11 +78,10 @@ pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
 
 async fn start_transaction_indexer(
     db: Arc<DatabaseConnection>,
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>,
     is_localnet: bool,
     start_slot: Option<u64>,
 ) -> tokio::task::JoinHandle<()> {
-    let rpc_client = Arc::new(rpc_client);
     tokio::spawn(async move {
         let start_slot = match (start_slot, is_localnet) {
             (Some(start_slot), _) => start_slot,
@@ -112,8 +111,12 @@ async fn start_transaction_indexer(
     })
 }
 
-async fn start_api_server(db: Arc<DatabaseConnection>, api_port: u16) -> ServerHandle {
-    let api = PhotonApi::from(db);
+async fn start_api_server(
+    db: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClient>,
+    api_port: u16,
+) -> ServerHandle {
+    let api = PhotonApi::new(db, rpc_client);
     api::rpc_server::run_server(api, api_port).await.unwrap()
 }
 
@@ -183,19 +186,20 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
+    let rpc_client = Arc::new(RpcClient::new(args.rpc_url.clone()));
 
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");
     start_transaction_indexer(
         db_conn.clone(),
-        RpcClient::new(args.rpc_url),
+        rpc_client.clone(),
         is_localnet,
         args.start_slot,
     )
     .await;
 
     info!("Starting API server with port {}...", args.port);
-    let api_handler = start_api_server(db_conn, args.port).await;
+    let api_handler = start_api_server(db_conn, rpc_client, args.port).await;
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             info!("Shutting down API server...");

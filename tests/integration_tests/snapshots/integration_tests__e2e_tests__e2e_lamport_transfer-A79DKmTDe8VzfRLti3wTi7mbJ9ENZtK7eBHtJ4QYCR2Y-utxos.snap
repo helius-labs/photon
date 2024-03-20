@@ -1,18 +1,23 @@
 ---
-source: tests/integration_tests/parsing_tests.rs
+source: tests/integration_tests/e2e_tests.rs
 expression: utxos
 ---
 {
-  "items": [
-    {
-      "hash": "2KcPHMVx7meTfejzUuuWhL2JvfVG1SRWB3ofYEHnEX1q",
-      "address": null,
-      "data": "",
-      "owner": "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y",
-      "lamports": 420000000,
-      "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-      "seq": 2,
-      "slotUpdated": 0
-    }
-  ]
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "hash": "2KcPHMVx7meTfejzUuuWhL2JvfVG1SRWB3ofYEHnEX1q",
+        "address": null,
+        "data": "",
+        "owner": "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y",
+        "lamports": 420000000,
+        "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+        "seq": 2,
+        "slotUpdated": 0
+      }
+    ]
+  }
 }

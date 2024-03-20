@@ -2,21 +2,16 @@ use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
-use photon::api::api::ApiContract;
-use photon::api::method::get_compressed_token_accounts_by_delegate::GetCompressedTokenAccountsByDelegateRequest;
-use photon::api::{
-    error::PhotonApiError,
-    method::{
-        get_compressed_token_accounts_by_owner::GetCompressedTokenAccountsByOwnerRequest,
-        get_utxo::GetUtxoRequest,
-    },
-};
+use photon::api::error::PhotonApiError;
+use photon::api::method::utils::{CompressedAccountRequest, GetCompressedAccountsByAuthority};
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
+use photon::ingester::index_block;
 use photon::ingester::parser::bundle::PublicTransactionEventBundle;
 use photon::ingester::persist::state_update::{EnrichedPathNode, UtxoWithSlot};
 use photon::ingester::persist::state_update::{EnrichedUtxo, StateUpdate};
 use photon::ingester::persist::{persist_state_update, persist_token_datas, EnrichedTokenData};
+use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use psp_compressed_pda::{
     tlv::{Tlv, TlvDataElement},
     utxo::Utxo,
@@ -49,6 +44,21 @@ async fn test_persist_state_transitions(
 ) {
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
     let owner = Pubkey::new_unique();
     let person = Person {
         name: "Alice".to_string(),
@@ -107,11 +117,13 @@ async fn test_persist_state_transitions(
     // Verify GetUtxo
     let res = setup
         .api
-        .get_utxo(GetUtxoRequest {
-            hash: Hash::from(hash.clone()),
+        .get_compressed_account(CompressedAccountRequest {
+            address: None,
+            hash: Some(Hash::from(hash.clone())),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .value;
 
     #[allow(deprecated)]
     let raw_data = base64::decode(res.data).unwrap();
@@ -123,8 +135,9 @@ async fn test_persist_state_transitions(
     // TODO: Test spent utxos
     let err = setup
         .api
-        .get_utxo(GetUtxoRequest {
-            hash: Hash::from(Pubkey::new_unique().to_bytes()),
+        .get_compressed_account(CompressedAccountRequest {
+            hash: Some(Hash::from(Pubkey::new_unique().to_bytes())),
+            address: None,
         })
         .await
         .unwrap_err();
@@ -151,6 +164,20 @@ async fn test_persist_token_data(
     let owner2 = Pubkey::new_unique();
     let delegate1 = Pubkey::new_unique();
     let delegate2 = Pubkey::new_unique();
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
 
     let token_tlv_data1: TokenTlvData = TokenTlvData {
         mint: mint1.clone(),
@@ -198,6 +225,7 @@ async fn test_persist_token_data(
         let hash = Hash::new_unique();
         let model = utxos::ActiveModel {
             hash: Set(hash.clone().into()),
+            account: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
             spent: Set(false),
             data: Set(to_vec(&token_tlv_data).unwrap()),
             owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
@@ -224,13 +252,28 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwnerRequest {
-                owner: SerializablePubkey::from(owner.clone()),
-                ..Default::default()
-            })
+            .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+                SerializablePubkey::from(owner.clone()),
+                None,
+            ))
             .await
-            .unwrap();
-        verify_responses_match_tlv_data(res, owner_tlv)
+            .unwrap()
+            .value;
+
+        verify_responses_match_tlv_data(res.clone(), owner_tlv);
+        for token_account in res.items {
+            let request = CompressedAccountRequest {
+                address: None,
+                hash: Some(token_account.hash),
+            };
+            let balance = setup
+                .api
+                .get_compressed_token_account_balance(request)
+                .await
+                .unwrap()
+                .value;
+            assert_eq!(balance.amount.parse::<u64>().unwrap(), token_account.amount);
+        }
     }
     for delegate in [delegate1, delegate2] {
         let delegate_tlv = all_token_tlv_data
@@ -240,14 +283,13 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_delegate(
-                GetCompressedTokenAccountsByDelegateRequest {
-                    delegate: SerializablePubkey::from(delegate.clone()),
-                    ..Default::default()
-                },
-            )
+            .get_compressed_token_accounts_by_delegate(GetCompressedAccountsByAuthority(
+                SerializablePubkey::from(delegate.clone()),
+                None,
+            ))
             .await
-            .unwrap();
+            .unwrap()
+            .value;
 
         verify_responses_match_tlv_data(res, delegate_tlv)
     }

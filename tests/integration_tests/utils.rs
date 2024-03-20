@@ -85,7 +85,7 @@ pub struct TestSetup {
     pub db_conn: Arc<DatabaseConnection>,
     pub api: PhotonApi,
     pub name: String,
-    pub client: RpcClient,
+    pub client: Arc<RpcClient>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -113,7 +113,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
                 panic!("Refusing to run tests on non-local database out of caution");
             }
             let pool = setup_pg_pool(local_db.to_string()).await;
-            SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+            SqlxPostgresConnector::from_sqlx_postgres_pool(pool) 
         }
         DatabaseBackend::Sqlite => {
             SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
@@ -132,15 +132,14 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         }
         _ => unimplemented!(),
     }
-    let api = PhotonApi::from(db_conn.clone());
 
     let rpc_url = match opts.network {
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
-    let client = RpcClient::new(rpc_url.to_string());
-
+    let client = Arc::new(RpcClient::new(rpc_url.to_string()));
+    let api = PhotonApi::new(db_conn.clone(), client.clone());
     TestSetup {
         name,
         db_conn,
