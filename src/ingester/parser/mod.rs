@@ -69,8 +69,8 @@ pub fn parse_transaction(
                     let public_transaction_bundle = PublicTransactionEventBundle {
                         in_utxos: public_transaction_event.in_utxos,
                         out_utxos: public_transaction_event.out_utxos,
-                        changelogs: changelogs,
-                        slot: slot,
+                        changelogs,
+                        slot,
                         transaction: tx.signature,
                     };
 

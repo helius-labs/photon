@@ -37,9 +37,9 @@ impl From<SolanaPubkey> for SerializablePubkey {
     }
 }
 
-impl Into<Vec<u8>> for SerializablePubkey {
-    fn into(self) -> Vec<u8> {
-        self.0.to_bytes().to_vec()
+impl From<SerializablePubkey> for Vec<u8> {
+    fn from(val: SerializablePubkey) -> Self {
+        val.0.to_bytes().to_vec()
     }
 }
 
@@ -53,15 +53,15 @@ impl TryFrom<Vec<u8>> for SerializablePubkey {
     }
 }
 
-impl Into<String> for SerializablePubkey {
-    fn into(self) -> String {
-        self.0.to_string()
+impl From<SerializablePubkey> for String {
+    fn from(val: SerializablePubkey) -> Self {
+        val.0.to_string()
     }
 }
 
 impl fmt::Debug for SerializablePubkey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SerializablePubkey({})", self.0.to_string())
+        write!(f, "SerializablePubkey({})", self.0)
     }
 }
 
@@ -88,7 +88,7 @@ impl<'de> Visitor<'de> for Base58Visitor {
     }
 
     fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-        Ok(SerializablePubkey::try_from(value).map_err(|e| E::custom(e.to_string()))?)
+        SerializablePubkey::try_from(value).map_err(|e| E::custom(e.to_string()))
     }
 }
 

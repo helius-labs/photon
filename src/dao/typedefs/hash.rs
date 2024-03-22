@@ -64,9 +64,9 @@ impl TryFrom<&str> for Hash {
     }
 }
 
-impl Into<Vec<u8>> for Hash {
-    fn into(self) -> Vec<u8> {
-        self.0.to_vec()
+impl From<Hash> for Vec<u8> {
+    fn from(val: Hash) -> Self {
+        val.0.to_vec()
     }
 }
 
@@ -76,9 +76,9 @@ impl From<[u8; 32]> for Hash {
     }
 }
 
-impl Into<[u8; 32]> for Hash {
-    fn into(self) -> [u8; 32] {
-        self.0
+impl From<Hash> for [u8; 32] {
+    fn from(val: Hash) -> Self {
+        val.0
     }
 }
 
@@ -101,9 +101,9 @@ impl std::fmt::Display for Hash {
     }
 }
 
-impl Into<String> for Hash {
-    fn into(self) -> String {
-        self.to_base58()
+impl From<Hash> for String {
+    fn from(val: Hash) -> Self {
+        val.to_base58()
     }
 }
 
@@ -136,7 +136,7 @@ impl<'de> Visitor<'de> for Base58VisitorHash {
     }
 
     fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-        Ok(Hash::try_from(value).map_err(|e| E::custom(e.to_string()))?)
+        Hash::try_from(value).map_err(|e| E::custom(e.to_string()))
     }
 }
 

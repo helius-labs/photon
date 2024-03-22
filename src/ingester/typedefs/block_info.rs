@@ -161,7 +161,7 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
 
         Ok(TransactionInfo {
             instruction_groups: parse_instruction_groups(versioned_transaction, meta)?,
-            signature: signature,
+            signature,
         })
     }
 }
@@ -183,7 +183,7 @@ pub fn parse_instruction_groups(
                     .iter()
                     .chain(loaded_addresses.readonly.iter())
                 {
-                    let pubkey = Pubkey::from_str(&address)
+                    let pubkey = Pubkey::from_str(address)
                         .map_err(|e| IngesterError::ParserError(e.to_string()))?;
                     accounts.push(pubkey);
                 }
@@ -209,7 +209,7 @@ pub fn parse_instruction_groups(
                 outer_instruction: Instruction {
                     program_id,
                     data,
-                    accounts: accounts.into(),
+                    accounts,
                 },
                 inner_instructions: Vec::new(),
             }
@@ -238,7 +238,7 @@ pub fn parse_instruction_groups(
                             .inner_instructions
                             .push(Instruction {
                                 program_id,
-                                data: data.into(),
+                                data,
                                 accounts,
                             });
                     }

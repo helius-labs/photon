@@ -37,7 +37,7 @@ async fn fetch_accounts_from_hashes(
         .filter(utxos::Column::Hash.is_in(raw_hashes.clone()))
         .all(conn)
         .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e.to_string())))?;
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
     let found_hashes: Vec<Vec<u8>> = accounts
         .iter()
@@ -51,9 +51,10 @@ async fn fetch_accounts_from_hashes(
 
     let mut formatted_not_found_hashes: Vec<Hash> = Vec::new();
     for hash in not_found_hashes {
-        formatted_not_found_hashes.push(Hash::try_from(hash).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Invalid hash: {}", e.to_string()))
-        })?);
+        formatted_not_found_hashes.push(
+            Hash::try_from(hash)
+                .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid hash: {}", e)))?,
+        );
     }
 
     if !formatted_not_found_hashes.is_empty() {
@@ -76,7 +77,7 @@ async fn fetch_account_from_addresses(
         .filter(utxos::Column::Account.is_in(raw_addresses.clone()))
         .all(conn)
         .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e.to_string())))?;
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
     let found_addresses: Vec<Vec<u8>> = accounts
         .iter()
@@ -90,9 +91,10 @@ async fn fetch_account_from_addresses(
 
     let mut formatted_not_found_addresses: Vec<SerializablePubkey> = Vec::new();
     for addr in not_found_addresses {
-        formatted_not_found_addresses.push(SerializablePubkey::try_from(addr).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Invalid address: {}", e.to_string()))
-        })?);
+        formatted_not_found_addresses.push(
+            SerializablePubkey::try_from(addr)
+                .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid address: {}", e)))?,
+        );
     }
 
     if !formatted_not_found_addresses.is_empty() {
