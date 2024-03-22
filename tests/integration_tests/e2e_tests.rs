@@ -114,7 +114,7 @@ async fn test_e2e_token_mint(
     let events = parse_transaction(&tx, 0).unwrap();
     assert_eq!(events.len(), 1);
     for event in events {
-        persist_bundle_using_connection(&setup.db_conn.as_ref(), event)
+        persist_bundle_using_connection(setup.db_conn.as_ref(), event)
             .await
             .unwrap();
     }
@@ -132,7 +132,7 @@ async fn test_e2e_token_mint(
         .value;
 
     assert_eq!(token_accounts.items.len(), 1);
-    let token_utxo = token_accounts.items.get(0).unwrap();
+    let token_utxo = token_accounts.items.first().unwrap();
     let expected_token_utxo = TokenUxto {
         hash: "2aHg84Unrimv4cNB4PYwEGt9vRvQaGsUBQCRwKTVuoP6"
             .try_into()

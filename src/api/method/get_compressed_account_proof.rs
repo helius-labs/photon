@@ -76,7 +76,7 @@ pub async fn get_compressed_account_proof(
 
     let ProofResponse { root, proof } = build_full_proof(proof_nodes, required_node_indices)?;
     let account_proof = AccountProof {
-        hash: Hash::try_from(leaf_node.hash)?.into(),
+        hash: Hash::try_from(leaf_node.hash)?,
         root,
         proof,
     };

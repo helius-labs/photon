@@ -22,13 +22,13 @@ pub enum PhotonApiError {
 
 // TODO: Simplify error conversions and ensure we adhere
 // to the proper RPC and HTTP codes.
-impl Into<RpcError> for PhotonApiError {
-    fn into(self) -> RpcError {
-        match self {
+impl From<PhotonApiError> for RpcError {
+    fn from(val: PhotonApiError) -> Self {
+        match val {
             PhotonApiError::ValidationError(_)
             | PhotonApiError::InvalidPubkey { .. }
             | PhotonApiError::RecordNotFound(_)
-            | PhotonApiError::StaleSlot(_) => invalid_request(self),
+            | PhotonApiError::StaleSlot(_) => invalid_request(val),
             PhotonApiError::DatabaseError(_) | PhotonApiError::UnexpectedError(_) => {
                 internal_server_error()
             }

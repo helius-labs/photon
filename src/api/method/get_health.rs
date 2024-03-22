@@ -22,7 +22,7 @@ pub async fn get_health(conn: &DatabaseConnection, rpc: &RpcClient) -> Result<()
     let slot = rpc
         .get_slot()
         .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("RPC error: {}", e.to_string())))?;
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("RPC error: {}", e)))?;
 
     let slots_behind = slot - context.slot;
     if slots_behind > HEALTH_CHECK_SLOT_DISTANCE {

@@ -39,7 +39,6 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> B
                     rewards: None,
                     commitment: Some(CommitmentConfig::confirmed()),
                     max_supported_transaction_version: Some(0),
-                    ..RpcBlockConfig::default()
                 },
             )
             .await
@@ -68,7 +67,6 @@ impl TransactionPoller {
 
         let mut blocks: Vec<BlockInfo> = stream::iter(slots)
             .map(|slot| {
-                let slot = slot.clone();
                 let client = self.client.clone();
                 async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
             })

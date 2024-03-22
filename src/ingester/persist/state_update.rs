@@ -109,28 +109,25 @@ impl TryFrom<EventBundle> for StateUpdate {
                     });
                 }
 
-                state_update.path_nodes.extend(
-                    path_updates
-                        .into_iter()
-                        .map(|p| {
-                            let tree_height = p.path.len();
-                            p.path
-                                .into_iter()
-                                .enumerate()
-                                .map(move |(i, node)| EnrichedPathNode {
-                                    node: PathNode {
-                                        node: node.node.clone(),
-                                        index: node.index,
-                                    },
-                                    slot: e.slot as i64,
-                                    tree: p.tree,
-                                    seq: p.seq,
-                                    level: i,
-                                    tree_depth: tree_height,
-                                })
-                        })
-                        .flatten(),
-                );
+                state_update
+                    .path_nodes
+                    .extend(path_updates.into_iter().flat_map(|p| {
+                        let tree_height = p.path.len();
+                        p.path
+                            .into_iter()
+                            .enumerate()
+                            .map(move |(i, node)| EnrichedPathNode {
+                                node: PathNode {
+                                    node: node.node,
+                                    index: node.index,
+                                },
+                                slot: e.slot as i64,
+                                tree: p.tree,
+                                seq: p.seq,
+                                level: i,
+                                tree_depth: tree_height,
+                            })
+                    }));
                 state_update.prune_redundant_updates();
                 Ok(state_update)
             }
@@ -144,13 +141,13 @@ fn extract_path_updates(changelogs: Changelogs) -> Vec<PathUpdate> {
         .iter()
         .flat_map(|cl| match cl {
             ChangelogEvent::V1(cl) => {
-                let tree_id = cl.id.clone();
+                let tree_id = cl.id;
                 cl.paths.iter().map(move |p| PathUpdate {
                     tree: tree_id,
                     path: p
                         .iter()
                         .map(|node| PathNode {
-                            node: node.node.clone(),
+                            node: node.node,
                             index: node.index,
                         })
                         .collect(),

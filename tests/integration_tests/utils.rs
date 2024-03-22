@@ -76,8 +76,7 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
             // We run migrations from fresh everytime for SQLite
             run_migrations_from_fresh(db).await;
         }
-        *init = Some(());
-        return;
+        *init = Some(())
     }
 }
 
@@ -340,7 +339,6 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     let token_accounts = response.items;
     for (account, tlv) in token_accounts.iter().zip(order_tlvs(tlvs).iter()) {
         let account = account.clone();
-        let tlv = tlv.clone();
         assert_eq!(account.mint, tlv.mint.into());
         assert_eq!(account.owner, tlv.owner.into());
         assert_eq!(account.amount, tlv.amount);

@@ -14,6 +14,6 @@ pub enum IngesterError {
 
 impl From<sea_orm::error::DbErr> for IngesterError {
     fn from(err: sea_orm::error::DbErr) -> Self {
-        IngesterError::DatabaseError(format!("DatabaseError: {}", err.to_string()))
+        IngesterError::DatabaseError(format!("DatabaseError: {}", err))
     }
 }

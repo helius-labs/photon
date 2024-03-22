@@ -11,7 +11,7 @@ pub async fn get_compressed_token_accounts_by_owner(
     fetch_token_accounts(
         conn,
         Authority::Owner(delegate),
-        options.map(|o| o.mint).flatten(),
+        options.and_then(|o| o.mint),
     )
     .await
 }

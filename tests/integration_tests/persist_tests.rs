@@ -67,7 +67,7 @@ async fn test_persist_state_transitions(
     let person_tlv = Tlv {
         tlv_elements: vec![TlvDataElement {
             discriminator: [0; 8],
-            owner: owner,
+            owner,
             data: to_vec(&person).unwrap(),
             data_hash: [0; 32],
         }],
@@ -91,7 +91,7 @@ async fn test_persist_state_transitions(
                 id: tree.to_bytes(),
                 paths: vec![vec![
                     PathNode {
-                        node: hash.clone().into(),
+                        node: hash,
                         index: 4,
                     },
                     PathNode {
@@ -108,7 +108,7 @@ async fn test_persist_state_transitions(
             })],
         },
         transaction: Signature::new_unique(),
-        slot: slot,
+        slot,
     };
     persist_bundle_using_connection(&setup.db_conn, bundle.into())
         .await
@@ -119,7 +119,7 @@ async fn test_persist_state_transitions(
         .api
         .get_compressed_account(CompressedAccountRequest {
             address: None,
-            hash: Some(Hash::from(hash.clone())),
+            hash: Some(Hash::from(hash)),
         })
         .await
         .unwrap()
@@ -129,7 +129,7 @@ async fn test_persist_state_transitions(
     let raw_data = base64::decode(res.data).unwrap();
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports);
-    assert_eq!(res.slot_updated, slot as u64);
+    assert_eq!(res.slot_updated, slot);
 
     // Assert that we get an error if we input a non-existent UTXO.
     // TODO: Test spent utxos
@@ -180,8 +180,8 @@ async fn test_persist_token_data(
     .unwrap();
 
     let token_tlv_data1: TokenTlvData = TokenTlvData {
-        mint: mint1.clone(),
-        owner: owner1.clone(),
+        mint: mint1,
+        owner: owner1,
         amount: 1,
         delegate: Some(delegate1),
         state: AccountState::Frozen,
@@ -190,8 +190,8 @@ async fn test_persist_token_data(
     };
 
     let token_tlv_data2: TokenTlvData = TokenTlvData {
-        mint: mint2.clone(),
-        owner: owner1.clone(),
+        mint: mint2,
+        owner: owner1,
         amount: 2,
         delegate: Some(delegate2),
         state: AccountState::Initialized,
@@ -200,19 +200,15 @@ async fn test_persist_token_data(
     };
 
     let token_tlv_data3: TokenTlvData = TokenTlvData {
-        mint: mint3.clone(),
-        owner: owner2.clone(),
+        mint: mint3,
+        owner: owner2,
         amount: 3,
         delegate: Some(delegate1),
         state: AccountState::Frozen,
         is_native: Some(1000),
         delegated_amount: 3,
     };
-    let all_token_tlv_data = vec![
-        token_tlv_data1.clone(),
-        token_tlv_data2.clone(),
-        token_tlv_data3.clone(),
-    ];
+    let all_token_tlv_data = vec![token_tlv_data1, token_tlv_data2, token_tlv_data3];
 
     let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
         .await
@@ -236,7 +232,7 @@ async fn test_persist_token_data(
         utxos::Entity::insert(model).exec(&txn).await.unwrap();
         token_datas.push(EnrichedTokenData {
             hash,
-            token_tlv_data: token_tlv_data.clone(),
+            token_tlv_data: *token_tlv_data,
             slot_updated: slot,
         });
     }
@@ -253,7 +249,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
-                SerializablePubkey::from(owner.clone()),
+                SerializablePubkey::from(owner),
                 None,
             ))
             .await
@@ -284,7 +280,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_delegate(GetCompressedAccountsByAuthority(
-                SerializablePubkey::from(delegate.clone()),
+                SerializablePubkey::from(delegate),
                 None,
             ))
             .await
@@ -354,13 +350,13 @@ async fn test_load_test(
         let state_update = StateUpdate {
             in_utxos: vec![],
             out_utxos: (0..num_elements)
-                .map(|i| generate_random_utxo(tree.clone(), i))
+                .map(|i| generate_random_utxo(tree, i))
                 .collect(),
             // We only include the leaf index because we think the most path nodes will be
             // overwritten anyways. So the amortized number of writes will be in each tree
             // will be close to 1.
             path_nodes: (0..num_elements)
-                .map(|i| generate_random_leaf_index(tree.clone(), i as u32, i))
+                .map(|i| generate_random_leaf_index(tree, i as u32, i))
                 .collect(),
         };
         persist_state_update(&txn, state_update).await.unwrap();

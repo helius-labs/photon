@@ -67,7 +67,7 @@ pub async fn persist_state_update(
 fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> {
     Ok(match &utxo.data {
         Some(tlv) => {
-            let tlv_data_element = tlv.tlv_elements.get(0);
+            let tlv_data_element = tlv.tlv_elements.first();
             match tlv_data_element {
                 Some(data_element) if data_element.owner == COMPRESSED_TOKEN_PROGRAM => {
                     let token_data = Some(
@@ -222,7 +222,7 @@ async fn append_output_utxo(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    if out_utxo_models.len() > 0 {
+    if !out_utxo_models.is_empty() {
         let query = utxos::Entity::insert_many(out_utxo_models)
             .on_conflict(
                 OnConflict::column(utxos::Column::Hash)
@@ -231,7 +231,7 @@ async fn append_output_utxo(
             )
             .build(txn.get_database_backend());
         txn.execute(query).await?;
-        if token_datas.len() > 0 {
+        if !token_datas.is_empty() {
             info!(
                 "Persisting token data for {} UTXOs for ...",
                 token_datas.len()
@@ -295,7 +295,7 @@ async fn persist_path_nodes(
         return Ok(());
     }
     let node_models = nodes
-        .into_iter()
+        .iter()
         .map(|node| state_trees::ActiveModel {
             tree: Set(node.tree.to_vec()),
             level: Set(node.level as i64),
@@ -309,7 +309,7 @@ async fn persist_path_nodes(
             } else {
                 None
             }),
-            seq: Set(node.seq as i64),
+            seq: Set(node.seq),
             slot_updated: Set(node.slot),
             ..Default::default()
         })
