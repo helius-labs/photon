@@ -108,12 +108,12 @@ pub struct TestSetupOptions {
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
     let db_conn = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
-            let local_db = "postgres://postgres@localhost/postgres";
+            let local_db = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
                 panic!("Refusing to run tests on non-local database out of caution");
             }
             let pool = setup_pg_pool(local_db.to_string()).await;
-            SqlxPostgresConnector::from_sqlx_postgres_pool(pool) 
+            SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
         }
         DatabaseBackend::Sqlite => {
             SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
