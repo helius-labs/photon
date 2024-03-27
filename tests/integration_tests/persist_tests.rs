@@ -5,7 +5,7 @@ use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, Path
 use photon::api::error::PhotonApiError;
 use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
 use photon::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
-use photon::api::method::utils::{CompressedAccountRequest, GetCompressedAccountsByAuthority};
+use photon::api::method::utils::{CompressedAccountRequest, GetCompressedTokenAccountsByAuthority};
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::index_block;
@@ -401,7 +401,7 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
                 SerializablePubkey::from(owner),
                 None,
             ))
@@ -432,7 +432,7 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_delegate(GetCompressedAccountsByAuthority(
+            .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByAuthority(
                 SerializablePubkey::from(delegate),
                 None,
             ))

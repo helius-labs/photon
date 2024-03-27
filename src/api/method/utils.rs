@@ -6,13 +6,49 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
     QuerySelect,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
+
+pub const PAGE_LIMIT: u64 = 1000;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct Limit(u64);
+
+impl Limit {
+    pub fn new(value: u64) -> Result<Self, &'static str> {
+        if value > PAGE_LIMIT {
+            Err("Value must be less than or equal to 1000")
+        } else {
+            Ok(Limit(value))
+        }
+    }
+
+    pub fn value(&self) -> u64 {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for Limit {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = u64::deserialize(deserializer)?;
+        if value > PAGE_LIMIT {
+            Err(de::Error::invalid_value(
+                de::Unexpected::Unsigned(value),
+                &"a value less than or equal to 1000",
+            ))
+        } else {
+            Ok(Limit(value))
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ResponseWithContext<T> {
@@ -97,8 +133,8 @@ pub struct TokenUxto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAccountList {
-    // TODO: Add cursor
     pub items: Vec<TokenUxto>,
+    pub cursor: Option<String>,
 }
 
 pub enum Authority {
@@ -108,22 +144,23 @@ pub enum Authority {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountsByAuthorityOptions {
+pub struct GetCompressedTokenAccountsByAuthorityOptions {
     pub mint: Option<SerializablePubkey>,
+    pub cursor: Option<String>,
+    pub limit: Option<Limit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-// We avoid named fields to mimic the RPC API.
-pub struct GetCompressedAccountsByAuthority(
+pub struct GetCompressedTokenAccountsByAuthority(
     pub SerializablePubkey,
-    pub Option<GetCompressedAccountsByAuthorityOptions>,
+    pub Option<GetCompressedTokenAccountsByAuthorityOptions>,
 );
 
 pub async fn fetch_token_accounts(
     conn: &sea_orm::DatabaseConnection,
     owner_or_delegate: Authority,
-    mint: Option<SerializablePubkey>,
+    options: Option<GetCompressedTokenAccountsByAuthorityOptions>,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let mut filter = match owner_or_delegate {
@@ -132,23 +169,56 @@ pub async fn fetch_token_accounts(
             token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into())
         }
     };
-    if let Some(m) = mint {
-        filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(m.into()));
+    let mut limit = PAGE_LIMIT;
+    if let Some(options) = options {
+        if let Some(mint) = options.mint {
+            filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(mint.into()));
+        }
+        if let Some(cursor) = options.cursor {
+            let bytes = bs58::decode(cursor.clone()).into_vec().map_err(|_| {
+                PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor))
+            })?;
+            let expected_cursor_length = 64;
+            if bytes.len() != expected_cursor_length {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Invalid cursor length. Expected {}. Received {}.",
+                    expected_cursor_length,
+                    bytes.len()
+                )));
+            }
+            let (mint, hash) = bytes.split_at(32);
+            filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(mint.into()));
+            filter = filter.and(token_owners::Column::Hash.gt::<Vec<u8>>(hash.into()));
+        }
+        if let Some(l) = options.limit {
+            limit = l.value();
+        }
     }
 
     let result = token_owners::Entity::find()
         .filter(filter)
         .order_by_asc(token_owners::Column::Mint)
         .order_by_asc(token_owners::Column::Hash)
+        .limit(limit)
         .all(conn)
         .await?;
 
     let items: Result<Vec<TokenUxto>, PhotonApiError> =
         result.into_iter().map(parse_token_owners_model).collect();
     let items = items?;
+    let cursor = items.last().map(|item| {
+        bs58::encode::<Vec<u8>>({
+            let item = item.clone();
+            let mut bytes: Vec<u8> = item.mint.into();
+            let hash_bytes: Vec<u8> = item.hash.into();
+            bytes.extend_from_slice(hash_bytes.as_slice());
+            bytes
+        })
+        .into_string()
+    });
 
     Ok(TokenAccountListResponse {
-        value: TokenAccountList { items },
+        value: TokenAccountList { items, cursor },
         context,
     })
 }

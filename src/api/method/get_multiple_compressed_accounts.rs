@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, ResponseWithContext},
+    utils::{Context, ResponseWithContext, PAGE_LIMIT},
 };
 use crate::dao::typedefs::hash::Hash;
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -31,6 +31,13 @@ async fn fetch_accounts_from_hashes(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
 ) -> Result<Vec<utxos::Model>, PhotonApiError> {
+    if hashes.len() > PAGE_LIMIT as usize {
+        PhotonApiError::ValidationError(format!(
+            "Too many hashes requested {}. Maximum allowed: {}",
+            hashes.len(),
+            PAGE_LIMIT
+        ));
+    }
     let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
 
     let accounts = utxos::Entity::find()
@@ -71,6 +78,13 @@ async fn fetch_account_from_addresses(
     conn: &DatabaseConnection,
     addresses: Vec<SerializablePubkey>,
 ) -> Result<Vec<utxos::Model>, PhotonApiError> {
+    if addresses.len() > PAGE_LIMIT as usize {
+        PhotonApiError::ValidationError(format!(
+            "Too many addresses requested {}. Maximum allowed: {}",
+            addresses.len(),
+            PAGE_LIMIT
+        ));
+    }
     let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
 
     let accounts = utxos::Entity::find()
