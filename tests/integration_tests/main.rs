@@ -3,5 +3,5 @@
 // 1. Faster compile time since we only have 1 binary.
 // 2. The ability to add global locks on the DB to prevent tests from interfering with each other.
 mod e2e_tests;
-mod persist_tests;
+mod mock_tests;
 mod utils;

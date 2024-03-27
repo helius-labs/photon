@@ -171,6 +171,7 @@ pub async fn fetch_token_accounts(
         }
     }
     .and(token_owners::Column::Spent.eq(false));
+
     let mut limit = PAGE_LIMIT;
     if let Some(options) = options {
         if let Some(mint) = options.mint {
@@ -189,8 +190,9 @@ pub async fn fetch_token_accounts(
                 )));
             }
             let (mint, hash) = bytes.split_at(32);
-            filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(mint.into()));
-            filter = filter.and(token_owners::Column::Hash.gt::<Vec<u8>>(hash.into()));
+            filter = filter
+                .and(token_owners::Column::Mint.gte::<Vec<u8>>(mint.into()))
+                .and(token_owners::Column::Hash.gt::<Vec<u8>>(hash.into()));
         }
         if let Some(l) = options.limit {
             limit = l.value();
