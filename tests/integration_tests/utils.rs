@@ -10,7 +10,6 @@ use photon::{
     api::{
         api::PhotonApi,
         method::{
-            get_multiple_compressed_accounts::UtxoList,
             utils::{TokenAccountList, Utxo},
         },
     },

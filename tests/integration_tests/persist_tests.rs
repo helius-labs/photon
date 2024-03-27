@@ -22,7 +22,7 @@ use psp_compressed_token::AccountState;
 use psp_compressed_token::TokenTlvData;
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
-use solana_sdk::nonce::State;
+
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::vec;
 
