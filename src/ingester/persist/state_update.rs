@@ -5,11 +5,13 @@ use psp_compressed_pda::utxo::Utxo;
 
 use crate::ingester::{error::IngesterError, parser::bundle::EventBundle};
 
+#[derive(Debug, Clone)]
 pub struct UtxoWithSlot {
     pub utxo: Utxo,
     pub slot: i64,
 }
 
+#[derive(Debug, Clone)]
 pub struct EnrichedUtxo {
     pub utxo: UtxoWithSlot,
     pub tree: [u8; 32],

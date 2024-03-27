@@ -43,6 +43,12 @@ impl From<SerializablePubkey> for Vec<u8> {
     }
 }
 
+impl From<[u8; 32]> for SerializablePubkey {
+    fn from(bytes: [u8; 32]) -> Self {
+        SerializablePubkey(SolanaPubkey::from(bytes))
+    }
+}
+
 impl TryFrom<Vec<u8>> for SerializablePubkey {
     type Error = ParsePubkeyError;
 
