@@ -17,7 +17,10 @@ pub struct GetCompressedAccountBalance {
 }
 
 // TODO: Make sure that get_health formatting matches the Solana RPC formatting.
-pub async fn get_health(conn: &DatabaseConnection, rpc: &RpcClient) -> Result<(), PhotonApiError> {
+pub async fn get_health(
+    conn: &DatabaseConnection,
+    rpc: &RpcClient,
+) -> Result<String, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let slot = rpc
         .get_slot()
@@ -28,5 +31,5 @@ pub async fn get_health(conn: &DatabaseConnection, rpc: &RpcClient) -> Result<()
     if slots_behind > HEALTH_CHECK_SLOT_DISTANCE {
         return Err(PhotonApiError::StaleSlot(slots_behind));
     }
-    Ok(())
+    Ok("ok".to_string())
 }

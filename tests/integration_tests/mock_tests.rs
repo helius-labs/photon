@@ -5,7 +5,10 @@ use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, Path
 use photon::api::error::PhotonApiError;
 use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
 use photon::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
-use photon::api::method::utils::{CompressedAccountRequest, GetCompressedAccountsByAuthority};
+use photon::api::method::utils::{
+    CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
+    GetCompressedTokenAccountsByAuthorityOptions,
+};
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::index_block;
@@ -166,6 +169,8 @@ async fn test_persist_state_transitions(
 async fn test_multiple_accounts(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon::api::method::utils::Limit;
+
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
@@ -264,22 +269,50 @@ async fn test_multiple_accounts(
     txn.commit().await.unwrap();
 
     for owner in [owner1, owner2] {
-        let mut res = setup
+        let res = setup
             .api
             .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
                 SerializablePubkey::from(owner),
+                None,
             ))
             .await
             .unwrap()
             .value;
 
+        let mut response_utxos = res.items;
+
+        let mut paginated_response_utxos = Vec::new();
+        let mut cursor = None;
+        loop {
+            let res = setup
+                .api
+                .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+                    SerializablePubkey::from(owner),
+                    Some(
+                        photon::api::method::get_compressed_program_accounts::Options {
+                            cursor: cursor.clone(),
+                            limit: Some(Limit::new(1).unwrap()),
+                        },
+                    ),
+                ))
+                .await
+                .unwrap()
+                .value;
+
+            paginated_response_utxos.extend(res.items.clone());
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(response_utxos, paginated_response_utxos);
         let mut utxos = enriched_utxos
             .clone()
             .into_iter()
             .filter(|x| x.utxo.utxo.owner == owner)
             .collect::<Vec<EnrichedUtxo>>();
 
-        assert_utxo_response_list_matches_input(&mut res.items, &mut utxos);
+        assert_utxo_response_list_matches_input(&mut response_utxos, &mut utxos);
     }
 
     let mut utxos_of_interest = vec![enriched_utxos[0].clone(), enriched_utxos[2].clone()];
@@ -393,6 +426,26 @@ async fn test_persist_token_data(
     persist_token_datas(&txn, token_datas).await.unwrap();
     txn.commit().await.unwrap();
 
+    let owner_tlv = all_token_tlv_data
+        .iter()
+        .filter(|x| x.owner == owner1 && x.mint == mint1)
+        .map(Clone::clone)
+        .collect();
+
+    let res = setup
+        .api
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
+            SerializablePubkey::from(owner1),
+            Some(GetCompressedTokenAccountsByAuthorityOptions {
+                mint: Some(SerializablePubkey::from(mint1)),
+                ..Default::default()
+            }),
+        ))
+        .await
+        .unwrap()
+        .value;
+    verify_responses_match_tlv_data(res.clone(), owner_tlv);
+
     for owner in [owner1, owner2] {
         let owner_tlv = all_token_tlv_data
             .iter()
@@ -401,7 +454,7 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
                 SerializablePubkey::from(owner),
                 None,
             ))
@@ -409,6 +462,30 @@ async fn test_persist_token_data(
             .unwrap()
             .value;
 
+        let mut paginated_res = Vec::new();
+        let mut cursor = None;
+        loop {
+            let res = setup
+                .api
+                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
+                    SerializablePubkey::from(owner),
+                    Some(GetCompressedTokenAccountsByAuthorityOptions {
+                        cursor: cursor.clone(),
+                        limit: Some(photon::api::method::utils::Limit::new(1).unwrap()),
+                        mint: None,
+                    }),
+                ))
+                .await
+                .unwrap()
+                .value;
+
+            paginated_res.extend(res.items.clone());
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(paginated_res, res.items);
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
         for token_account in res.items {
             let request = CompressedAccountRequest {
@@ -432,14 +509,37 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_delegate(GetCompressedAccountsByAuthority(
+            .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByAuthority(
                 SerializablePubkey::from(delegate),
                 None,
             ))
             .await
             .unwrap()
             .value;
+        let mut paginated_res = Vec::new();
+        let mut cursor = None;
+        loop {
+            let res = setup
+                .api
+                .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByAuthority(
+                    SerializablePubkey::from(delegate),
+                    Some(GetCompressedTokenAccountsByAuthorityOptions {
+                        cursor: cursor.clone(),
+                        limit: Some(photon::api::method::utils::Limit::new(1).unwrap()),
+                        mint: None,
+                    }),
+                ))
+                .await
+                .unwrap()
+                .value;
 
+            paginated_res.extend(res.items.clone());
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(paginated_res, res.items);
         verify_responses_match_tlv_data(res, delegate_tlv)
     }
 }

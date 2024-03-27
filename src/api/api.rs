@@ -28,8 +28,8 @@ use super::{
         },
         get_slot::get_slot,
         utils::{
-            CompressedAccountRequest, GetCompressedAccountsByAuthority, TokenAccountListResponse,
-            UtxoResponse,
+            CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
+            TokenAccountListResponse, UtxoResponse,
         },
     },
 };
@@ -106,14 +106,14 @@ impl PhotonApi {
 
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
-        request: GetCompressedAccountsByAuthority,
+        request: GetCompressedTokenAccountsByAuthority,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_token_accounts_by_owner(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_token_accounts_by_delegate(
         &self,
-        request: GetCompressedAccountsByAuthority,
+        request: GetCompressedTokenAccountsByAuthority,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
@@ -132,7 +132,7 @@ impl PhotonApi {
         get_compressed_balance(&self.db_conn, request).await
     }
 
-    pub async fn get_health(&self) -> Result<(), PhotonApiError> {
+    pub async fn get_health(&self) -> Result<String, PhotonApiError> {
         get_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
     }
 

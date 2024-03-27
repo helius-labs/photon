@@ -13,7 +13,7 @@ use super::method::{
     get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest,
     utils::CompressedAccountRequest,
 };
-use super::{api::PhotonApi, method::utils::GetCompressedAccountsByAuthority};
+use super::{api::PhotonApi, method::utils::GetCompressedTokenAccountsByAuthority};
 
 pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -71,7 +71,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedTokenAccountsByOwner",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountsByAuthority>()?;
+            let payload = rpc_params.parse::<GetCompressedTokenAccountsByAuthority>()?;
             rpc_context
                 .get_compressed_token_accounts_by_owner(payload)
                 .await
@@ -82,7 +82,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedTokenAccountsByDelegate",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedAccountsByAuthority>()?;
+            let payload = rpc_params.parse::<GetCompressedTokenAccountsByAuthority>()?;
             rpc_context
                 .get_compressed_token_accounts_by_delegate(payload)
                 .await

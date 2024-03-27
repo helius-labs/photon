@@ -66,6 +66,7 @@ async fn test_e2e_utxo_parsing(
             "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
                 .try_into()
                 .unwrap(),
+            None,
         ))
         .await
         .unwrap();
@@ -80,7 +81,7 @@ async fn test_e2e_utxo_parsing(
 async fn test_e2e_token_mint(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon::api::method::utils::GetCompressedAccountsByAuthority;
+    use photon::api::method::utils::GetCompressedTokenAccountsByAuthority;
 
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
@@ -123,7 +124,7 @@ async fn test_e2e_token_mint(
 
     let token_accounts = setup
         .api
-        .get_compressed_token_accounts_by_owner(GetCompressedAccountsByAuthority(
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
             owner.try_into().unwrap(),
             None,
         ))
@@ -202,6 +203,7 @@ async fn test_e2e_lamport_transfer(
             .api
             .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
                 SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
+                None,
             ))
             .await
             .unwrap();

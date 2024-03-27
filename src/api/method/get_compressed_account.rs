@@ -15,10 +15,10 @@ pub async fn get_compressed_account(
     let id = request.parse_id()?;
     let utxo = parse_utxo_model(
         utxos::Entity::find()
-            .filter(id.get_filter(AccountDataTable::Utxos))
+            .filter(id.filter(AccountDataTable::Utxos))
             .one(conn)
             .await?
-            .ok_or(id.get_record_not_found_error())?,
+            .ok_or(id.not_found_error())?,
     )?;
     Ok(UtxoResponse {
         value: utxo,

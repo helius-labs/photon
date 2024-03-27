@@ -128,6 +128,19 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(
+                Index::create()
+                    .name("utxos_owner_hash_idx")
+                    .table(UTXOs::Table)
+                    .col(UTXOs::Spent)
+                    .col(UTXOs::Owner)
+                    .col(UTXOs::Hash) // For pagination
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .create_table(
                 Table::create()
                     .table(TokenOwners::Table)
@@ -202,10 +215,13 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_owner_mint_idx")
+                    .name("token_owners_owner_mint_hash_idx")
                     .table(TokenOwners::Table)
+                    .col(TokenOwners::Spent)
                     .col(TokenOwners::Owner)
                     .col(TokenOwners::Mint)
+                    .col(TokenOwners::Hash) // For pagination
+                    .unique()
                     .to_owned(),
             )
             .await?;
@@ -213,10 +229,13 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_owner_delegate_idx")
+                    .name("token_owners_delegate_mint_hash_idx")
                     .table(TokenOwners::Table)
-                    .col(TokenOwners::Owner)
+                    .col(TokenOwners::Spent)
                     .col(TokenOwners::Delegate)
+                    .col(TokenOwners::Mint)
+                    .col(TokenOwners::Hash) // For pagination
+                    .unique()
                     .to_owned(),
             )
             .await?;
