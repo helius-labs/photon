@@ -9,9 +9,7 @@ use borsh::to_vec;
 use photon::{
     api::{
         api::PhotonApi,
-        method::{
-            utils::{TokenAccountList, Utxo},
-        },
+        method::utils::{TokenAccountList, Utxo},
     },
     dao::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
@@ -117,7 +115,7 @@ pub struct TestSetupOptions {
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
     let db_conn = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
-            let local_db = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
             if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
                 panic!("Refusing to run tests on non-local database out of caution");
             }
@@ -369,16 +367,15 @@ pub fn assert_utxo_response_list_matches_input(
     for (res, utxo) in utxo_response.iter().zip(input_utxos.iter()) {
         let EnrichedUtxo { utxo, tree, seq } = utxo;
         let UtxoWithSlot { utxo, slot } = utxo;
+        #[allow(deprecated)]
+        let input_data = base64::encode(to_vec(&utxo.data.clone().unwrap()).unwrap());
         assert_eq!(res.hash, utxo.hash().into());
         assert_eq!(res.owner, SerializablePubkey::from(utxo.owner));
         assert_eq!(res.tree, Some(SerializablePubkey::from(tree.clone())));
         assert_eq!(res.seq, Some(*seq as u64));
         assert_eq!(res.lamports, utxo.lamports);
         assert_eq!(res.slot_updated, *slot as u64);
-        assert_eq!(
-            res.data,
-            base64::encode(to_vec(&utxo.data.clone().unwrap()).unwrap())
-        );
+        assert_eq!(res.data, input_data);
     }
 }
 

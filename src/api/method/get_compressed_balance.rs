@@ -3,7 +3,7 @@ use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 
 use super::super::error::PhotonApiError;
 use super::utils::{AccountDataTable, LamportModel};
-use super::utils::{BalanceModel, CompressedAccountRequest, Context, ResponseWithContext};
+use super::utils::{CompressedAccountRequest, Context, ResponseWithContext};
 
 pub type GetCompressedAccountBalance = ResponseWithContext<i64>;
 
