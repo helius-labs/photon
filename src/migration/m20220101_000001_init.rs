@@ -110,7 +110,6 @@ impl MigrationTrait for Migration {
                 Index::create()
                     .name("utxos_hash_idx")
                     .table(UTXOs::Table)
-                    .col(UTXOs::Spent)
                     .col(UTXOs::Hash)
                     .unique()
                     .to_owned(),
@@ -122,7 +121,6 @@ impl MigrationTrait for Migration {
                 Index::create()
                     .name("utxos_account_idx")
                     .table(UTXOs::Table)
-                    .col(UTXOs::Spent)
                     .col(UTXOs::Account)
                     .unique()
                     .to_owned(),
@@ -198,7 +196,6 @@ impl MigrationTrait for Migration {
                 Index::create()
                     .name("token_owners_hash_idx")
                     .table(TokenOwners::Table)
-                    .col(TokenOwners::Spent)
                     .col(TokenOwners::Hash)
                     .unique()
                     .to_owned(),
@@ -210,7 +207,6 @@ impl MigrationTrait for Migration {
                 Index::create()
                     .name("token_owners_account_idx")
                     .table(TokenOwners::Table)
-                    .col(TokenOwners::Spent)
                     .col(TokenOwners::Account)
                     .to_owned(),
             )

@@ -131,9 +131,10 @@ pub struct TokenUxto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
     pub items: Vec<TokenUxto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -168,7 +169,8 @@ pub async fn fetch_token_accounts(
         Authority::Delegate(delegate) => {
             token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into())
         }
-    };
+    }
+    .and(token_owners::Column::Spent.eq(false));
     let mut limit = PAGE_LIMIT;
     if let Some(options) = options {
         if let Some(mint) = options.mint {
@@ -206,7 +208,7 @@ pub async fn fetch_token_accounts(
     let items: Result<Vec<TokenUxto>, PhotonApiError> =
         result.into_iter().map(parse_token_owners_model).collect();
     let items = items?;
-    let cursor = items.last().map(|item| {
+    let mut cursor = items.last().map(|item| {
         bs58::encode::<Vec<u8>>({
             let item = item.clone();
             let mut bytes: Vec<u8> = item.mint.into();
@@ -216,6 +218,9 @@ pub async fn fetch_token_accounts(
         })
         .into_string()
     });
+    if items.len() < limit as usize {
+        cursor = None;
+    }
 
     Ok(TokenAccountListResponse {
         value: TokenAccountList { items, cursor },
@@ -266,24 +271,26 @@ pub enum AccountDataTable {
 }
 
 impl AccountIdentifier {
-    pub fn get_filter(&self, table: AccountDataTable) -> SimpleExpr {
+    pub fn filter(&self, table: AccountDataTable) -> SimpleExpr {
         match table {
             AccountDataTable::Utxos => match &self {
                 AccountIdentifier::Address(address) => {
                     utxos::Column::Account.eq::<Vec<u8>>(address.clone().into())
                 }
                 AccountIdentifier::Hash(hash) => utxos::Column::Hash.eq(hash.to_vec()),
-            },
+            }
+            .and(utxos::Column::Spent.eq(false)),
             AccountDataTable::TokenOwners => match &self {
                 AccountIdentifier::Address(address) => {
                     token_owners::Column::Owner.eq::<Vec<u8>>(address.clone().into())
                 }
                 AccountIdentifier::Hash(hash) => token_owners::Column::Hash.eq(hash.to_vec()),
-            },
+            }
+            .and(token_owners::Column::Spent.eq(false)),
         }
     }
 
-    pub fn get_record_not_found_error(&self) -> PhotonApiError {
+    pub fn not_found_error(&self) -> PhotonApiError {
         match &self {
             AccountIdentifier::Address(address) => {
                 PhotonApiError::RecordNotFound(format!("Account {} not found", address))

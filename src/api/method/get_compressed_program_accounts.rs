@@ -26,6 +26,7 @@ pub struct GetCompressedProgramAccountsRequest(pub SerializablePubkey, pub Optio
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PaginatedUtxoList {
     pub items: Vec<Utxo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Hash>,
 }
 
@@ -63,7 +64,10 @@ pub async fn get_compressed_program_accounts(
         .into_iter()
         .map(parse_utxo_model)
         .collect::<Result<Vec<Utxo>, PhotonApiError>>()?;
-    let cursor = items.last().map(|u| u.hash.clone());
+    let mut cursor = items.last().map(|u| u.hash.clone());
+    if items.len() < limit as usize {
+        cursor = None;
+    }
 
     Ok(GetCompressedProgramAccountsResponse {
         context,

@@ -268,6 +268,7 @@ async fn test_multiple_accounts(
             .api
             .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
                 SerializablePubkey::from(owner),
+                None,
             ))
             .await
             .unwrap()

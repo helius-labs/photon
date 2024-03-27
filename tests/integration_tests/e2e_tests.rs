@@ -66,6 +66,7 @@ async fn test_e2e_utxo_parsing(
             "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
                 .try_into()
                 .unwrap(),
+            None,
         ))
         .await
         .unwrap();
@@ -202,6 +203,7 @@ async fn test_e2e_lamport_transfer(
             .api
             .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
                 SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
+                None,
             ))
             .await
             .unwrap();

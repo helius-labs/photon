@@ -132,7 +132,7 @@ impl PhotonApi {
         get_compressed_balance(&self.db_conn, request).await
     }
 
-    pub async fn get_health(&self) -> Result<(), PhotonApiError> {
+    pub async fn get_health(&self) -> Result<String, PhotonApiError> {
         get_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
     }
 

@@ -17,11 +17,11 @@ pub async fn get_compressed_balance(
     let balance = utxos::Entity::find()
         .select_only()
         .column(utxos::Column::Lamports)
-        .filter(id.get_filter(AccountDataTable::Utxos))
+        .filter(id.filter(AccountDataTable::Utxos))
         .into_model::<LamportModel>()
         .one(conn)
         .await?
-        .ok_or(id.get_record_not_found_error())?;
+        .ok_or(id.not_found_error())?;
 
     Ok(GetCompressedAccountBalance {
         value: balance.lamports,

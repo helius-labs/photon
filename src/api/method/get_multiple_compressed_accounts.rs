@@ -41,7 +41,11 @@ async fn fetch_accounts_from_hashes(
     let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
 
     let accounts = utxos::Entity::find()
-        .filter(utxos::Column::Hash.is_in(raw_hashes.clone()))
+        .filter(
+            utxos::Column::Hash
+                .is_in(raw_hashes.clone())
+                .and(utxos::Column::Spent.eq(false)),
+        )
         .all(conn)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
@@ -88,7 +92,11 @@ async fn fetch_account_from_addresses(
     let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
 
     let accounts = utxos::Entity::find()
-        .filter(utxos::Column::Account.is_in(raw_addresses.clone()))
+        .filter(
+            utxos::Column::Account
+                .is_in(raw_addresses.clone())
+                .and(utxos::Column::Spent.eq(false)),
+        )
         .all(conn)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;

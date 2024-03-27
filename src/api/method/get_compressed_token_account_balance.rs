@@ -26,11 +26,11 @@ pub async fn get_compressed_token_account_balance(
     let balance = token_owners::Entity::find()
         .select_only()
         .column(token_owners::Column::Amount)
-        .filter(id.get_filter(AccountDataTable::TokenOwners))
+        .filter(id.filter(AccountDataTable::TokenOwners))
         .into_model::<BalanceModel>()
         .one(conn)
         .await?
-        .ok_or(id.get_record_not_found_error())?;
+        .ok_or(id.not_found_error())?;
 
     Ok(GetCompressedTokenAccountBalanceResponse {
         value: TokenAccountBalance {
