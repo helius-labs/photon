@@ -5,11 +5,19 @@ use std::{
     sync::Mutex,
 };
 
+use borsh::to_vec;
 use photon::{
-    api::{api::PhotonApi, method::utils::TokenAccountList},
+    api::{
+        api::PhotonApi,
+        method::utils::{TokenAccountList, Utxo},
+    },
+    dao::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
         parser::bundle::EventBundle,
-        persist::persist_bundle,
+        persist::{
+            persist_bundle,
+            state_update::{EnrichedUtxo, UtxoWithSlot},
+        },
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     },
 };
@@ -107,7 +115,7 @@ pub struct TestSetupOptions {
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
     let db_conn = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
-            let local_db = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
             if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
                 panic!("Refusing to run tests on non-local database out of caution");
             }
@@ -346,6 +354,28 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
         assert_eq!(account.is_native, tlv.is_native.is_some());
         assert_eq!(account.frozen, tlv.state == AccountState::Frozen);
         assert_eq!(account.is_native, tlv.is_native.is_some());
+    }
+}
+
+pub fn assert_utxo_response_list_matches_input(
+    utxo_response: &mut Vec<Utxo>,
+    input_utxos: &mut Vec<EnrichedUtxo>,
+) {
+    utxo_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
+    input_utxos.sort_by(|a, b| a.utxo.utxo.hash().cmp(&b.utxo.utxo.hash()));
+
+    for (res, utxo) in utxo_response.iter().zip(input_utxos.iter()) {
+        let EnrichedUtxo { utxo, tree, seq } = utxo;
+        let UtxoWithSlot { utxo, slot } = utxo;
+        #[allow(deprecated)]
+        let input_data = base64::encode(to_vec(&utxo.data.clone().unwrap()).unwrap());
+        assert_eq!(res.hash, utxo.hash().into());
+        assert_eq!(res.owner, SerializablePubkey::from(utxo.owner));
+        assert_eq!(res.tree, Some(SerializablePubkey::from(tree.clone())));
+        assert_eq!(res.seq, Some(*seq as u64));
+        assert_eq!(res.lamports, utxo.lamports);
+        assert_eq!(res.slot_updated, *slot as u64);
+        assert_eq!(res.data, input_data);
     }
 }
 

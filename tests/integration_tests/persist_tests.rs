@@ -3,6 +3,8 @@ use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use light_merkle_tree_event::{ChangelogEvent, ChangelogEventV1, Changelogs, PathNode};
 use photon::api::error::PhotonApiError;
+use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
+use photon::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon::api::method::utils::{CompressedAccountRequest, GetCompressedAccountsByAuthority};
 use photon::dao::generated::utxos;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -20,6 +22,7 @@ use psp_compressed_token::AccountState;
 use psp_compressed_token::TokenTlvData;
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
+
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::vec;
 
@@ -30,7 +33,6 @@ struct Person {
 }
 
 // TODO:
-// - Replace the test data with transactions generated locally via the new contracts.
 // - Add tests for duplicate inserts.
 // - Add tests for UTXO input spends without existing UTXO.
 // - Add test for multi-input/output transitions.
@@ -114,13 +116,14 @@ async fn test_persist_state_transitions(
         .await
         .unwrap();
 
-    // Verify GetUtxo
+    let request = CompressedAccountRequest {
+        address: None,
+        hash: Some(Hash::from(hash)),
+    };
+
     let res = setup
         .api
-        .get_compressed_account(CompressedAccountRequest {
-            address: None,
-            hash: Some(Hash::from(hash)),
-        })
+        .get_compressed_account(request.clone())
         .await
         .unwrap()
         .value;
@@ -130,6 +133,14 @@ async fn test_persist_state_transitions(
     assert_eq!(person_tlv, Tlv::try_from_slice(&raw_data).unwrap());
     assert_eq!(res.lamports, utxo.lamports);
     assert_eq!(res.slot_updated, slot);
+
+    let res = setup
+        .api
+        .get_compressed_balance(request)
+        .await
+        .unwrap()
+        .value;
+    assert_eq!(res, utxo.lamports as i64);
 
     // Assert that we get an error if we input a non-existent UTXO.
     // TODO: Test spent utxos
@@ -146,6 +157,148 @@ async fn test_persist_state_transitions(
         PhotonApiError::RecordNotFound(_) => {}
         _ => panic!("Expected NotFound error"),
     }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_multiple_accounts(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let owner1 = Pubkey::new_unique();
+    let owner2 = Pubkey::new_unique();
+    let mut state_update = StateUpdate::default();
+
+    let utxos = vec![
+        Utxo {
+            data: Some(Tlv {
+                tlv_elements: vec![TlvDataElement {
+                    discriminator: [0; 8],
+                    owner: owner1,
+                    data: vec![1; 500],
+                    data_hash: [1; 32],
+                }],
+            }),
+            owner: owner1,
+            blinding: [0; 32],
+            lamports: 5,
+        },
+        Utxo {
+            data: Some(Tlv {
+                tlv_elements: vec![TlvDataElement {
+                    discriminator: [0; 8],
+                    owner: owner1,
+                    data: vec![2; 500],
+                    data_hash: [2; 32],
+                }],
+            }),
+            owner: owner1,
+            blinding: [2; 32],
+            lamports: 10,
+        },
+        Utxo {
+            data: Some(Tlv {
+                tlv_elements: vec![TlvDataElement {
+                    discriminator: [0; 8],
+                    owner: owner2,
+                    data: vec![3; 500],
+                    data_hash: [3; 32],
+                }],
+            }),
+            owner: owner2,
+            blinding: [3; 32],
+            lamports: 20,
+        },
+        Utxo {
+            data: Some(Tlv {
+                tlv_elements: vec![TlvDataElement {
+                    discriminator: [0; 8],
+                    owner: owner2,
+                    data: vec![4; 500],
+                    data_hash: [4; 32],
+                }],
+            }),
+            owner: owner2,
+            blinding: [4; 32],
+            lamports: 30,
+        },
+    ];
+
+    let arbitrary_multiplier = 10;
+    let enriched_utxos: Vec<EnrichedUtxo> = utxos
+        .iter()
+        .enumerate()
+        .map(|(i, utxo)| EnrichedUtxo {
+            utxo: UtxoWithSlot {
+                utxo: utxo.clone(),
+                slot: (i * arbitrary_multiplier) as i64,
+            },
+            tree: Pubkey::new_unique().to_bytes(),
+            seq: i as i64,
+        })
+        .collect();
+
+    state_update.out_utxos = enriched_utxos.clone();
+    let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+        .await
+        .unwrap();
+    persist_state_update(&txn, state_update).await.unwrap();
+    txn.commit().await.unwrap();
+
+    for owner in [owner1, owner2] {
+        let mut res = setup
+            .api
+            .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+                SerializablePubkey::from(owner),
+            ))
+            .await
+            .unwrap()
+            .value;
+
+        let mut utxos = enriched_utxos
+            .clone()
+            .into_iter()
+            .filter(|x| x.utxo.utxo.owner == owner)
+            .collect::<Vec<EnrichedUtxo>>();
+
+        assert_utxo_response_list_matches_input(&mut res.items, &mut utxos);
+    }
+
+    let mut utxos_of_interest = vec![enriched_utxos[0].clone(), enriched_utxos[2].clone()];
+    let mut res = setup
+        .api
+        .get_multiple_compressed_accounts(GetMultipleCompressedAccountsRequest {
+            addresses: None,
+            hashes: Some(
+                utxos_of_interest
+                    .iter()
+                    .map(|x| x.utxo.utxo.hash().into())
+                    .collect(),
+            ),
+        })
+        .await
+        .unwrap()
+        .value;
+
+    assert_utxo_response_list_matches_input(&mut res.items, &mut utxos_of_interest);
 }
 
 #[named]

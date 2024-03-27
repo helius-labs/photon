@@ -30,17 +30,22 @@ cargo run -- --help
 To run tests, install and run Postgres and SQLlite locally. For MacOS users, we recommend using
 Homebrew to run local Postgres: https://wiki.postgresql.org/wiki/Homebrew.
 
-Then export environment variables to configure your RPC:
+Then export environment variables to configure your RPC and your test Postgres url. For SQLlite testing,
+we always use an in-memory SQLlite database, so there is no need to configure a test url.
 
 ```bash
 export MAINNET_RPC_URL=https://api.devnet.solana.com
 export DEVNET_RPC_URL=https://api.mainnet-beta.solana.com
+export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
 ```
 
 Afterwards, run:
 ```bash
 cargo test
 ```
+
+Note that for both Postgres and SQLlite all migrations will run automatically during tests. So no
+prior configuration is needed.
 
 ### Database Management
 

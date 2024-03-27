@@ -244,6 +244,11 @@ pub struct BalanceModel {
     pub amount: i64,
 }
 
+#[derive(FromQueryResult)]
+pub struct LamportModel {
+    pub lamports: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ProofResponse {
