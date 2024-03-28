@@ -1,14 +1,18 @@
 use self::state_update::{EnrichedPathNode, EnrichedUtxo, StateUpdate, UtxoWithSlot};
 
-use super::{error, parser::bundle::EventBundle};
+use super::{
+    error,
+    parser::{
+        bundle::EventBundle,
+        indexer_events::{AccountState, CompressedAccount, TokenData},
+    },
+};
 use crate::dao::{
     generated::{state_trees, token_owners, utxos},
     typedefs::hash::Hash,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use log::info;
-use psp_compressed_pda::utxo::Utxo;
-use psp_compressed_token::{AccountState, TokenTlvData};
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
@@ -64,32 +68,16 @@ pub async fn persist_state_update(
     Ok(())
 }
 
-fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> {
-    Ok(match &utxo.data {
-        Some(tlv) => {
-            let tlv_data_element = tlv.tlv_elements.first();
-            match tlv_data_element {
-                Some(data_element) if data_element.owner == COMPRESSED_TOKEN_PROGRAM => {
-                    let token_data = Some(
-                        TokenTlvData::try_from_slice(&data_element.data).map_err(|_| {
-                            IngesterError::ParserError("Failed to parse token data".to_string())
-                        })?,
-                    );
-                    if tlv.tlv_elements.len() > 1 {
-                        return Err(IngesterError::MalformedEvent {
-                            msg: format!(
-                                "More than one TLV element found in UTXO: {}",
-                                Hash::from(utxo.hash())
-                            ),
-                        });
-                    }
-                    token_data
-                }
-                _ => None,
-            }
+fn parse_token_data(account: &CompressedAccount) -> Result<Option<TokenData>, IngesterError> {
+    match account.data {
+        Some(data) if account.owner == COMPRESSED_TOKEN_PROGRAM => {
+            let token_data = TokenData::try_from_slice(&data.data).map_err(|_| {
+                IngesterError::ParserError("Failed to parse token data".to_string())
+            })?;
+            Ok(Some(token_data))
         }
-        None => None,
-    })
+        _ => Ok(None),
+    }
 }
 
 async fn spend_input_utxos(
@@ -157,10 +145,8 @@ async fn spend_input_utxos(
     Ok(())
 }
 
-// Note: I highly dislike this name but it's a consequence of the confusing compression abstractions.
-//       I will fix once we clean up the compression abstractions.
 pub struct EnrichedTokenData {
-    pub token_tlv_data: TokenTlvData,
+    pub token_data: TokenData,
     pub hash: Hash,
     pub slot_updated: i64,
 }
@@ -209,7 +195,7 @@ async fn append_output_utxo(
 
         if let Some(token_data) = parse_token_data(out_utxo)? {
             token_datas.push(EnrichedTokenData {
-                token_tlv_data: token_data,
+                token_data: token_data,
                 hash: Hash::from(out_utxo.hash()),
                 slot_updated: *slot,
             });
@@ -251,19 +237,19 @@ pub async fn persist_token_datas(
         .into_iter()
         .map(
             |EnrichedTokenData {
-                 token_tlv_data,
+                 token_data,
                  hash,
                  slot_updated,
              }| {
                 token_owners::ActiveModel {
                     hash: Set(hash.into()),
-                    mint: Set(token_tlv_data.mint.to_bytes().to_vec()),
-                    owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
-                    amount: Set(token_tlv_data.amount as i64),
-                    delegate: Set(token_tlv_data.delegate.map(|d| d.to_bytes().to_vec())),
-                    frozen: Set(token_tlv_data.state == AccountState::Frozen),
-                    delegated_amount: Set(token_tlv_data.delegated_amount as i64),
-                    is_native: Set(token_tlv_data.is_native.map(|n| n as i64)),
+                    mint: Set(token_data.mint.to_bytes().to_vec()),
+                    owner: Set(token_data.owner.to_bytes().to_vec()),
+                    amount: Set(token_data.amount as i64),
+                    delegate: Set(token_data.delegate.map(|d| d.to_bytes().to_vec())),
+                    frozen: Set(token_data.state == AccountState::Frozen),
+                    delegated_amount: Set(token_data.delegated_amount as i64),
+                    is_native: Set(token_data.is_native.map(|n| n as i64)),
                     spent: Set(false),
                     slot_updated: Set(slot_updated),
                     ..Default::default()
