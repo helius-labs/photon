@@ -1,3 +1,5 @@
+/// Copied from the Light repo. We copy them instead of importing from the Light repo in order to
+/// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -57,7 +59,7 @@ pub enum ChangelogEvent {
 
 /// Node of the Merkle path with an index representing the position in a
 /// non-sparse Merkle tree.
-#[derive(BorshDeserialize, BorshSerialize, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
 pub struct PathNode {
     pub node: [u8; 32],
     pub index: u32,

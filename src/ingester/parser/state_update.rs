@@ -2,38 +2,30 @@ use std::collections::HashSet;
 
 use solana_sdk::pubkey::Pubkey;
 
-use crate::ingester::{
-    error::IngesterError,
-    parser::indexer_events::{CompressedAccount, PathNode},
-};
-
-#[derive(Debug, Clone)]
-pub struct AccountWithSlot {
-    pub account: CompressedAccount,
-    pub slot: i64,
-}
+use crate::ingester::parser::indexer_events::{CompressedAccount, PathNode};
 
 #[derive(Debug, Clone)]
 pub struct EnrichedAccount {
     pub account: CompressedAccount,
     pub tree: Pubkey,
-    pub seq: Option<i64>,
+    pub seq: Option<u64>,
     pub hash: [u8; 32],
+    pub slot: u64,
 }
 
 pub struct EnrichedPathNode {
     pub node: PathNode,
-    pub slot: i64,
+    pub slot: u64,
     pub tree: [u8; 32],
-    pub seq: i64,
+    pub seq: u64,
     pub level: usize,
     pub tree_depth: usize,
 }
 
-struct PathUpdate {
-    tree: [u8; 32],
-    path: Vec<PathNode>,
-    seq: i64,
+pub struct PathUpdate {
+    pub tree: [u8; 32],
+    pub path: Vec<PathNode>,
+    pub seq: u64,
 }
 
 #[derive(Default)]

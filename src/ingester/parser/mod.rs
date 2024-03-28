@@ -1,16 +1,17 @@
 use borsh::BorshDeserialize;
 use log::info;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::ingester::parser::{
-    indexer_events::CompressedAccountWithMerkleContext, state_update::EnrichedAccount,
+    indexer_events::{CompressedAccountWithMerkleContext, PathNode},
+    state_update::{EnrichedAccount, EnrichedPathNode},
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
-    indexer_events::{Changelogs, PublicTransactionEvent},
-    state_update::StateUpdate,
+    indexer_events::{ChangelogEvent, Changelogs, PublicTransactionEvent},
+    state_update::{PathUpdate, StateUpdate},
 };
 
 pub mod indexer_events;
@@ -67,8 +68,12 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                             e
                         ))
                     })?;
-                    let state_update =
-                        parse_public_transaction_event(slot, public_transaction_event, changelogs)?;
+                    let state_update = parse_public_transaction_event(
+                        tx.signature,
+                        slot,
+                        public_transaction_event,
+                        changelogs,
+                    )?;
                     state_updates.push(state_update);
                 }
             }
@@ -78,6 +83,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 }
 
 fn parse_public_transaction_event(
+    tx: Signature,
     slot: u64,
     transaction_event: PublicTransactionEvent,
     changelogs: Changelogs,
@@ -91,116 +97,91 @@ fn parse_public_transaction_event(
         ..
     } = transaction_event;
 
-    let state_update = StateUpdate::new();
+    let mut state_update = StateUpdate::new();
 
     for (account, hash) in input_compressed_accounts
-        .drain(..)
+        .iter()
         .zip(input_compressed_account_hashes)
     {
         let CompressedAccountWithMerkleContext {
             compressed_account,
             merkle_tree_pubkey_index,
-            nullifier_queue_pubkey_index,
-            leaf_index,
-        } = account;
+            ..
+        } = account.clone();
 
-        let account_with_slot = EnrichedAccount {
+        let enriched_account = EnrichedAccount {
             account: compressed_account,
             tree: pubkey_array[merkle_tree_pubkey_index as usize],
             seq: None,
-            slot: slot as i64,
+            slot,
+            hash,
         };
-        state_update.in_accounts.push(account_with_slot);
+        state_update.in_accounts.push(enriched_account);
+    }
+    let path_updates = extract_path_updates(changelogs);
+
+    if output_compressed_accounts.len() != path_updates.len() {
+        return Err(IngesterError::MalformedEvent {
+            msg: format!(
+                "Number of path updates did not match the number of output UTXOs (txn: {})",
+                tx,
+            ),
+        });
     }
 
-    todo!()
+    for ((out_account, path), hash) in output_compressed_accounts
+        .into_iter()
+        .zip(path_updates.iter())
+        .zip(output_compressed_account_hashes)
+    {
+        let enriched_account = EnrichedAccount {
+            account: out_account,
+            tree: Pubkey::from(path.tree),
+            seq: Some(path.seq),
+            slot,
+            hash,
+        };
+        state_update.out_accounts.push(enriched_account);
+    }
+
+    state_update
+        .path_nodes
+        .extend(path_updates.into_iter().flat_map(|p| {
+            let tree_height = p.path.len();
+            p.path
+                .into_iter()
+                .enumerate()
+                .map(move |(i, node)| EnrichedPathNode {
+                    node: node.clone(),
+                    slot,
+                    tree: p.tree,
+                    seq: p.seq,
+                    level: i,
+                    tree_depth: tree_height,
+                })
+        }));
+    Ok(state_update)
 }
 
-// impl TryFrom<EventBundle> for StateUpdate {
-//     type Error = IngesterError;
-
-//     fn try_from(e: EventBundle) -> Result<StateUpdate, IngesterError> {
-//         match e {
-//             EventBundle::PublicTransactionEvent(e) => {
-//                 let mut state_update = StateUpdate::default();
-//                 state_update
-//                     .in_accounts
-//                     .extend(
-//                         e.in_accounts
-//                             .into_iter()
-//                             .map(|utxoaccount| AccountWithSlot {
-//                                 utxo,
-//                                 slot: e.slot as i64,
-//                             }),
-//                     );
-
-//                 let path_updates = extract_path_updates(e.changelogs);
-
-//                 if e.out_utxos.len() != path_updates.len() {
-//                     return Err(IngesterError::MalformedEvent {
-//                         msg: format!(
-//                             "Number of path updates did not match the number of output UTXOs (txn: {})",
-//                             e.transaction,
-//                         ),
-//                     });
-//                 }
-
-//                 for (out_utxo, path) in e.out_utxos.into_iter().zip(path_updates.iter()) {
-//                     state_update.out_utxos.push(EnrichedUtxo {
-//                         utxo: UtxoWithSlot {
-//                             utxo: out_utxo,
-//                             slot: e.slot as i64,
-//                         },
-//                         tree: path.tree,
-//                         seq: path.seq,
-//                     });
-//                 }
-
-//                 state_update
-//                     .path_nodes
-//                     .extend(path_updates.into_iter().flat_map(|p| {
-//                         let tree_height = p.path.len();
-//                         p.path
-//                             .into_iter()
-//                             .enumerate()
-//                             .map(move |(i, node)| EnrichedPathNode {
-//                                 node: PathNode {
-//                                     node: node.node,
-//                                     index: node.index,
-//                                 },
-//                                 slot: e.slot as i64,
-//                                 tree: p.tree,
-//                                 seq: p.seq,
-//                                 level: i,
-//                                 tree_depth: tree_height,
-//                             })
-//                     }));
-//                 state_update.prune_redundant_updates();
-//                 Ok(state_update)
-//             }
-//         }
-//     }
-// }
-
-// fn extract_path_updates(changelogs: Changelogs) -> Vec<PathUpdate> {
-//     changelogs
-//         .changelogs
-//         .iter()
-//         .flat_map(|cl| match cl {
-//             ChangelogEvent::V1(cl) => {
-//                 let tree_id = cl.id;
-//                 cl.paths.iter().map(move |p| PathUpdate {
-//                     tree: tree_id,
-//                     path: p
-//                         .iter()
-//                         .map(|node| PathNode {
-//                             node: node.node,
-//                             index: node.index,
-//                         })
-//                         .collect(),
-//                     seq: cl.seq as i64,
-//                 })
-//             }
-//         })
-//         .collect::<Vec<_>>()
-// }
+fn extract_path_updates(changelogs: Changelogs) -> Vec<PathUpdate> {
+    changelogs
+        .changelogs
+        .iter()
+        .flat_map(|cl| match cl {
+            ChangelogEvent::V1(cl) => {
+                let tree_id = cl.id;
+                cl.paths.iter().map(move |p| PathUpdate {
+                    tree: tree_id,
+                    path: p
+                        .iter()
+                        .map(|node| PathNode {
+                            node: node.node,
+                            index: node.index,
+                        })
+                        .collect(),
+                    seq: cl.seq,
+                })
+            }
+        })
+        .collect::<Vec<_>>()
+}
