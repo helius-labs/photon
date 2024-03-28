@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     dao::{
-        generated::{state_trees, token_owners, utxos},
+        generated::{accounts, state_trees, token_accounts},
         typedefs::hash::Hash,
     },
     ingester::parser::state_update::StateUpdate,
@@ -45,11 +45,11 @@ pub async fn persist_state_update(
         path_nodes.len()
     );
 
-    info!("Persisting spent utxos...");
+    info!("Persisting spent accounts...");
     for chunk in in_accounts.chunks(MAX_SQL_INSERTS) {
         spend_input_accounts(txn, chunk).await?;
     }
-    info!("Persisting output utxos...");
+    info!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
     }
@@ -78,9 +78,9 @@ async fn spend_input_accounts(
     txn: &DatabaseTransaction,
     in_accounts: &[EnrichedAccount],
 ) -> Result<(), IngesterError> {
-    let in_account_models: Vec<utxos::ActiveModel> = in_accounts
+    let in_account_models: Vec<accounts::ActiveModel> = in_accounts
         .iter()
-        .map(|account| utxos::ActiveModel {
+        .map(|account| accounts::ActiveModel {
             hash: Set(account.hash.to_vec()),
             spent: Set(true),
             data: Set(vec![]),
@@ -93,16 +93,16 @@ async fn spend_input_accounts(
         .collect();
 
     if !in_account_models.is_empty() {
-        utxos::Entity::insert_many(in_account_models)
+        accounts::Entity::insert_many(in_account_models)
             .on_conflict(
-                OnConflict::column(utxos::Column::Hash)
+                OnConflict::column(accounts::Column::Hash)
                     .update_columns([
-                        utxos::Column::Hash,
-                        utxos::Column::Data,
-                        utxos::Column::Lamports,
-                        utxos::Column::Spent,
-                        utxos::Column::SlotUpdated,
-                        utxos::Column::Tree,
+                        accounts::Column::Hash,
+                        accounts::Column::Data,
+                        accounts::Column::Lamports,
+                        accounts::Column::Spent,
+                        accounts::Column::SlotUpdated,
+                        accounts::Column::Tree,
                     ])
                     .to_owned(),
             )
@@ -113,7 +113,7 @@ async fn spend_input_accounts(
     for in_accounts in in_accounts {
         let token_data = parse_token_data(&in_accounts.account)?;
         if token_data.is_some() {
-            token_models.push(token_owners::ActiveModel {
+            token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
                 amount: Set(0),
@@ -123,14 +123,14 @@ async fn spend_input_accounts(
         }
     }
     if !token_models.is_empty() {
-        info!("Marking {} token UTXOs as spent...", token_models.len());
-        token_owners::Entity::insert_many(token_models)
+        info!("Marking {} token accounts as spent...", token_models.len());
+        token_accounts::Entity::insert_many(token_models)
             .on_conflict(
-                OnConflict::column(token_owners::Column::Hash)
+                OnConflict::column(token_accounts::Column::Hash)
                     .update_columns([
-                        token_owners::Column::Hash,
-                        token_owners::Column::Amount,
-                        token_owners::Column::Spent,
+                        token_accounts::Column::Hash,
+                        token_accounts::Column::Amount,
+                        token_accounts::Column::Spent,
                     ])
                     .to_owned(),
             )
@@ -144,7 +144,7 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
-    pub account: Option<[u8; 32]>,
+    pub address: Option<[u8; 32]>,
     pub slot_updated: u64,
 }
 
@@ -164,9 +164,9 @@ async fn append_output_accounts(
             slot,
         } = account;
 
-        account_models.push(utxos::ActiveModel {
+        account_models.push(accounts::ActiveModel {
             hash: Set(hash.to_vec()),
-            account: Set(account.address.map(|x| x.to_vec())),
+            address: Set(account.address.map(|x| x.to_vec())),
             data: Set(account.data.clone().map(|d| d.data).unwrap_or(Vec::new())),
             tree: Set(Some(tree.to_bytes().to_vec())),
             owner: Set(account.owner.as_ref().to_vec()),
@@ -182,7 +182,7 @@ async fn append_output_accounts(
                 token_data: token_data,
                 hash: Hash::from(hash.clone()),
                 slot_updated: *slot,
-                account: account.address.clone(),
+                address: account.address.clone(),
             });
         }
     }
@@ -194,9 +194,9 @@ async fn append_output_accounts(
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
     if !out_accounts.is_empty() {
-        let query = utxos::Entity::insert_many(account_models)
+        let query = accounts::Entity::insert_many(account_models)
             .on_conflict(
-                OnConflict::column(utxos::Column::Hash)
+                OnConflict::column(accounts::Column::Hash)
                     .do_nothing()
                     .to_owned(),
             )
@@ -222,11 +222,11 @@ pub async fn persist_token_accounts(
                  token_data,
                  hash,
                  slot_updated,
-                 account,
+                 address,
              }| {
-                token_owners::ActiveModel {
+                token_accounts::ActiveModel {
                     hash: Set(hash.into()),
-                    account: Set(account.map(|x| x.to_vec())),
+                    address: Set(address.map(|x| x.to_vec())),
                     mint: Set(token_data.mint.to_bytes().to_vec()),
                     owner: Set(token_data.owner.to_bytes().to_vec()),
                     amount: Set(token_data.amount as i64),
@@ -245,9 +245,9 @@ pub async fn persist_token_accounts(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    let query = token_owners::Entity::insert_many(token_models)
+    let query = token_accounts::Entity::insert_many(token_models)
         .on_conflict(
-            OnConflict::column(token_owners::Column::Hash)
+            OnConflict::column(token_accounts::Column::Hash)
                 .do_nothing()
                 .to_owned(),
         )

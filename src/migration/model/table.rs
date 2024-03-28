@@ -14,13 +14,12 @@ pub enum StateTrees {
 }
 
 #[derive(Copy, Clone, Iden)]
-pub enum UTXOs {
-    #[iden = "utxos"]
+pub enum Accounts {
     Table,
     Id,
     Hash,
     Data,
-    Account,
+    Address,
     Owner,
     Lamports,
     Tree,
@@ -31,11 +30,11 @@ pub enum UTXOs {
 }
 
 #[derive(Copy, Clone, Iden)]
-pub enum TokenOwners {
+pub enum TokenAccounts {
     Table,
     Id,
     Hash,
-    Account,
+    Address,
     Owner,
     Mint,
     Amount,
@@ -44,8 +43,8 @@ pub enum TokenOwners {
     IsNative,
     DelegatedAmount,
     CloseAuthority,
-    // Duplicate to Spent in UTXOs. Added to simplify the handling of concurrent insertions and deletions
-    // of token utxos.
+    // Duplicate to Spent in accounts. Added to simplify the handling of concurrent insertions and deletions
+    // of token accounts.
     Spent,
     SlotUpdated,
     CreatedAt,

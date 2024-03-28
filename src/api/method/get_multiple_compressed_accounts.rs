@@ -1,4 +1,4 @@
-use crate::dao::generated::utxos;
+use crate::dao::generated::accounts;
 use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use super::{
 use crate::dao::typedefs::hash::Hash;
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
-use super::utils::{parse_utxo_model, Utxo};
+use super::utils::{parse_account_model, Account};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -21,16 +21,16 @@ pub struct GetMultipleCompressedAccountsRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct UtxoList {
-    pub items: Vec<Utxo>,
+pub struct AccountList {
+    pub items: Vec<Account>,
 }
 
-pub type GetMultipleCompressedAccountsResponse = ResponseWithContext<UtxoList>;
+pub type GetMultipleCompressedAccountsResponse = ResponseWithContext<AccountList>;
 
 async fn fetch_accounts_from_hashes(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
-) -> Result<Vec<utxos::Model>, PhotonApiError> {
+) -> Result<Vec<accounts::Model>, PhotonApiError> {
     if hashes.len() > PAGE_LIMIT as usize {
         PhotonApiError::ValidationError(format!(
             "Too many hashes requested {}. Maximum allowed: {}",
@@ -40,11 +40,11 @@ async fn fetch_accounts_from_hashes(
     }
     let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
 
-    let accounts = utxos::Entity::find()
+    let accounts = accounts::Entity::find()
         .filter(
-            utxos::Column::Hash
+            accounts::Column::Hash
                 .is_in(raw_hashes.clone())
-                .and(utxos::Column::Spent.eq(false)),
+                .and(accounts::Column::Spent.eq(false)),
         )
         .all(conn)
         .await
@@ -81,7 +81,7 @@ async fn fetch_accounts_from_hashes(
 async fn fetch_account_from_addresses(
     conn: &DatabaseConnection,
     addresses: Vec<SerializablePubkey>,
-) -> Result<Vec<utxos::Model>, PhotonApiError> {
+) -> Result<Vec<accounts::Model>, PhotonApiError> {
     if addresses.len() > PAGE_LIMIT as usize {
         PhotonApiError::ValidationError(format!(
             "Too many addresses requested {}. Maximum allowed: {}",
@@ -91,11 +91,11 @@ async fn fetch_account_from_addresses(
     }
     let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
 
-    let accounts = utxos::Entity::find()
+    let accounts = accounts::Entity::find()
         .filter(
-            utxos::Column::Account
+            accounts::Column::Address
                 .is_in(raw_addresses.clone())
-                .and(utxos::Column::Spent.eq(false)),
+                .and(accounts::Column::Spent.eq(false)),
         )
         .all(conn)
         .await
@@ -103,7 +103,7 @@ async fn fetch_account_from_addresses(
 
     let found_addresses: Vec<Vec<u8>> = accounts
         .iter()
-        .filter_map(|account| account.account.clone())
+        .filter_map(|account| account.address.clone())
         .collect();
 
     let not_found_addresses: Vec<Vec<u8>> = raw_addresses
@@ -143,11 +143,11 @@ pub async fn get_multiple_compressed_accounts(
 
     Ok(GetMultipleCompressedAccountsResponse {
         context,
-        value: UtxoList {
+        value: AccountList {
             items: accounts
                 .into_iter()
-                .map(parse_utxo_model)
-                .collect::<Result<Vec<Utxo>, PhotonApiError>>()?,
+                .map(parse_account_model)
+                .collect::<Result<Vec<Account>, PhotonApiError>>()?,
         },
     })
 }

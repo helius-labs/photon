@@ -28,8 +28,8 @@ use super::{
         },
         get_slot::get_slot,
         utils::{
-            CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
-            TokenAccountListResponse, UtxoResponse,
+            AccountResponse, CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
+            TokenAccountListResponse,
         },
     },
 };
@@ -93,7 +93,7 @@ impl PhotonApi {
     pub async fn get_compressed_account(
         &self,
         request: CompressedAccountRequest,
-    ) -> Result<UtxoResponse, PhotonApiError> {
+    ) -> Result<AccountResponse, PhotonApiError> {
         get_compressed_account(&self.db_conn, request).await
     }
 

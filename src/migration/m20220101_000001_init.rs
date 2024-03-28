@@ -3,7 +3,7 @@ use sea_orm_migration::{
     sea_orm::{ConnectionTrait, DatabaseBackend, Statement},
 };
 
-use crate::migration::model::table::{StateTrees, TokenOwners, UTXOs};
+use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
 
 use super::model::table::Blocks;
 
@@ -65,7 +65,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // We only need to index the hash values for leaf nodes (UTXO identifier).
+        // We only need to index the hash values for leaf nodes (Account identifier).
         manager
             .get_connection()
             .execute(Statement::from_string(
@@ -78,26 +78,30 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(UTXOs::Table)
+                    .table(Accounts::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(UTXOs::Id)
+                        ColumnDef::new(Accounts::Id)
                             .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(UTXOs::Hash).binary().not_null())
-                    .col(ColumnDef::new(UTXOs::Data).binary().not_null())
-                    .col(ColumnDef::new(UTXOs::Account).binary())
-                    .col(ColumnDef::new(UTXOs::Owner).binary().not_null())
-                    .col(ColumnDef::new(UTXOs::Lamports).big_integer().not_null())
-                    .col(ColumnDef::new(UTXOs::Tree).binary())
-                    .col(ColumnDef::new(UTXOs::Seq).big_integer())
-                    .col(ColumnDef::new(UTXOs::SlotUpdated).big_integer().not_null())
-                    .col(ColumnDef::new(UTXOs::Spent).boolean().not_null())
+                    .col(ColumnDef::new(Accounts::Hash).binary().not_null())
+                    .col(ColumnDef::new(Accounts::Data).binary().not_null())
+                    .col(ColumnDef::new(Accounts::Address).binary())
+                    .col(ColumnDef::new(Accounts::Owner).binary().not_null())
+                    .col(ColumnDef::new(Accounts::Lamports).big_integer().not_null())
+                    .col(ColumnDef::new(Accounts::Tree).binary())
+                    .col(ColumnDef::new(Accounts::Seq).big_integer())
                     .col(
-                        ColumnDef::new(UTXOs::CreatedAt)
+                        ColumnDef::new(Accounts::SlotUpdated)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(Accounts::Spent).boolean().not_null())
+                    .col(
+                        ColumnDef::new(Accounts::CreatedAt)
                             .timestamp()
                             .default(Expr::current_timestamp()),
                     )
@@ -108,9 +112,9 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("utxos_hash_idx")
-                    .table(UTXOs::Table)
-                    .col(UTXOs::Hash)
+                    .name("accounts_hash_idx")
+                    .table(Accounts::Table)
+                    .col(Accounts::Hash)
                     .unique()
                     .to_owned(),
             )
@@ -119,9 +123,9 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("utxos_account_idx")
-                    .table(UTXOs::Table)
-                    .col(UTXOs::Account)
+                    .name("accounts_address_idx")
+                    .table(Accounts::Table)
+                    .col(Accounts::Address)
                     .unique()
                     .to_owned(),
             )
@@ -130,11 +134,11 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("utxos_owner_hash_idx")
-                    .table(UTXOs::Table)
-                    .col(UTXOs::Spent)
-                    .col(UTXOs::Owner)
-                    .col(UTXOs::Hash) // For pagination
+                    .name("accounts_owner_hash_idx")
+                    .table(Accounts::Table)
+                    .col(Accounts::Spent)
+                    .col(Accounts::Owner)
+                    .col(Accounts::Hash) // For pagination
                     .unique()
                     .to_owned(),
             )
@@ -143,47 +147,51 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(TokenOwners::Table)
+                    .table(TokenAccounts::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(TokenOwners::Id)
+                        ColumnDef::new(TokenAccounts::Id)
                             .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(TokenOwners::Hash).binary().not_null())
-                    .col(ColumnDef::new(TokenOwners::Account).binary())
-                    .col(ColumnDef::new(TokenOwners::Owner).binary().not_null())
-                    .col(ColumnDef::new(TokenOwners::Mint).binary().not_null())
-                    // TODO: Change this to a u64 here to avoid balance overflow.
-                    .col(ColumnDef::new(TokenOwners::Amount).big_integer().not_null())
-                    .col(ColumnDef::new(TokenOwners::Delegate).binary())
-                    .col(ColumnDef::new(TokenOwners::Frozen).boolean().not_null())
-                    // TODO: Change this to a u64 here to avoid balance overflow.
-                    .col(ColumnDef::new(TokenOwners::IsNative).big_integer())
+                    .col(ColumnDef::new(TokenAccounts::Hash).binary().not_null())
+                    .col(ColumnDef::new(TokenAccounts::Address).binary())
+                    .col(ColumnDef::new(TokenAccounts::Owner).binary().not_null())
+                    .col(ColumnDef::new(TokenAccounts::Mint).binary().not_null())
                     // TODO: Change this to a u64 here to avoid balance overflow.
                     .col(
-                        ColumnDef::new(TokenOwners::DelegatedAmount)
+                        ColumnDef::new(TokenAccounts::Amount)
                             .big_integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(TokenOwners::CloseAuthority).binary())
-                    .col(ColumnDef::new(TokenOwners::Spent).boolean().not_null())
+                    .col(ColumnDef::new(TokenAccounts::Delegate).binary())
+                    .col(ColumnDef::new(TokenAccounts::Frozen).boolean().not_null())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(ColumnDef::new(TokenAccounts::IsNative).big_integer())
+                    // TODO: Change this to a u64 here to avoid balance overflow.
+                    .col(
+                        ColumnDef::new(TokenAccounts::DelegatedAmount)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(TokenAccounts::CloseAuthority).binary())
+                    .col(ColumnDef::new(TokenAccounts::Spent).boolean().not_null())
                     .foreign_key(
                         ForeignKey::create()
-                            .name("token_owners_utxo_fk")
-                            .from(TokenOwners::Table, TokenOwners::Hash)
-                            .to(UTXOs::Table, UTXOs::Hash)
+                            .name("token_accounts_hash_fk")
+                            .from(TokenAccounts::Table, TokenAccounts::Hash)
+                            .to(Accounts::Table, Accounts::Hash)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .col(
-                        ColumnDef::new(TokenOwners::SlotUpdated)
+                        ColumnDef::new(TokenAccounts::SlotUpdated)
                             .big_integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TokenOwners::CreatedAt)
+                        ColumnDef::new(TokenAccounts::CreatedAt)
                             .timestamp()
                             .default(Expr::current_timestamp()),
                     )
@@ -194,9 +202,9 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_hash_idx")
-                    .table(TokenOwners::Table)
-                    .col(TokenOwners::Hash)
+                    .name("token_accounts_hash_idx")
+                    .table(TokenAccounts::Table)
+                    .col(TokenAccounts::Hash)
                     .unique()
                     .to_owned(),
             )
@@ -205,9 +213,9 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_account_idx")
-                    .table(TokenOwners::Table)
-                    .col(TokenOwners::Account)
+                    .name("token_accounts_address_idx")
+                    .table(TokenAccounts::Table)
+                    .col(TokenAccounts::Address)
                     .to_owned(),
             )
             .await?;
@@ -215,12 +223,12 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_owner_mint_hash_idx")
-                    .table(TokenOwners::Table)
-                    .col(TokenOwners::Spent)
-                    .col(TokenOwners::Owner)
-                    .col(TokenOwners::Mint)
-                    .col(TokenOwners::Hash) // For pagination
+                    .name("token_accounts_owner_mint_hash_idx")
+                    .table(TokenAccounts::Table)
+                    .col(TokenAccounts::Spent)
+                    .col(TokenAccounts::Owner)
+                    .col(TokenAccounts::Mint)
+                    .col(TokenAccounts::Hash) // For pagination
                     .unique()
                     .to_owned(),
             )
@@ -229,12 +237,12 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_owners_delegate_mint_hash_idx")
-                    .table(TokenOwners::Table)
-                    .col(TokenOwners::Spent)
-                    .col(TokenOwners::Delegate)
-                    .col(TokenOwners::Mint)
-                    .col(TokenOwners::Hash) // For pagination
+                    .name("token_accounts_delegate_mint_hash_idx")
+                    .table(TokenAccounts::Table)
+                    .col(TokenAccounts::Spent)
+                    .col(TokenAccounts::Delegate)
+                    .col(TokenAccounts::Mint)
+                    .col(TokenAccounts::Hash) // For pagination
                     .unique()
                     .to_owned(),
             )
@@ -282,11 +290,11 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
-            .drop_table(Table::drop().table(UTXOs::Table).to_owned())
+            .drop_table(Table::drop().table(Accounts::Table).to_owned())
             .await?;
 
         manager
-            .drop_table(Table::drop().table(TokenOwners::Table).to_owned())
+            .drop_table(Table::drop().table(TokenAccounts::Table).to_owned())
             .await?;
 
         manager

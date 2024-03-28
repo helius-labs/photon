@@ -9,7 +9,7 @@ use borsh::to_vec;
 use photon::{
     api::{
         api::PhotonApi,
-        method::utils::{TokenAccountList, Utxo},
+        method::utils::{Account, TokenAccountList},
     },
     dao::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
@@ -357,7 +357,7 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
 }
 
 pub fn assert_account_response_list_matches_input(
-    account_response: &mut Vec<Utxo>,
+    account_response: &mut Vec<Account>,
     input_accounts: &mut Vec<EnrichedAccount>,
 ) {
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));

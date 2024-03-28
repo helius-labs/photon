@@ -1,4 +1,4 @@
-use crate::dao::generated::utxos;
+use crate::dao::generated::accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 
 use super::super::error::PhotonApiError;
@@ -14,10 +14,10 @@ pub async fn get_compressed_balance(
     let context = Context::extract(conn).await?;
     let id = request.parse_id()?;
 
-    let balance = utxos::Entity::find()
+    let balance = accounts::Entity::find()
         .select_only()
-        .column(utxos::Column::Lamports)
-        .filter(id.filter(AccountDataTable::Utxos))
+        .column(accounts::Column::Lamports)
+        .filter(id.filter(AccountDataTable::Accounts))
         .into_model::<LamportModel>()
         .one(conn)
         .await?

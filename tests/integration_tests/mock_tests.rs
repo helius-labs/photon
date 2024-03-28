@@ -8,7 +8,7 @@ use photon::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
     GetCompressedTokenAccountsByAuthorityOptions,
 };
-use photon::dao::generated::utxos;
+use photon::dao::generated::accounts;
 use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon::ingester::index_block;
 use photon::ingester::parser::indexer_events::TokenData;
@@ -373,9 +373,9 @@ async fn test_persist_token_data(
     for token_data in all_token_data.iter() {
         let slot = 11;
         let hash = Hash::new_unique();
-        let model = utxos::ActiveModel {
+        let model = accounts::ActiveModel {
             hash: Set(hash.clone().into()),
-            account: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
+            address: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
             spent: Set(false),
             data: Set(to_vec(&token_data).unwrap()),
             owner: Set(token_data.owner.to_bytes().to_vec()),
@@ -383,12 +383,12 @@ async fn test_persist_token_data(
             slot_updated: Set(slot),
             ..Default::default()
         };
-        utxos::Entity::insert(model).exec(&txn).await.unwrap();
+        accounts::Entity::insert(model).exec(&txn).await.unwrap();
         token_datas.push(EnrichedTokenAccount {
             hash,
             token_data: *token_data,
             slot_updated: slot as u64,
-            account: None,
+            address: None,
         });
     }
 
