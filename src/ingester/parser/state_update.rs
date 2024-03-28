@@ -43,7 +43,7 @@ impl StateUpdate {
 
     pub fn prune_redundant_updates(&mut self) {
         let in_account_set: HashSet<[u8; 32]> = self.in_accounts.iter().map(|a| a.hash).collect();
-        // NOTE: For snapshot verification, we might need to persist UTXO data until UTXOs are
+        // NOTE: For snapshot verification, we might need to persist accounts data until accounts are
         //       removed from the tree through the nullifier crank.
         self.out_accounts
             .retain(|a| !in_account_set.contains(&a.hash));

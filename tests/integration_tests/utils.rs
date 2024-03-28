@@ -363,14 +363,14 @@ pub fn assert_account_response_list_matches_input(
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
     input_accounts.sort_by(|a, b| a.hash.cmp(&b.hash));
 
-    for (res, utxo) in account_response.iter().zip(input_accounts.iter()) {
+    for (res, account) in account_response.iter().zip(input_accounts.iter()) {
         let EnrichedAccount {
             account,
             tree,
             seq,
             slot,
             hash,
-        } = utxo.clone();
+        } = account.clone();
 
         #[allow(deprecated)]
         let input_data = base64::encode(&account.data.clone().unwrap().data.to_vec());

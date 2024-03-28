@@ -24,13 +24,13 @@ pub struct GetCompressedProgramAccountsRequest(pub SerializablePubkey, pub Optio
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PaginatedUtxoList {
+pub struct PaginatedAccountList {
     pub items: Vec<Account>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Hash>,
 }
 
-pub type GetCompressedProgramAccountsResponse = ResponseWithContext<PaginatedUtxoList>;
+pub type GetCompressedProgramAccountsResponse = ResponseWithContext<PaginatedAccountList>;
 
 pub async fn get_compressed_program_accounts(
     conn: &DatabaseConnection,
@@ -71,6 +71,6 @@ pub async fn get_compressed_program_accounts(
 
     Ok(GetCompressedProgramAccountsResponse {
         context,
-        value: PaginatedUtxoList { items, cursor },
+        value: PaginatedAccountList { items, cursor },
     })
 }

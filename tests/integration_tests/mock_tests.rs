@@ -31,7 +31,7 @@ struct Person {
 
 // TODO:
 // - Add tests for duplicate inserts.
-// - Add tests for UTXO input spends without existing UTXO.
+// - Add tests for accounts input spends without existing accounts.
 // - Add test for multi-input/output transitions.
 
 #[named]
@@ -114,7 +114,7 @@ async fn test_persist_state_update_basic(
 
     assert_eq!(res, account.account.lamports as i64);
 
-    // Assert that we get an error if we input a non-existent UTXO.
+    // Assert that we get an error if we input a non-existent account.
     // TODO: Test spent accounts
     let err = setup
         .api

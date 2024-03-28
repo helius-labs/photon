@@ -123,7 +123,7 @@ fn parse_public_transaction_event(
     if output_compressed_accounts.len() != path_updates.len() {
         return Err(IngesterError::MalformedEvent {
             msg: format!(
-                "Number of path updates did not match the number of output UTXOs (txn: {})",
+                "Number of path updates did not match the number of output accounts (txn: {})",
                 tx,
             ),
         });
