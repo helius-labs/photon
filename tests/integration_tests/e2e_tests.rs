@@ -1,15 +1,15 @@
 use function_name::named;
 use itertools::Itertools;
-use photon::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
-use photon::ingester::index_block;
+use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use photon_indexer::ingester::index_block;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
-use photon::api::method::utils::GetCompressedTokenAccountsByAuthority;
-use photon::dao::generated::blocks;
-use photon::dao::typedefs::hash::Hash;
-use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
+use photon_indexer::api::method::utils::GetCompressedTokenAccountsByAuthority;
+use photon_indexer::dao::generated::blocks;
+use photon_indexer::dao::typedefs::hash::Hash;
+use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;

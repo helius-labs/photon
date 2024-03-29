@@ -3,12 +3,12 @@ use std::{fmt, thread::sleep, time::Duration};
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
-use photon::api::{self, api::PhotonApi};
-use photon::ingester::fetchers::poller::{
+use photon_indexer::api::{self, api::PhotonApi};
+use photon_indexer::ingester::fetchers::poller::{
     fetch_current_slot_with_infinite_retry, Options, TransactionPoller,
 };
-use photon::ingester::index_block_batch_with_infinite_retries;
-use photon::migration::{
+use photon_indexer::ingester::index_block_batch_with_infinite_retries;
+use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
