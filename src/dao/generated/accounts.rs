@@ -3,13 +3,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "utxos")]
+#[sea_orm(table_name = "accounts")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub hash: Vec<u8>,
     pub data: Vec<u8>,
-    pub account: Option<Vec<u8>>,
+    pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub lamports: i64,
     pub tree: Option<Vec<u8>>,
@@ -21,13 +21,13 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::token_owners::Entity")]
-    TokenOwners,
+    #[sea_orm(has_many = "super::token_accounts::Entity")]
+    TokenAccounts,
 }
 
-impl Related<super::token_owners::Entity> for Entity {
+impl Related<super::token_accounts::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::TokenOwners.def()
+        Relation::TokenAccounts.def()
     }
 }
 

@@ -1,0 +1,24 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: accounts
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "hash": "3WCurN17webNLBJqAgCpjPjJbgWvAPnzXzxU2vEjS4YV",
+        "address": null,
+        "owner": "FjLHdH44f8uN3kxrnxEuuLyLqeR7mp6jZ4d8NT3bk5os",
+        "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
+        "amount": 700,
+        "delegate": null,
+        "isNative": false,
+        "closeAuthority": null,
+        "frozen": false
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-use crate::dao::generated::{blocks, state_trees, token_owners, utxos};
+use crate::dao::generated::{accounts, blocks, state_trees, token_accounts};
 
 use schemars::JsonSchema;
 use sea_orm::sea_query::SimpleExpr;
@@ -85,11 +85,11 @@ impl Context {
     }
 }
 
-pub type UtxoResponse = ResponseWithContext<Utxo>;
+pub type AccountResponse = ResponseWithContext<Account>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Utxo {
+pub struct Account {
     pub hash: Hash,
     pub address: Option<SerializablePubkey>,
     pub data: String,
@@ -100,17 +100,20 @@ pub struct Utxo {
     pub slot_updated: u64,
 }
 
-pub fn parse_utxo_model(utxo: utxos::Model) -> Result<Utxo, PhotonApiError> {
-    Ok(Utxo {
-        hash: utxo.hash.try_into()?,
-        address: utxo.account.map(SerializablePubkey::try_from).transpose()?,
+pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
+    Ok(Account {
+        hash: account.hash.try_into()?,
+        address: account
+            .address
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
         #[allow(deprecated)]
-        data: base64::encode(utxo.data),
-        owner: utxo.owner.try_into()?,
-        tree: utxo.tree.map(|tree| tree.try_into()).transpose()?,
-        lamports: utxo.lamports as u64,
-        slot_updated: utxo.slot_updated as u64,
-        seq: utxo.seq.map(|seq| seq as u64),
+        data: base64::encode(account.data),
+        owner: account.owner.try_into()?,
+        tree: account.tree.map(|tree| tree.try_into()).transpose()?,
+        lamports: account.lamports as u64,
+        slot_updated: account.slot_updated as u64,
+        seq: account.seq.map(|seq| seq as u64),
     })
 }
 
@@ -118,9 +121,9 @@ pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct TokenUxto {
+pub struct TokenAcccount {
     pub hash: Hash,
-    pub account: Option<SerializablePubkey>,
+    pub address: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
     pub amount: u64,
@@ -133,7 +136,7 @@ pub struct TokenUxto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
-    pub items: Vec<TokenUxto>,
+    pub items: Vec<TokenAcccount>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
@@ -165,17 +168,17 @@ pub async fn fetch_token_accounts(
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let mut filter = match owner_or_delegate {
-        Authority::Owner(owner) => token_owners::Column::Owner.eq::<Vec<u8>>(owner.into()),
+        Authority::Owner(owner) => token_accounts::Column::Owner.eq::<Vec<u8>>(owner.into()),
         Authority::Delegate(delegate) => {
-            token_owners::Column::Delegate.eq::<Vec<u8>>(delegate.into())
+            token_accounts::Column::Delegate.eq::<Vec<u8>>(delegate.into())
         }
     }
-    .and(token_owners::Column::Spent.eq(false));
+    .and(token_accounts::Column::Spent.eq(false));
 
     let mut limit = PAGE_LIMIT;
     if let Some(options) = options {
         if let Some(mint) = options.mint {
-            filter = filter.and(token_owners::Column::Mint.eq::<Vec<u8>>(mint.into()));
+            filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
         }
         if let Some(cursor) = options.cursor {
             let bytes = bs58::decode(cursor.clone()).into_vec().map_err(|_| {
@@ -191,24 +194,24 @@ pub async fn fetch_token_accounts(
             }
             let (mint, hash) = bytes.split_at(32);
             filter = filter
-                .and(token_owners::Column::Mint.gte::<Vec<u8>>(mint.into()))
-                .and(token_owners::Column::Hash.gt::<Vec<u8>>(hash.into()));
+                .and(token_accounts::Column::Mint.gte::<Vec<u8>>(mint.into()))
+                .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into()));
         }
         if let Some(l) = options.limit {
             limit = l.value();
         }
     }
 
-    let result = token_owners::Entity::find()
+    let result = token_accounts::Entity::find()
         .filter(filter)
-        .order_by_asc(token_owners::Column::Mint)
-        .order_by_asc(token_owners::Column::Hash)
+        .order_by_asc(token_accounts::Column::Mint)
+        .order_by_asc(token_accounts::Column::Hash)
         .limit(limit)
         .all(conn)
         .await?;
 
-    let items: Result<Vec<TokenUxto>, PhotonApiError> =
-        result.into_iter().map(parse_token_owners_model).collect();
+    let items: Result<Vec<TokenAcccount>, PhotonApiError> =
+        result.into_iter().map(parse_token_accounts_model).collect();
     let items = items?;
     let mut cursor = items.last().map(|item| {
         bs58::encode::<Vec<u8>>({
@@ -230,28 +233,28 @@ pub async fn fetch_token_accounts(
     })
 }
 
-pub fn parse_token_owners_model(
-    token_owner: token_owners::Model,
-) -> Result<TokenUxto, PhotonApiError> {
-    Ok(TokenUxto {
-        hash: token_owner.hash.try_into()?,
-        account: token_owner
-            .account
+pub fn parse_token_accounts_model(
+    token_account: token_accounts::Model,
+) -> Result<TokenAcccount, PhotonApiError> {
+    Ok(TokenAcccount {
+        hash: token_account.hash.try_into()?,
+        address: token_account
+            .address
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        owner: token_owner.owner.try_into()?,
-        mint: token_owner.mint.try_into()?,
-        amount: token_owner.amount as u64,
-        delegate: token_owner
+        owner: token_account.owner.try_into()?,
+        mint: token_account.mint.try_into()?,
+        amount: token_account.amount as u64,
+        delegate: token_account
             .delegate
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        is_native: token_owner.is_native.is_some(),
-        close_authority: token_owner
+        is_native: token_account.is_native.is_some(),
+        close_authority: token_account
             .close_authority
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        frozen: token_owner.frozen,
+        frozen: token_account.frozen,
     })
 }
 
@@ -268,27 +271,27 @@ pub enum AccountIdentifier {
 }
 
 pub enum AccountDataTable {
-    Utxos,
-    TokenOwners,
+    Accounts,
+    TokenAccounts,
 }
 
 impl AccountIdentifier {
     pub fn filter(&self, table: AccountDataTable) -> SimpleExpr {
         match table {
-            AccountDataTable::Utxos => match &self {
+            AccountDataTable::Accounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    utxos::Column::Account.eq::<Vec<u8>>(address.clone().into())
+                    accounts::Column::Address.eq::<Vec<u8>>(address.clone().into())
                 }
-                AccountIdentifier::Hash(hash) => utxos::Column::Hash.eq(hash.to_vec()),
+                AccountIdentifier::Hash(hash) => accounts::Column::Hash.eq(hash.to_vec()),
             }
-            .and(utxos::Column::Spent.eq(false)),
-            AccountDataTable::TokenOwners => match &self {
+            .and(accounts::Column::Spent.eq(false)),
+            AccountDataTable::TokenAccounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    token_owners::Column::Owner.eq::<Vec<u8>>(address.clone().into())
+                    token_accounts::Column::Owner.eq::<Vec<u8>>(address.clone().into())
                 }
-                AccountIdentifier::Hash(hash) => token_owners::Column::Hash.eq(hash.to_vec()),
+                AccountIdentifier::Hash(hash) => token_accounts::Column::Hash.eq(hash.to_vec()),
             }
-            .and(token_owners::Column::Spent.eq(false)),
+            .and(token_accounts::Column::Spent.eq(false)),
         }
     }
 

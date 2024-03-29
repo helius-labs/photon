@@ -3,12 +3,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "token_owners")]
+#[sea_orm(table_name = "token_accounts")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub hash: Vec<u8>,
-    pub account: Option<Vec<u8>>,
+    pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub amount: i64,
@@ -25,18 +25,18 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::utxos::Entity",
+        belongs_to = "super::accounts::Entity",
         from = "Column::Hash",
-        to = "super::utxos::Column::Hash",
+        to = "super::accounts::Column::Hash",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    Utxos,
+    Accounts,
 }
 
-impl Related<super::utxos::Entity> for Entity {
+impl Related<super::accounts::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Utxos.def()
+        Relation::Accounts.def()
     }
 }
 

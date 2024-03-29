@@ -21,7 +21,7 @@ const MAX_BASE58_LEN: usize = 44;
 /// This is similar to a Solana Public Key, which is also a 32-byte hash. However, while a Solana
 /// Public Key is specifically an ed25519 public key, a `Hash` is not necessarily an ed25519 hash.
 ///
-/// Also a `Hash` is used to represent other types of hashes, such as UTXO hashes and Merkle
+/// Also a `Hash` is used to represent other types of hashes, such as account hashes and Merkle
 /// tree node hashes. This is why `Hash` is a separate struct from the the Solana Public Key struct.
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Hash([u8; 32]);

@@ -1,4 +1,4 @@
-use crate::dao::generated::{state_trees, utxos};
+use crate::dao::generated::{accounts, state_trees};
 use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
@@ -33,8 +33,8 @@ pub async fn get_compressed_account_proof(
 
     let leaf_hash = match id {
         AccountIdentifier::Address(address) => Hash::try_from(
-            utxos::Entity::find()
-                .filter(utxos::Column::Account.eq::<Vec<u8>>(address.clone().into()))
+            accounts::Entity::find()
+                .filter(accounts::Column::Address.eq::<Vec<u8>>(address.clone().into()))
                 .one(conn)
                 .await?
                 .ok_or(PhotonApiError::RecordNotFound(format!(

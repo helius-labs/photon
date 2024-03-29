@@ -1,4 +1,4 @@
-use crate::dao::generated::token_owners;
+use crate::dao::generated::token_accounts;
 use schemars::JsonSchema;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
@@ -23,10 +23,10 @@ pub async fn get_compressed_token_account_balance(
 ) -> Result<GetCompressedTokenAccountBalanceResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let id = request.parse_id()?;
-    let balance = token_owners::Entity::find()
+    let balance = token_accounts::Entity::find()
         .select_only()
-        .column(token_owners::Column::Amount)
-        .filter(id.filter(AccountDataTable::TokenOwners))
+        .column(token_accounts::Column::Amount)
+        .filter(id.filter(AccountDataTable::TokenAccounts))
         .into_model::<BalanceModel>()
         .one(conn)
         .await?

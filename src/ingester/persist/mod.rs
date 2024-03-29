@@ -1,14 +1,19 @@
-use self::state_update::{EnrichedPathNode, EnrichedUtxo, StateUpdate, UtxoWithSlot};
-
-use super::{error, parser::bundle::EventBundle};
-use crate::dao::{
-    generated::{state_trees, token_owners, utxos},
-    typedefs::hash::Hash,
+use super::{
+    error,
+    parser::{
+        indexer_events::{AccountState, CompressedAccount, TokenData},
+        state_update::{EnrichedAccount, EnrichedPathNode},
+    },
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use crate::{
+    dao::{
+        generated::{accounts, state_trees, token_accounts},
+        typedefs::hash::Hash,
+    },
+    ingester::parser::state_update::StateUpdate,
+};
+use borsh::BorshDeserialize;
 use log::info;
-use psp_compressed_pda::utxo::Utxo;
-use psp_compressed_token::{AccountState, TokenTlvData};
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
@@ -16,46 +21,39 @@ use sea_orm::{
 use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
-pub mod state_update;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 // To avoid exceeding the 25k total parameter limit, we set the insert limit to 1k (as we have fewer
 // than 10 columns per table).
 pub const MAX_SQL_INSERTS: usize = 1000;
 
-pub async fn persist_bundle(
-    txn: &DatabaseTransaction,
-    event: EventBundle,
-) -> Result<(), IngesterError> {
-    persist_state_update(txn, event.try_into().unwrap()).await
-}
-
 pub async fn persist_state_update(
     txn: &DatabaseTransaction,
-    state_update: StateUpdate,
+    mut state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
+    state_update.prune_redundant_updates();
     let StateUpdate {
-        in_utxos,
-        out_utxos,
+        in_accounts,
+        out_accounts,
         path_nodes,
     } = state_update;
 
     info!(
-        "Persisting state update with {} in UTXOs, {} out UTXOs, and {} path nodes",
-        in_utxos.len(),
-        out_utxos.len(),
+        "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
+        in_accounts.len(),
+        out_accounts.len(),
         path_nodes.len()
     );
 
-    info!("Persisting spent utxos...");
-    for chunk in in_utxos.chunks(MAX_SQL_INSERTS) {
-        spend_input_utxos(txn, chunk).await?;
+    info!("Persisting spent accounts...");
+    for chunk in in_accounts.chunks(MAX_SQL_INSERTS) {
+        spend_input_accounts(txn, chunk).await?;
     }
-    info!("Persisting output utxos...");
-    for chunk in out_utxos.chunks(MAX_SQL_INSERTS) {
-        append_output_utxo(txn, chunk).await?;
+    info!("Persisting output accounts...");
+    for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
+        append_output_accounts(txn, chunk).await?;
     }
-    append_output_utxo(txn, &out_utxos).await?;
+
     info!("Persisting path nodes...");
     for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
         persist_path_nodes(txn, chunk).await?;
@@ -64,61 +62,47 @@ pub async fn persist_state_update(
     Ok(())
 }
 
-fn parse_token_data(utxo: &Utxo) -> Result<Option<TokenTlvData>, IngesterError> {
-    Ok(match &utxo.data {
-        Some(tlv) => {
-            let tlv_data_element = tlv.tlv_elements.first();
-            match tlv_data_element {
-                Some(data_element) if data_element.owner == COMPRESSED_TOKEN_PROGRAM => {
-                    let token_data = Some(
-                        TokenTlvData::try_from_slice(&data_element.data).map_err(|_| {
-                            IngesterError::ParserError("Failed to parse token data".to_string())
-                        })?,
-                    );
-                    if tlv.tlv_elements.len() > 1 {
-                        return Err(IngesterError::MalformedEvent {
-                            msg: format!(
-                                "More than one TLV element found in UTXO: {}",
-                                Hash::from(utxo.hash())
-                            ),
-                        });
-                    }
-                    token_data
-                }
-                _ => None,
-            }
+fn parse_token_data(account: &CompressedAccount) -> Result<Option<TokenData>, IngesterError> {
+    match account.data.clone() {
+        Some(data) if account.owner == COMPRESSED_TOKEN_PROGRAM => {
+            let token_data = TokenData::try_from_slice(&data.data).map_err(|_| {
+                IngesterError::ParserError("Failed to parse token data".to_string())
+            })?;
+            Ok(Some(token_data))
         }
-        None => None,
-    })
+        _ => Ok(None),
+    }
 }
 
-async fn spend_input_utxos(
+async fn spend_input_accounts(
     txn: &DatabaseTransaction,
-    in_utxos: &[UtxoWithSlot],
+    in_accounts: &[EnrichedAccount],
 ) -> Result<(), IngesterError> {
-    let in_utxo_models: Vec<utxos::ActiveModel> = in_utxos
+    let in_account_models: Vec<accounts::ActiveModel> = in_accounts
         .iter()
-        .map(|utxo| utxos::ActiveModel {
-            hash: Set(utxo.utxo.hash().to_vec()),
+        .map(|account| accounts::ActiveModel {
+            hash: Set(account.hash.to_vec()),
             spent: Set(true),
             data: Set(vec![]),
             owner: Set(vec![]),
             lamports: Set(0),
-            slot_updated: Set(utxo.slot),
+            slot_updated: Set(account.slot as i64),
+            tree: Set(Some(account.tree.to_bytes().to_vec())),
             ..Default::default()
         })
         .collect();
 
-    if !in_utxo_models.is_empty() {
-        utxos::Entity::insert_many(in_utxo_models)
+    if !in_account_models.is_empty() {
+        accounts::Entity::insert_many(in_account_models)
             .on_conflict(
-                OnConflict::column(utxos::Column::Hash)
+                OnConflict::column(accounts::Column::Hash)
                     .update_columns([
-                        utxos::Column::Hash,
-                        utxos::Column::Data,
-                        utxos::Column::Lamports,
-                        utxos::Column::Spent,
-                        utxos::Column::SlotUpdated,
+                        accounts::Column::Hash,
+                        accounts::Column::Data,
+                        accounts::Column::Lamports,
+                        accounts::Column::Spent,
+                        accounts::Column::SlotUpdated,
+                        accounts::Column::Tree,
                     ])
                     .to_owned(),
             )
@@ -126,27 +110,31 @@ async fn spend_input_utxos(
             .await?;
     }
     let mut token_models = Vec::new();
-    for in_utxo in in_utxos {
-        let token_data = parse_token_data(&in_utxo.utxo)?;
-        if token_data.is_some() {
-            token_models.push(token_owners::ActiveModel {
-                hash: Set(in_utxo.utxo.hash().to_vec()),
+    for in_accounts in in_accounts {
+        let token_data = parse_token_data(&in_accounts.account)?;
+        if let Some(token_data) = token_data {
+            token_models.push(token_accounts::ActiveModel {
+                hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
                 amount: Set(0),
-                slot_updated: Set(in_utxo.slot),
+                slot_updated: Set(in_accounts.slot as i64),
+                owner: Set(token_data.owner.to_bytes().to_vec()),
+                mint: Set(token_data.mint.to_bytes().to_vec()),
+                frozen: Set(token_data.state == AccountState::Frozen),
+                delegated_amount: Set(0),
                 ..Default::default()
             });
         }
     }
     if !token_models.is_empty() {
-        info!("Marking {} token UTXOs as spent...", token_models.len());
-        token_owners::Entity::insert_many(token_models)
+        info!("Marking {} token accounts as spent...", token_models.len());
+        token_accounts::Entity::insert_many(token_models)
             .on_conflict(
-                OnConflict::column(token_owners::Column::Hash)
+                OnConflict::column(token_accounts::Column::Hash)
                     .update_columns([
-                        token_owners::Column::Hash,
-                        token_owners::Column::Amount,
-                        token_owners::Column::Spent,
+                        token_accounts::Column::Hash,
+                        token_accounts::Column::Amount,
+                        token_accounts::Column::Spent,
                     ])
                     .to_owned(),
             )
@@ -157,61 +145,48 @@ async fn spend_input_utxos(
     Ok(())
 }
 
-// Note: I highly dislike this name but it's a consequence of the confusing compression abstractions.
-//       I will fix once we clean up the compression abstractions.
-pub struct EnrichedTokenData {
-    pub token_tlv_data: TokenTlvData,
+pub struct EnrichedTokenAccount {
+    pub token_data: TokenData,
     pub hash: Hash,
-    pub slot_updated: i64,
+    pub address: Option<[u8; 32]>,
+    pub slot_updated: u64,
 }
 
-async fn append_output_utxo(
+async fn append_output_accounts(
     txn: &DatabaseTransaction,
-    out_utxos: &[EnrichedUtxo],
+    out_accounts: &[EnrichedAccount],
 ) -> Result<(), IngesterError> {
-    let mut out_utxo_models = Vec::new();
-    let mut token_datas = Vec::new();
+    let mut account_models = Vec::new();
+    let mut token_accounts = Vec::new();
 
-    for out_utxo in out_utxos {
-        let EnrichedUtxo {
-            utxo: out_utxo,
+    for account in out_accounts {
+        let EnrichedAccount {
+            account,
             tree,
             seq,
-        } = out_utxo;
-
-        let UtxoWithSlot {
-            utxo: out_utxo,
+            hash,
             slot,
-        } = out_utxo;
+        } = account;
 
-        out_utxo_models.push(utxos::ActiveModel {
-            hash: Set(out_utxo.hash().to_vec()),
-            data: Set(out_utxo
-                .data
-                .clone()
-                .map(|tlv| {
-                    tlv.try_to_vec().map_err(|_| {
-                        IngesterError::ParserError(format!(
-                            "Failed to serialize TLV for UXTO: {}",
-                            Hash::from(out_utxo.hash())
-                        ))
-                    })
-                })
-                .unwrap_or(Ok(Vec::new()))?),
-            tree: Set(Some(tree.to_vec())),
-            owner: Set(out_utxo.owner.as_ref().to_vec()),
-            lamports: Set(out_utxo.lamports as i64),
+        account_models.push(accounts::ActiveModel {
+            hash: Set(hash.to_vec()),
+            address: Set(account.address.map(|x| x.to_vec())),
+            data: Set(account.data.clone().map(|d| d.data).unwrap_or(Vec::new())),
+            tree: Set(Some(tree.to_bytes().to_vec())),
+            owner: Set(account.owner.as_ref().to_vec()),
+            lamports: Set(account.lamports as i64),
             spent: Set(false),
-            slot_updated: Set(*slot),
-            seq: Set(Some(*seq)),
+            slot_updated: Set(*slot as i64),
+            seq: Set(seq.map(|s| s as i64)),
             ..Default::default()
         });
 
-        if let Some(token_data) = parse_token_data(out_utxo)? {
-            token_datas.push(EnrichedTokenData {
-                token_tlv_data: token_data,
-                hash: Hash::from(out_utxo.hash()),
+        if let Some(token_data) = parse_token_data(account)? {
+            token_accounts.push(EnrichedTokenAccount {
+                token_data: token_data,
+                hash: Hash::from(hash.clone()),
                 slot_updated: *slot,
+                address: account.address.clone(),
             });
         }
     }
@@ -222,50 +197,49 @@ async fn append_output_utxo(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    if !out_utxo_models.is_empty() {
-        let query = utxos::Entity::insert_many(out_utxo_models)
+    if !out_accounts.is_empty() {
+        let query = accounts::Entity::insert_many(account_models)
             .on_conflict(
-                OnConflict::column(utxos::Column::Hash)
+                OnConflict::column(accounts::Column::Hash)
                     .do_nothing()
                     .to_owned(),
             )
             .build(txn.get_database_backend());
         txn.execute(query).await?;
-        if !token_datas.is_empty() {
-            info!(
-                "Persisting token data for {} UTXOs for ...",
-                token_datas.len()
-            );
-            persist_token_datas(txn, token_datas).await?;
+        if !token_accounts.is_empty() {
+            info!("Persisting {} token accounts...", token_accounts.len());
+            persist_token_accounts(txn, token_accounts).await?;
         }
     }
 
     Ok(())
 }
 
-pub async fn persist_token_datas(
+pub async fn persist_token_accounts(
     txn: &DatabaseTransaction,
-    token_datas: Vec<EnrichedTokenData>,
+    token_accounts: Vec<EnrichedTokenAccount>,
 ) -> Result<(), IngesterError> {
-    let token_models = token_datas
+    let token_models = token_accounts
         .into_iter()
         .map(
-            |EnrichedTokenData {
-                 token_tlv_data,
+            |EnrichedTokenAccount {
+                 token_data,
                  hash,
                  slot_updated,
+                 address,
              }| {
-                token_owners::ActiveModel {
+                token_accounts::ActiveModel {
                     hash: Set(hash.into()),
-                    mint: Set(token_tlv_data.mint.to_bytes().to_vec()),
-                    owner: Set(token_tlv_data.owner.to_bytes().to_vec()),
-                    amount: Set(token_tlv_data.amount as i64),
-                    delegate: Set(token_tlv_data.delegate.map(|d| d.to_bytes().to_vec())),
-                    frozen: Set(token_tlv_data.state == AccountState::Frozen),
-                    delegated_amount: Set(token_tlv_data.delegated_amount as i64),
-                    is_native: Set(token_tlv_data.is_native.map(|n| n as i64)),
+                    address: Set(address.map(|x| x.to_vec())),
+                    mint: Set(token_data.mint.to_bytes().to_vec()),
+                    owner: Set(token_data.owner.to_bytes().to_vec()),
+                    amount: Set(token_data.amount as i64),
+                    delegate: Set(token_data.delegate.map(|d| d.to_bytes().to_vec())),
+                    frozen: Set(token_data.state == AccountState::Frozen),
+                    delegated_amount: Set(token_data.delegated_amount as i64),
+                    is_native: Set(token_data.is_native.map(|n| n as i64)),
                     spent: Set(false),
-                    slot_updated: Set(slot_updated),
+                    slot_updated: Set(slot_updated as i64),
                     ..Default::default()
                 }
             },
@@ -275,9 +249,9 @@ pub async fn persist_token_datas(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    let query = token_owners::Entity::insert_many(token_models)
+    let query = token_accounts::Entity::insert_many(token_models)
         .on_conflict(
-            OnConflict::column(token_owners::Column::Hash)
+            OnConflict::column(token_accounts::Column::Hash)
                 .do_nothing()
                 .to_owned(),
         )
@@ -309,8 +283,8 @@ async fn persist_path_nodes(
             } else {
                 None
             }),
-            seq: Set(node.seq),
-            slot_updated: Set(node.slot),
+            seq: Set(node.seq as i64),
+            slot_updated: Set(node.slot as i64),
             ..Default::default()
         })
         .collect::<Vec<_>>();

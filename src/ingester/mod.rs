@@ -14,8 +14,8 @@ use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
 
+use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
-use self::persist::state_update::StateUpdate;
 use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
@@ -26,21 +26,18 @@ pub mod parser;
 pub mod persist;
 pub mod typedefs;
 
-fn derive_block_state_update(block: &BlockInfo) -> StateUpdate {
+fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterError> {
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     for transaction in &block.transactions {
-        let event_bundles = parse_transaction(transaction, block.metadata.slot).unwrap();
-        for bundle in event_bundles {
-            state_updates.push(bundle.try_into().unwrap());
-        }
+        state_updates.push(parse_transaction(transaction, block.metadata.slot)?);
     }
-    StateUpdate::merge_updates(state_updates)
+    Ok(StateUpdate::merge_updates(state_updates))
 }
 
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    persist_state_update(&txn, derive_block_state_update(block)).await?;
+    persist_state_update(&txn, derive_block_state_update(block)?).await?;
     txn.commit().await?;
     Ok(())
 }
@@ -87,7 +84,7 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(block));
+        state_updates.push(derive_block_state_update(block)?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     tx.commit().await?;

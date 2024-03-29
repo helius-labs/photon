@@ -1,6 +1,6 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
-expression: utxos
+expression: accounts
 ---
 {
   "context": {
@@ -9,13 +9,13 @@ expression: utxos
   "value": {
     "items": [
       {
-        "hash": "2KcPHMVx7meTfejzUuuWhL2JvfVG1SRWB3ofYEHnEX1q",
+        "hash": "2iXDQnRbAJhEhFnz8ZkNjV3h45ATCQYKiyytCwpKg9z1",
         "address": null,
         "data": "",
-        "owner": "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y",
-        "lamports": 420000000,
+        "owner": "H9umPt6hyzWn5pXDRMzy3ZuJXDqVMTK4Dvps4qY5XeTX",
+        "lamports": 0,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-        "seq": 2,
+        "seq": 1,
         "slotUpdated": 0
       }
     ]

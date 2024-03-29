@@ -5,33 +5,31 @@ use std::{
     sync::Mutex,
 };
 
-use borsh::to_vec;
 use photon::{
     api::{
         api::PhotonApi,
-        method::utils::{TokenAccountList, Utxo},
+        method::utils::{Account, TokenAccountList},
     },
     dao::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
-        parser::bundle::EventBundle,
-        persist::{
-            persist_bundle,
-            state_update::{EnrichedUtxo, UtxoWithSlot},
+        parser::{
+            indexer_events::{AccountState, TokenData},
+            parse_transaction,
+            state_update::{EnrichedAccount, StateUpdate},
         },
+        persist::persist_state_update,
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     },
 };
 
 use once_cell::sync::Lazy;
 use photon::migration::{Migrator, MigratorTrait};
-use psp_compressed_token::{AccountState, TokenTlvData};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
-use photon::dao::typedefs::hash::Hash;
 use photon::ingester::typedefs::block_info::TransactionInfo;
 pub use rstest::rstest;
 use solana_client::{
@@ -232,17 +230,6 @@ pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<
     }
 }
 
-pub fn mock_str_to_hash(input: &str) -> Hash {
-    let mut array = [0u8; 32];
-    let bytes = input.as_bytes();
-
-    for (i, &byte) in bytes.iter().enumerate().take(32) {
-        array[i] = byte;
-    }
-
-    Hash::try_from(array.to_vec()).unwrap()
-}
-
 fn get_relative_project_path(path: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)
 }
@@ -322,20 +309,20 @@ pub fn trim_test_name(name: &str) -> String {
         .to_string()
 }
 
-fn order_tlvs(mut tlvs: Vec<TokenTlvData>) -> Vec<TokenTlvData> {
-    let mut without_duplicates = tlvs.clone();
+fn order_token_datas(mut token_datas: Vec<TokenData>) -> Vec<TokenData> {
+    let mut without_duplicates = token_datas.clone();
     without_duplicates.dedup_by(|a, b| a.mint == b.mint);
-    if without_duplicates.len() != tlvs.len() {
+    if without_duplicates.len() != token_datas.len() {
         panic!(
-            "Duplicate mint in tlvs: {:?}. Need hashes to further order token tlv data.",
-            tlvs
+            "Duplicate mint in token_datas: {:?}. Need hashes to further order token tlv data.",
+            token_datas
         );
     }
-    tlvs.sort_by(|a, b| a.mint.cmp(&b.mint));
-    tlvs
+    token_datas.sort_by(|a, b| a.mint.cmp(&b.mint));
+    token_datas
 }
 
-pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<TokenTlvData>) {
+pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<TokenData>) {
     if response.items.len() != tlvs.len() {
         panic!(
             "Mismatch in number of accounts. Expected: {}, Actual: {}",
@@ -345,7 +332,7 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     }
 
     let token_accounts = response.items;
-    for (account, tlv) in token_accounts.iter().zip(order_tlvs(tlvs).iter()) {
+    for (account, tlv) in token_accounts.iter().zip(order_token_datas(tlvs).iter()) {
         let account = account.clone();
         assert_eq!(account.mint, tlv.mint.into());
         assert_eq!(account.owner, tlv.owner.into());
@@ -357,35 +344,49 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     }
 }
 
-pub fn assert_utxo_response_list_matches_input(
-    utxo_response: &mut Vec<Utxo>,
-    input_utxos: &mut Vec<EnrichedUtxo>,
+pub fn assert_account_response_list_matches_input(
+    account_response: &mut Vec<Account>,
+    input_accounts: &mut Vec<EnrichedAccount>,
 ) {
-    utxo_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
-    input_utxos.sort_by(|a, b| a.utxo.utxo.hash().cmp(&b.utxo.utxo.hash()));
+    account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
+    input_accounts.sort_by(|a, b| a.hash.cmp(&b.hash));
 
-    for (res, utxo) in utxo_response.iter().zip(input_utxos.iter()) {
-        let EnrichedUtxo { utxo, tree, seq } = utxo;
-        let UtxoWithSlot { utxo, slot } = utxo;
+    for (res, account) in account_response.iter().zip(input_accounts.iter()) {
+        let EnrichedAccount {
+            account,
+            tree,
+            seq,
+            slot,
+            hash,
+        } = account.clone();
+
         #[allow(deprecated)]
-        let input_data = base64::encode(to_vec(&utxo.data.clone().unwrap()).unwrap());
-        assert_eq!(res.hash, utxo.hash().into());
-        assert_eq!(res.owner, SerializablePubkey::from(utxo.owner));
+        let input_data = base64::encode(&account.data.clone().unwrap().data.to_vec());
+        assert_eq!(res.hash, hash.into());
+        assert_eq!(res.owner, SerializablePubkey::from(account.owner));
         assert_eq!(res.tree, Some(SerializablePubkey::from(tree.clone())));
-        assert_eq!(res.seq, Some(*seq as u64));
-        assert_eq!(res.lamports, utxo.lamports);
-        assert_eq!(res.slot_updated, *slot as u64);
+        assert_eq!(res.seq, seq);
+        assert_eq!(res.lamports, account.lamports);
+        assert_eq!(res.slot_updated, slot);
         assert_eq!(res.data, input_data);
     }
 }
 
 /// Persist using a database connection instead of a transaction. Should only be use for tests.
-pub async fn persist_bundle_using_connection(
+pub async fn persist_state_update_using_connection(
     db: &DatabaseConnection,
-    bundle: EventBundle,
+    state_update: StateUpdate,
 ) -> Result<(), sea_orm::DbErr> {
     let txn = db.begin().await.unwrap();
-    persist_bundle(&txn, bundle).await.unwrap();
+    persist_state_update(&txn, state_update).await.unwrap();
     txn.commit().await.unwrap();
     Ok(())
+}
+
+pub async fn index_transaction(setup: &TestSetup, tx: &str) {
+    let tx = cached_fetch_transaction(setup, tx).await;
+    let state_update = parse_transaction(&tx, 0).unwrap();
+    persist_state_update_using_connection(&setup.db_conn, state_update)
+        .await
+        .unwrap();
 }

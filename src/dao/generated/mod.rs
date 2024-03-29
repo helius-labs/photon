@@ -2,7 +2,7 @@
 
 pub mod prelude;
 
+pub mod accounts;
 pub mod blocks;
 pub mod state_trees;
-pub mod token_owners;
-pub mod utxos;
+pub mod token_accounts;
