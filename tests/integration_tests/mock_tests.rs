@@ -1,22 +1,22 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
-use photon::api::error::PhotonApiError;
-use photon::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
-use photon::api::method::utils::{
+use photon_indexer::api::error::PhotonApiError;
+use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
+use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
     GetCompressedTokenAccountsByAuthorityOptions,
 };
-use photon::dao::generated::accounts;
-use photon::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
-use photon::ingester::index_block;
-use photon::ingester::parser::indexer_events::TokenData;
-use photon::ingester::parser::state_update::{EnrichedAccount, StateUpdate};
-use photon::ingester::persist::{
+use photon_indexer::dao::generated::accounts;
+use photon_indexer::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
+use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::parser::indexer_events::TokenData;
+use photon_indexer::ingester::parser::state_update::{EnrichedAccount, StateUpdate};
+use photon_indexer::ingester::persist::{
     persist_state_update, persist_token_accounts, EnrichedTokenAccount,
 };
-use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
+use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 
@@ -41,7 +41,9 @@ struct Person {
 async fn test_persist_state_update_basic(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon::ingester::parser::indexer_events::{CompressedAccount, CompressedAccountData};
+    use photon_indexer::ingester::parser::indexer_events::{
+        CompressedAccount, CompressedAccountData,
+    };
 
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
@@ -138,7 +140,7 @@ async fn test_persist_state_update_basic(
 async fn test_multiple_accounts(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon::{
+    use photon_indexer::{
         api::method::utils::Limit,
         ingester::parser::indexer_events::{CompressedAccount, CompressedAccountData},
     };
@@ -257,7 +259,7 @@ async fn test_multiple_accounts(
                 .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(
                     SerializablePubkey::from(owner),
                     Some(
-                        photon::api::method::get_compressed_accounts_by_owner::Options {
+                        photon_indexer::api::method::get_compressed_accounts_by_owner::Options {
                             cursor: cursor.clone(),
                             limit: Some(Limit::new(1).unwrap()),
                         },
@@ -307,7 +309,7 @@ async fn test_multiple_accounts(
 async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon::ingester::parser::indexer_events::AccountState;
+    use photon_indexer::ingester::parser::indexer_events::AccountState;
 
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
@@ -440,7 +442,7 @@ async fn test_persist_token_data(
                     SerializablePubkey::from(owner),
                     Some(GetCompressedTokenAccountsByAuthorityOptions {
                         cursor: cursor.clone(),
-                        limit: Some(photon::api::method::utils::Limit::new(1).unwrap()),
+                        limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                         mint: None,
                     }),
                 ))
@@ -494,7 +496,7 @@ async fn test_persist_token_data(
                     SerializablePubkey::from(delegate),
                     Some(GetCompressedTokenAccountsByAuthorityOptions {
                         cursor: cursor.clone(),
-                        limit: Some(photon::api::method::utils::Limit::new(1).unwrap()),
+                        limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                         mint: None,
                     }),
                 ))
@@ -522,7 +524,7 @@ async fn test_persist_token_data(
 async fn test_load_test(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon::ingester::parser::{
+    use photon_indexer::ingester::parser::{
         indexer_events::{CompressedAccount, CompressedAccountData, PathNode},
         state_update::EnrichedPathNode,
     };
