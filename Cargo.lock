@@ -3465,7 +3465,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "photon"
+name = "photon-indexer"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
