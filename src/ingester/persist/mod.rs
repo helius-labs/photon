@@ -112,12 +112,16 @@ async fn spend_input_accounts(
     let mut token_models = Vec::new();
     for in_accounts in in_accounts {
         let token_data = parse_token_data(&in_accounts.account)?;
-        if token_data.is_some() {
+        if let Some(token_data) = token_data {
             token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
                 amount: Set(0),
                 slot_updated: Set(in_accounts.slot as i64),
+                owner: Set(token_data.owner.to_bytes().to_vec()),
+                mint: Set(token_data.mint.to_bytes().to_vec()),
+                frozen: Set(token_data.state == AccountState::Frozen),
+                delegated_amount: Set(0),
                 ..Default::default()
             });
         }

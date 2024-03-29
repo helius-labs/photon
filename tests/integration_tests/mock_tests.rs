@@ -2,7 +2,7 @@ use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use photon::api::error::PhotonApiError;
-use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
+use photon::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
@@ -239,7 +239,7 @@ async fn test_multiple_accounts(
     for owner in [owner1, owner2] {
         let res = setup
             .api
-            .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(
                 SerializablePubkey::from(owner),
                 None,
             ))
@@ -254,10 +254,10 @@ async fn test_multiple_accounts(
         loop {
             let res = setup
                 .api
-                .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
+                .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(
                     SerializablePubkey::from(owner),
                     Some(
-                        photon::api::method::get_compressed_program_accounts::Options {
+                        photon::api::method::get_compressed_accounts_by_owner::Options {
                             cursor: cursor.clone(),
                             limit: Some(Limit::new(1).unwrap()),
                         },

@@ -5,7 +5,6 @@ use std::{
     sync::Mutex,
 };
 
-use borsh::to_vec;
 use photon::{
     api::{
         api::PhotonApi,
@@ -15,6 +14,7 @@ use photon::{
     ingester::{
         parser::{
             indexer_events::{AccountState, TokenData},
+            parse_transaction,
             state_update::{EnrichedAccount, StateUpdate},
         },
         persist::persist_state_update,
@@ -30,7 +30,6 @@ use sea_orm::{
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
-use photon::dao::typedefs::hash::Hash;
 use photon::ingester::typedefs::block_info::TransactionInfo;
 pub use rstest::rstest;
 use solana_client::{
@@ -231,17 +230,6 @@ pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<
     }
 }
 
-pub fn mock_str_to_hash(input: &str) -> Hash {
-    let mut array = [0u8; 32];
-    let bytes = input.as_bytes();
-
-    for (i, &byte) in bytes.iter().enumerate().take(32) {
-        array[i] = byte;
-    }
-
-    Hash::try_from(array.to_vec()).unwrap()
-}
-
 fn get_relative_project_path(path: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)
 }
@@ -393,4 +381,12 @@ pub async fn persist_state_update_using_connection(
     persist_state_update(&txn, state_update).await.unwrap();
     txn.commit().await.unwrap();
     Ok(())
+}
+
+pub async fn index_transaction(setup: &TestSetup, tx: &str) {
+    let tx = cached_fetch_transaction(setup, tx).await;
+    let state_update = parse_transaction(&tx, 0).unwrap();
+    persist_state_update_using_connection(&setup.db_conn, state_update)
+        .await
+        .unwrap();
 }

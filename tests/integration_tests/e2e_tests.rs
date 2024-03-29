@@ -1,266 +1,176 @@
-// use function_name::named;
-// use photon::api::method::get_compressed_program_accounts::GetCompressedProgramAccountsRequest;
-// use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
-// use photon::ingester::index_block;
-// use photon::ingester::parser::parse_transaction;
+use function_name::named;
+use itertools::Itertools;
+use photon::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use photon::ingester::index_block;
 
-// use crate::utils::*;
-// use insta::assert_json_snapshot;
-// use photon::api::method::utils::TokenUxto;
-// use photon::dao::generated::blocks;
-// use photon::dao::typedefs::hash::Hash;
-// use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-// use sea_orm::ColumnTrait;
-// use sea_orm::EntityTrait;
-// use sea_orm::QueryFilter;
-// use serial_test::serial;
-// use solana_sdk::pubkey::Pubkey;
+use crate::utils::*;
+use insta::assert_json_snapshot;
+use photon::api::method::utils::GetCompressedTokenAccountsByAuthority;
+use photon::dao::generated::blocks;
+use photon::dao::typedefs::hash::Hash;
+use photon::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
+use sea_orm::ColumnTrait;
+use sea_orm::EntityTrait;
+use sea_orm::QueryFilter;
+use serial_test::serial;
 
-// #[named]
-// #[rstest]
-// #[tokio::test]
-// #[serial]
-// async fn test_e2e_utxo_parsing(
-//     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-// ) {
-//     let name = trim_test_name(function_name!());
-//     let setup = setup_with_options(
-//         name,
-//         TestSetupOptions {
-//             network: Network::Localnet,
-//             db_backend,
-//         },
-//     )
-//     .await;
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_e2e_mint_and_transfer(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
 
-//     // HACK: We index a block so that API methods can fetch the current slot.
-//     index_block(
-//         &setup.db_conn,
-//         &BlockInfo {
-//             metadata: BlockMetadata {
-//                 slot: 0,
-//                 ..Default::default()
-//             },
-//             ..Default::default()
-//         },
-//     )
-//     .await
-//     .unwrap();
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let bob_pubkey =
+        SerializablePubkey::try_from("8EYKVyNCsDFHkxos7V4kr8bMouYU2nPJ1QXk2ET8FBc7").unwrap();
+    let charles_pubkey =
+        SerializablePubkey::try_from("FjLHdH44f8uN3kxrnxEuuLyLqeR7mp6jZ4d8NT3bk5os").unwrap();
 
-//     let tx = cached_fetch_transaction(
-//         &setup,
-//         "2y27eTCZ53DiFubUqBtstcrFrDCvr1sqCJFYDnjFVuZrrCGXvQPfVVosBv7mYF3LeJRy73EiGzqPX2vWHDg4iRCk",
-//     )
-//     .await;
+    let mint_tx =
+        "2QN6Z3AiG73zWw8KgLH9mL1emTHD1cKypzD62SBSDZzLH2UhuHsPsmzeDB9uXyR2qhxbNS6WFCF11TPFgTUux6H2";
+    let transfer_tx =
+        "46VP2T7zPwcFJzU3HDjCh5PWwxKP9LahgGbPQcsePXUwhFrFa2wHCEh4kDu4KCv18BtCw5RxauJt832DmbF4dUPt";
+    let txs = [mint_tx, transfer_tx];
 
-//     let events = parse_transaction(&tx, 0).unwrap();
-//     assert_eq!(events.len(), 1);
-//     for event in events {
-//         persist_bundle_using_connection(setup.db_conn.as_ref(), event)
-//             .await
-//             .unwrap();
-//     }
-//     let utxos = setup
-//         .api
-//         .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
-//             "8uxi3FheruZNcPfq4WKGQD19xB44QMfUGuFLij9JWeJ"
-//                 .try_into()
-//                 .unwrap(),
-//             None,
-//         ))
-//         .await
-//         .unwrap();
+    for tx_permutation in txs.iter().permutations(txs.len()) {
+        for tx in tx_permutation {
+            index_transaction(&setup, tx).await;
+        }
+        for (person, pubkey) in [
+            ("bob", bob_pubkey.clone()),
+            ("charles", charles_pubkey.clone()),
+        ] {
+            let accounts = setup
+                .api
+                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
+                    pubkey, None,
+                ))
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+        }
+    }
+}
 
-//     assert_eq!(utxos.value.items.len(), 1);
-// }
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_e2e_lamport_transfer(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
 
-// #[named]
-// #[rstest]
-// #[tokio::test]
-// #[serial]
-// async fn test_e2e_token_mint(
-//     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-// ) {
-//     use photon::api::method::utils::GetCompressedTokenAccountsByAuthority;
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let bob_pubkey =
+        SerializablePubkey::try_from("H9umPt6hyzWn5pXDRMzy3ZuJXDqVMTK4Dvps4qY5XeTX").unwrap();
 
-//     let name = trim_test_name(function_name!());
-//     let setup = setup_with_options(
-//         name,
-//         TestSetupOptions {
-//             network: Network::Localnet,
-//             db_backend,
-//         },
-//     )
-//     .await;
-//     // HACK: We index a block so that API methods can fetch the current slot.
-//     index_block(
-//         &setup.db_conn,
-//         &BlockInfo {
-//             metadata: BlockMetadata {
-//                 slot: 0,
-//                 ..Default::default()
-//             },
-//             ..Default::default()
-//         },
-//     )
-//     .await
-//     .unwrap();
+    let transfer_tx =
+        "4iXfgDbgAEQU8hcto67feZsNHxFGm3JKKo97zDgnT84VAUTTjiSCEyi1ZSMFdiybS5XmRHy3nW1qDtKkTPEBpsV9";
 
-//     let tx = cached_fetch_transaction(
-//         &setup,
-//         "kSEwLwJmJASMLycq52gKpNe7VtZdvuYaK9Vro2JZU4LHDt9GxgybWXtv7q9SRFvWVkCp7SEmWr51AdmKHD5N5wo",
-//     )
-//     .await;
+    index_transaction(&setup, transfer_tx).await;
+    let accounts = setup
+        .api
+        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(bob_pubkey, None))
+        .await
+        .unwrap();
+    assert_json_snapshot!(name.clone(), accounts);
+}
 
-//     let events = parse_transaction(&tx, 0).unwrap();
-//     assert_eq!(events.len(), 1);
-//     for event in events {
-//         persist_bundle_using_connection(setup.db_conn.as_ref(), event)
-//             .await
-//             .unwrap();
-//     }
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_index_block_metadata(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Mainnet,
+            db_backend,
+        },
+    )
+    .await;
 
-//     let owner = "GTP6qbHeRne8doYekYmzzYMTXAtHMtpzzguLg2LLNMeD";
+    let slot = 254170887;
+    let block = cached_fetch_block(&setup, slot).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    let filter = blocks::Column::Slot.eq(block.metadata.slot);
 
-//     let token_accounts = setup
-//         .api
-//         .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
-//             owner.try_into().unwrap(),
-//             None,
-//         ))
-//         .await
-//         .unwrap()
-//         .value;
+    let block_model = blocks::Entity::find()
+        .filter(filter)
+        .one(setup.db_conn.as_ref())
+        .await
+        .unwrap()
+        .unwrap();
 
-//     assert_eq!(token_accounts.items.len(), 1);
-//     let token_utxo = token_accounts.items.first().unwrap();
-//     let expected_token_utxo = TokenUxto {
-//         hash: "2aHg84Unrimv4cNB4PYwEGt9vRvQaGsUBQCRwKTVuoP6"
-//             .try_into()
-//             .unwrap(),
-//         account: None,
-//         owner: owner.try_into().unwrap(),
-//         mint: SerializablePubkey::try_from("GDvagojL2e9B7Eh7CHwHjQwcJAAtiMpbvCvtzDTCpogP").unwrap(),
-//         amount: 200,
-//         delegate: None,
-//         is_native: false,
-//         close_authority: None,
-//         frozen: false,
-//     };
-//     assert_eq!(token_utxo, &expected_token_utxo);
-// }
+    assert_eq!(block_model.slot, 254170887);
+    assert_eq!(block_model.parent_slot, 254170886);
+    assert_eq!(
+        Hash::try_from(block_model.parent_blockhash)
+            .unwrap()
+            .to_string(),
+        "9BMHTdybcGah8PWtCzu8tVFDBXmiEHZZDf3FaZ651Nf"
+    );
+    assert_eq!(
+        Hash::try_from(block_model.blockhash).unwrap().to_string(),
+        "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
+    );
+    assert_eq!(block_model.block_height, 234724352);
+    assert_eq!(block_model.block_time, 1710441678);
 
-// #[named]
-// #[rstest]
-// #[tokio::test]
-// #[serial]
-// async fn test_e2e_lamport_transfer(
-//     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-// ) {
-//     let name = trim_test_name(function_name!());
-//     let setup = setup_with_options(
-//         name.clone(),
-//         TestSetupOptions {
-//             network: Network::Localnet,
-//             db_backend,
-//         },
-//     )
-//     .await;
+    // Verify that we don't get an error if we try to index the same block again
+    index_block(&setup.db_conn, &block).await.unwrap();
+    assert_eq!(setup.api.get_slot().await.unwrap(), slot);
 
-//     // HACK: We index a block so that API methods can fetch the current slot.
-//     index_block(
-//         &setup.db_conn,
-//         &BlockInfo {
-//             metadata: BlockMetadata {
-//                 slot: 0,
-//                 ..Default::default()
-//             },
-//             ..Default::default()
-//         },
-//     )
-//     .await
-//     .unwrap();
-
-//     let tx = cached_fetch_transaction(
-//         &setup,
-//         "2FWS4xBAHiZKfZ9gwcq6i1wqvoYX2acj49wAHoP6CtqshQaFjgnSxcMUPANPMU3q8qoESUacmYNHG9LCCh3X59fB",
-//     )
-//     .await;
-
-//     let events = parse_transaction(&tx, 0).unwrap();
-//     assert_eq!(events.len(), 1);
-//     for event in events {
-//         persist_bundle_using_connection(&setup.db_conn, event)
-//             .await
-//             .unwrap();
-//     }
-
-//     let owner1 = "A79DKmTDe8VzfRLti3wTi7mbJ9ENZtK7eBHtJ4QYCR2Y";
-//     let owner2 = "K75mYjtM3zrpBqBwEtQ1RsM39YULMMMoP1pm5ZQkF2h";
-
-//     for owner in [owner1, owner2] {
-//         let utxos = setup
-//             .api
-//             .get_compressed_program_accounts(GetCompressedProgramAccountsRequest(
-//                 SerializablePubkey::from(Pubkey::try_from(owner).unwrap()),
-//                 None,
-//             ))
-//             .await
-//             .unwrap();
-//         assert_json_snapshot!(format!("{}-{}-utxos", name, owner), utxos);
-//     }
-// }
-
-// #[named]
-// #[rstest]
-// #[tokio::test]
-// #[serial]
-// async fn test_index_block_metadata(
-//     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-// ) {
-//     let name = trim_test_name(function_name!());
-//     let setup = setup_with_options(
-//         name.clone(),
-//         TestSetupOptions {
-//             network: Network::Mainnet,
-//             db_backend,
-//         },
-//     )
-//     .await;
-
-//     let slot = 254170887;
-//     let block = cached_fetch_block(&setup, slot).await;
-//     index_block(&setup.db_conn, &block).await.unwrap();
-//     let filter = blocks::Column::Slot.eq(block.metadata.slot);
-
-//     let block_model = blocks::Entity::find()
-//         .filter(filter)
-//         .one(setup.db_conn.as_ref())
-//         .await
-//         .unwrap()
-//         .unwrap();
-
-//     assert_eq!(block_model.slot, 254170887);
-//     assert_eq!(block_model.parent_slot, 254170886);
-//     assert_eq!(
-//         Hash::try_from(block_model.parent_blockhash)
-//             .unwrap()
-//             .to_string(),
-//         "9BMHTdybcGah8PWtCzu8tVFDBXmiEHZZDf3FaZ651Nf"
-//     );
-//     assert_eq!(
-//         Hash::try_from(block_model.blockhash).unwrap().to_string(),
-//         "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
-//     );
-//     assert_eq!(block_model.block_height, 234724352);
-//     assert_eq!(block_model.block_time, 1710441678);
-
-//     // Verify that we don't get an error if we try to index the same block again
-//     index_block(&setup.db_conn, &block).await.unwrap();
-//     assert_eq!(setup.api.get_slot().await.unwrap(), slot);
-
-//     // Verify that get_slot() gets updated a new block is indexed.
-//     let block = cached_fetch_block(&setup, slot + 1).await;
-//     index_block(&setup.db_conn, &block).await.unwrap();
-//     assert_eq!(setup.api.get_slot().await.unwrap(), slot + 1);
-// }
+    // Verify that get_slot() gets updated a new block is indexed.
+    let block = cached_fetch_block(&setup, slot + 1).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    assert_eq!(setup.api.get_slot().await.unwrap(), slot + 1);
+}

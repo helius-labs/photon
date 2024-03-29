@@ -121,9 +121,9 @@ pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct TokenUxto {
+pub struct TokenAcccount {
     pub hash: Hash,
-    pub account: Option<SerializablePubkey>,
+    pub address: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
     pub amount: u64,
@@ -136,7 +136,7 @@ pub struct TokenUxto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
-    pub items: Vec<TokenUxto>,
+    pub items: Vec<TokenAcccount>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
@@ -210,7 +210,7 @@ pub async fn fetch_token_accounts(
         .all(conn)
         .await?;
 
-    let items: Result<Vec<TokenUxto>, PhotonApiError> =
+    let items: Result<Vec<TokenAcccount>, PhotonApiError> =
         result.into_iter().map(parse_token_accounts_model).collect();
     let items = items?;
     let mut cursor = items.last().map(|item| {
@@ -235,10 +235,10 @@ pub async fn fetch_token_accounts(
 
 pub fn parse_token_accounts_model(
     token_account: token_accounts::Model,
-) -> Result<TokenUxto, PhotonApiError> {
-    Ok(TokenUxto {
+) -> Result<TokenAcccount, PhotonApiError> {
+    Ok(TokenAcccount {
         hash: token_account.hash.try_into()?,
-        account: token_account
+        address: token_account
             .address
             .map(SerializablePubkey::try_from)
             .transpose()?,

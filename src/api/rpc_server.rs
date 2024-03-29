@@ -9,7 +9,7 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
-    get_compressed_program_accounts::GetCompressedProgramAccountsRequest,
+    get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
     get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest,
     utils::CompressedAccountRequest,
 };
@@ -123,9 +123,9 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedProgramAccounts",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<GetCompressedProgramAccountsRequest>()?;
+            let payload = rpc_params.parse::<GetCompressedAccountsByOwnerRequest>()?;
             rpc_context
-                .get_compressed_program_accounts(payload)
+                .get_compressed_accounts_by_owner(payload)
                 .await
                 .map_err(Into::into)
         },

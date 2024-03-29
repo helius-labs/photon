@@ -11,11 +11,11 @@ use super::{
         get_compressed_account_proof::{
             get_compressed_account_proof, GetCompressedAccountProofResponse,
         },
-        get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
-        get_compressed_program_accounts::{
-            get_compressed_program_accounts, GetCompressedProgramAccountsRequest,
-            GetCompressedProgramAccountsResponse,
+        get_compressed_accounts_by_owner::{
+            get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
+            GetCompressedAccountsByOwnerResponse,
         },
+        get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
         get_compressed_token_account_balance::{
             get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
@@ -140,11 +140,11 @@ impl PhotonApi {
         get_slot(self.db_conn.as_ref()).await
     }
 
-    pub async fn get_compressed_program_accounts(
+    pub async fn get_compressed_accounts_by_owner(
         &self,
-        request: GetCompressedProgramAccountsRequest,
-    ) -> Result<GetCompressedProgramAccountsResponse, PhotonApiError> {
-        get_compressed_program_accounts(self.db_conn.as_ref(), request).await
+        request: GetCompressedAccountsByOwnerRequest,
+    ) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
+        get_compressed_accounts_by_owner(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_multiple_compressed_accounts(

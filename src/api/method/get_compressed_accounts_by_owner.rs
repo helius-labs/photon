@@ -20,7 +20,7 @@ pub struct Options {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedProgramAccountsRequest(pub SerializablePubkey, pub Option<Options>);
+pub struct GetCompressedAccountsByOwnerRequest(pub SerializablePubkey, pub Option<Options>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -30,12 +30,12 @@ pub struct PaginatedAccountList {
     pub cursor: Option<Hash>,
 }
 
-pub type GetCompressedProgramAccountsResponse = ResponseWithContext<PaginatedAccountList>;
+pub type GetCompressedAccountsByOwnerResponse = ResponseWithContext<PaginatedAccountList>;
 
-pub async fn get_compressed_program_accounts(
+pub async fn get_compressed_accounts_by_owner(
     conn: &DatabaseConnection,
-    request: GetCompressedProgramAccountsRequest,
-) -> Result<GetCompressedProgramAccountsResponse, PhotonApiError> {
+    request: GetCompressedAccountsByOwnerRequest,
+) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let owner = request.0;
 
@@ -69,7 +69,7 @@ pub async fn get_compressed_program_accounts(
         cursor = None;
     }
 
-    Ok(GetCompressedProgramAccountsResponse {
+    Ok(GetCompressedAccountsByOwnerResponse {
         context,
         value: PaginatedAccountList { items, cursor },
     })
