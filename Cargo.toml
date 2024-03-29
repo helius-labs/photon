@@ -1,5 +1,5 @@
 [package]
-default-run = "main"
+default-run = "photon"
 description = "Solana indexer for general compression"
 edition = "2021"
 license = "Apache-2.0"
@@ -7,14 +7,14 @@ name = "photon-indexer"
 publish = true
 readme = "README.md"
 repository = "https://github.com/helius-labs/photon"
-version = "0.2.0"
+version = "0.3.0"
 
 [[bin]]
-name = "main"
+name = "photon"
 path = "src/main.rs"
 
 [[bin]]
-name = "migration"
+name = "photon-migration"
 path = "src/migration/main.rs"
 
 [dependencies]

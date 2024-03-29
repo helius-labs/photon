@@ -2,25 +2,33 @@
 
 Solana indexer for general compression
 
+## Installation
+
+To install the photon indexer run:
+
+```bash
+cargo install photon-indexer
+```
+
 ## Running Photon 
 
-To run the photon indexer run:
+To run it run:
 
 ```bash
 # Against localnet
-cargo run
+cargo run photon
 
 # Against devnet
-cargo run -- --rpc-url=https://api.devnet.solana.com
+cargo run photon-- --rpc-url=https://api.devnet.solana.com
 
 # Using your local Postgres database instead of the default in in-memory SQLite db
-cargon run -- --db-urlpostgres://postgres@localhost/postgres
+cargon run photon-- --db-urlpostgres://postgres@localhost/postgres
 
 # Specifying a start slot. Defaults to 0 for localnet and current for devnet/mainnet
-cargo run -- --start-slot=123 
+cargo run photon-- --start-slot=123 
 
 # To see more configuration options
-cargo run -- --help
+cargo run photon-- --help
 ```
 
 ## Local Development
