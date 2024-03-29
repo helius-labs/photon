@@ -1,4 +1,4 @@
-use crate::migration::Migrator;
+use photon::migration::Migrator;
 use sea_orm_migration::prelude::*;
 
 #[async_std::main]
