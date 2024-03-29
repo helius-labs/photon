@@ -2,25 +2,45 @@
 
 Solana indexer for general compression
 
-## Running Photon 
+## Installation
 
-To run the photon indexer run:
+To install the photon indexer run:
+
+```bash
+cargo install photon-indexer
+```
+
+### Running Photon 
+
+To run photon run:
 
 ```bash
 # Against localnet
-cargo run
+photon
 
 # Against devnet
-cargo run -- --rpc-url=https://api.devnet.solana.com
+photon --rpc-url=https://api.devnet.solana.com
 
 # Using your local Postgres database instead of the default in in-memory SQLite db
-cargon run -- --db-urlpostgres://postgres@localhost/postgres
+photon --db-url=postgres://postgres@localhost/postgres
 
 # Specifying a start slot. Defaults to 0 for localnet and current for devnet/mainnet
-cargo run -- --start-slot=123 
+photon --start-slot=123 
 
 # To see more configuration options
-cargo run -- --help
+photon --help
+```
+
+### Database Management
+
+We support both Postgres and SQLite as database backends. Photon uses a auto-configured SQLite
+in-memory database by default. To specify another database backend run migrations and specify the
+database url when running Photon.
+
+```bash
+export DATABASE_URL="postgres://postgres@localhost/postgres" # Or your SQLlite database url
+photon-migration -- up
+photon --db-url=$DATABASE_URL
 ```
 
 ## Local Development
@@ -47,15 +67,7 @@ cargo test
 Note that for both Postgres and SQLlite all migrations will run automatically during tests. So no
 prior configuration is needed.
 
-### Database Management
-
-We support both Postgres and SQLite through sea-orm. 
-
-To run migrations run:
-```bash
-export DATABASE_URL="postgres://postgres@localhost/postgres" # Or your SQLlite database url
-cargo run --bin migration -- up
-```
+### Database Model Autogeneration
 
 To generate database models first install sea-orm-cli:
 ```bash
