@@ -8,6 +8,7 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
+use sqlx::types::chrono::DateTime;
 
 use crate::dao::typedefs::hash::{Hash, ParseHashError};
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -102,6 +103,13 @@ pub struct Account {
     pub slot_updated: u64,
 }
 
+fn parse_discriminator(discriminator: Vec<u8>) -> u64 {
+    match discriminator.len() {
+        0 => 0,
+        _ => LittleEndian::read_u64(&discriminator),
+    }
+}
+
 pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
     Ok(Account {
         hash: account.hash.try_into()?,
@@ -109,10 +117,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
             .address
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        discriminator: match account.discriminator.len() {
-            0 => 0,
-            _ => LittleEndian::read_u64(&account.discriminator),
-        },
+        discriminator: parse_discriminator(account.discriminator),
         #[allow(deprecated)]
         data: base64::encode(account.data),
         owner: account.owner.try_into()?,
@@ -137,6 +142,11 @@ pub struct TokenAcccount {
     pub is_native: bool,
     pub close_authority: Option<SerializablePubkey>,
     pub frozen: bool,
+    pub data: Vec<u8>,
+    pub discriminator: u64,
+    pub lamports: u64,
+    pub tree: Option<SerializablePubkey>,
+    pub seq: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -166,6 +176,29 @@ pub struct GetCompressedTokenAccountsByAuthority(
     pub SerializablePubkey,
     pub Option<GetCompressedTokenAccountsByAuthorityOptions>,
 );
+
+#[derive(FromQueryResult)]
+pub struct EnrichedTokenAccountModel {
+    pub id: i64,
+    pub hash: Vec<u8>,
+    pub address: Option<Vec<u8>>,
+    pub owner: Vec<u8>,
+    pub mint: Vec<u8>,
+    pub amount: i64,
+    pub delegate: Option<Vec<u8>>,
+    pub frozen: bool,
+    pub is_native: Option<i64>,
+    pub delegated_amount: i64,
+    pub close_authority: Option<Vec<u8>>,
+    pub spent: bool,
+    pub slot_updated: i64,
+    // Needed for generating proof
+    pub data: Vec<u8>,
+    pub discriminator: Vec<u8>,
+    pub lamports: i64,
+    pub tree: Option<Vec<u8>>,
+    pub seq: Option<i64>,
+}
 
 pub async fn fetch_token_accounts(
     conn: &sea_orm::DatabaseConnection,
@@ -209,6 +242,7 @@ pub async fn fetch_token_accounts(
     }
 
     let result = token_accounts::Entity::find()
+        .find_also_linked(accounts::Entity)
         .filter(filter)
         .order_by_asc(token_accounts::Column::Mint)
         .order_by_asc(token_accounts::Column::Hash)
@@ -240,7 +274,7 @@ pub async fn fetch_token_accounts(
 }
 
 pub fn parse_token_accounts_model(
-    token_account: token_accounts::Model,
+    token_account: EnrichedTokenAccountModel,
 ) -> Result<TokenAcccount, PhotonApiError> {
     Ok(TokenAcccount {
         hash: token_account.hash.try_into()?,
@@ -261,6 +295,14 @@ pub fn parse_token_accounts_model(
             .map(SerializablePubkey::try_from)
             .transpose()?,
         frozen: token_account.frozen,
+        data: token_account.data,
+        discriminator: parse_discriminator(token_account.discriminator),
+        lamports: token_account.lamports as u64,
+        tree: token_account
+            .tree
+            .map(SerializablePubkey::try_from)
+            .transpose()?,
+        seq: token_account.seq.map(|seq| seq as u64),
     })
 }
 
