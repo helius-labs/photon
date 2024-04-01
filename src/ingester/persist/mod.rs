@@ -85,6 +85,7 @@ async fn spend_input_accounts(
             spent: Set(true),
             data: Set(vec![]),
             owner: Set(vec![]),
+            discriminator: Set(vec![]),
             lamports: Set(0),
             slot_updated: Set(account.slot as i64),
             tree: Set(Some(account.tree.to_bytes().to_vec())),
@@ -171,6 +172,11 @@ async fn append_output_accounts(
         account_models.push(accounts::ActiveModel {
             hash: Set(hash.to_vec()),
             address: Set(account.address.map(|x| x.to_vec())),
+            discriminator: Set(account
+                .data
+                .clone()
+                .map(|d| d.discriminator.to_vec())
+                .unwrap_or(Vec::new())),
             data: Set(account.data.clone().map(|d| d.data).unwrap_or(Vec::new())),
             tree: Set(Some(tree.to_bytes().to_vec())),
             owner: Set(account.owner.as_ref().to_vec()),

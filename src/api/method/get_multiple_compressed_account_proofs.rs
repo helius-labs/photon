@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, ResponseWithContext},
+    utils::{Context, ResponseWithContext, PAGE_LIMIT},
 };
 use crate::dao::typedefs::hash::Hash;
 
@@ -30,6 +30,13 @@ pub async fn get_multiple_compressed_account_proofs(
     conn: &DatabaseConnection,
     request: Vec<Hash>,
 ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
+    if request.len() > PAGE_LIMIT as usize {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many hashes requested {}. Maximum allowed: {}",
+            request.len(),
+            PAGE_LIMIT
+        )));
+    }
     let context = Context::extract(conn).await?;
     let proofs = get_multiple_compressed_account_proofs_helper(conn, request).await?;
     Ok(ResponseWithContext {

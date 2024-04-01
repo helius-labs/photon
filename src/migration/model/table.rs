@@ -19,6 +19,7 @@ pub enum Accounts {
     Id,
     Hash,
     Data,
+    Discriminator,
     Address,
     Owner,
     Lamports,

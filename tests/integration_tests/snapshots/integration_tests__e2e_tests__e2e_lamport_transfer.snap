@@ -11,6 +11,7 @@ expression: accounts
       {
         "hash": "2iXDQnRbAJhEhFnz8ZkNjV3h45ATCQYKiyytCwpKg9z1",
         "address": null,
+        "discriminator": 0,
         "data": "",
         "owner": "H9umPt6hyzWn5pXDRMzy3ZuJXDqVMTK4Dvps4qY5XeTX",
         "lamports": 0,
