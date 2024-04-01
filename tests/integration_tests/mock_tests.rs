@@ -383,6 +383,7 @@ async fn test_persist_token_data(
             owner: Set(token_data.owner.to_bytes().to_vec()),
             lamports: Set(10),
             slot_updated: Set(slot),
+            discriminator: Set(Vec::new()),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();
