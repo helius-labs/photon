@@ -72,6 +72,19 @@ async fn test_e2e_mint_and_transfer(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+            let proofs = setup
+                .api
+                .get_multiple_compressed_account_proofs(
+                    accounts
+                        .value
+                        .items
+                        .iter()
+                        .map(|x| x.hash.clone())
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
         }
     }
 }

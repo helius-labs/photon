@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::dao::typedefs::hash::Hash;
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
@@ -9,7 +10,7 @@ use super::{
     method::{
         get_compressed_account::get_compressed_account,
         get_compressed_account_proof::{
-            get_compressed_account_proof, GetCompressedAccountProofResponse,
+            get_compressed_account_proof, GetCompressedAccountProofResponse, HashRequest,
         },
         get_compressed_accounts_by_owner::{
             get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
@@ -22,6 +23,9 @@ use super::{
         get_compressed_token_accounts_by_delegate::get_compressed_account_token_accounts_by_delegate,
         get_compressed_token_accounts_by_owner::get_compressed_token_accounts_by_owner,
         get_health::get_health,
+        get_multiple_compressed_account_proofs::{
+            get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse,
+        },
         get_multiple_compressed_accounts::{
             get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
             GetMultipleCompressedAccountsResponse,
@@ -99,9 +103,16 @@ impl PhotonApi {
 
     pub async fn get_compressed_account_proof(
         &self,
-        request: CompressedAccountRequest,
+        request: HashRequest,
     ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
         get_compressed_account_proof(&self.db_conn, request).await
+    }
+
+    pub async fn get_multiple_compressed_account_proofs(
+        &self,
+        request: Vec<Hash>,
+    ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
+        get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_token_accounts_by_owner(

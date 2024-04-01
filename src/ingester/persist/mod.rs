@@ -183,10 +183,10 @@ async fn append_output_accounts(
 
         if let Some(token_data) = parse_token_data(account)? {
             token_accounts.push(EnrichedTokenAccount {
-                token_data: token_data,
-                hash: Hash::from(hash.clone()),
+                token_data,
+                hash: Hash::from(*hash),
                 slot_updated: *slot,
-                address: account.address.clone(),
+                address: account.address,
             });
         }
     }
@@ -310,5 +310,5 @@ async fn persist_path_nodes(
 }
 
 fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
-    index - 2i64.pow(tree_height)
+    2i64.pow(tree_height) - index
 }
