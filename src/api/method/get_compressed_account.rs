@@ -20,8 +20,9 @@ pub async fn get_compressed_account(
             .await?
             .ok_or(id.not_found_error())?,
     )?;
+
     Ok(AccountResponse {
-        value: account,
+        value: { account },
         context,
     })
 }
