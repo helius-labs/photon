@@ -39,7 +39,7 @@ database url when running Photon.
 
 ```bash
 export DATABASE_URL="postgres://postgres@localhost/postgres" # Or your SQLlite database url
-photon-migration -- up
+photon-migration up
 photon --db-url=$DATABASE_URL
 ```
 
