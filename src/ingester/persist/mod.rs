@@ -21,6 +21,7 @@ use sea_orm::{
 use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
+use sqlx::types::Decimal;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
 // To avoid exceeding the 25k total parameter limit, we set the insert limit to 1k (as we have fewer
@@ -86,7 +87,7 @@ async fn spend_input_accounts(
             data: Set(vec![]),
             owner: Set(vec![]),
             discriminator: Set(vec![]),
-            lamports: Set(0),
+            lamports: Set(Decimal::from(0)),
             slot_updated: Set(account.slot as i64),
             tree: Set(Some(account.tree.to_bytes().to_vec())),
             ..Default::default()
@@ -117,12 +118,12 @@ async fn spend_input_accounts(
             token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
-                amount: Set(0),
+                amount: Set(Decimal::from(0)),
                 slot_updated: Set(in_accounts.slot as i64),
                 owner: Set(token_data.owner.to_bytes().to_vec()),
                 mint: Set(token_data.mint.to_bytes().to_vec()),
                 frozen: Set(token_data.state == AccountState::Frozen),
-                delegated_amount: Set(0),
+                delegated_amount: Set(Decimal::from(0)),
                 ..Default::default()
             });
         }
@@ -180,7 +181,7 @@ async fn append_output_accounts(
             data: Set(account.data.clone().map(|d| d.data).unwrap_or(Vec::new())),
             tree: Set(Some(tree.to_bytes().to_vec())),
             owner: Set(account.owner.as_ref().to_vec()),
-            lamports: Set(account.lamports as i64),
+            lamports: Set(Decimal::from(account.lamports)),
             spent: Set(false),
             slot_updated: Set(*slot as i64),
             seq: Set(seq.map(|s| s as i64)),
@@ -239,11 +240,11 @@ pub async fn persist_token_accounts(
                     address: Set(address.map(|x| x.to_vec())),
                     mint: Set(token_data.mint.to_bytes().to_vec()),
                     owner: Set(token_data.owner.to_bytes().to_vec()),
-                    amount: Set(token_data.amount as i64),
+                    amount: Set(Decimal::from(token_data.amount)),
                     delegate: Set(token_data.delegate.map(|d| d.to_bytes().to_vec())),
                     frozen: Set(token_data.state == AccountState::Frozen),
-                    delegated_amount: Set(token_data.delegated_amount as i64),
-                    is_native: Set(token_data.is_native.map(|n| n as i64)),
+                    delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
+                    is_native: Set(token_data.is_native.map(|n| Decimal::from(n))),
                     spent: Set(false),
                     slot_updated: Set(slot_updated as i64),
                     ..Default::default()

@@ -12,7 +12,7 @@ const HEALTH_CHECK_SLOT_DISTANCE: u64 = 5;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountBalance {
-    value: i64,
+    value: u64,
     context: Context,
 }
 

@@ -114,7 +114,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    assert_eq!(res, account.account.lamports as i64);
+    assert_eq!(res, account.account.lamports as u64);
 
     // Assert that we get an error if we input a non-existent account.
     // TODO: Test spent accounts
@@ -310,6 +310,7 @@ async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::ingester::parser::indexer_events::AccountState;
+    use sqlx::types::Decimal;
 
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
@@ -381,7 +382,7 @@ async fn test_persist_token_data(
             spent: Set(false),
             data: Set(to_vec(&token_data).unwrap()),
             owner: Set(token_data.owner.to_bytes().to_vec()),
-            lamports: Set(10),
+            lamports: Set(Decimal::from(10)),
             slot_updated: Set(slot),
             discriminator: Set(Vec::new()),
             ..Default::default()

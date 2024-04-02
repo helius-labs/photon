@@ -5,7 +5,7 @@ use super::super::error::PhotonApiError;
 use super::utils::{AccountDataTable, LamportModel};
 use super::utils::{CompressedAccountRequest, Context, ResponseWithContext};
 
-pub type GetCompressedAccountBalance = ResponseWithContext<i64>;
+pub type GetCompressedAccountBalance = ResponseWithContext<u64>;
 
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,
