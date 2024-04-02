@@ -42,7 +42,7 @@ impl fmt::Display for LoggingFormat {
 struct Args {
     /// Port to expose the local Photon API
     // We use a random default port to avoid conflicts with other services
-    #[arg(short, long, default_value_t = 8781)]
+    #[arg(short, long, default_value_t = 8784)]
     port: u16,
 
     /// URL of the RPC server
@@ -59,12 +59,17 @@ struct Args {
     start_slot: Option<u64>,
 
     /// Max database connections to use in database pool
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(long, default_value_t = 10)]
     max_db_conn: u32,
 
     /// Logging format
     #[arg(short, long, default_value_t = LoggingFormat::Standard)]
     logging_format: LoggingFormat,
+
+    /// Max number of blocks to fetch concurrently. Generally, this should be set to be as high
+    /// as possible without reaching RPC rate limits.
+    #[arg(long)]
+    max_concurrent_block_fetches: Option<usize>,
 }
 
 pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
@@ -81,22 +86,30 @@ async fn start_transaction_indexer(
     rpc_client: Arc<RpcClient>,
     is_localnet: bool,
     start_slot: Option<u64>,
+    max_batch_size: usize,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+    // Spawn the task
+    let handle = tokio::spawn(async move {
+        let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
         let start_slot = match (start_slot, is_localnet) {
             (Some(start_slot), _) => start_slot,
             // Start indexing from the first slot for localnet.
             (None, true) => 0,
-            (None, false) => fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await,
+            (None, false) => current_slot,
         };
         let mut poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
-
-        info!("Backfilling historical blocks...");
+        let number_of_blocks_to_backfill = current_slot - start_slot;
+        info!(
+            "Backfilling historical blocks. Number of blocks to backfill: {}",
+            number_of_blocks_to_backfill
+        );
+        if number_of_blocks_to_backfill > 10_000 && is_localnet {
+            info!("Backfilling a large number of blocks. This may take a while. Considering restarting local validator or specifying a start slot.");
+        }
         let mut finished_backfill = false;
+
         loop {
-            // Indexing throughput is more influenced by concurrent transaction indexing than
-            // RPC block fetching. So just use a reasonable default here.
-            let blocks = poller.fetch_new_block_batch(5).await;
+            let blocks = poller.fetch_new_block_batch(max_batch_size).await;
             if blocks.is_empty() {
                 sleep(Duration::from_millis(20));
                 if !finished_backfill {
@@ -108,7 +121,8 @@ async fn start_transaction_indexer(
             }
             index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
         }
-    })
+    });
+    handle
 }
 
 async fn start_api_server(
@@ -190,11 +204,14 @@ async fn main() {
 
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");
-    start_transaction_indexer(
+    // For localnet we can safely use a large batch size to speed up indexing.
+    let max_batch_size = if is_localnet { 20 } else { 5 };
+    let indexer_handle = start_transaction_indexer(
         db_conn.clone(),
         rpc_client.clone(),
         is_localnet,
         args.start_slot,
+        max_batch_size,
     )
     .await;
 
@@ -202,6 +219,8 @@ async fn main() {
     let api_handler = start_api_server(db_conn, rpc_client, args.port).await;
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
+            info!("Shutting down indexer...");
+            indexer_handle.abort();
             info!("Shutting down API server...");
             api_handler.stop().unwrap();
         }

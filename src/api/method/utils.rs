@@ -1,4 +1,4 @@
-use crate::dao::generated::{accounts, blocks, state_trees, token_accounts};
+use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
 use schemars::JsonSchema;
@@ -8,9 +8,8 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
-use sqlx::types::chrono::DateTime;
 
-use crate::dao::typedefs::hash::{Hash, ParseHashError};
+use crate::dao::typedefs::hash::Hash;
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;

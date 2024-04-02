@@ -61,7 +61,7 @@ impl TransactionPoller {
         }
     }
 
-    pub async fn fetch_new_block_batch(&mut self, batch_size: usize) -> Vec<BlockInfo> {
+    pub async fn fetch_new_block_batch(&mut self, max_batch_size: usize) -> Vec<BlockInfo> {
         let new_slot = fetch_current_slot_with_infinite_retry(self.client.as_ref()).await;
         let slots: Vec<_> = (self.slot..new_slot).collect();
 
@@ -70,7 +70,7 @@ impl TransactionPoller {
                 let client = self.client.clone();
                 async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
             })
-            .buffer_unordered(batch_size)
+            .buffer_unordered(max_batch_size)
             .collect()
             .await;
         blocks.sort_by(|a, b| a.metadata.slot.cmp(&b.metadata.slot));
