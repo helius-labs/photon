@@ -100,18 +100,20 @@ async fn start_transaction_indexer(
         let mut poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
         let number_of_blocks_to_backfill = current_slot - start_slot;
         info!(
-            "Backfilling historical blocks. Number of blocks to backfill: {}",
+            "Backfilling historical blocks. Current number of blocks to backfill: {}",
             number_of_blocks_to_backfill
         );
         if number_of_blocks_to_backfill > 10_000 && is_localnet {
             info!("Backfilling a large number of blocks. This may take a while. Considering restarting local validator or specifying a start slot.");
         }
         let mut finished_backfill = false;
+        let mut finished_initial_backfill = false;
+        let mut num_blocks_indexed_in_backfill = 0;
 
         loop {
             let blocks = poller.fetch_new_block_batch(max_batch_size).await;
             if blocks.is_empty() {
-                sleep(Duration::from_millis(20));
+                sleep(Duration::from_millis(10));
                 if !finished_backfill {
                     info!("Finished backfilling historical blocks...");
                     info!("Streaming live blocks...");
@@ -119,7 +121,23 @@ async fn start_transaction_indexer(
                 finished_backfill = true;
                 continue;
             }
+            num_blocks_indexed_in_backfill += blocks.len();
             index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
+
+            if !finished_backfill {
+                if num_blocks_indexed_in_backfill <= (number_of_blocks_to_backfill as usize) {
+                    info!(
+                        "Backfilled {} / {} blocks",
+                        num_blocks_indexed_in_backfill, number_of_blocks_to_backfill
+                    );
+                } else {
+                    if !finished_initial_backfill {
+                        info!("Backfilling new blocks since backfill started...");
+                        finished_initial_backfill = true;
+                    }
+                    info!("Backfilled {} blocks", num_blocks_indexed_in_backfill);
+                }
+            }
         }
     });
     handle
@@ -221,6 +239,9 @@ async fn main() {
         Ok(()) => {
             info!("Shutting down indexer...");
             indexer_handle.abort();
+            indexer_handle
+                .await
+                .expect_err("Indexer should have been aborted");
             info!("Shutting down API server...");
             api_handler.stop().unwrap();
         }

@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use log::info;
+use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::ingester::parser::{
@@ -45,7 +45,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                     && next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     if !logged_transaction {
-                        info!(
+                        debug!(
                             "Indexing transaction with slot {} and id {}",
                             slot, tx.signature
                         );
