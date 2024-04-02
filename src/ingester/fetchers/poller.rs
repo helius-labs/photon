@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{cmp::min, sync::Arc, thread::sleep, time::Duration};
 
 use futures::{stream, StreamExt};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
@@ -61,21 +61,22 @@ impl TransactionPoller {
         }
     }
 
-    pub async fn fetch_new_block_batch(&mut self, batch_size: usize) -> Vec<BlockInfo> {
-        let new_slot = fetch_current_slot_with_infinite_retry(self.client.as_ref()).await;
-        let slots: Vec<_> = (self.slot..new_slot).collect();
+    pub async fn fetch_new_block_batch(&mut self, max_batch_size: usize) -> Vec<BlockInfo> {
+        let current_slot = fetch_current_slot_with_infinite_retry(self.client.as_ref()).await;
+        let next_slot = min(current_slot, self.slot + max_batch_size as u64);
+        let slots: Vec<_> = (self.slot..next_slot).collect();
 
         let mut blocks: Vec<BlockInfo> = stream::iter(slots)
             .map(|slot| {
                 let client = self.client.clone();
                 async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
             })
-            .buffer_unordered(batch_size)
+            .buffer_unordered(max_batch_size)
             .collect()
             .await;
         blocks.sort_by(|a, b| a.metadata.slot.cmp(&b.metadata.slot));
 
-        self.slot = new_slot;
+        self.slot = next_slot;
         blocks
     }
 }

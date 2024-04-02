@@ -13,7 +13,7 @@ use crate::{
     ingester::parser::state_update::StateUpdate,
 };
 use borsh::BorshDeserialize;
-use log::info;
+use log::{debug, info};
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
@@ -38,23 +38,23 @@ pub async fn persist_state_update(
         path_nodes,
     } = state_update;
 
-    info!(
+    debug!(
         "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
         in_accounts.len(),
         out_accounts.len(),
         path_nodes.len()
     );
 
-    info!("Persisting spent accounts...");
+    debug!("Persisting spent accounts...");
     for chunk in in_accounts.chunks(MAX_SQL_INSERTS) {
         spend_input_accounts(txn, chunk).await?;
     }
-    info!("Persisting output accounts...");
+    debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
     }
 
-    info!("Persisting path nodes...");
+    debug!("Persisting path nodes...");
     for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
         persist_path_nodes(txn, chunk).await?;
     }
@@ -128,7 +128,7 @@ async fn spend_input_accounts(
         }
     }
     if !token_models.is_empty() {
-        info!("Marking {} token accounts as spent...", token_models.len());
+        debug!("Marking {} token accounts as spent...", token_models.len());
         token_accounts::Entity::insert_many(token_models)
             .on_conflict(
                 OnConflict::column(token_accounts::Column::Hash)
@@ -213,7 +213,7 @@ async fn append_output_accounts(
             .build(txn.get_database_backend());
         txn.execute(query).await?;
         if !token_accounts.is_empty() {
-            info!("Persisting {} token accounts...", token_accounts.len());
+            debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;
         }
     }
