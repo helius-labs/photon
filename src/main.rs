@@ -223,13 +223,22 @@ async fn main() {
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");
     // For localnet we can safely use a large batch size to speed up indexing.
-    let max_batch_size = if is_localnet { 20 } else { 5 };
+    let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
+        Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
+        None => {
+            if is_localnet {
+                20
+            } else {
+                5
+            }
+        }
+    };
     let indexer_handle = start_transaction_indexer(
         db_conn.clone(),
         rpc_client.clone(),
         is_localnet,
         args.start_slot,
-        max_batch_size,
+        max_concurrent_block_fetches,
     )
     .await;
 
