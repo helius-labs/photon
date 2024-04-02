@@ -242,13 +242,40 @@ pub async fn fetch_token_accounts(
     }
 
     let result = token_accounts::Entity::find()
-        .find_also_linked(accounts::Entity)
+        .find_also_related(accounts::Entity)
         .filter(filter)
         .order_by_asc(token_accounts::Column::Mint)
         .order_by_asc(token_accounts::Column::Hash)
         .limit(limit)
         .all(conn)
-        .await?;
+        .await?
+        .drain(..)
+        .map(|(token_account, account)| {
+            let account = account.ok_or(PhotonApiError::RecordNotFound(format!(
+                "Base account not found for token account",
+            )))?;
+            Ok(EnrichedTokenAccountModel {
+                id: token_account.id,
+                hash: token_account.hash,
+                address: token_account.address,
+                owner: token_account.owner,
+                mint: token_account.mint,
+                amount: token_account.amount,
+                delegate: token_account.delegate,
+                frozen: token_account.frozen,
+                is_native: token_account.is_native,
+                delegated_amount: token_account.delegated_amount,
+                close_authority: token_account.close_authority,
+                spent: token_account.spent,
+                slot_updated: token_account.slot_updated,
+                data: account.data,
+                discriminator: account.discriminator,
+                lamports: account.lamports,
+                tree: account.tree,
+                seq: account.seq,
+            })
+        })
+        .collect::<Result<Vec<EnrichedTokenAccountModel>, PhotonApiError>>()?;
 
     let items: Result<Vec<TokenAcccount>, PhotonApiError> =
         result.into_iter().map(parse_token_accounts_model).collect();
