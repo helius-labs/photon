@@ -22,7 +22,6 @@ pub enum Accounts {
     Data,
     Discriminator,
     Owner,
-    Lamports,
     Tree,
     Spent,
     Seq,
@@ -38,11 +37,8 @@ pub enum TokenAccounts {
     Address,
     Owner,
     Mint,
-    Amount,
     Delegate,
     Frozen,
-    IsNative,
-    DelegatedAmount,
     CloseAuthority,
     // Duplicate to Spent in accounts. Added to simplify the handling of concurrent insertions and deletions
     // of token accounts.

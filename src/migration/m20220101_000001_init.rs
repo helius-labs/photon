@@ -236,23 +236,21 @@ impl MigrationTrait for Migration {
                 .await?;
             }
             DatabaseBackend::Sqlite => {
-                execute_sql(manager, "ALTER TABLE accounts ADD COLUMN lamports INTEGER;").await?;
-
+                // HACK: SQLx Decimal is not compatible with INTEGER so we use REAL instead.
+                execute_sql(manager, "ALTER TABLE accounts ADD COLUMN lamports REAL;").await?;
                 execute_sql(
                     manager,
-                    "ALTER TABLE token_accounts ADD COLUMN amount INTEGER;",
+                    "ALTER TABLE token_accounts ADD COLUMN amount REAL;",
                 )
                 .await?;
-
                 execute_sql(
                     manager,
-                    "ALTER TABLE token_accounts ADD COLUMN is_native INTEGER;",
+                    "ALTER TABLE token_accounts ADD COLUMN is_native REAL;",
                 )
                 .await?;
-
                 execute_sql(
                     manager,
-                    "ALTER TABLE token_accounts ADD COLUMN delegated_amount INTEGER;",
+                    "ALTER TABLE token_accounts ADD COLUMN delegated_amount REAL;",
                 )
                 .await?;
             }

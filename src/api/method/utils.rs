@@ -18,7 +18,7 @@ use sea_orm_migration::sea_query::Expr;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
-fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
+pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
     value
         .to_string()
         .parse::<u64>()
@@ -73,8 +73,8 @@ pub struct Context {
 
 #[derive(FromQueryResult)]
 struct ContextModel {
-    // Postgres and SQLlite do not support u64 as return type. We need to use u64 and cast it to u64.
-    slot: u64,
+    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
+    slot: i64,
 }
 
 impl Context {
@@ -405,10 +405,10 @@ impl CompressedAccountRequest {
 
 #[derive(FromQueryResult)]
 pub struct BalanceModel {
-    pub amount: u64,
+    pub amount: Decimal,
 }
 
 #[derive(FromQueryResult)]
 pub struct LamportModel {
-    pub lamports: u64,
+    pub lamports: Decimal,
 }
