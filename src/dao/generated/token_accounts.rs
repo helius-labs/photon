@@ -11,15 +11,18 @@ pub struct Model {
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
-    pub amount: i64,
     pub delegate: Option<Vec<u8>>,
     pub frozen: bool,
-    pub is_native: Option<i64>,
-    pub delegated_amount: i64,
     pub close_authority: Option<Vec<u8>>,
     pub spent: bool,
     pub slot_updated: i64,
     pub created_at: Option<DateTime>,
+    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
+    pub amount: Decimal,
+    #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]
+    pub is_native: Option<Decimal>,
+    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
+    pub delegated_amount: Decimal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

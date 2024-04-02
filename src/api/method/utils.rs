@@ -8,6 +8,7 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
+use sqlx::types::Decimal;
 
 use crate::dao::typedefs::hash::Hash;
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -16,6 +17,13 @@ use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
 
 pub const PAGE_LIMIT: u64 = 1000;
+
+pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
+    value
+        .to_string()
+        .parse::<u64>()
+        .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct Limit(u64);
@@ -121,7 +129,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         data: base64::encode(account.data),
         owner: account.owner.try_into()?,
         tree: account.tree.map(|tree| tree.try_into()).transpose()?,
-        lamports: account.lamports as u64,
+        lamports: parse_decimal(account.lamports)?,
         slot_updated: account.slot_updated as u64,
         seq: account.seq.map(|seq| seq as u64),
     })
@@ -183,18 +191,18 @@ pub struct EnrichedTokenAccountModel {
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
-    pub amount: i64,
+    pub amount: Decimal,
     pub delegate: Option<Vec<u8>>,
     pub frozen: bool,
-    pub is_native: Option<i64>,
-    pub delegated_amount: i64,
+    pub is_native: Option<Decimal>,
+    pub delegated_amount: Decimal,
     pub close_authority: Option<Vec<u8>>,
     pub spent: bool,
     pub slot_updated: i64,
     // Needed for generating proof
     pub data: Vec<u8>,
     pub discriminator: Vec<u8>,
-    pub lamports: i64,
+    pub lamports: Decimal,
     pub tree: Option<Vec<u8>>,
     pub seq: Option<i64>,
 }
@@ -310,7 +318,7 @@ pub fn parse_token_accounts_model(
             .transpose()?,
         owner: token_account.owner.try_into()?,
         mint: token_account.mint.try_into()?,
-        amount: token_account.amount as u64,
+        amount: parse_decimal(token_account.amount)?,
         delegate: token_account
             .delegate
             .map(SerializablePubkey::try_from)
@@ -323,7 +331,7 @@ pub fn parse_token_accounts_model(
         frozen: token_account.frozen,
         data: token_account.data,
         discriminator: parse_discriminator(token_account.discriminator),
-        lamports: token_account.lamports as u64,
+        lamports: parse_decimal(token_account.lamports)?,
         tree: token_account
             .tree
             .map(SerializablePubkey::try_from)
@@ -397,10 +405,10 @@ impl CompressedAccountRequest {
 
 #[derive(FromQueryResult)]
 pub struct BalanceModel {
-    pub amount: i64,
+    pub amount: Decimal,
 }
 
 #[derive(FromQueryResult)]
 pub struct LamportModel {
-    pub lamports: i64,
+    pub lamports: Decimal,
 }

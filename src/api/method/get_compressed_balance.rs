@@ -2,10 +2,10 @@ use crate::dao::generated::accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 
 use super::super::error::PhotonApiError;
-use super::utils::{AccountDataTable, LamportModel};
+use super::utils::{parse_decimal, AccountDataTable, LamportModel};
 use super::utils::{CompressedAccountRequest, Context, ResponseWithContext};
 
-pub type GetCompressedAccountBalance = ResponseWithContext<i64>;
+pub type GetCompressedAccountBalance = ResponseWithContext<u64>;
 
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,
@@ -24,7 +24,7 @@ pub async fn get_compressed_balance(
         .ok_or(id.not_found_error())?;
 
     Ok(GetCompressedAccountBalance {
-        value: balance.lamports,
+        value: parse_decimal(balance.lamports)?,
         context,
     })
 }
