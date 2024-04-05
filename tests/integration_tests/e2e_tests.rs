@@ -22,6 +22,8 @@ use serial_test::serial;
 async fn test_e2e_mint_and_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -74,14 +76,14 @@ async fn test_e2e_mint_and_transfer(
             assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
             let proofs = setup
                 .api
-                .get_multiple_compressed_account_proofs(
+                .get_multiple_compressed_account_proofs(HashList(
                     accounts
                         .value
                         .items
                         .iter()
                         .map(|x| x.hash.clone())
                         .collect(),
-                )
+                ))
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
@@ -128,7 +130,10 @@ async fn test_e2e_lamport_transfer(
     index_transaction(&setup, transfer_tx).await;
     let accounts = setup
         .api
-        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(bob_pubkey, None))
+        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+            owner: bob_pubkey,
+            ..Default::default()
+        })
         .await
         .unwrap();
     assert_json_snapshot!(name.clone(), accounts);

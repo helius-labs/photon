@@ -17,6 +17,10 @@ path = "src/main.rs"
 name = "photon-migration"
 path = "src/migration/main.rs"
 
+[[bin]]
+name = "photon-openapi"
+path = "src/openapi/main.rs"
+
 [dependencies]
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
@@ -28,9 +32,11 @@ bs58 = "0.4.0"
 byteorder = "1.5.0"
 cadence-macros = "1.2.0"
 clap = {"version" = "4.5.2", features = ["derive"]}
+dirs = "5.0.1"
 env_logger = "0.10.0"
 futures = "0.3.30"
 hyper = "0.14.23"
+indexmap = "2.2.6"
 insta = {version = "1.34.0", features = ["json"]}
 itertools = "0.12.1"
 jsonrpsee = {version = "0.16.2", features = ["server", "macros"]}
@@ -39,11 +45,7 @@ lazy_static = "1.4.0"
 light-poseidon = "0.2.0"
 log = "0.4.17"
 once_cell = "1.19.0"
-open-rpc-derive = {version = "0.0.4"}
-open-rpc-schema = {version = "0.0.4"}
 rstest = "0.18.2"
-schemars = {version = "0.8.6", features = ["chrono"]}
-schemars_derive = "0.8.6"
 sea-orm = {version = "0.10.6", features = [
   "macros",
   "runtime-tokio-rustls",
@@ -81,6 +83,7 @@ tracing-subscriber = {version = "0.3.16", features = [
   "env-filter",
   "ansi",
 ]}
+utoipa = {version = "4.2.0", features = ["yaml"]}
 
 [dev-dependencies]
 function_name = "0.3.0"

@@ -2,19 +2,19 @@ use std::collections::HashMap;
 
 use crate::dao::{generated::state_trees, typedefs::serializable_pubkey::SerializablePubkey};
 use itertools::Itertools;
-use schemars::JsonSchema;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, ResponseWithContext, PAGE_LIMIT},
+    utils::{Context, PAGE_LIMIT},
 };
 use crate::dao::typedefs::hash::Hash;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct MerkleProofWithContext {
     pub proof: Vec<Hash>,
@@ -23,13 +23,21 @@ pub struct MerkleProofWithContext {
     pub merkle_tree: SerializablePubkey,
 }
 
-pub type GetMultipleCompressedAccountProofsResponse =
-    ResponseWithContext<Vec<MerkleProofWithContext>>;
+// We do not use generics to simplify documentation generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct GetMultipleCompressedAccountProofsResponse {
+    pub context: Context,
+    pub value: Vec<MerkleProofWithContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct HashList(pub Vec<Hash>);
 
 pub async fn get_multiple_compressed_account_proofs(
     conn: &DatabaseConnection,
-    request: Vec<Hash>,
+    request: HashList,
 ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
+    let request = request.0;
     if request.len() > PAGE_LIMIT as usize {
         return Err(PhotonApiError::ValidationError(format!(
             "Too many hashes requested {}. Maximum allowed: {}",
@@ -39,7 +47,7 @@ pub async fn get_multiple_compressed_account_proofs(
     }
     let context = Context::extract(conn).await?;
     let proofs = get_multiple_compressed_account_proofs_helper(conn, request).await?;
-    Ok(ResponseWithContext {
+    Ok(GetMultipleCompressedAccountProofsResponse {
         value: proofs,
         context,
     })

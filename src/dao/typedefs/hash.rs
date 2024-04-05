@@ -1,11 +1,10 @@
 use core::fmt;
 use std::mem;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use utoipa::openapi::{KnownFormat, ObjectBuilder, RefOr, Schema, SchemaFormat, SchemaType};
+use utoipa::ToSchema;
 
-use schemars::gen::SchemaGenerator;
-use schemars::schema::Schema;
 use serde::de::{self, Visitor};
 use serde::ser::Serializer;
 use serde::Deserializer;
@@ -38,6 +37,24 @@ impl Hash {
     pub fn new_unique() -> Self {
         // Slightly hacky way to get 32 random bytes
         Hash(Pubkey::new_unique().to_bytes())
+    }
+}
+
+impl<'__s> ToSchema<'__s> for Hash {
+    fn schema() -> (&'__s str, RefOr<Schema>) {
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::String)
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Byte)))
+                .description(Some("A 32-byte hash represented as a base58 string."))
+                .build(),
+        );
+
+        ("Hash", RefOr::T(schema))
+    }
+
+    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+        Vec::new()
     }
 }
 
@@ -110,19 +127,6 @@ impl From<Hash> for String {
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Hash({})", self.to_base58())
-    }
-}
-
-impl JsonSchema for Hash {
-    fn schema_name() -> String {
-        "Hash".to_string()
-    }
-
-    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
-        let schema = gen.subschema_for::<String>();
-        let mut schema_object = schema.into_object();
-        schema_object.metadata().description = Some("A base58 encoded string".to_string());
-        schema_object.into()
     }
 }
 

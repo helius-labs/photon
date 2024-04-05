@@ -1,7 +1,7 @@
 use crate::dao::generated::accounts;
-use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
@@ -12,14 +12,14 @@ use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::utils::{parse_account_model, Account};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountsRequest {
     pub hashes: Option<Vec<Hash>>,
     pub addresses: Option<Vec<SerializablePubkey>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountList {
     pub items: Vec<Account>,

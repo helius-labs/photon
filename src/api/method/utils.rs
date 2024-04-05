@@ -1,7 +1,6 @@
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
-use schemars::JsonSchema;
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
@@ -9,6 +8,7 @@ use sea_orm::{
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use sqlx::types::Decimal;
+use utoipa::ToSchema;
 
 use crate::dao::typedefs::hash::Hash;
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
@@ -25,7 +25,7 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 pub struct Limit(u64);
 
 impl Limit {
@@ -59,13 +59,13 @@ impl<'de> Deserialize<'de> for Limit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ResponseWithContext<T> {
     pub context: Context,
     pub value: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromQueryResult)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, FromQueryResult)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
     pub slot: u64,
@@ -94,9 +94,7 @@ impl Context {
     }
 }
 
-pub type AccountResponse = ResponseWithContext<Account>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Account {
     pub hash: Hash,
@@ -135,9 +133,14 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
     })
 }
 
-pub type TokenAccountListResponse = ResponseWithContext<TokenAccountList>;
+// We do not use generics to simplify documentation generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct TokenAccountListResponse {
+    pub context: Context,
+    pub value: TokenAccountList,
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAcccount {
     pub hash: Hash,
@@ -156,7 +159,7 @@ pub struct TokenAcccount {
     pub seq: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
     pub items: Vec<TokenAcccount>,
@@ -169,7 +172,7 @@ pub enum Authority {
     Delegate(SerializablePubkey),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByAuthorityOptions {
     pub mint: Option<SerializablePubkey>,
@@ -177,7 +180,7 @@ pub struct GetCompressedTokenAccountsByAuthorityOptions {
     pub limit: Option<Limit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByAuthority(
     pub SerializablePubkey,
@@ -340,7 +343,7 @@ pub fn parse_token_accounts_model(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CompressedAccountRequest {
     pub address: Option<SerializablePubkey>,

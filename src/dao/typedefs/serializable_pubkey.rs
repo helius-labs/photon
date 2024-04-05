@@ -1,21 +1,40 @@
 use core::fmt;
 use std::str::FromStr;
 
-use schemars::JsonSchema;
 use serde::Deserialize;
 use solana_sdk::pubkey::ParsePubkeyError;
 
-use schemars::gen::SchemaGenerator;
-use schemars::schema::Schema;
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey as SolanaPubkey;
+use utoipa::openapi::{schema::Schema, RefOr};
+use utoipa::openapi::{KnownFormat, ObjectBuilder, SchemaFormat, SchemaType};
+use utoipa::ToSchema;
 
 use std::convert::TryFrom;
 
 #[derive(Default, Clone, PartialEq, Eq)]
+/// A Solana public key.
 pub struct SerializablePubkey(SolanaPubkey);
+
+impl<'__s> ToSchema<'__s> for SerializablePubkey {
+    fn schema() -> (&'__s str, RefOr<Schema>) {
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::String)
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Byte)))
+                .description(Some("A Solana public key represented as a base58 string."))
+                .build(),
+        );
+
+        ("SerializablePubkey", RefOr::T(schema))
+    }
+
+    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+        Vec::new()
+    }
+}
 
 impl TryFrom<&str> for SerializablePubkey {
     type Error = ParsePubkeyError;
@@ -68,19 +87,6 @@ impl From<SerializablePubkey> for String {
 impl fmt::Debug for SerializablePubkey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SerializablePubkey({})", self.0)
-    }
-}
-
-impl JsonSchema for SerializablePubkey {
-    fn schema_name() -> String {
-        "SerializablePubkey".to_string()
-    }
-
-    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
-        let schema = gen.subschema_for::<String>();
-        let mut schema_object = schema.into_object();
-        schema_object.metadata().description = Some("A base58 encoded string".to_string());
-        schema_object.into()
     }
 }
 

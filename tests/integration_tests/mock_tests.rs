@@ -241,10 +241,10 @@ async fn test_multiple_accounts(
     for owner in [owner1, owner2] {
         let res = setup
             .api
-            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(
-                SerializablePubkey::from(owner),
-                None,
-            ))
+            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                owner: SerializablePubkey::from(owner),
+                ..Default::default()
+            })
             .await
             .unwrap()
             .value;
@@ -256,15 +256,11 @@ async fn test_multiple_accounts(
         loop {
             let res = setup
                 .api
-                .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest(
-                    SerializablePubkey::from(owner),
-                    Some(
-                        photon_indexer::api::method::get_compressed_accounts_by_owner::Options {
-                            cursor: cursor.clone(),
-                            limit: Some(Limit::new(1).unwrap()),
-                        },
-                    ),
-                ))
+                .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                    owner: SerializablePubkey::from(owner),
+                    cursor: cursor.clone(),
+                    limit: Some(Limit::new(1).unwrap()),
+                })
                 .await
                 .unwrap()
                 .value;

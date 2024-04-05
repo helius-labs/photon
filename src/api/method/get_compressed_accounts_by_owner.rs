@@ -1,28 +1,32 @@
 use crate::dao::{generated::accounts, typedefs::hash::Hash};
-use schemars::JsonSchema;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, Limit, ResponseWithContext, PAGE_LIMIT},
+    utils::{Context, Limit, PAGE_LIMIT},
 };
 use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::utils::{parse_account_model, Account};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Options {
     pub cursor: Option<Hash>,
     pub limit: Option<Limit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountsByOwnerRequest(pub SerializablePubkey, pub Option<Options>);
+pub struct GetCompressedAccountsByOwnerRequest {
+    pub owner: SerializablePubkey,
+    pub cursor: Option<Hash>,
+    pub limit: Option<Limit>,
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PaginatedAccountList {
     pub items: Vec<Account>,
@@ -30,32 +34,38 @@ pub struct PaginatedAccountList {
     pub cursor: Option<Hash>,
 }
 
-pub type GetCompressedAccountsByOwnerResponse = ResponseWithContext<PaginatedAccountList>;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct GetCompressedAccountsByOwnerResponse {
+    pub context: Context,
+    pub value: PaginatedAccountList,
+}
 
 pub async fn get_compressed_accounts_by_owner(
     conn: &DatabaseConnection,
     request: GetCompressedAccountsByOwnerRequest,
 ) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let owner = request.0;
+    let GetCompressedAccountsByOwnerRequest {
+        owner,
+        cursor,
+        limit,
+    } = request;
 
     let mut filter = accounts::Column::Owner
         .eq::<Vec<u8>>(owner.into())
         .and(accounts::Column::Spent.eq(false));
 
-    let mut limit = PAGE_LIMIT;
-    if let Some(options) = request.1 {
-        if let Some(cursor) = options.cursor {
-            filter = filter.and(accounts::Column::Hash.gt::<Vec<u8>>(cursor.into()));
-        }
-        if let Some(l) = options.limit {
-            limit = l.value();
-        }
+    if let Some(cursor) = cursor {
+        filter = filter.and(accounts::Column::Hash.gt::<Vec<u8>>(cursor.into()));
+    }
+    let mut query_limit = PAGE_LIMIT;
+    if let Some(limit) = limit {
+        query_limit = limit.value();
     }
 
     let result = accounts::Entity::find()
         .order_by(accounts::Column::Hash, sea_orm::Order::Asc)
-        .limit(limit)
+        .limit(query_limit)
         .filter(filter)
         .all(conn)
         .await?;
@@ -64,8 +74,9 @@ pub async fn get_compressed_accounts_by_owner(
         .into_iter()
         .map(parse_account_model)
         .collect::<Result<Vec<Account>, PhotonApiError>>()?;
+
     let mut cursor = items.last().map(|u| u.hash.clone());
-    if items.len() < limit as usize {
+    if items.len() < query_limit as usize {
         cursor = None;
     }
 
