@@ -79,7 +79,7 @@ fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
         builder,
         "method",
         &name,
-        "The name of the DAS method to invoke.",
+        "The name of the method to invoke.",
     );
     builder = builder
         .required("jsonrpc")
