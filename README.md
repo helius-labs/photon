@@ -59,7 +59,12 @@ export DEVNET_RPC_URL=https://api.mainnet-beta.solana.com
 export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
 ```
 
-Afterwards, run:
+Additionally, for tests we use `swagger-cli` to validate our OpenAPI schemas. So please install it:
+```bash
+npm install -g @apidevtools/swagger-cli
+```
+
+Afterwards finishing setup simply run:
 ```bash
 cargo test
 ```
@@ -82,7 +87,7 @@ sea-orm-cli generate entity -o src/dao/generated
 
 ### Documentation Generation
 
-In order to update the OpenAPI schemas for the API please first install the swagger-cli through:
+In order to update the OpenAPI schemas for the API please first install the `swagger-cli` through:
 
 ```bash
 npm install -g @apidevtools/swagger-cli

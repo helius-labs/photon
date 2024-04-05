@@ -4,4 +4,5 @@
 // 2. The ability to add global locks on the DB to prevent tests from interfering with each other.
 mod e2e_tests;
 mod mock_tests;
+mod open_api_tests;
 mod utils;
