@@ -1,11 +1,18 @@
 use crate::dao::generated::accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
 use super::utils::{parse_decimal, AccountDataTable, LamportModel};
 use super::utils::{CompressedAccountRequest, Context, ResponseWithContext};
 
-pub type GetCompressedAccountBalance = ResponseWithContext<u64>;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+pub struct GetCompressedAccountBalance {
+    pub context: Context,
+    pub value: u64,
+}
 
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,

@@ -1,13 +1,13 @@
 use crate::dao::generated::token_accounts;
-use schemars::JsonSchema;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
 use super::utils::{AccountDataTable, ResponseWithContext};
 use super::utils::{BalanceModel, CompressedAccountRequest, Context};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 // This is a struct because in the future we might add other fields here like decimals or uiAmount,
 // which is a string representation with decimals in the form of "10.00"
@@ -15,7 +15,12 @@ pub struct TokenAccountBalance {
     pub amount: String,
 }
 
-pub type GetCompressedTokenAccountBalanceResponse = ResponseWithContext<TokenAccountBalance>;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+pub struct GetCompressedTokenAccountBalanceResponse {
+    pub context: Context,
+    pub value: TokenAccountBalance,
+}
 
 pub async fn get_compressed_token_account_balance(
     conn: &DatabaseConnection,

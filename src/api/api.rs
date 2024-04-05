@@ -4,7 +4,10 @@ use crate::dao::typedefs::hash::Hash;
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
+use utoipa::openapi::{RefOr, Schema};
+use utoipa::ToSchema;
 
+use super::method::get_compressed_account::AccountResponse;
 use super::{
     error::PhotonApiError,
     method::{
@@ -25,6 +28,7 @@ use super::{
         get_health::get_health,
         get_multiple_compressed_account_proofs::{
             get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse,
+            HashList,
         },
         get_multiple_compressed_accounts::{
             get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
@@ -32,7 +36,7 @@ use super::{
         },
         get_slot::get_slot,
         utils::{
-            AccountResponse, CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
+            CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
             TokenAccountListResponse,
         },
     },
@@ -74,11 +78,13 @@ impl PhotonApi {
     }
 }
 
-impl PhotonApi {
-    pub async fn get_methods() -> Result<(), PhotonApiError> {
-        Ok(())
-    }
+pub struct OpenApiSpec {
+    pub name: String,
+    pub request: Option<RefOr<Schema>>,
+    pub response: RefOr<Schema>,
+}
 
+impl PhotonApi {
     pub async fn liveness(&self) -> Result<(), PhotonApiError> {
         Ok(())
     }
@@ -110,7 +116,7 @@ impl PhotonApi {
 
     pub async fn get_multiple_compressed_account_proofs(
         &self,
-        request: Vec<Hash>,
+        request: HashList,
     ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
@@ -163,6 +169,52 @@ impl PhotonApi {
         request: GetMultipleCompressedAccountsRequest,
     ) -> Result<GetMultipleCompressedAccountsResponse, PhotonApiError> {
         get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
+    }
+
+    // HACK: This could be easily implemented through a macro. Using ChatGPT instead for speed.
+    pub fn method_api_specs() -> Vec<OpenApiSpec> {
+        vec![
+            OpenApiSpec {
+                name: "getCompressedAccount".to_string(),
+                request: Some(HashRequest::schema().1),
+                response: AccountResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedAccountProof".to_string(),
+                request: Some(HashRequest::schema().1),
+                response: GetCompressedAccountProofResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleCompressedAccountProofs".to_string(),
+                request: Some(HashList::schema().1),
+                response: GetMultipleCompressedAccountProofsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountsByOwner".to_string(),
+                request: Some(GetCompressedTokenAccountsByAuthority::schema().1),
+                response: TokenAccountListResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountsByDelegate".to_string(),
+                request: Some(GetCompressedTokenAccountsByAuthority::schema().1),
+                response: TokenAccountListResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountBalance".to_string(),
+                request: Some(CompressedAccountRequest::schema().1),
+                response: GetCompressedTokenAccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedBalance".to_string(),
+                request: Some(CompressedAccountRequest::schema().1),
+                response: GetCompressedAccountBalance::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedAccountsByOwner".to_string(),
+                request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
+                response: GetCompressedAccountsByOwnerResponse::schema().1,
+            },
+        ]
     }
 }
 

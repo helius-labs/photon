@@ -10,6 +10,7 @@ use photon_indexer::{
         api::PhotonApi,
         method::utils::{Account, TokenAccountList},
     },
+    common::relative_project_path,
     dao::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
         parser::{
@@ -230,10 +231,6 @@ pub async fn truncate_table(conn: &DatabaseConnection, table: String) -> Result<
     }
 }
 
-fn get_relative_project_path(path: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)
-}
-
 pub async fn fetch_transaction(
     client: &RpcClient,
     sig: Signature,
@@ -258,7 +255,7 @@ pub async fn fetch_transaction(
 
 pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> TransactionInfo {
     let sig = Signature::from_str(tx).unwrap();
-    let dir = get_relative_project_path(&format!("tests/data/transactions/{}", setup.name));
+    let dir = relative_project_path(&format!("tests/data/transactions/{}", setup.name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
@@ -283,7 +280,7 @@ async fn fetch_block(client: &RpcClient, slot: Slot) -> UiConfirmedBlock {
 }
 
 pub async fn cached_fetch_block(setup: &TestSetup, slot: Slot) -> BlockInfo {
-    let dir = get_relative_project_path(&format!("tests/data/blocks/{}", setup.name));
+    let dir = relative_project_path(&format!("tests/data/blocks/{}", setup.name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }

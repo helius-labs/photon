@@ -9,13 +9,11 @@ use log::debug;
 use tower_http::cors::{Any, CorsLayer};
 
 use super::method::{
-    get_compressed_account_proof::HashRequest,
     get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
     get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest,
     utils::CompressedAccountRequest,
 };
 use super::{api::PhotonApi, method::utils::GetCompressedTokenAccountsByAuthority};
-use crate::dao::typedefs::hash::Hash;
 
 pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -51,7 +49,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedAccount",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<CompressedAccountRequest>()?;
+            let payload = rpc_params.parse()?;
             rpc_context
                 .get_compressed_account(payload)
                 .await
@@ -62,7 +60,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getCompressedAccountProof",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<HashRequest>()?;
+            let payload = rpc_params.parse()?;
             rpc_context
                 .get_compressed_account_proof(payload)
                 .await
@@ -73,7 +71,7 @@ pub fn build_rpc_module(contract: PhotonApi) -> Result<RpcModule<PhotonApi>, any
     module.register_async_method(
         "getMultipleCompressedAccountProofs",
         |rpc_params, rpc_context| async move {
-            let payload = rpc_params.parse::<Vec<Hash>>()?;
+            let payload = rpc_params.parse()?;
             rpc_context
                 .get_multiple_compressed_account_proofs(payload)
                 .await
