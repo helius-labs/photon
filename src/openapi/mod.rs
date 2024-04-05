@@ -142,7 +142,7 @@ pub fn update_docs(is_test: bool) {
                     spec.name.clone()
                 ))
             }
-            false => relative_project_path(&format!("src/openapi/docs/{}.yaml", spec.name.clone())),
+            false => relative_project_path(&format!("src/openapi/specs/{}.yaml", spec.name.clone())),
         };
 
         std::fs::write(path.clone(), yaml).unwrap();
