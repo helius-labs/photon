@@ -1,0 +1,250 @@
+openapi: 3.0.3
+info:
+  title: photon-indexer
+  description: Solana indexer for general compression
+  license:
+    name: Apache-2.0
+  version: 0.4.0
+servers:
+- url: http://127.0.0.1
+paths:
+  /:
+    summary: getCompressedBalance
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - string
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the DAS method to invoke.
+                  enum:
+                  - getCompressedBalance
+                params:
+                  type: object
+                  properties:
+                    address:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                    hash:
+                      allOf:
+                      - $ref: '#/components/schemas/Hash'
+                      nullable: true
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - context
+                - value
+                properties:
+                  context:
+                    $ref: '#/components/schemas/Context'
+                  value:
+                    type: integer
+                    format: int64
+                    minimum: 0
+components:
+  schemas:
+    Account:
+      type: object
+      required:
+      - hash
+      - discriminator
+      - data
+      - owner
+      - lamports
+      - slotUpdated
+      properties:
+        address:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+        data:
+          type: string
+        discriminator:
+          type: integer
+          format: int64
+          minimum: 0
+        hash:
+          $ref: '#/components/schemas/Hash'
+        lamports:
+          type: integer
+          format: int64
+          minimum: 0
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        seq:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        slotUpdated:
+          type: integer
+          format: int64
+          minimum: 0
+        tree:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+      additionalProperties: false
+    Context:
+      type: object
+      required:
+      - slot
+      properties:
+        slot:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: false
+    Hash:
+      type: string
+      format: byte
+      description: A 32-byte hash represented as a base58 string.
+    Limit:
+      type: integer
+      format: int64
+      minimum: 0
+    MerkleProofWithContext:
+      type: object
+      required:
+      - proof
+      - leafIndex
+      - hash
+      - merkleTree
+      properties:
+        hash:
+          $ref: '#/components/schemas/Hash'
+        leafIndex:
+          type: integer
+          format: int32
+          minimum: 0
+        merkleTree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        proof:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+      additionalProperties: false
+    PaginatedAccountList:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          allOf:
+          - $ref: '#/components/schemas/Hash'
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+      additionalProperties: false
+    SerializablePubkey:
+      type: string
+      format: byte
+      description: A Solana public key represented as a base58 string.
+    TokenAcccount:
+      type: object
+      required:
+      - hash
+      - owner
+      - mint
+      - amount
+      - isNative
+      - frozen
+      - data
+      - discriminator
+      - lamports
+      properties:
+        address:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+        closeAuthority:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+        data:
+          type: string
+          format: binary
+        delegate:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+        discriminator:
+          type: integer
+          format: int64
+          minimum: 0
+        frozen:
+          type: boolean
+        hash:
+          $ref: '#/components/schemas/Hash'
+        isNative:
+          type: boolean
+        lamports:
+          type: integer
+          format: int64
+          minimum: 0
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        seq:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        tree:
+          allOf:
+          - $ref: '#/components/schemas/SerializablePubkey'
+          nullable: true
+      additionalProperties: false
+    TokenAccountBalance:
+      type: object
+      required:
+      - amount
+      properties:
+        amount:
+          type: string
+      additionalProperties: false
+    TokenAccountList:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenAcccount'
