@@ -7,8 +7,8 @@ use super::{
     super::error::PhotonApiError,
     utils::{Context, ResponseWithContext, PAGE_LIMIT},
 };
-use crate::dao::typedefs::hash::Hash;
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::utils::{parse_account_model, Account};
 

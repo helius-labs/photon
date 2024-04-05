@@ -12,7 +12,7 @@ use std::{fmt, str::FromStr};
 
 use std::convert::TryFrom;
 
-use crate::dao::typedefs::hash::Hash;
+use crate::common::typedefs::hash::Hash;
 
 use super::super::error::IngesterError;
 

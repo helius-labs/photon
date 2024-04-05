@@ -10,8 +10,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use sqlx::types::Decimal;
 use utoipa::ToSchema;
 
-use crate::dao::typedefs::hash::Hash;
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;

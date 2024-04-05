@@ -1,4 +1,4 @@
-use crate::dao::{generated::accounts, typedefs::hash::Hash};
+use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -7,7 +7,7 @@ use super::{
     super::error::PhotonApiError,
     utils::{Context, Limit, PAGE_LIMIT},
 };
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 
 use super::utils::{parse_account_model, Account};
 
