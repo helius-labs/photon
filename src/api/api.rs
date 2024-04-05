@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::dao::typedefs::hash::Hash;
+
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};

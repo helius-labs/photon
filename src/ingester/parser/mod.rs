@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use log::{debug, info};
+use log::{debug};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::ingester::parser::{

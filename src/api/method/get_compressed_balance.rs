@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
 use super::utils::{parse_decimal, AccountDataTable, LamportModel};
-use super::utils::{CompressedAccountRequest, Context, ResponseWithContext};
+use super::utils::{CompressedAccountRequest, Context};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.

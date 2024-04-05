@@ -7,7 +7,7 @@ use super::{
     get_multiple_compressed_account_proofs::{
         get_multiple_compressed_account_proofs_helper, MerkleProofWithContext,
     },
-    utils::{Context, ResponseWithContext},
+    utils::{Context},
 };
 use crate::dao::typedefs::hash::Hash;
 

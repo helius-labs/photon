@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
-use super::utils::{AccountDataTable, ResponseWithContext};
+use super::utils::{AccountDataTable};
 use super::utils::{BalanceModel, CompressedAccountRequest, Context};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

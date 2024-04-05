@@ -3,7 +3,7 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::PaginatedAcco
 use photon_indexer::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use photon_indexer::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use photon_indexer::api::method::utils::Account;
-use photon_indexer::api::method::utils::CompressedAccountRequest;
+
 use photon_indexer::api::method::utils::Context;
 use photon_indexer::api::method::utils::Limit;
 use photon_indexer::api::method::utils::TokenAcccount;
@@ -12,24 +12,24 @@ use photon_indexer::dao::typedefs::hash::Hash;
 use photon_indexer::dao::typedefs::serializable_pubkey::SerializablePubkey;
 
 use photon_indexer::common::relative_project_path;
-use utoipa::openapi::path::Operation;
+
 use utoipa::openapi::path::OperationBuilder;
-use utoipa::openapi::request_body::RequestBody;
+
 use utoipa::openapi::request_body::RequestBodyBuilder;
-use utoipa::openapi::Content;
+
 use utoipa::openapi::ContentBuilder;
-use utoipa::openapi::Object;
+
 use utoipa::openapi::ObjectBuilder;
 use utoipa::openapi::PathItem;
 use utoipa::openapi::PathItemType;
-use utoipa::openapi::PathsBuilder;
+
 use utoipa::openapi::RefOr;
 use utoipa::openapi::Required;
 use utoipa::openapi::ResponseBuilder;
 use utoipa::openapi::ResponsesBuilder;
 use utoipa::openapi::Schema;
 use utoipa::openapi::SchemaType;
-use utoipa::openapi::Server;
+
 use utoipa::openapi::ServerBuilder;
 use utoipa::OpenApi;
 use utoipa::ToSchema;

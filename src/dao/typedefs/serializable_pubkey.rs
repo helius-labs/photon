@@ -8,7 +8,7 @@ use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey as SolanaPubkey;
-use utoipa::openapi::{self, schema::Schema, RefOr};
+use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{KnownFormat, ObjectBuilder, SchemaFormat, SchemaType};
 use utoipa::ToSchema;
 

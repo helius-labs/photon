@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, ResponseWithContext, PAGE_LIMIT},
+    utils::{Context, PAGE_LIMIT},
 };
 use crate::dao::typedefs::hash::Hash;
 

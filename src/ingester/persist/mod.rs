@@ -13,7 +13,7 @@ use crate::{
     ingester::parser::state_update::StateUpdate,
 };
 use borsh::BorshDeserialize;
-use log::{debug, info};
+use log::{debug};
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
