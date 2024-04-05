@@ -8,6 +8,7 @@ use sea_orm::{
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use sqlx::types::Decimal;
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use crate::common::typedefs::hash::Hash;
@@ -65,10 +66,36 @@ pub struct ResponseWithContext<T> {
     pub value: T,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, FromQueryResult)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
     pub slot: u64,
+}
+
+impl<'__s> ToSchema<'__s> for Context {
+    fn schema() -> (&'__s str, RefOr<Schema>) {
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::Object)
+                .property(
+                    "slot",
+                    Schema::Object(
+                        ObjectBuilder::new()
+                            .schema_type(SchemaType::Integer)
+                            .description(Some("The current slot"))
+                            .example(Some(serde_json::Value::Number(serde_json::Number::from(0))))
+                            .build(),
+                    ),
+                )
+                .required("slot")
+                .build(),
+        );
+        ("Context", RefOr::T(schema))
+    }
+
+    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+        Vec::new()
+    }
 }
 
 #[derive(FromQueryResult)]

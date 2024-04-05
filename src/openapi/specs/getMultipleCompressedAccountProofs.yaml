@@ -34,7 +34,7 @@ paths:
                   - '2.0'
                 method:
                   type: string
-                  description: The name of the DAS method to invoke.
+                  description: The name of the method to invoke.
                   enum:
                   - getMultipleCompressedAccountProofs
                 params:
@@ -110,13 +110,12 @@ components:
       properties:
         slot:
           type: integer
-          format: int64
-          minimum: 0
-      additionalProperties: false
+          description: The current slot
+          example: 0
     Hash:
       type: string
-      format: byte
       description: A 32-byte hash represented as a base58 string.
+      example: 11111113R2cuenjG5nFubqX9Wzuukdin2YfGQVzu5
     Limit:
       type: integer
       format: int64
@@ -158,8 +157,8 @@ components:
       additionalProperties: false
     SerializablePubkey:
       type: string
-      format: byte
       description: A Solana public key represented as a base58 string.
+      example: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
     TokenAcccount:
       type: object
       required:

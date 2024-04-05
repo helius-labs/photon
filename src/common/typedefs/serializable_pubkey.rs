@@ -9,7 +9,7 @@ use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey as SolanaPubkey;
 use utoipa::openapi::{schema::Schema, RefOr};
-use utoipa::openapi::{KnownFormat, ObjectBuilder, SchemaFormat, SchemaType};
+use utoipa::openapi::{ObjectBuilder, SchemaType};
 use utoipa::ToSchema;
 
 use std::convert::TryFrom;
@@ -23,8 +23,10 @@ impl<'__s> ToSchema<'__s> for SerializablePubkey {
         let schema = Schema::Object(
             ObjectBuilder::new()
                 .schema_type(SchemaType::String)
-                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Byte)))
                 .description(Some("A Solana public key represented as a base58 string."))
+                .example(Some(serde_json::Value::String(
+                    SerializablePubkey(SolanaPubkey::new_unique()).to_string(),
+                )))
                 .build(),
         );
 

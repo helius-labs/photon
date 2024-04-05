@@ -2,7 +2,7 @@ use core::fmt;
 use std::mem;
 
 use serde::{Deserialize, Serialize};
-use utoipa::openapi::{KnownFormat, ObjectBuilder, RefOr, Schema, SchemaFormat, SchemaType};
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use serde::de::{self, Visitor};
@@ -45,8 +45,10 @@ impl<'__s> ToSchema<'__s> for Hash {
         let schema = Schema::Object(
             ObjectBuilder::new()
                 .schema_type(SchemaType::String)
-                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Byte)))
                 .description(Some("A 32-byte hash represented as a base58 string."))
+                .example(Some(serde_json::Value::String(
+                    Hash::new_unique().to_base58(),
+                )))
                 .build(),
         );
 
