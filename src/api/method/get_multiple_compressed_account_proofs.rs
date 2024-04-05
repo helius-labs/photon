@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::dao::{generated::state_trees, typedefs::serializable_pubkey::SerializablePubkey};
+use crate::{
+    common::typedefs::serializable_pubkey::SerializablePubkey, dao::generated::state_trees,
+};
 use itertools::Itertools;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
@@ -12,7 +14,7 @@ use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
 };
-use crate::dao::typedefs::hash::Hash;
+use crate::common::typedefs::hash::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

@@ -1,14 +1,14 @@
 use function_name::named;
 use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
 use photon_indexer::api::method::utils::GetCompressedTokenAccountsByAuthority;
+use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
-use photon_indexer::dao::typedefs::hash::Hash;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;

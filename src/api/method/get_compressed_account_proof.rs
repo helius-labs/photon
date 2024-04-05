@@ -7,9 +7,9 @@ use super::{
     get_multiple_compressed_account_proofs::{
         get_multiple_compressed_account_proofs_helper, MerkleProofWithContext,
     },
-    utils::{Context},
+    utils::Context,
 };
-use crate::dao::typedefs::hash::Hash;
+use crate::common::typedefs::hash::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

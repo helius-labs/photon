@@ -1,9 +1,4 @@
-use std::{
-    env,
-    path::{Path},
-    str::FromStr,
-    sync::Mutex,
-};
+use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use photon_indexer::{
     api::{
@@ -11,7 +6,7 @@ use photon_indexer::{
         method::utils::{Account, TokenAccountList},
     },
     common::relative_project_path,
-    dao::typedefs::serializable_pubkey::SerializablePubkey,
+    common::typedefs::serializable_pubkey::SerializablePubkey,
     ingester::{
         parser::{
             indexer_events::{AccountState, TokenData},

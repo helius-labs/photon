@@ -1,4 +1,4 @@
-use crate::dao::typedefs::hash::ParseHashError;
+use crate::common::typedefs::hash::ParseHashError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use solana_sdk::pubkey::ParsePubkeyError;

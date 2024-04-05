@@ -8,8 +8,8 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
     GetCompressedTokenAccountsByAuthorityOptions,
 };
+use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
-use photon_indexer::dao::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::indexer_events::TokenData;
 use photon_indexer::ingester::parser::state_update::{EnrichedAccount, StateUpdate};

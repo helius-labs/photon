@@ -8,8 +8,8 @@ use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
-use crate::dao::typedefs::hash::Hash;
-use crate::dao::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use dirs;
 
 use crate::common::relative_project_path;
@@ -142,7 +142,9 @@ pub fn update_docs(is_test: bool) {
                     spec.name.clone()
                 ))
             }
-            false => relative_project_path(&format!("src/openapi/specs/{}.yaml", spec.name.clone())),
+            false => {
+                relative_project_path(&format!("src/openapi/specs/{}.yaml", spec.name.clone()))
+            }
         };
 
         std::fs::write(path.clone(), yaml).unwrap();

@@ -5,15 +5,13 @@ use super::{
         state_update::{EnrichedAccount, EnrichedPathNode},
     },
 };
+use crate::common::typedefs::hash::Hash;
 use crate::{
-    dao::{
-        generated::{accounts, state_trees, token_accounts},
-        typedefs::hash::Hash,
-    },
+    dao::generated::{accounts, state_trees, token_accounts},
     ingester::parser::state_update::StateUpdate,
 };
 use borsh::BorshDeserialize;
-use log::{debug};
+use log::debug;
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
 };
