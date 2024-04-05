@@ -34,7 +34,7 @@ paths:
                   - '2.0'
                 method:
                   type: string
-                  description: The name of the DAS method to invoke.
+                  description: The name of the method to invoke.
                   enum:
                   - getCompressedTokenAccountBalance
                 params:
@@ -116,13 +116,12 @@ components:
       properties:
         slot:
           type: integer
-          format: int64
-          minimum: 0
-      additionalProperties: false
+          description: The current slot
+          example: 0
     Hash:
       type: string
-      format: byte
       description: A 32-byte hash represented as a base58 string.
+      example: 11111115q4EpJaTXAZWpCg3J2zppWGSZ46KXozzo9
     Limit:
       type: integer
       format: int64
@@ -164,8 +163,8 @@ components:
       additionalProperties: false
     SerializablePubkey:
       type: string
-      format: byte
       description: A Solana public key represented as a base58 string.
+      example: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
     TokenAcccount:
       type: object
       required:
