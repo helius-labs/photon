@@ -113,6 +113,16 @@ components:
           - $ref: '#/components/schemas/SerializablePubkey'
           nullable: true
       additionalProperties: false
+    AccountList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+      additionalProperties: false
     Context:
       type: object
       required:
@@ -121,6 +131,7 @@ components:
         slot:
           type: integer
           description: The current slot
+          default: 0
           example: 0
     Hash:
       type: string

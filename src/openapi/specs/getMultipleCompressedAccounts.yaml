@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressedBalance
+    summary: getMultipleCompressedAccounts
     post:
       requestBody:
         content:
@@ -36,17 +36,19 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedBalance
+                  - getMultipleCompressedAccounts
                 params:
                   type: object
                   properties:
-                    address:
-                      allOf:
-                      - $ref: '#/components/schemas/SerializablePubkey'
+                    addresses:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/SerializablePubkey'
                       nullable: true
-                    hash:
-                      allOf:
-                      - $ref: '#/components/schemas/Hash'
+                    hashes:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Hash'
                       nullable: true
                   additionalProperties: false
         required: true
@@ -64,9 +66,7 @@ paths:
                   context:
                     $ref: '#/components/schemas/Context'
                   value:
-                    type: integer
-                    format: int64
-                    minimum: 0
+                    $ref: '#/components/schemas/AccountList'
 components:
   schemas:
     Account:
@@ -134,7 +134,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111116djSnXB2wXVGT4xDLsfTnkp1p4cCxHAfRq
+      example: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
     Limit:
       type: integer
       format: int64
@@ -177,7 +177,7 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      example: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
+      example: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
     TokenAcccount:
       type: object
       required:

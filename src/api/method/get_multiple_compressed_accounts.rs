@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, ResponseWithContext, PAGE_LIMIT},
+    utils::{Context, PAGE_LIMIT},
 };
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -25,7 +25,12 @@ pub struct AccountList {
     pub items: Vec<Account>,
 }
 
-pub type GetMultipleCompressedAccountsResponse = ResponseWithContext<AccountList>;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics in order to simplify documentation generation
+pub struct GetMultipleCompressedAccountsResponse {
+    pub context: Context,
+    pub value: AccountList,
+}
 
 async fn fetch_accounts_from_hashes(
     conn: &DatabaseConnection,
