@@ -111,6 +111,7 @@ components:
         slot:
           type: integer
           description: The current slot
+          default: 0
           example: 0
     Hash:
       type: string

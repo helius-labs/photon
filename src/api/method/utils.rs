@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -7,6 +9,7 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
+use serde_json::Number;
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -83,6 +86,9 @@ impl<'__s> ToSchema<'__s> for Context {
                         ObjectBuilder::new()
                             .schema_type(SchemaType::Integer)
                             .description(Some("The current slot"))
+                            .default(Some(serde_json::Value::Number(
+                                Number::from_str("0").unwrap(),
+                            )))
                             .example(Some(serde_json::Value::Number(serde_json::Number::from(0))))
                             .build(),
                     ),
