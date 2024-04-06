@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressedBalance
+    summary: getSlot
     post:
       requestBody:
         content:
@@ -20,7 +20,6 @@ paths:
               - jsonrpc
               - id
               - method
-              - params
               properties:
                 id:
                   type: string
@@ -36,19 +35,7 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedBalance
-                params:
-                  type: object
-                  properties:
-                    address:
-                      allOf:
-                      - $ref: '#/components/schemas/SerializablePubkey'
-                      nullable: true
-                    hash:
-                      allOf:
-                      - $ref: '#/components/schemas/Hash'
-                      nullable: true
-                  additionalProperties: false
+                  - getSlot
         required: true
       responses:
         '200':
@@ -56,17 +43,10 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - context
-                - value
-                properties:
-                  context:
-                    $ref: '#/components/schemas/Context'
-                  value:
-                    type: integer
-                    format: int64
-                    minimum: 0
+                type: integer
+                description: The current slot
+                default: 0
+                example: 0
 components:
   schemas:
     Account:
@@ -134,7 +114,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111116djSnXB2wXVGT4xDLsfTnkp1p4cCxHAfRq
+      example: 11111119rSGfPZLcyCGzY4uYEL1fkzJr6fke9qKxb
     Limit:
       type: integer
       format: int64
@@ -177,7 +157,7 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      example: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
+      example: 11111119T6fgHG3unjQB6vpWozhBdiXDbQovvFVeF
     TokenAcccount:
       type: object
       required:

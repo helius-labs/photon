@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -7,6 +9,7 @@ use sea_orm::{
     QuerySelect,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
+use serde_json::Number;
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -60,16 +63,23 @@ impl<'de> Deserialize<'de> for Limit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct ResponseWithContext<T> {
-    pub context: Context,
-    pub value: T,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
     pub slot: u64,
+}
+
+pub fn slot_schema() -> Schema {
+    Schema::Object(
+        ObjectBuilder::new()
+            .schema_type(SchemaType::Integer)
+            .description(Some("The current slot"))
+            .default(Some(serde_json::Value::Number(
+                Number::from_str("0").unwrap(),
+            )))
+            .example(Some(serde_json::Value::Number(serde_json::Number::from(0))))
+            .build(),
+    )
 }
 
 impl<'__s> ToSchema<'__s> for Context {
@@ -77,16 +87,7 @@ impl<'__s> ToSchema<'__s> for Context {
         let schema = Schema::Object(
             ObjectBuilder::new()
                 .schema_type(SchemaType::Object)
-                .property(
-                    "slot",
-                    Schema::Object(
-                        ObjectBuilder::new()
-                            .schema_type(SchemaType::Integer)
-                            .description(Some("The current slot"))
-                            .example(Some(serde_json::Value::Number(serde_json::Number::from(0))))
-                            .build(),
-                    ),
-                )
+                .property("slot", slot_schema())
                 .required("slot")
                 .build(),
         );
