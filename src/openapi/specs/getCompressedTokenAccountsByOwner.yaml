@@ -104,6 +104,16 @@ components:
           - $ref: '#/components/schemas/SerializablePubkey'
           nullable: true
       additionalProperties: false
+    AccountList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+      additionalProperties: false
     Context:
       type: object
       required:

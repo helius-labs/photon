@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-
+use crate::api::method::utils::slot_schema;
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
-use utoipa::openapi::{RefOr, Schema};
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use super::method::get_compressed_account::AccountResponse;
@@ -213,6 +213,28 @@ impl PhotonApi {
                 name: "getCompressedAccountsByOwner".to_string(),
                 request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
                 response: GetCompressedAccountsByOwnerResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleCompressedAccounts".to_string(),
+                request: Some(GetMultipleCompressedAccountsRequest::schema().1),
+                response: GetMultipleCompressedAccountsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getHealth".to_string(),
+                request: None,
+                response: RefOr::T(Schema::Object(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::String)
+                        .description(Some("ok if healthy"))
+                        .default(Some(serde_json::Value::String("ok".to_string())))
+                        .enum_values(Some(vec!["ok".to_string()]))
+                        .build(),
+                )),
+            },
+            OpenApiSpec {
+                name: "getSlot".to_string(),
+                request: None,
+                response: RefOr::T(slot_schema()),
             },
         ]
     }
