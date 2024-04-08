@@ -19,6 +19,7 @@ expression: accounts
         "closeAuthority": null,
         "frozen": false,
         "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgRrecV+aglSOSgsBIGOlhEvPwOkABupelZMI4UqPx6l/CwBAAAAAAAAAAEAAAAAAAAAAAA=",
+        "dataHash": "2oxvZ6Cr89GyYziwQeYhjwyCodJw4D8pr8aCd6AmymoT",
         "discriminator": 2,
         "lamports": 0,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",

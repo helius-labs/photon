@@ -9,6 +9,7 @@ pub struct Model {
     pub id: i64,
     pub hash: Vec<u8>,
     pub data: Vec<u8>,
+    pub data_hash: Option<Vec<u8>>,
     pub discriminator: Vec<u8>,
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,

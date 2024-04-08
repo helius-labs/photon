@@ -20,6 +20,7 @@ pub enum Accounts {
     Hash,
     Address,
     Data,
+    DataHash,
     Discriminator,
     Owner,
     Tree,

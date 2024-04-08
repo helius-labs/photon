@@ -113,6 +113,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Accounts::Hash).binary().not_null())
                     .col(ColumnDef::new(Accounts::Data).binary().not_null())
+                    .col(ColumnDef::new(Accounts::DataHash).binary())
                     .col(ColumnDef::new(Accounts::Discriminator).binary().not_null())
                     .col(ColumnDef::new(Accounts::Address).binary())
                     .col(ColumnDef::new(Accounts::Owner).binary().not_null())

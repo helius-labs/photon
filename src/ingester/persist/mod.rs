@@ -168,6 +168,7 @@ async fn append_output_accounts(
             slot,
         } = account;
 
+        let account_data = account.data.clone();
         account_models.push(accounts::ActiveModel {
             hash: Set(hash.to_vec()),
             address: Set(account.address.map(|x| x.to_vec())),
@@ -176,7 +177,8 @@ async fn append_output_accounts(
                 .clone()
                 .map(|d| d.discriminator.to_vec())
                 .unwrap_or(Vec::new())),
-            data: Set(account.data.clone().map(|d| d.data).unwrap_or(Vec::new())),
+            data: Set(account_data.clone().map(|d| d.data).unwrap_or(Vec::new())),
+            data_hash: Set(account_data.clone().map(|d| d.data_hash.to_vec())),
             tree: Set(Some(tree.to_bytes().to_vec())),
             owner: Set(account.owner.as_ref().to_vec()),
             lamports: Set(Decimal::from(account.lamports)),
