@@ -39,6 +39,10 @@ paths:
                   - getCompressedBalance
                 params:
                   type: object
+                  description: Request for compressed account data
+                  default:
+                    address: null
+                    hash: '11111111111111111111111111111111'
                   properties:
                     address:
                       allOf:
@@ -49,6 +53,9 @@ paths:
                       - $ref: '#/components/schemas/Hash'
                       nullable: true
                   additionalProperties: false
+                  example:
+                    address: null
+                    hash: '11111111111111111111111111111111'
         required: true
       responses:
         '200':
@@ -177,6 +184,7 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
+      default: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
       example: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
     TokenAcccount:
       type: object

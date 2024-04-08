@@ -171,7 +171,6 @@ impl PhotonApi {
         get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
     }
 
-    // HACK: This could be easily implemented through a macro. Using ChatGPT instead for speed.
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
             OpenApiSpec {
@@ -206,7 +205,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getCompressedBalance".to_string(),
-                request: Some(CompressedAccountRequest::schema().1),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
                 response: GetCompressedAccountBalance::schema().1,
             },
             OpenApiSpec {

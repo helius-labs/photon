@@ -20,13 +20,15 @@ pub struct SerializablePubkey(SolanaPubkey);
 
 impl<'__s> ToSchema<'__s> for SerializablePubkey {
     fn schema() -> (&'__s str, RefOr<Schema>) {
+        let example = Some(serde_json::Value::String(
+            SerializablePubkey(SolanaPubkey::new_unique()).to_string(),
+        ));
         let schema = Schema::Object(
             ObjectBuilder::new()
                 .schema_type(SchemaType::String)
                 .description(Some("A Solana public key represented as a base58 string."))
-                .example(Some(serde_json::Value::String(
-                    SerializablePubkey(SolanaPubkey::new_unique()).to_string(),
-                )))
+                .example(example.clone())
+                .default(example)
                 .build(),
         );
 
