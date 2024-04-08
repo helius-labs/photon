@@ -139,8 +139,7 @@ components:
       - slotUpdated
       properties:
         address:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
+          $ref: '#/components/schemas/SerializablePubkey'
           nullable: true
         data:
           type: string
