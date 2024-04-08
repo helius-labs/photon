@@ -166,6 +166,7 @@ async fn append_output_accounts(
             seq,
             hash,
             slot,
+            leaf_index,
         } = account;
 
         let account_data = account.data.clone();
@@ -180,6 +181,7 @@ async fn append_output_accounts(
             data: Set(account_data.clone().map(|d| d.data).unwrap_or(Vec::new())),
             data_hash: Set(account_data.clone().map(|d| d.data_hash.to_vec())),
             tree: Set(Some(tree.to_bytes().to_vec())),
+            leaf_index: Set(leaf_index.map(|l| l as i64)),
             owner: Set(account.owner.as_ref().to_vec()),
             lamports: Set(Decimal::from(account.lamports)),
             spent: Set(false),

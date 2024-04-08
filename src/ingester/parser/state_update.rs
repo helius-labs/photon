@@ -11,6 +11,7 @@ pub struct EnrichedAccount {
     pub seq: Option<u64>,
     pub hash: [u8; 32],
     pub slot: u64,
+    pub leaf_index: Option<u32>,
 }
 
 pub struct EnrichedPathNode {

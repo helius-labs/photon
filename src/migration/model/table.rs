@@ -24,6 +24,7 @@ pub enum Accounts {
     Discriminator,
     Owner,
     Tree,
+    LeafIndex,
     Spent,
     Seq,
     SlotUpdated,

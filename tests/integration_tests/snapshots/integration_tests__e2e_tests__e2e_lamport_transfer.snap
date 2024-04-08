@@ -17,6 +17,7 @@ expression: accounts
         "owner": "H9umPt6hyzWn5pXDRMzy3ZuJXDqVMTK4Dvps4qY5XeTX",
         "lamports": 0,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+        "leafIndex": 0,
         "seq": 1,
         "slotUpdated": 0
       }

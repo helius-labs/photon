@@ -134,6 +134,7 @@ pub struct Account {
     pub owner: SerializablePubkey,
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
+    pub leaf_index: u32,
     pub seq: Option<u64>,
     pub slot_updated: u64,
 }
@@ -143,6 +144,18 @@ fn parse_discriminator(discriminator: Vec<u8>) -> u64 {
         0 => 0,
         _ => LittleEndian::read_u64(&discriminator),
     }
+}
+
+fn parse_leaf_index(leaf_index: Option<i64>) -> Result<u32, PhotonApiError> {
+    leaf_index
+        .ok_or(PhotonApiError::UnexpectedError(
+            "Leaf index not found".to_string(),
+        ))
+        .and_then(|leaf_index| {
+            leaf_index
+                .try_into()
+                .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
+        })
 }
 
 pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
@@ -158,6 +171,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         data_hash: account.data_hash.map(|hash| hash.try_into()).transpose()?,
         owner: account.owner.try_into()?,
         tree: account.tree.map(|tree| tree.try_into()).transpose()?,
+        leaf_index: parse_leaf_index(account.leaf_index)?,
         lamports: parse_decimal(account.lamports)?,
         slot_updated: account.slot_updated as u64,
         seq: account.seq.map(|seq| seq as u64),
@@ -189,6 +203,7 @@ pub struct TokenAcccount {
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
     pub seq: Option<u64>,
+    pub leaf_index: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -251,6 +266,7 @@ pub struct EnrichedTokenAccountModel {
     pub discriminator: Vec<u8>,
     pub lamports: Decimal,
     pub tree: Option<Vec<u8>>,
+    pub leaf_index: Option<i64>,
     pub seq: Option<i64>,
 }
 
@@ -325,6 +341,7 @@ pub async fn fetch_token_accounts(
                 discriminator: account.discriminator,
                 lamports: account.lamports,
                 tree: account.tree,
+                leaf_index: account.leaf_index,
                 seq: account.seq,
             })
         })
@@ -387,6 +404,7 @@ pub fn parse_token_accounts_model(
             .tree
             .map(SerializablePubkey::try_from)
             .transpose()?,
+        leaf_index: parse_leaf_index(token_account.leaf_index)?,
         seq: token_account.seq.map(|seq| seq as u64),
     })
 }
