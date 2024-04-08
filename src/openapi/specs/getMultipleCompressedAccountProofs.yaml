@@ -26,7 +26,7 @@ paths:
                   type: string
                   description: An ID to identify the request.
                   enum:
-                  - string
+                  - test-account
                 jsonrpc:
                   type: string
                   description: The version of the JSON-RPC protocol.
@@ -180,7 +180,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111113R2cuenjG5nFubqX9Wzuukdin2YfGQVzu5
+      example: 11111114DhpssPJgSi1YU7hCMfYt1BJ334YgsffXm
     Limit:
       type: integer
       format: int64
@@ -223,8 +223,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
-      example: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
+      default: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
+      example: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
     TokenAcccount:
       type: object
       required:

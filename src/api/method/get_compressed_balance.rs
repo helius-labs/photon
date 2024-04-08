@@ -14,6 +14,27 @@ pub struct GetCompressedAccountBalance {
     pub value: u64,
 }
 
+impl GetCompressedAccountBalance {
+    pub fn adjusted_schema() -> utoipa::openapi::RefOr<utoipa::openapi::Schema> {
+        let mut schema = GetCompressedAccountBalance::schema().1;
+        let object = match schema {
+            utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(ref mut object)) => {
+                let example = serde_json::to_value(GetCompressedAccountBalance {
+                    context: { Context { slot: 1 } },
+                    value: 1,
+                })
+                .unwrap();
+                object.default = Some(example.clone());
+                object.example = Some(example);
+                object.description = Some("Response for compressed account balance".to_string());
+                object.clone()
+            }
+            _ => unimplemented!(),
+        };
+        utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(object))
+    }
+
+}
 pub async fn get_compressed_balance(
     conn: &DatabaseConnection,
     request: CompressedAccountRequest,

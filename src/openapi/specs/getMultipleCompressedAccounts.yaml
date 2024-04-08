@@ -26,7 +26,7 @@ paths:
                   type: string
                   description: An ID to identify the request.
                   enum:
-                  - string
+                  - test-account
                 jsonrpc:
                   type: string
                   description: The version of the JSON-RPC protocol.
@@ -39,6 +39,12 @@ paths:
                   - getMultipleCompressedAccounts
                 params:
                   type: object
+                  description: Request for compressed account data
+                  default:
+                    addresses: null
+                    hashes:
+                    - 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM
+                    - 1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh
                   properties:
                     addresses:
                       type: array
@@ -51,6 +57,11 @@ paths:
                         $ref: '#/components/schemas/Hash'
                       nullable: true
                   additionalProperties: false
+                  example:
+                    addresses: null
+                    hashes:
+                    - 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM
+                    - 1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh
         required: true
       responses:
         '200':
@@ -188,7 +199,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
+      example: 111111193m4hAxmCcGXMfnjVPfNhWSjb69sDgffKu
     Limit:
       type: integer
       format: int64
@@ -231,8 +242,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
-      example: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
+      default: 11111118eRTi4fUVRoeYEeeTyL4DPAwxatvWT5q1Z
+      example: 11111118eRTi4fUVRoeYEeeTyL4DPAwxatvWT5q1Z
     TokenAcccount:
       type: object
       required:
