@@ -176,7 +176,7 @@ impl PhotonApi {
         vec![
             OpenApiSpec {
                 name: "getCompressedAccount".to_string(),
-                request: Some(HashRequest::schema().1),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
                 response: AccountResponse::schema().1,
             },
             OpenApiSpec {
@@ -201,7 +201,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountBalance".to_string(),
-                request: Some(CompressedAccountRequest::schema().1),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
                 response: GetCompressedTokenAccountBalanceResponse::schema().1,
             },
             OpenApiSpec {

@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
+use borsh::schema;
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
@@ -75,9 +76,9 @@ pub fn slot_schema() -> Schema {
             .schema_type(SchemaType::Integer)
             .description(Some("The current slot"))
             .default(Some(serde_json::Value::Number(
-                Number::from_str("0").unwrap(),
+                Number::from_str("1").unwrap(),
             )))
-            .example(Some(serde_json::Value::Number(serde_json::Number::from(0))))
+            .example(Some(serde_json::Value::Number(serde_json::Number::from(1))))
             .build(),
     )
 }
@@ -376,6 +377,26 @@ pub fn parse_token_accounts_model(
 pub struct CompressedAccountRequest {
     pub address: Option<SerializablePubkey>,
     pub hash: Option<Hash>,
+}
+
+impl CompressedAccountRequest {
+    pub fn adjusted_schema() -> RefOr<Schema> {
+        let mut schema = CompressedAccountRequest::schema().1;
+        let object = match schema {
+            RefOr::T(Schema::Object(ref mut object)) => {
+                object.default = Some(
+                    serde_json::to_value(CompressedAccountRequest {
+                        hash: Some(Hash::default()),
+                        address: None,
+                    })
+                    .unwrap(),
+                );
+                object.clone()
+            }
+            _ => unimplemented!(),
+        };
+        RefOr::T(Schema::Object(object))
+    }
 }
 
 pub enum AccountIdentifier {

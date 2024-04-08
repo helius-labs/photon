@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.4.0
+  version: 0.5.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -39,6 +39,9 @@ paths:
                   - getCompressedTokenAccountBalance
                 params:
                   type: object
+                  default:
+                    address: null
+                    hash: '11111111111111111111111111111111'
                   properties:
                     address:
                       allOf:
@@ -127,8 +130,8 @@ components:
         slot:
           type: integer
           description: The current slot
-          default: 0
-          example: 0
+          default: 1
+          example: 1
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
