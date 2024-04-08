@@ -384,13 +384,14 @@ impl CompressedAccountRequest {
         let mut schema = CompressedAccountRequest::schema().1;
         let object = match schema {
             RefOr::T(Schema::Object(ref mut object)) => {
-                object.default = Some(
-                    serde_json::to_value(CompressedAccountRequest {
-                        hash: Some(Hash::default()),
-                        address: None,
-                    })
-                    .unwrap(),
-                );
+                let example = serde_json::to_value(CompressedAccountRequest {
+                    hash: Some(Hash::default()),
+                    address: None,
+                })
+                .unwrap();
+                object.default = Some(example.clone());
+                object.example = Some(example);
+                object.description = Some("Request for compressed account data".to_string());
                 object.clone()
             }
             _ => unimplemented!(),
