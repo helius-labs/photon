@@ -351,6 +351,7 @@ pub fn assert_account_response_list_matches_input(
             seq,
             slot,
             hash,
+            leaf_index,
         } = account.clone();
 
         #[allow(deprecated)]
@@ -362,6 +363,7 @@ pub fn assert_account_response_list_matches_input(
         assert_eq!(res.lamports, account.lamports);
         assert_eq!(res.slot_updated, slot);
         assert_eq!(res.data.0, input_data);
+        assert_eq!(res.leaf_index, leaf_index.unwrap());
     }
 }
 

@@ -14,6 +14,7 @@ pub struct Model {
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub tree: Option<Vec<u8>>,
+    pub leaf_index: Option<i64>,
     pub seq: Option<i64>,
     pub slot_updated: i64,
     pub spent: bool,

@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use log::{debug};
+use log::debug;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::ingester::parser::{
@@ -115,6 +115,7 @@ fn parse_public_transaction_event(
             seq: None,
             slot,
             hash,
+            leaf_index: None,
         };
         state_update.in_accounts.push(enriched_account);
     }
@@ -129,10 +130,11 @@ fn parse_public_transaction_event(
         });
     }
 
-    for ((out_account, path), hash) in output_compressed_accounts
+    for (((out_account, path), hash), leaf_index) in output_compressed_accounts
         .into_iter()
         .zip(path_updates.iter())
         .zip(output_compressed_account_hashes)
+        .zip(transaction_event.output_leaf_indices.iter())
     {
         let enriched_account = EnrichedAccount {
             account: out_account,
@@ -140,6 +142,7 @@ fn parse_public_transaction_event(
             seq: Some(path.seq),
             slot,
             hash,
+            leaf_index: Some(*leaf_index),
         };
         state_update.out_accounts.push(enriched_account);
     }

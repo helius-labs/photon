@@ -75,6 +75,7 @@ async fn test_persist_state_update_basic(
             owner: Pubkey::new_unique(),
         },
         tree: Pubkey::new_unique(),
+        leaf_index: Some(0),
         seq: Some(0),
         hash: [0; 32],
         slot: 0,
@@ -179,6 +180,7 @@ async fn test_multiple_accounts(
                 owner: owner1,
             },
             tree: Pubkey::new_unique(),
+            leaf_index: Some(10),
             slot: 0,
             seq: Some(1),
             hash: [0; 32],
@@ -195,6 +197,7 @@ async fn test_multiple_accounts(
                 owner: owner1,
             },
             tree: Pubkey::new_unique(),
+            leaf_index: Some(11),
             slot: 0,
             seq: Some(2),
             hash: [0; 32],
@@ -211,6 +214,7 @@ async fn test_multiple_accounts(
                 owner: owner2,
             },
             tree: Pubkey::new_unique(),
+            leaf_index: Some(13),
             slot: 1,
             seq: Some(3),
             hash: [0; 32],
@@ -227,6 +231,7 @@ async fn test_multiple_accounts(
                 owner: owner2,
             },
             tree: Pubkey::new_unique(),
+            leaf_index: Some(23),
             slot: 0,
             seq: Some(1),
             hash: [0; 32],
@@ -369,7 +374,7 @@ async fn test_persist_token_data(
 
     let mut token_datas = Vec::new();
 
-    for token_data in all_token_data.iter() {
+    for (i, token_data) in all_token_data.iter().enumerate() {
         let slot = 11;
         let hash = Hash::new_unique();
         let model = accounts::ActiveModel {
@@ -380,6 +385,7 @@ async fn test_persist_token_data(
             owner: Set(token_data.owner.to_bytes().to_vec()),
             lamports: Set(Decimal::from(10)),
             slot_updated: Set(slot),
+            leaf_index: Set(Some(i as i64)),
             discriminator: Set(Vec::new()),
             ..Default::default()
         };
@@ -537,6 +543,7 @@ async fn test_load_test(
                 owner: Pubkey::new_unique(),
             },
             tree,
+            leaf_index: Some(20),
             seq: Some(seq as u64),
             hash: [0; 32],
             slot: 0,

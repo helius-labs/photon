@@ -118,6 +118,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Accounts::Address).binary())
                     .col(ColumnDef::new(Accounts::Owner).binary().not_null())
                     .col(ColumnDef::new(Accounts::Tree).binary())
+                    .col(ColumnDef::new(Accounts::LeafIndex).big_integer())
                     .col(ColumnDef::new(Accounts::Seq).big_integer())
                     .col(
                         ColumnDef::new(Accounts::SlotUpdated)

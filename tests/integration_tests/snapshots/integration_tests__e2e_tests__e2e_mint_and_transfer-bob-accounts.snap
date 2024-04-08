@@ -23,7 +23,8 @@ expression: accounts
         "discriminator": 2,
         "lamports": 0,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-        "seq": 3
+        "seq": 3,
+        "leafIndex": 2
       }
     ]
   }
