@@ -206,7 +206,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedBalance".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: GetCompressedAccountBalance::schema().1,
+                response: GetCompressedAccountBalance::adjusted_schema(),
             },
             OpenApiSpec {
                 name: "getCompressedAccountsByOwner".to_string(),
@@ -215,7 +215,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getMultipleCompressedAccounts".to_string(),
-                request: Some(GetMultipleCompressedAccountsRequest::schema().1),
+                request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
                 response: GetMultipleCompressedAccountsResponse::schema().1,
             },
             OpenApiSpec {

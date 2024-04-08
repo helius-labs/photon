@@ -1,7 +1,10 @@
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{
+    openapi::{RefOr, Schema},
+    ToSchema,
+};
 
 use super::{
     super::error::PhotonApiError,
@@ -17,6 +20,27 @@ use super::utils::{parse_account_model, Account};
 pub struct GetMultipleCompressedAccountsRequest {
     pub hashes: Option<Vec<Hash>>,
     pub addresses: Option<Vec<SerializablePubkey>>,
+}
+
+impl GetMultipleCompressedAccountsRequest {
+    pub fn adjusted_schema() -> RefOr<Schema> {
+        let mut schema = GetMultipleCompressedAccountsRequest::schema().1;
+        let object = match schema {
+            RefOr::T(Schema::Object(ref mut object)) => {
+                let example = serde_json::to_value(GetMultipleCompressedAccountsRequest {
+                    hashes: Some(vec![Hash::new_unique(), Hash::new_unique()]),
+                    addresses: None,
+                })
+                .unwrap();
+                object.default = Some(example.clone());
+                object.example = Some(example);
+                object.description = Some("Request for compressed account data".to_string());
+                object.clone()
+            }
+            _ => unimplemented!(),
+        };
+        RefOr::T(Schema::Object(object))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]

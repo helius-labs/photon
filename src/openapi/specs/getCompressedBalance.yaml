@@ -26,7 +26,7 @@ paths:
                   type: string
                   description: An ID to identify the request.
                   enum:
-                  - string
+                  - test-account
                 jsonrpc:
                   type: string
                   description: The version of the JSON-RPC protocol.
@@ -64,6 +64,11 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Response for compressed account balance
+                default:
+                  context:
+                    slot: 1
+                  value: 1
                 required:
                 - context
                 - value
@@ -74,6 +79,10 @@ paths:
                     type: integer
                     format: int64
                     minimum: 0
+                example:
+                  context:
+                    slot: 1
+                  value: 1
         '400':
           description: Invalid request.
           content:
@@ -195,7 +204,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111116djSnXB2wXVGT4xDLsfTnkp1p4cCxHAfRq
+      example: 11111117SQekjmcMtR25wEPPiL6m1Mb5586NkLL4X
     Limit:
       type: integer
       format: int64
@@ -238,8 +247,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
-      example: 11111116EPqoQskEM2Pddp8KTL9JdYEBZMGF3aq7V
+      default: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
+      example: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
     TokenAcccount:
       type: object
       required:

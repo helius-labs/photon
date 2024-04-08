@@ -101,7 +101,12 @@ fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
         "2.0",
         "The version of the JSON-RPC protocol.",
     );
-    builder = add_string_property(builder, "id", "string", "An ID to identify the request.");
+    builder = add_string_property(
+        builder,
+        "id",
+        "test-account",
+        "An ID to identify the request.",
+    );
     builder = add_string_property(
         builder,
         "method",
