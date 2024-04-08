@@ -12,6 +12,8 @@ use crate::api::method::utils::TokenAccountList;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use dirs;
+use sea_orm::sea_query::SchemaBuilder;
+use utoipa::openapi::Response;
 
 use crate::common::relative_project_path;
 
@@ -34,6 +36,8 @@ use utoipa::openapi::SchemaType;
 
 use utoipa::openapi::ServerBuilder;
 use utoipa::OpenApi;
+
+const JSON_CONTENT_TYPE: &str = "application/json";
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(
@@ -65,6 +69,27 @@ fn add_string_property(
 
     let string_schema = RefOr::T(Schema::Object(string_object));
     builder.property(name, string_schema)
+}
+
+fn build_error_response(description: &str) -> Response {
+    ResponseBuilder::new()
+        .description(description)
+        .content(
+            JSON_CONTENT_TYPE,
+            ContentBuilder::new()
+                .schema(Schema::Object(
+                    ObjectBuilder::new()
+                        .property(
+                            "error",
+                            RefOr::T(Schema::Object(
+                                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+                            )),
+                        )
+                        .build(),
+                ))
+                .build(),
+        )
+        .build()
 }
 
 fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
@@ -104,18 +129,22 @@ pub fn update_docs(is_test: bool) {
         let content = ContentBuilder::new()
             .schema(request_schema(&spec.name, spec.request))
             .build();
-        let json_content_type = "application/json".to_string();
         let request_body = RequestBodyBuilder::new()
-            .content(json_content_type.clone(), content)
+            .content(JSON_CONTENT_TYPE.clone(), content)
             .required(Some(Required::True))
             .build();
         let responses = ResponsesBuilder::new().response(
             "200",
             ResponseBuilder::new().content(
-                json_content_type,
+                JSON_CONTENT_TYPE,
                 ContentBuilder::new().schema(spec.response).build(),
             ),
-        );
+        ).response("400", build_error_response("Invalid request."))
+        .response("401", build_error_response("Unauthorized request."))
+        .response("403", build_error_response("Request was forbidden."))
+        .response("404", build_error_response("The specified resource was not found."))
+        .response("429", build_error_response("Exceeded rate limit."))
+        .response("500", build_error_response("The server encountered an unexpected condition that prevented it from fulfilling the request."));
         let operation = OperationBuilder::new()
             .request_body(Some(request_body))
             .responses(responses)
