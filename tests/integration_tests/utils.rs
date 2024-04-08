@@ -42,6 +42,7 @@ use solana_transaction_status::{
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
+    types::Decimal,
     PgPool,
 };
 use std::sync::Arc;
@@ -328,7 +329,7 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
         let account = account.clone();
         assert_eq!(account.mint, tlv.mint.into());
         assert_eq!(account.owner, tlv.owner.into());
-        assert_eq!(account.amount, tlv.amount);
+        assert_eq!(account.amount, Decimal::from(tlv.amount));
         assert_eq!(account.delegate, tlv.delegate.map(Into::into));
         assert_eq!(account.is_native, tlv.is_native.is_some());
         assert_eq!(account.frozen, tlv.state == AccountState::Frozen);
@@ -360,7 +361,7 @@ pub fn assert_account_response_list_matches_input(
         assert_eq!(res.seq, seq);
         assert_eq!(res.lamports, account.lamports);
         assert_eq!(res.slot_updated, slot);
-        assert_eq!(res.data, input_data);
+        assert_eq!(res.data.0, input_data);
     }
 }
 

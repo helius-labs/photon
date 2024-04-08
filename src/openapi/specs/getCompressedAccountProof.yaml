@@ -124,7 +124,7 @@ components:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
         data:
-          type: string
+          $ref: '#/components/schemas/Base64String'
         discriminator:
           type: integer
           format: int64
@@ -159,6 +159,11 @@ components:
           items:
             $ref: '#/components/schemas/Account'
       additionalProperties: false
+    Base64String:
+      type: string
+      description: A base 64 encoded string.
+      default: SGVsbG8sIFdvcmxkIQ==
+      example: SGVsbG8sIFdvcmxkIQ==
     Context:
       type: object
       required:
@@ -231,14 +236,11 @@ components:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
         amount:
-          type: integer
-          format: int64
-          minimum: 0
+          type: string
         closeAuthority:
           $ref: '#/components/schemas/SerializablePubkey'
         data:
-          type: string
-          format: binary
+          $ref: '#/components/schemas/Base64String'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
         discriminator:
