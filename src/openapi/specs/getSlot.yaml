@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.5.0
+  version: 0.7.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -111,12 +111,15 @@ components:
       - data
       - owner
       - lamports
+      - leafIndex
       - slotUpdated
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
         data:
           $ref: '#/components/schemas/Base64String'
+        dataHash:
+          $ref: '#/components/schemas/Hash'
         discriminator:
           type: integer
           format: int64
@@ -126,6 +129,10 @@ components:
         lamports:
           type: integer
           format: int64
+          minimum: 0
+        leafIndex:
+          type: integer
+          format: int32
           minimum: 0
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -224,6 +231,7 @@ components:
       - data
       - discriminator
       - lamports
+      - leafIndex
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -233,6 +241,8 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         data:
           $ref: '#/components/schemas/Base64String'
+        dataHash:
+          $ref: '#/components/schemas/Hash'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
         discriminator:
@@ -248,6 +258,10 @@ components:
         lamports:
           type: integer
           format: int64
+          minimum: 0
+        leafIndex:
+          type: integer
+          format: int32
           minimum: 0
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
