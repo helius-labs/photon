@@ -165,6 +165,7 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
+      default: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
       example: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
     TokenAcccount:
       type: object
