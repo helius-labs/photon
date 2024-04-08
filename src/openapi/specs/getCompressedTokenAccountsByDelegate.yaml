@@ -38,12 +38,24 @@ paths:
                   enum:
                   - getCompressedTokenAccountsByDelegate
                 params:
-                  type: array
-                  items:
-                    type: object
-                  description: ''
-                  maxItems: 2
-                  minItems: 2
+                  type: object
+                  required:
+                  - delegate
+                  properties:
+                    cursor:
+                      type: string
+                      nullable: true
+                    delegate:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
+                    mint:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                  additionalProperties: false
         required: true
       responses:
         '200':

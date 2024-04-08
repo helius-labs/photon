@@ -36,8 +36,8 @@ use super::{
         },
         get_slot::get_slot,
         utils::{
-            CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
-            TokenAccountListResponse,
+            CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
+            GetCompressedTokenAccountsByOwner, TokenAccountListResponse,
         },
     },
 };
@@ -123,14 +123,14 @@ impl PhotonApi {
 
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
-        request: GetCompressedTokenAccountsByAuthority,
+        request: GetCompressedTokenAccountsByOwner,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_token_accounts_by_owner(&self.db_conn, request).await
     }
 
     pub async fn get_compressed_token_accounts_by_delegate(
         &self,
-        request: GetCompressedTokenAccountsByAuthority,
+        request: GetCompressedTokenAccountsByDelegate,
     ) -> Result<TokenAccountListResponse, PhotonApiError> {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
@@ -191,12 +191,12 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByOwner".to_string(),
-                request: Some(GetCompressedTokenAccountsByAuthority::schema().1),
+                request: Some(GetCompressedTokenAccountsByOwner::schema().1),
                 response: TokenAccountListResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByDelegate".to_string(),
-                request: Some(GetCompressedTokenAccountsByAuthority::schema().1),
+                request: Some(GetCompressedTokenAccountsByDelegate::schema().1),
                 response: TokenAccountListResponse::schema().1,
             },
             OpenApiSpec {

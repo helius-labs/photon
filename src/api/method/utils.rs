@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
-use borsh::schema;
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
@@ -211,10 +210,21 @@ pub struct GetCompressedTokenAccountsByAuthorityOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedTokenAccountsByAuthority(
-    pub SerializablePubkey,
-    pub Option<GetCompressedTokenAccountsByAuthorityOptions>,
-);
+pub struct GetCompressedTokenAccountsByOwner {
+    pub owner: SerializablePubkey,
+    pub mint: Option<SerializablePubkey>,
+    pub cursor: Option<String>,
+    pub limit: Option<Limit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetCompressedTokenAccountsByDelegate {
+    pub delegate: SerializablePubkey,
+    pub mint: Option<SerializablePubkey>,
+    pub cursor: Option<String>,
+    pub limit: Option<Limit>,
+}
 
 #[derive(FromQueryResult)]
 pub struct EnrichedTokenAccountModel {
@@ -242,7 +252,7 @@ pub struct EnrichedTokenAccountModel {
 pub async fn fetch_token_accounts(
     conn: &sea_orm::DatabaseConnection,
     owner_or_delegate: Authority,
-    options: Option<GetCompressedTokenAccountsByAuthorityOptions>,
+    options: GetCompressedTokenAccountsByAuthorityOptions,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let mut filter = match owner_or_delegate {
@@ -254,30 +264,28 @@ pub async fn fetch_token_accounts(
     .and(token_accounts::Column::Spent.eq(false));
 
     let mut limit = PAGE_LIMIT;
-    if let Some(options) = options {
-        if let Some(mint) = options.mint {
-            filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
+    if let Some(mint) = options.mint {
+        filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
+    }
+    if let Some(cursor) = options.cursor {
+        let bytes = bs58::decode(cursor.clone())
+            .into_vec()
+            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor)))?;
+        let expected_cursor_length = 64;
+        if bytes.len() != expected_cursor_length {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid cursor length. Expected {}. Received {}.",
+                expected_cursor_length,
+                bytes.len()
+            )));
         }
-        if let Some(cursor) = options.cursor {
-            let bytes = bs58::decode(cursor.clone()).into_vec().map_err(|_| {
-                PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor))
-            })?;
-            let expected_cursor_length = 64;
-            if bytes.len() != expected_cursor_length {
-                return Err(PhotonApiError::ValidationError(format!(
-                    "Invalid cursor length. Expected {}. Received {}.",
-                    expected_cursor_length,
-                    bytes.len()
-                )));
-            }
-            let (mint, hash) = bytes.split_at(32);
-            filter = filter
-                .and(token_accounts::Column::Mint.gte::<Vec<u8>>(mint.into()))
-                .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into()));
-        }
-        if let Some(l) = options.limit {
-            limit = l.value();
-        }
+        let (mint, hash) = bytes.split_at(32);
+        filter = filter
+            .and(token_accounts::Column::Mint.gte::<Vec<u8>>(mint.into()))
+            .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into()));
+    }
+    if let Some(l) = options.limit {
+        limit = l.value();
     }
 
     let result = token_accounts::Entity::find()
