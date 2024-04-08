@@ -12,7 +12,6 @@ use crate::api::method::utils::TokenAccountList;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use dirs;
-use sea_orm::sea_query::SchemaBuilder;
 use utoipa::openapi::Response;
 
 use crate::common::relative_project_path;
@@ -126,23 +125,58 @@ fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
     RefOr::T(Schema::Object(builder.build()))
 }
 
+// Examples of allOf references are always {}, which is incorrect.
+#[allow(non_snake_case)]
+fn fix_examples_for_allOf_references(schema: RefOr<Schema>) -> RefOr<Schema> {
+    match schema {
+        RefOr::T(mut schema) => match schema {
+            Schema::Object(ref mut object) => RefOr::T(match object.schema_type {
+                SchemaType::Object => {
+                    object.properties = object
+                        .properties
+                        .iter()
+                        .map(|(key, value)| {
+                            let new_value = fix_examples_for_allOf_references(value.clone());
+                            (key.clone(), new_value)
+                        })
+                        .collect();
+                    schema
+                }
+                _ => schema,
+            }),
+            Schema::AllOf(ref all_of) => all_of.items[0].clone(),
+            _ => RefOr::T(schema),
+        },
+        RefOr::Ref(_) => schema,
+    }
+}
+
 pub fn update_docs(is_test: bool) {
     let method_api_specs = PhotonApi::method_api_specs();
 
     for spec in method_api_specs {
         let mut doc = ApiDoc::openapi();
+        doc.components = doc.components.map(|components| {
+            let mut components = components.clone();
+            components.schemas = components
+                .schemas
+                .iter()
+                .map(|(k, v)| (k.clone(), fix_examples_for_allOf_references(v.clone())))
+                .collect();
+            components
+        });
         let content = ContentBuilder::new()
             .schema(request_schema(&spec.name, spec.request))
             .build();
         let request_body = RequestBodyBuilder::new()
-            .content(JSON_CONTENT_TYPE.clone(), content)
+            .content(JSON_CONTENT_TYPE, content)
             .required(Some(Required::True))
             .build();
         let responses = ResponsesBuilder::new().response(
             "200",
             ResponseBuilder::new().content(
                 JSON_CONTENT_TYPE,
-                ContentBuilder::new().schema(spec.response).build(),
+                ContentBuilder::new().schema(fix_examples_for_allOf_references(spec.response)).build(),
             ),
         ).response("400", build_error_response("Invalid request."))
         .response("401", build_error_response("Unauthorized request."))
