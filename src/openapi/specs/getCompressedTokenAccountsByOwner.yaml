@@ -38,12 +38,24 @@ paths:
                   enum:
                   - getCompressedTokenAccountsByOwner
                 params:
-                  type: array
-                  items:
-                    type: object
-                  description: ''
-                  maxItems: 2
-                  minItems: 2
+                  type: object
+                  required:
+                  - owner
+                  properties:
+                    cursor:
+                      type: string
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
+                    mint:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                    owner:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
         required: true
       responses:
         '200':

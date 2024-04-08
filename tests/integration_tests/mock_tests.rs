@@ -5,8 +5,8 @@ use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
-    CompressedAccountRequest, GetCompressedTokenAccountsByAuthority,
-    GetCompressedTokenAccountsByAuthorityOptions,
+    CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
+    GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
@@ -403,13 +403,11 @@ async fn test_persist_token_data(
 
     let res = setup
         .api
-        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
-            SerializablePubkey::from(owner1),
-            Some(GetCompressedTokenAccountsByAuthorityOptions {
-                mint: Some(SerializablePubkey::from(mint1)),
-                ..Default::default()
-            }),
-        ))
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+            owner: SerializablePubkey::from(owner1),
+            mint: Some(SerializablePubkey::from(mint1)),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .value;
@@ -423,10 +421,10 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
-                SerializablePubkey::from(owner),
-                None,
-            ))
+            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+                owner: SerializablePubkey::from(owner),
+                ..Default::default()
+            })
             .await
             .unwrap()
             .value;
@@ -436,14 +434,12 @@ async fn test_persist_token_data(
         loop {
             let res = setup
                 .api
-                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
-                    SerializablePubkey::from(owner),
-                    Some(GetCompressedTokenAccountsByAuthorityOptions {
-                        cursor: cursor.clone(),
-                        limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
-                        mint: None,
-                    }),
-                ))
+                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+                    owner: SerializablePubkey::from(owner),
+                    cursor: cursor.clone(),
+                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    ..Default::default()
+                })
                 .await
                 .unwrap()
                 .value;
@@ -478,10 +474,10 @@ async fn test_persist_token_data(
             .collect();
         let res = setup
             .api
-            .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByAuthority(
-                SerializablePubkey::from(delegate),
-                None,
-            ))
+            .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
+                delegate: SerializablePubkey::from(delegate),
+                ..Default::default()
+            })
             .await
             .unwrap()
             .value;
@@ -490,14 +486,12 @@ async fn test_persist_token_data(
         loop {
             let res = setup
                 .api
-                .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByAuthority(
-                    SerializablePubkey::from(delegate),
-                    Some(GetCompressedTokenAccountsByAuthorityOptions {
-                        cursor: cursor.clone(),
-                        limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
-                        mint: None,
-                    }),
-                ))
+                .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
+                    delegate: SerializablePubkey::from(delegate),
+                    cursor: cursor.clone(),
+                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    ..Default::default()
+                })
                 .await
                 .unwrap()
                 .value;

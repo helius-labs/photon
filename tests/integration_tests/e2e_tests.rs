@@ -6,7 +6,7 @@ use photon_indexer::ingester::index_block;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
-use photon_indexer::api::method::utils::GetCompressedTokenAccountsByAuthority;
+use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -68,9 +68,10 @@ async fn test_e2e_mint_and_transfer(
         ] {
             let accounts = setup
                 .api
-                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByAuthority(
-                    pubkey, None,
-                ))
+                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+                    owner: pubkey,
+                    ..Default::default()
+                })
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);

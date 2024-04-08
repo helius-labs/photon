@@ -39,6 +39,7 @@ paths:
                   - getCompressedAccount
                 params:
                   type: object
+                  description: Request for compressed account data
                   default:
                     address: null
                     hash: '11111111111111111111111111111111'
@@ -52,6 +53,9 @@ paths:
                       - $ref: '#/components/schemas/Hash'
                       nullable: true
                   additionalProperties: false
+                  example:
+                    address: null
+                    hash: '11111111111111111111111111111111'
         required: true
       responses:
         '200':
