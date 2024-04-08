@@ -114,9 +114,7 @@ components:
       - slotUpdated
       properties:
         address:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
         data:
           type: string
         discriminator:
@@ -141,9 +139,7 @@ components:
           format: int64
           minimum: 0
         tree:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
     AccountList:
       type: object
@@ -200,9 +196,7 @@ components:
       - items
       properties:
         cursor:
-          allOf:
-          - $ref: '#/components/schemas/Hash'
-          nullable: true
+          $ref: '#/components/schemas/Hash'
         items:
           type: array
           items:
@@ -227,24 +221,18 @@ components:
       - lamports
       properties:
         address:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
         amount:
           type: integer
           format: int64
           minimum: 0
         closeAuthority:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
         data:
           type: string
           format: binary
         delegate:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
         discriminator:
           type: integer
           format: int64
@@ -269,9 +257,7 @@ components:
           nullable: true
           minimum: 0
         tree:
-          allOf:
-          - $ref: '#/components/schemas/SerializablePubkey'
-          nullable: true
+          $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
     TokenAccountBalance:
       type: object
