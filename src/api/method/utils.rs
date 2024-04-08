@@ -130,6 +130,7 @@ pub struct Account {
     pub address: Option<SerializablePubkey>,
     pub discriminator: u64,
     pub data: Base64String,
+    pub data_hash: Option<Hash>,
     pub owner: SerializablePubkey,
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
@@ -154,6 +155,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         discriminator: parse_discriminator(account.discriminator),
         #[allow(deprecated)]
         data: Base64String(base64::encode(account.data)),
+        data_hash: account.data_hash.map(|hash| hash.try_into()).transpose()?,
         owner: account.owner.try_into()?,
         tree: account.tree.map(|tree| tree.try_into()).transpose()?,
         lamports: parse_decimal(account.lamports)?,
@@ -182,6 +184,7 @@ pub struct TokenAcccount {
     pub close_authority: Option<SerializablePubkey>,
     pub frozen: bool,
     pub data: Base64String,
+    pub data_hash: Option<Hash>,
     pub discriminator: u64,
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
@@ -244,6 +247,7 @@ pub struct EnrichedTokenAccountModel {
     pub slot_updated: i64,
     // Needed for generating proof
     pub data: Vec<u8>,
+    pub data_hash: Option<Vec<u8>>,
     pub discriminator: Vec<u8>,
     pub lamports: Decimal,
     pub tree: Option<Vec<u8>>,
@@ -317,6 +321,7 @@ pub async fn fetch_token_accounts(
                 spent: token_account.spent,
                 slot_updated: token_account.slot_updated,
                 data: account.data,
+                data_hash: account.data_hash,
                 discriminator: account.discriminator,
                 lamports: account.lamports,
                 tree: account.tree,
@@ -372,6 +377,10 @@ pub fn parse_token_accounts_model(
         frozen: token_account.frozen,
         #[allow(deprecated)]
         data: Base64String(base64::encode(token_account.data)),
+        data_hash: token_account
+            .data_hash
+            .map(|hash| hash.try_into())
+            .transpose()?,
         discriminator: parse_discriminator(token_account.discriminator),
         lamports: parse_decimal(token_account.lamports)?,
         tree: token_account
