@@ -97,7 +97,7 @@ async fn test_persist_state_update_basic(
         .value;
 
     #[allow(deprecated)]
-    let raw_data = base64::decode(res.data).unwrap();
+    let raw_data = base64::decode(res.data.0).unwrap();
     assert_eq!(account.account.data.unwrap().data, raw_data);
     assert_eq!(res.lamports, account.account.lamports);
     assert_eq!(res.slot_updated, account.slot);
@@ -463,7 +463,7 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(balance.amount.parse::<u64>().unwrap(), token_account.amount);
+            assert_eq!(balance.amount, token_account.amount);
         }
     }
     for delegate in [delegate1, delegate2] {

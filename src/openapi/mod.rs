@@ -9,6 +9,7 @@ use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
+use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use dirs;
@@ -50,7 +51,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenAcccount,
     TokenAccountBalance,
     AccountList,
-    Limit
+    Limit,
+    Base64String
 )))]
 struct ApiDoc;
 

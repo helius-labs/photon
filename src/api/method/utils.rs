@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::common::typedefs::bs64_string::Base64String;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -128,7 +129,7 @@ pub struct Account {
     pub hash: Hash,
     pub address: Option<SerializablePubkey>,
     pub discriminator: u64,
-    pub data: String,
+    pub data: Base64String,
     pub owner: SerializablePubkey,
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
@@ -152,7 +153,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
             .transpose()?,
         discriminator: parse_discriminator(account.discriminator),
         #[allow(deprecated)]
-        data: base64::encode(account.data),
+        data: Base64String(base64::encode(account.data)),
         owner: account.owner.try_into()?,
         tree: account.tree.map(|tree| tree.try_into()).transpose()?,
         lamports: parse_decimal(account.lamports)?,
@@ -175,12 +176,12 @@ pub struct TokenAcccount {
     pub address: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
-    pub amount: u64,
+    pub amount: Decimal,
     pub delegate: Option<SerializablePubkey>,
     pub is_native: bool,
     pub close_authority: Option<SerializablePubkey>,
     pub frozen: bool,
-    pub data: Vec<u8>,
+    pub data: Base64String,
     pub discriminator: u64,
     pub lamports: u64,
     pub tree: Option<SerializablePubkey>,
@@ -358,7 +359,7 @@ pub fn parse_token_accounts_model(
             .transpose()?,
         owner: token_account.owner.try_into()?,
         mint: token_account.mint.try_into()?,
-        amount: parse_decimal(token_account.amount)?,
+        amount: token_account.amount,
         delegate: token_account
             .delegate
             .map(SerializablePubkey::try_from)
@@ -369,7 +370,8 @@ pub fn parse_token_accounts_model(
             .map(SerializablePubkey::try_from)
             .transpose()?,
         frozen: token_account.frozen,
-        data: token_account.data,
+        #[allow(deprecated)]
+        data: Base64String(base64::encode(token_account.data)),
         discriminator: parse_discriminator(token_account.discriminator),
         lamports: parse_decimal(token_account.lamports)?,
         tree: token_account
