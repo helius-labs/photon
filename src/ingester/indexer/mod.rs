@@ -71,7 +71,7 @@ impl Indexer {
             index_block_batch_with_infinite_retries(self.db.as_ref(), blocks).await;
 
             if let Some(backfill) = &backfill {
-                if blocks_indexed <= (backfill.num_blocks_to_index as usize) {
+                if blocks_indexed <= backfill.num_blocks_to_index {
                     info!(
                         "Backfilled {} / {} blocks",
                         blocks_indexed, backfill.num_blocks_to_index
@@ -89,11 +89,10 @@ impl Indexer {
 }
 
 pub async fn continously_run_indexer(indexer: Arc<Mutex<Indexer>>) -> tokio::task::JoinHandle<()> {
-    let handle = tokio::spawn(async move {
+    tokio::spawn(async move {
         loop {
             indexer.deref().lock().await.index_latest_blocks(None).await;
             sleep(Duration::from_millis(20));
         }
-    });
-    handle
+    })
 }

@@ -246,7 +246,7 @@ pub async fn persist_token_accounts(
                     delegate: Set(token_data.delegate.map(|d| d.to_bytes().to_vec())),
                     frozen: Set(token_data.state == AccountState::Frozen),
                     delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
-                    is_native: Set(token_data.is_native.map(|n| Decimal::from(n))),
+                    is_native: Set(token_data.is_native.map(Decimal::from)),
                     spent: Set(false),
                     slot_updated: Set(slot_updated as i64),
                     ..Default::default()

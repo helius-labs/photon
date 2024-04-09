@@ -319,9 +319,9 @@ pub async fn fetch_token_accounts(
         .await?
         .drain(..)
         .map(|(token_account, account)| {
-            let account = account.ok_or(PhotonApiError::RecordNotFound(format!(
-                "Base account not found for token account",
-            )))?;
+            let account = account.ok_or(PhotonApiError::RecordNotFound(
+                "Base account not found for token account".to_string(),
+            ))?;
             Ok(EnrichedTokenAccountModel {
                 id: token_account.id,
                 hash: token_account.hash,
