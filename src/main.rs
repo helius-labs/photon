@@ -1,10 +1,9 @@
-use std::{fmt};
+use std::fmt;
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
-
 
 use photon_indexer::ingester::indexer::{continously_run_indexer, Indexer};
 use photon_indexer::migration::{
