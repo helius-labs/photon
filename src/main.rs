@@ -1,19 +1,17 @@
-use std::{fmt, thread::sleep, time::Duration};
+use std::{fmt};
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
-use photon_indexer::ingester::fetchers::poller::{
-    fetch_current_slot_with_infinite_retry, Options, TransactionPoller,
-};
-use photon_indexer::ingester::index_block_batch_with_infinite_retries;
+
+
 use photon_indexer::ingester::indexer::{continously_run_indexer, Indexer};
 use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
-use sea_orm::Transaction;
+
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
