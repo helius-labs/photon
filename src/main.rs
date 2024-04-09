@@ -1,17 +1,16 @@
-use std::{fmt, thread::sleep, time::Duration};
+use std::fmt;
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
-use photon_indexer::ingester::fetchers::poller::{
-    fetch_current_slot_with_infinite_retry, Options, TransactionPoller,
-};
-use photon_indexer::ingester::index_block_batch_with_infinite_retries;
+
+use photon_indexer::ingester::indexer::{continously_run_indexer, Indexer};
 use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
+
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -20,6 +19,7 @@ use sqlx::{
 };
 use std::env;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Parser, Debug, Clone, ValueEnum)]
 enum LoggingFormat {
@@ -81,75 +81,16 @@ pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
         .unwrap()
 }
 
-async fn start_transaction_indexer(
-    db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
-    is_localnet: bool,
-    start_slot: Option<u64>,
-    max_batch_size: usize,
-) -> tokio::task::JoinHandle<()> {
-    // Spawn the task
-    let handle = tokio::spawn(async move {
-        let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
-        let start_slot = match (start_slot, is_localnet) {
-            (Some(start_slot), _) => start_slot,
-            // Start indexing from the first slot for localnet.
-            (None, true) => 0,
-            (None, false) => current_slot,
-        };
-        let mut poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
-        let number_of_blocks_to_backfill = current_slot - start_slot;
-        info!(
-            "Backfilling historical blocks. Current number of blocks to backfill: {}",
-            number_of_blocks_to_backfill
-        );
-        if number_of_blocks_to_backfill > 10_000 && is_localnet {
-            info!("Backfilling a large number of blocks. This may take a while. Considering restarting local validator or specifying a start slot.");
-        }
-        let mut finished_backfill = false;
-        let mut finished_initial_backfill = false;
-        let mut num_blocks_indexed_in_backfill = 0;
-
-        loop {
-            let blocks = poller.fetch_new_block_batch(max_batch_size).await;
-            if blocks.is_empty() {
-                sleep(Duration::from_millis(10));
-                if !finished_backfill {
-                    info!("Finished backfilling historical blocks...");
-                    info!("Streaming live blocks...");
-                }
-                finished_backfill = true;
-                continue;
-            }
-            num_blocks_indexed_in_backfill += blocks.len();
-            index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
-
-            if !finished_backfill {
-                if num_blocks_indexed_in_backfill <= (number_of_blocks_to_backfill as usize) {
-                    info!(
-                        "Backfilled {} / {} blocks",
-                        num_blocks_indexed_in_backfill, number_of_blocks_to_backfill
-                    );
-                } else {
-                    if !finished_initial_backfill {
-                        info!("Backfilling new blocks since backfill started...");
-                        finished_initial_backfill = true;
-                    }
-                    info!("Backfilled {} blocks", num_blocks_indexed_in_backfill);
-                }
-            }
-        }
-    });
-    handle
-}
-
 async fn start_api_server(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
+    indexer: Option<Arc<Mutex<Indexer>>>,
     api_port: u16,
 ) -> ServerHandle {
     let api = PhotonApi::new(db, rpc_client);
-    api::rpc_server::run_server(api, api_port).await.unwrap()
+    api::rpc_server::run_server(api, api_port, indexer)
+        .await
+        .unwrap()
 }
 
 fn setup_logging(logging_format: LoggingFormat) {
@@ -233,7 +174,7 @@ async fn main() {
             }
         }
     };
-    let indexer_handle = start_transaction_indexer(
+    let indexer = Indexer::new(
         db_conn.clone(),
         rpc_client.clone(),
         is_localnet,
@@ -241,9 +182,17 @@ async fn main() {
         max_concurrent_block_fetches,
     )
     .await;
+    let indexer = Arc::new(Mutex::new(indexer));
+    let indexer_handle = continously_run_indexer(indexer.clone()).await;
 
     info!("Starting API server with port {}...", args.port);
-    let api_handler = start_api_server(db_conn, rpc_client, args.port).await;
+    let api_handler = start_api_server(
+        db_conn,
+        rpc_client,
+        if is_localnet { Some(indexer) } else { None },
+        args.port,
+    )
+    .await;
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             info!("Shutting down indexer...");

@@ -108,12 +108,7 @@ fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
         "test-account",
         "An ID to identify the request.",
     );
-    builder = add_string_property(
-        builder,
-        "method",
-        &name,
-        "The name of the method to invoke.",
-    );
+    builder = add_string_property(builder, "method", name, "The name of the method to invoke.");
     builder = builder
         .required("jsonrpc")
         .required("id")

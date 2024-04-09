@@ -22,6 +22,7 @@ use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
 pub mod error;
 pub mod fetchers;
+pub mod indexer;
 pub mod parser;
 pub mod persist;
 pub mod typedefs;
