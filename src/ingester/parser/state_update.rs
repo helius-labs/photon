@@ -21,6 +21,7 @@ pub struct EnrichedPathNode {
     pub seq: u64,
     pub level: usize,
     pub tree_depth: usize,
+    pub leaf_index: Option<u32>
 }
 
 pub struct PathUpdate {

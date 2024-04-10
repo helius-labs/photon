@@ -560,6 +560,7 @@ async fn test_load_test(
             tree: tree.to_bytes(),
             seq: seq as u64,
             level: 0,
+            leaf_index: Some(seq as u32),
             tree_depth: 20,
         }
     }

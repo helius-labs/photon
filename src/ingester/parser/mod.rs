@@ -147,22 +147,26 @@ fn parse_public_transaction_event(
         state_update.out_accounts.push(enriched_account);
     }
 
-    state_update
-        .path_nodes
-        .extend(path_updates.into_iter().flat_map(|p| {
-            let tree_height = p.path.len();
-            p.path
-                .into_iter()
-                .enumerate()
-                .map(move |(i, node)| EnrichedPathNode {
-                    node: node.clone(),
-                    slot,
-                    tree: p.tree,
-                    seq: p.seq,
-                    level: i,
-                    tree_depth: tree_height,
-                })
-        }));
+    state_update.path_nodes.extend(
+        path_updates
+            .into_iter()
+            .zip(transaction_event.output_leaf_indices)
+            .flat_map(|(p, leaf_idx)| {
+                let tree_height = p.path.len();
+                p.path
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(i, node)| EnrichedPathNode {
+                        node: node.clone(),
+                        slot,
+                        tree: p.tree,
+                        seq: p.seq,
+                        level: i,
+                        tree_depth: tree_height,
+                        leaf_index: if i == 0 { Some(leaf_idx) } else { None },
+                    })
+            }),
+    );
     Ok(state_update)
 }
 
