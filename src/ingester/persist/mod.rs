@@ -284,14 +284,7 @@ async fn persist_path_nodes(
             level: Set(node.level as i64),
             node_idx: Set(node.node.index as i64),
             hash: Set(node.node.node.to_vec()),
-            leaf_idx: Set(if node.level == 0 {
-                Some(node_idx_to_leaf_idx(
-                    node.node.index as i64,
-                    node.tree_depth as u32,
-                ))
-            } else {
-                None
-            }),
+            leaf_idx: Set(node.leaf_index.map(|x| x as i64)),
             seq: Set(node.seq as i64),
             slot_updated: Set(node.slot as i64),
             ..Default::default()
@@ -316,8 +309,4 @@ async fn persist_path_nodes(
     txn.execute(query).await?;
 
     Ok(())
-}
-
-fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
-    2i64.pow(tree_height) - index
 }
