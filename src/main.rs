@@ -12,6 +12,7 @@ use photon_indexer::migration::{
 };
 
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::commitment_config::CommitmentConfig;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
@@ -159,7 +160,10 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
-    let rpc_client = Arc::new(RpcClient::new(args.rpc_url.clone()));
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        args.rpc_url.clone(),
+        CommitmentConfig::confirmed(),
+    ));
 
     info!("Starting indexer...");
     let is_localnet = args.rpc_url.contains("127.0.0.1");

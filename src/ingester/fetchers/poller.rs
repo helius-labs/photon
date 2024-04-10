@@ -9,7 +9,7 @@ use crate::ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInf
 
 pub struct TransactionPoller {
     client: Arc<RpcClient>,
-    slot: u64,
+    next_slot: u64,
 }
 
 pub struct Options {
@@ -57,14 +57,14 @@ impl TransactionPoller {
     pub async fn new(client: Arc<RpcClient>, options: Options) -> Self {
         Self {
             client,
-            slot: options.start_slot,
+            next_slot: options.start_slot,
         }
     }
 
     pub async fn fetch_new_block_batch(&mut self, max_batch_size: usize) -> Vec<BlockInfo> {
         let current_slot = fetch_current_slot_with_infinite_retry(self.client.as_ref()).await;
-        let next_slot = min(current_slot, self.slot + max_batch_size as u64);
-        let slots: Vec<_> = (self.slot..next_slot).collect();
+        let new_next_slot = min(current_slot + 1, self.next_slot + max_batch_size as u64);
+        let slots: Vec<_> = ((self.next_slot)..(new_next_slot)).collect();
 
         let mut blocks: Vec<BlockInfo> = stream::iter(slots)
             .map(|slot| {
@@ -76,7 +76,7 @@ impl TransactionPoller {
             .await;
         blocks.sort_by(|a, b| a.metadata.slot.cmp(&b.metadata.slot));
 
-        self.slot = next_slot;
+        self.next_slot = new_next_slot;
         blocks
     }
 }

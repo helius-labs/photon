@@ -144,6 +144,56 @@ async fn test_e2e_lamport_transfer(
 #[rstest]
 #[tokio::test]
 #[serial]
+async fn test_compress_lamports(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let payer_pubkey =
+        SerializablePubkey::try_from("9Mrg8qhh4862JK83S9tWBGudP7QhPwNDiX7giDGcH8Bg").unwrap();
+
+    let transfer_tx =
+        "2UPacdoWFmiQovJf2BDamiLSpE9tcLHUFfWrymE7y84n66qUPiN5apQ7hFV4UkRkRYmRgz9oDUetSBttyg4wkGvt";
+
+    index_transaction(&setup, transfer_tx).await;
+
+    let accounts = setup
+        .api
+        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+            owner: payer_pubkey,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_json_snapshot!(name.clone(), accounts);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
 async fn test_index_block_metadata(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
