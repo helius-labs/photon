@@ -36,7 +36,9 @@ pub async fn persist_state_update(
         out_accounts,
         path_nodes,
     } = state_update;
-
+    if in_accounts.is_empty() && out_accounts.is_empty() && path_nodes.is_empty() {
+        return Ok(());
+    }
     debug!(
         "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
         in_accounts.len(),
