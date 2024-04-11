@@ -195,7 +195,6 @@ pub struct TokenAcccount {
     pub amount: Decimal,
     pub delegate: Option<SerializablePubkey>,
     pub is_native: bool,
-    pub close_authority: Option<SerializablePubkey>,
     pub frozen: bool,
     pub data: Base64String,
     pub data_hash: Option<Hash>,
@@ -247,7 +246,6 @@ pub struct GetCompressedTokenAccountsByDelegate {
 
 #[derive(FromQueryResult)]
 pub struct EnrichedTokenAccountModel {
-    pub id: i64,
     pub hash: Vec<u8>,
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
@@ -257,7 +255,6 @@ pub struct EnrichedTokenAccountModel {
     pub frozen: bool,
     pub is_native: Option<Decimal>,
     pub delegated_amount: Decimal,
-    pub close_authority: Option<Vec<u8>>,
     pub spent: bool,
     pub slot_updated: i64,
     // Needed for generating proof
@@ -323,7 +320,6 @@ pub async fn fetch_token_accounts(
                 "Base account not found for token account".to_string(),
             ))?;
             Ok(EnrichedTokenAccountModel {
-                id: token_account.id,
                 hash: token_account.hash,
                 address: token_account.address,
                 owner: token_account.owner,
@@ -333,7 +329,6 @@ pub async fn fetch_token_accounts(
                 frozen: token_account.frozen,
                 is_native: token_account.is_native,
                 delegated_amount: token_account.delegated_amount,
-                close_authority: token_account.close_authority,
                 spent: token_account.spent,
                 slot_updated: token_account.slot_updated,
                 data: account.data,
@@ -387,10 +382,6 @@ pub fn parse_token_accounts_model(
             .map(SerializablePubkey::try_from)
             .transpose()?,
         is_native: token_account.is_native.is_some(),
-        close_authority: token_account
-            .close_authority
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
         frozen: token_account.frozen,
         #[allow(deprecated)]
         data: Base64String(base64::encode(token_account.data)),

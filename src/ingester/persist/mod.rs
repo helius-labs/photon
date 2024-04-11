@@ -289,7 +289,6 @@ async fn persist_path_nodes(
             leaf_idx: Set(node.leaf_index.map(|x| x as i64)),
             seq: Set(node.seq as i64),
             slot_updated: Set(node.slot as i64),
-            ..Default::default()
         })
         .collect::<Vec<_>>();
 

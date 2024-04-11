@@ -3,7 +3,6 @@ use sea_orm_migration::prelude::*;
 #[derive(Copy, Clone, Iden)]
 pub enum StateTrees {
     Table,
-    Id,
     Tree,
     NodeIdx,
     LeafIdx,
@@ -16,7 +15,6 @@ pub enum StateTrees {
 #[derive(Copy, Clone, Iden)]
 pub enum Accounts {
     Table,
-    Id,
     Hash,
     Address,
     Data,
@@ -34,14 +32,12 @@ pub enum Accounts {
 #[derive(Copy, Clone, Iden)]
 pub enum TokenAccounts {
     Table,
-    Id,
     Hash,
     Address,
     Owner,
     Mint,
     Delegate,
     Frozen,
-    CloseAuthority,
     // Duplicate to Spent in accounts. Added to simplify the handling of concurrent insertions and deletions
     // of token accounts.
     Spent,
@@ -52,7 +48,6 @@ pub enum TokenAccounts {
 #[derive(Copy, Clone, Iden)]
 pub enum Blocks {
     Table,
-    Id,
     Slot,
     ParentSlot,
     Blockhash,

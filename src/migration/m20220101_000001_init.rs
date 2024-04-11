@@ -46,13 +46,6 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(StateTrees::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(StateTrees::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
                     .col(ColumnDef::new(StateTrees::Tree).binary().not_null())
                     .col(ColumnDef::new(StateTrees::NodeIdx).big_integer().not_null())
                     .col(ColumnDef::new(StateTrees::LeafIdx).big_integer())
@@ -64,18 +57,12 @@ impl MigrationTrait for Migration {
                             .big_integer()
                             .not_null(),
                     )
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("state_trees_tree_node_idx")
-                    .table(StateTrees::Table)
-                    .col(StateTrees::Tree)
-                    .col(StateTrees::NodeIdx)
-                    .unique()
+                    .primary_key(
+                        Index::create()
+                            .name("pk_state_trees")
+                            .col(StateTrees::Tree)
+                            .col(StateTrees::NodeIdx),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -104,13 +91,6 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Accounts::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Accounts::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
                     .col(ColumnDef::new(Accounts::Hash).binary().not_null())
                     .col(ColumnDef::new(Accounts::Data).binary().not_null())
                     .col(ColumnDef::new(Accounts::DataHash).binary())
@@ -131,17 +111,7 @@ impl MigrationTrait for Migration {
                             .timestamp()
                             .default(Expr::current_timestamp()),
                     )
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("accounts_hash_idx")
-                    .table(Accounts::Table)
-                    .col(Accounts::Hash)
-                    .unique()
+                    .primary_key(Index::create().name("pk_accounts").col(Accounts::Hash))
                     .to_owned(),
             )
             .await?;
@@ -175,20 +145,12 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(TokenAccounts::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(TokenAccounts::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
                     .col(ColumnDef::new(TokenAccounts::Hash).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Address).binary())
                     .col(ColumnDef::new(TokenAccounts::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Mint).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Delegate).binary())
                     .col(ColumnDef::new(TokenAccounts::Frozen).boolean().not_null())
-                    .col(ColumnDef::new(TokenAccounts::CloseAuthority).binary())
                     .col(ColumnDef::new(TokenAccounts::Spent).boolean().not_null())
                     .foreign_key(
                         ForeignKey::create()
@@ -206,6 +168,11 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(TokenAccounts::CreatedAt)
                             .timestamp()
                             .default(Expr::current_timestamp()),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name("pk_token_accounts")
+                            .col(TokenAccounts::Hash),
                     )
                     .to_owned(),
             )
@@ -264,17 +231,6 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_accounts_hash_idx")
-                    .table(TokenAccounts::Table)
-                    .col(TokenAccounts::Hash)
-                    .unique()
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
                     .name("token_accounts_address_idx")
                     .table(TokenAccounts::Table)
                     .col(TokenAccounts::Address)
@@ -315,30 +271,13 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Blocks::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Blocks::Id)
-                            .big_integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
                     .col(ColumnDef::new(Blocks::Slot).big_integer().not_null())
                     .col(ColumnDef::new(Blocks::ParentSlot).big_integer().not_null())
                     .col(ColumnDef::new(Blocks::ParentBlockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::Blockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::BlockHeight).big_integer().not_null())
                     .col(ColumnDef::new(Blocks::BlockTime).big_integer().not_null())
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("blocks_slot_idx")
-                    .table(Blocks::Table)
-                    .col(Blocks::Slot)
-                    .unique()
+                    .primary_key(Index::create().name("pk_blocks").col(Blocks::Slot))
                     .to_owned(),
             )
             .await?;
