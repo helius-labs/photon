@@ -5,15 +5,13 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "token_accounts")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub hash: Vec<u8>,
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: bool,
-    pub close_authority: Option<Vec<u8>>,
     pub spent: bool,
     pub slot_updated: i64,
     pub created_at: Option<DateTime>,

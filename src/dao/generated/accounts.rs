@@ -5,8 +5,7 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "accounts")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub hash: Vec<u8>,
     pub data: Vec<u8>,
     pub data_hash: Option<Vec<u8>>,
