@@ -328,6 +328,7 @@ async fn persist_account_transactions(
             hash: Set(transaction.hash.to_vec()),
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
             closure: Set(transaction.closure),
+            slot: Set(transaction.slot as i64),
         })
         .collect::<Vec<_>>();
 

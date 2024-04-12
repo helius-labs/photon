@@ -318,6 +318,11 @@ impl MigrationTrait for Migration {
                             .boolean()
                             .not_null(),
                     )
+                    .col(
+                        ColumnDef::new(AccountTransactions::Slot)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .primary_key(
                         Index::create()
                             .name("pk_account_transaction_history")

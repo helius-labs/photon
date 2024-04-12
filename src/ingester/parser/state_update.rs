@@ -35,6 +35,7 @@ pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
     pub closure: bool,
+    pub slot: u64,
 }
 
 #[derive(Default)]

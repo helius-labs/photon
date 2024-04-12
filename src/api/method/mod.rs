@@ -10,3 +10,4 @@ pub mod get_multiple_compressed_account_proofs;
 pub mod get_multiple_compressed_accounts;
 pub mod get_slot;
 pub mod utils;
+pub mod get_compressed_account_transactions;

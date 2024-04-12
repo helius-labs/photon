@@ -69,4 +69,5 @@ pub enum AccountTransactions {
     Hash,
     Signature,
     Closure,
+    Slot
 }
