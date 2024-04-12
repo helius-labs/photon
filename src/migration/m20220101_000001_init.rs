@@ -315,7 +315,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(AccountTransactions::Closure)
-                            .binary()
+                            .boolean()
                             .not_null(),
                     )
                     .primary_key(

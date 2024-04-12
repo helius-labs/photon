@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
+use crate::common::typedefs::hash::Hash;
 use crate::ingester::parser::indexer_events::{CompressedAccount, PathNode};
 
 #[derive(Debug, Clone)]
@@ -21,7 +22,7 @@ pub struct EnrichedPathNode {
     pub seq: u64,
     pub level: usize,
     pub tree_depth: usize,
-    pub leaf_index: Option<u32>
+    pub leaf_index: Option<u32>,
 }
 
 pub struct PathUpdate {
@@ -30,12 +31,19 @@ pub struct PathUpdate {
     pub seq: u64,
 }
 
+pub struct AccountTransaction {
+    pub hash: Hash,
+    pub signature: Signature,
+    pub closure: bool,
+}
+
 #[derive(Default)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
     pub in_accounts: Vec<EnrichedAccount>,
     pub out_accounts: Vec<EnrichedAccount>,
     pub path_nodes: Vec<EnrichedPathNode>,
+    pub account_transactions: Vec<AccountTransaction>,
 }
 
 impl StateUpdate {
@@ -69,6 +77,9 @@ impl StateUpdate {
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
             merged.path_nodes.extend(update.path_nodes);
+            merged
+                .account_transactions
+                .extend(update.account_transactions);
         }
         merged.prune_redundant_updates();
         merged

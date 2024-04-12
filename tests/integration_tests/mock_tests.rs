@@ -583,6 +583,7 @@ async fn test_load_test(
             path_nodes: (0..num_elements)
                 .map(|i| generate_random_leaf_index(tree, i as u32, i))
                 .collect(),
+            account_transactions: vec![],
         };
         persist_state_update(&txn, state_update).await.unwrap();
         txn.commit().await.unwrap();
