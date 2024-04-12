@@ -55,3 +55,18 @@ pub enum Blocks {
     BlockHeight,
     BlockTime,
 }
+
+#[derive(Copy, Clone, Iden)]
+pub enum Transactions {
+    Table,
+    Signature,
+    Slot,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum AccountTransactions {
+    Table,
+    Hash,
+    Signature,
+    Closure,
+}

@@ -5,7 +5,7 @@ use sea_orm_migration::{
 
 use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
 
-use super::model::table::Blocks;
+use super::model::table::{AccountTransactions, Blocks, Transactions};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -282,6 +282,53 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(Transactions::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Transactions::Signature).binary().not_null())
+                    .col(ColumnDef::new(Transactions::Slot).big_integer().not_null())
+                    .primary_key(
+                        Index::create()
+                            .name("pk_transactions")
+                            .col(Transactions::Signature),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AccountTransactions::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(AccountTransactions::Hash)
+                            .binary()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountTransactions::Signature)
+                            .binary()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountTransactions::Closure)
+                            .binary()
+                            .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name("pk_account_transaction_history")
+                            .col(AccountTransactions::Hash)
+                            .col(AccountTransactions::Signature)
+                            .col(AccountTransactions::Closure),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -300,6 +347,14 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(Blocks::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(Transactions::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(AccountTransactions::Table).to_owned())
             .await?;
 
         Ok(())
