@@ -14,6 +14,35 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::accounts::Entity",
+        from = "Column::Hash",
+        to = "super::accounts::Column::Hash",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Accounts,
+    #[sea_orm(
+        belongs_to = "super::transactions::Entity",
+        from = "Column::Signature",
+        to = "super::transactions::Column::Signature",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Transactions,
+}
+
+impl Related<super::accounts::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Accounts.def()
+    }
+}
+
+impl Related<super::transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Transactions.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

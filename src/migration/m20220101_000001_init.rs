@@ -339,13 +339,13 @@ impl MigrationTrait for Migration {
                             .to(Accounts::Table, Accounts::Hash)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
-                    // .foreign_key(
-                    //     ForeignKey::create()
-                    //         .name("account_transactions_signature_fk")
-                    //         .from(AccountTransactions::Table, AccountTransactions::Signature)
-                    //         .to(Transactions::Table, Transactions::Signature)
-                    //         .on_delete(ForeignKeyAction::Cascade),
-                    // )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("account_transactions_signature_fk")
+                            .from(AccountTransactions::Table, AccountTransactions::Signature)
+                            .to(Transactions::Table, Transactions::Signature)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
                     .to_owned(),
             )
             .await?;

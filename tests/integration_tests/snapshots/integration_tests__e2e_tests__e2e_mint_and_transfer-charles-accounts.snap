@@ -25,6 +25,7 @@ expression: accounts
         "seq": 3,
         "leafIndex": 1
       }
-    ]
+    ],
+    "cursor": null
   }
 }
