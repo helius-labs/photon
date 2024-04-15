@@ -1,7 +1,7 @@
 use crate::dao::generated::token_accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
-use sqlx::types::Decimal;
+
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
