@@ -24,7 +24,6 @@ async fn test_e2e_mint_and_transfer(
 ) {
     use photon_indexer::api::method::{
         get_multiple_compressed_account_proofs::HashList,
-        get_signatures_for_owner::GetSignaturesForOwnerRequest,
         get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
     };
 

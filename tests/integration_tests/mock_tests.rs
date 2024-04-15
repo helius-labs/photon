@@ -5,7 +5,7 @@ use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
-    parse_decimal, CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
+    CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::bs64_string::Base64String;

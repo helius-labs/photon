@@ -42,7 +42,6 @@ use solana_transaction_status::{
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
-    types::Decimal,
     PgPool,
 };
 use std::sync::Arc;
