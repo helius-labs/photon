@@ -20,7 +20,7 @@ use super::method::get_signatures_for_owner::{
 use super::method::get_signatures_for_token_owner::{
     get_signatures_for_token_owner, GetSignaturesForTokenOwnerRequest,
 };
-use super::method::utils::{GetPaginatedSignaturesResponse, HashRequest};
+use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
 use super::{
     error::PhotonApiError,
     method::{
@@ -32,7 +32,7 @@ use super::{
             get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
             GetCompressedAccountsByOwnerResponse,
         },
-        get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
+        get_compressed_balance::get_compressed_balance,
         get_compressed_token_account_balance::{
             get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
@@ -158,7 +158,7 @@ impl PhotonApi {
     pub async fn get_compressed_balance(
         &self,
         request: CompressedAccountRequest,
-    ) -> Result<GetCompressedAccountBalance, PhotonApiError> {
+    ) -> Result<AccountBalanceResponse, PhotonApiError> {
         get_compressed_balance(&self.db_conn, request).await
     }
 
@@ -247,7 +247,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedBalance".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: GetCompressedAccountBalance::adjusted_schema(),
+                response: AccountBalanceResponse::adjusted_schema(),
             },
             OpenApiSpec {
                 name: "getCompressedAccountsByOwner".to_string(),

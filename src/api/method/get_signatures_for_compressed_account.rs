@@ -1,4 +1,4 @@
-use sea_orm::{DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -9,7 +9,6 @@ use super::{
         SignatureSearchType,
     },
 };
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.

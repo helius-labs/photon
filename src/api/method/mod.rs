@@ -13,4 +13,6 @@ pub mod get_signatures_for_compressed_account;
 pub mod get_signatures_for_owner;
 pub mod get_signatures_for_token_owner;
 pub mod get_slot;
+pub mod get_total_owner_balance;
+pub mod get_total_owner_token_balances;
 pub mod utils;

@@ -518,6 +518,10 @@ pub struct HashRequest(pub Hash);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct PubkeyRequest(pub SerializablePubkey);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SignatureInfo {
     pub signature: SerializableSignature,
     pub slot: u64,
@@ -683,4 +687,32 @@ pub async fn search_for_signatures(
 pub struct GetPaginatedSignaturesResponse {
     pub context: Context,
     pub value: PaginatedSignatureInfoList,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+pub struct AccountBalanceResponse {
+    pub context: Context,
+    pub value: u64,
+}
+
+impl AccountBalanceResponse {
+    pub fn adjusted_schema() -> utoipa::openapi::RefOr<utoipa::openapi::Schema> {
+        let mut schema = AccountBalanceResponse::schema().1;
+        let object = match schema {
+            utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(ref mut object)) => {
+                let example = serde_json::to_value(AccountBalanceResponse {
+                    context: { Context { slot: 1 } },
+                    value: 1,
+                })
+                .unwrap();
+                object.default = Some(example.clone());
+                object.example = Some(example);
+                object.description = Some("Response for compressed account balance".to_string());
+                object.clone()
+            }
+            _ => unimplemented!(),
+        };
+        utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(object))
+    }
 }
