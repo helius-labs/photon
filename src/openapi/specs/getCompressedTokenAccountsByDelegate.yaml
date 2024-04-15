@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.7.0
+  version: 0.9.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -43,7 +43,8 @@ paths:
                   - delegate
                   properties:
                     cursor:
-                      type: string
+                      allOf:
+                      - $ref: '#/components/schemas/Base58String'
                       nullable: true
                     delegate:
                       $ref: '#/components/schemas/SerializablePubkey'
@@ -133,9 +134,9 @@ components:
       required:
       - hash
       - discriminator
-      - data
       - owner
       - lamports
+      - tree
       - leafIndex
       - slotUpdated
       properties:
@@ -183,6 +184,11 @@ components:
           items:
             $ref: '#/components/schemas/Account'
       additionalProperties: false
+    Base58String:
+      type: string
+      description: A base 58 encoded string.
+      default: 3J98t1WpEZ73CNm
+      example: 3J98t1WpEZ73CNm
     Base64String:
       type: string
       description: A base 64 encoded string.
@@ -239,11 +245,53 @@ components:
           items:
             $ref: '#/components/schemas/Account'
       additionalProperties: false
+    PaginatedSignatureInfoList:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignatureInfo'
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
       default: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
       example: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
+    SerializableSignature:
+      type: string
+      description: A Solana transaction signature.
+      default: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
+      example: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
+    SignatureInfo:
+      type: object
+      required:
+      - signature
+      - slot
+      - blockTime
+      properties:
+        blockTime:
+          type: string
+          format: date-time
+        signature:
+          $ref: '#/components/schemas/SerializableSignature'
+        slot:
+          type: integer
+          format: int64
+          minimum: 0
+    SignatureInfoList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignatureInfo'
     TokenAcccount:
       type: object
       required:
@@ -251,25 +299,29 @@ components:
       - owner
       - mint
       - amount
+      - delegatedAmount
       - isNative
       - frozen
       - data
       - discriminator
       - lamports
       - leafIndex
+      - slotUpdated
       properties:
-        address:
-          $ref: '#/components/schemas/SerializablePubkey'
         amount:
-          type: string
-        closeAuthority:
-          $ref: '#/components/schemas/SerializablePubkey'
+          type: integer
+          format: int64
+          minimum: 0
         data:
           $ref: '#/components/schemas/Base64String'
         dataHash:
           $ref: '#/components/schemas/Hash'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
+        delegatedAmount:
+          type: integer
+          format: int64
+          minimum: 0
         discriminator:
           type: integer
           format: int64
@@ -297,6 +349,10 @@ components:
           format: int64
           nullable: true
           minimum: 0
+        slotUpdated:
+          type: integer
+          format: int64
+          minimum: 0
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
@@ -306,7 +362,9 @@ components:
       - amount
       properties:
         amount:
-          type: string
+          type: integer
+          format: int64
+          minimum: 0
       additionalProperties: false
     TokenAccountList:
       type: object
@@ -314,8 +372,7 @@ components:
       - items
       properties:
         cursor:
-          type: string
-          nullable: true
+          $ref: '#/components/schemas/Base58String'
         items:
           type: array
           items:

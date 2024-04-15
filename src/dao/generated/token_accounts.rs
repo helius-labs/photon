@@ -7,7 +7,6 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub hash: Vec<u8>,
-    pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub delegate: Option<Vec<u8>>,

@@ -5,7 +5,7 @@ use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
-    CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
+    parse_decimal, CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -395,7 +395,6 @@ async fn test_persist_token_data(
             hash,
             token_data: *token_data,
             slot_updated: slot as u64,
-            address: None,
         });
     }
 
@@ -470,7 +469,7 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(balance.amount, token_account.amount);
+            assert_eq!(balance.amount, Into::<u64>::into(token_account.amount));
         }
     }
     for delegate in [delegate1, delegate2] {

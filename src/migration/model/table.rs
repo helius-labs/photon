@@ -32,7 +32,6 @@ pub enum Accounts {
 pub enum TokenAccounts {
     Table,
     Hash,
-    Address,
     Owner,
     Mint,
     Delegate,

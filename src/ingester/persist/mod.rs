@@ -183,7 +183,6 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
-    pub address: Option<[u8; 32]>,
     pub slot_updated: u64,
 }
 
@@ -230,7 +229,6 @@ async fn append_output_accounts(
                 token_data,
                 hash: Hash::from(*hash),
                 slot_updated: *slot,
-                address: account.address,
             });
         }
     }
@@ -270,11 +268,9 @@ pub async fn persist_token_accounts(
                  token_data,
                  hash,
                  slot_updated,
-                 address,
              }| {
                 token_accounts::ActiveModel {
                     hash: Set(hash.into()),
-                    address: Set(address.map(|x| x.to_vec())),
                     mint: Set(token_data.mint.to_bytes().to_vec()),
                     owner: Set(token_data.owner.to_bytes().to_vec()),
                     amount: Set(Decimal::from(token_data.amount)),

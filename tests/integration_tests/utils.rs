@@ -329,7 +329,7 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
         let account = account.clone();
         assert_eq!(account.mint, tlv.mint.into());
         assert_eq!(account.owner, tlv.owner.into());
-        assert_eq!(account.amount, Decimal::from(tlv.amount));
+        assert_eq!(account.amount, tlv.amount);
         assert_eq!(account.delegate, tlv.delegate.map(Into::into));
         assert_eq!(account.is_native, tlv.is_native.is_some());
         assert_eq!(account.frozen, tlv.state == AccountState::Frozen);

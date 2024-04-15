@@ -208,12 +208,11 @@ pub struct TokenAccountListResponse {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAcccount {
     pub hash: Hash,
-    pub address: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
-    pub amount: Decimal,
+    pub amount: u64,
     pub delegate: Option<SerializablePubkey>,
-    pub delegated_amount: Decimal,
+    pub delegated_amount: u64,
     pub is_native: bool,
     pub frozen: bool,
     pub data: Base64String,
@@ -267,7 +266,6 @@ pub struct GetCompressedTokenAccountsByDelegate {
 #[derive(FromQueryResult)]
 pub struct EnrichedTokenAccountModel {
     pub hash: Vec<u8>,
-    pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub amount: Decimal,
@@ -341,7 +339,6 @@ pub async fn fetch_token_accounts(
             ))?;
             Ok(EnrichedTokenAccountModel {
                 hash: token_account.hash,
-                address: token_account.address,
                 owner: token_account.owner,
                 mint: token_account.mint,
                 amount: token_account.amount,
@@ -393,13 +390,9 @@ pub fn parse_token_accounts_model(
 ) -> Result<TokenAcccount, PhotonApiError> {
     Ok(TokenAcccount {
         hash: token_account.hash.try_into()?,
-        address: token_account
-            .address
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
         owner: token_account.owner.try_into()?,
         mint: token_account.mint.try_into()?,
-        amount: token_account.amount,
+        amount: parse_decimal(token_account.amount)?,
         delegate: token_account
             .delegate
             .map(SerializablePubkey::try_from)
@@ -420,7 +413,7 @@ pub fn parse_token_accounts_model(
             .transpose()?,
         leaf_index: parse_leaf_index(token_account.leaf_index)?,
         seq: token_account.seq.map(|seq| seq as u64),
-        delegated_amount: token_account.delegated_amount,
+        delegated_amount: parse_decimal(token_account.delegated_amount)?,
         slot_updated: token_account.slot_updated as u64,
     })
 }

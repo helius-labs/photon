@@ -10,12 +10,11 @@ expression: accounts
     "items": [
       {
         "hash": "3WCurN17webNLBJqAgCpjPjJbgWvAPnzXzxU2vEjS4YV",
-        "address": null,
         "owner": "FjLHdH44f8uN3kxrnxEuuLyLqeR7mp6jZ4d8NT3bk5os",
         "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
-        "amount": "700",
+        "amount": 700,
         "delegate": null,
-        "delegatedAmount": "0",
+        "delegatedAmount": 0,
         "isNative": false,
         "frozen": false,
         "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgTa29GEotUm8evdXAb9rZNZsih1m01/edZmifolSq2FRrwCAAAAAAAAAAEAAAAAAAAAAAA=",

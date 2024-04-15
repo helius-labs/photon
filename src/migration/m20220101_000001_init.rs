@@ -141,7 +141,6 @@ impl MigrationTrait for Migration {
                     .table(TokenAccounts::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(TokenAccounts::Hash).binary().not_null())
-                    .col(ColumnDef::new(TokenAccounts::Address).binary())
                     .col(ColumnDef::new(TokenAccounts::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Mint).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Delegate).binary())
@@ -217,16 +216,6 @@ impl MigrationTrait for Migration {
                 unimplemented!("Unsupported database type")
             }
         }
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("token_accounts_address_idx")
-                    .table(TokenAccounts::Table)
-                    .col(TokenAccounts::Address)
-                    .to_owned(),
-            )
-            .await?;
 
         manager
             .create_index(
