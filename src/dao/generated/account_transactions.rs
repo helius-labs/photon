@@ -11,7 +11,6 @@ pub struct Model {
     pub signature: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub closure: bool,
-    pub slot: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

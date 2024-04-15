@@ -31,6 +31,12 @@ pub struct PathUpdate {
     pub seq: u64,
 }
 
+#[derive(Hash, Eq, Clone, PartialEq, Debug)]
+pub struct Transaction {
+    pub signature: Signature,
+    pub slot: u64,
+}
+
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,

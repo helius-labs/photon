@@ -294,6 +294,13 @@ impl MigrationTrait for Migration {
                             .name("pk_transactions")
                             .col(Transactions::Signature),
                     )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("transactions_slot_fk")
+                            .from(Transactions::Table, Transactions::Slot)
+                            .to(Blocks::Table, Blocks::Slot)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -318,11 +325,6 @@ impl MigrationTrait for Migration {
                             .boolean()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(AccountTransactions::Slot)
-                            .big_integer()
-                            .not_null(),
-                    )
                     .primary_key(
                         Index::create()
                             .name("pk_account_transaction_history")
@@ -330,6 +332,20 @@ impl MigrationTrait for Migration {
                             .col(AccountTransactions::Signature)
                             .col(AccountTransactions::Closure),
                     )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("account_transactions_hash_fk")
+                            .from(AccountTransactions::Table, AccountTransactions::Hash)
+                            .to(Accounts::Table, Accounts::Hash)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    // .foreign_key(
+                    //     ForeignKey::create()
+                    //         .name("account_transactions_signature_fk")
+                    //         .from(AccountTransactions::Table, AccountTransactions::Signature)
+                    //         .to(Transactions::Table, Transactions::Signature)
+                    //         .on_delete(ForeignKeyAction::Cascade),
+                    // )
                     .to_owned(),
             )
             .await?;

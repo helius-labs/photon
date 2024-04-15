@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{
     error,
     parser::{
@@ -5,7 +7,11 @@ use super::{
         state_update::{AccountTransaction, EnrichedAccount, EnrichedPathNode},
     },
 };
-use crate::{common::typedefs::hash::Hash, dao::generated::account_transactions};
+use crate::{
+    common::typedefs::hash::Hash,
+    dao::generated::{account_transactions, transactions},
+    ingester::parser::state_update::Transaction,
+};
 use crate::{
     dao::generated::{accounts, state_trees, token_accounts},
     ingester::parser::state_update::StateUpdate,
@@ -59,6 +65,27 @@ pub async fn persist_state_update(
     debug!("Persisting path nodes...");
     for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
         persist_path_nodes(txn, chunk).await?;
+    }
+
+    debug!("Persisting path nodes...");
+    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
+        persist_path_nodes(txn, chunk).await?;
+    }
+
+    let transactions: HashSet<Transaction> = account_transactions
+        .iter()
+        .map(|t| Transaction {
+            signature: t.signature,
+            slot: t.slot,
+        })
+        .collect();
+
+    let mut transactions: Vec<Transaction> = transactions.into_iter().collect();
+    transactions.sort_by_key(|t| t.signature);
+
+    debug!("Persisting transactions nodes...");
+    for chunk in transactions.chunks(MAX_SQL_INSERTS) {
+        persist_transactions(txn, chunk).await?;
     }
 
     debug!("Persisting account transactions...");
@@ -318,6 +345,35 @@ async fn persist_path_nodes(
     Ok(())
 }
 
+async fn persist_transactions(
+    txn: &DatabaseTransaction,
+    transactions: &[Transaction],
+) -> Result<(), IngesterError> {
+    let transaction_models = transactions
+        .iter()
+        .map(|transaction| transactions::ActiveModel {
+            signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
+            slot: Set(transaction.slot as i64),
+        })
+        .collect::<Vec<_>>();
+
+    if !transaction_models.is_empty() {
+        // We first build the query and then execute it because SeaORM has a bug where it always throws
+        // an error if we do not insert a record in an insert statement. However, in this case, it's
+        // expected not to insert anything if the key already exists.
+        let query = transactions::Entity::insert_many(transaction_models)
+            .on_conflict(
+                OnConflict::columns([transactions::Column::Signature])
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+    }
+
+    Ok(())
+}
+
 async fn persist_account_transactions(
     txn: &DatabaseTransaction,
     account_transactions: &[AccountTransaction],
@@ -328,7 +384,6 @@ async fn persist_account_transactions(
             hash: Set(transaction.hash.to_vec()),
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
             closure: Set(transaction.closure),
-            slot: Set(transaction.slot as i64),
         })
         .collect::<Vec<_>>();
 

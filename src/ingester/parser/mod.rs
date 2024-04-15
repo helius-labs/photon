@@ -177,7 +177,7 @@ fn parse_public_transaction_event(
             hash: Hash::from(a.hash),
             signature: tx,
             closure: true,
-            slot
+            slot,
         }));
 
     state_update
@@ -190,7 +190,7 @@ fn parse_public_transaction_event(
                     hash: Hash::from(a.hash),
                     signature: tx,
                     closure: false,
-                    slot
+                    slot,
                 }),
         );
 

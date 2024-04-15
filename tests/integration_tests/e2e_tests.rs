@@ -34,7 +34,6 @@ async fn test_e2e_mint_and_transfer(
     )
     .await;
 
-    // HACK: We index a block so that API methods can fetch the current slot.
     index_block(
         &setup.db_conn,
         &BlockInfo {
