@@ -118,7 +118,7 @@ async fn spend_input_accounts(
             hash: Set(account.hash.to_vec()),
             spent: Set(true),
             data: Set(vec![]),
-            owner: Set(vec![]),
+            owner: Set(account.account.owner.to_bytes().to_vec()),
             discriminator: Set(vec![]),
             lamports: Set(Decimal::from(0)),
             slot_updated: Set(account.slot as i64),

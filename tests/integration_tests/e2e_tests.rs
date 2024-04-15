@@ -22,7 +22,10 @@ use serial_test::serial;
 async fn test_e2e_mint_and_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+    use photon_indexer::api::method::{
+        get_multiple_compressed_account_proofs::HashList,
+        get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
+    };
 
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
@@ -68,7 +71,7 @@ async fn test_e2e_mint_and_transfer(
             let accounts = setup
                 .api
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                    owner: pubkey,
+                    owner: pubkey.clone(),
                     ..Default::default()
                 })
                 .await
@@ -87,6 +90,31 @@ async fn test_e2e_mint_and_transfer(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+
+            let mut cursor = None;
+            let limit = Limit::new(1).unwrap();
+            let mut signatures = Vec::new();
+            loop {
+                let res = setup
+                    .api
+                    .get_signatures_for_token_owner(GetSignaturesForTokenOwnerRequest {
+                        owner: pubkey.clone(),
+                        cursor,
+                        limit: Some(limit.clone()),
+                    })
+                    .await
+                    .unwrap()
+                    .value;
+                signatures.extend(res.items);
+                cursor = res.cursor;
+                if cursor.is_none() {
+                    break;
+                }
+            }
+            assert_json_snapshot!(
+                format!("{}-{}-token-signatures", name.clone(), person),
+                signatures
+            );
         }
     }
 }

@@ -576,10 +576,10 @@ pub async fn search_for_signatures(
     let (filter, arg): (String, Vec<u8>) = match signature_filter {
         SignatureFilter::Account(hash) => ("WHERE account_transactions.hash = $1".to_string(), hash.into()),
         SignatureFilter::Address(address) => {
-            ("JOIN accounts ON account_transactions.hash = account.hash WHERE account.address = $1".to_string(), address.into())
+            ("JOIN accounts ON account_transactions.hash = accounts.hash WHERE account.address = $1".to_string(), address.into())
         }
         SignatureFilter::Owner(owner) => (format!(
-            "JOIN {base_table} account_transactions.hash = account.hash WHERE {base_table}.owner = $1"
+            "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
         ), owner.into()),
     };
     let arg: Value = arg.into();
@@ -621,7 +621,7 @@ pub async fn search_for_signatures(
         "
         SELECT transactions.signature, transactions.slot, blocks.block_time
         FROM account_transactions
-        JOIN transactions ON account_transactions.signature = transactions.hash
+        JOIN transactions ON account_transactions.signature = transactions.signature
         JOIN blocks ON transactions.slot = blocks.slot
         {filter}
         {cursor_filter}
