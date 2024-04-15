@@ -8,6 +8,7 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
+use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
@@ -98,7 +99,7 @@ async fn test_persist_state_update_basic(
         .value;
 
     #[allow(deprecated)]
-    let raw_data = base64::decode(res.data.0).unwrap();
+    let raw_data = base64::decode(res.data.unwrap_or(Base64String("".to_string())).0).unwrap();
     assert_eq!(account.account.data.unwrap().data, raw_data);
     assert_eq!(res.lamports, account.account.lamports);
     assert_eq!(res.slot_updated, account.slot);

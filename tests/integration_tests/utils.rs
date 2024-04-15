@@ -358,11 +358,11 @@ pub fn assert_account_response_list_matches_input(
         let input_data = base64::encode(&account.data.clone().unwrap().data.to_vec());
         assert_eq!(res.hash, hash.into());
         assert_eq!(res.owner, SerializablePubkey::from(account.owner));
-        assert_eq!(res.tree, Some(SerializablePubkey::from(tree.clone())));
+        assert_eq!(res.tree, SerializablePubkey::from(tree.clone()));
         assert_eq!(res.seq, seq);
         assert_eq!(res.lamports, account.lamports);
         assert_eq!(res.slot_updated, slot);
-        assert_eq!(res.data.0, input_data);
+        assert_eq!(res.data.clone().unwrap_or_default().0, input_data);
         assert_eq!(res.leaf_index, leaf_index.unwrap());
     }
 }

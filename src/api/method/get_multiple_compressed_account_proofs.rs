@@ -173,7 +173,7 @@ pub fn get_proof_path(index: i64) -> Vec<i64> {
         }
         idx >>= 1
     }
-    indexes.push(1);
+    indexes.push(0);
     indexes
 }
 

@@ -15,6 +15,7 @@ expression: accounts
         "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
         "amount": "300",
         "delegate": null,
+        "delegatedAmount": "0",
         "isNative": false,
         "frozen": false,
         "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgRrecV+aglSOSgsBIGOlhEvPwOkABupelZMI4UqPx6l/CwBAAAAAAAAAAEAAAAAAAAAAAA=",
@@ -23,7 +24,8 @@ expression: accounts
         "lamports": 0,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
         "seq": 3,
-        "leafIndex": 2
+        "leafIndex": 2,
+        "slotUpdated": 0
       }
     ],
     "cursor": null

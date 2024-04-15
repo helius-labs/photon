@@ -139,11 +139,11 @@ pub struct Account {
     pub hash: Hash,
     pub address: Option<SerializablePubkey>,
     pub discriminator: u64,
-    pub data: Base64String,
+    pub data: Option<Base64String>,
     pub data_hash: Option<Hash>,
     pub owner: SerializablePubkey,
     pub lamports: u64,
-    pub tree: Option<SerializablePubkey>,
+    pub tree: SerializablePubkey,
     pub leaf_index: u32,
     pub seq: Option<u64>,
     pub slot_updated: u64,
@@ -176,11 +176,20 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
             .map(SerializablePubkey::try_from)
             .transpose()?,
         discriminator: parse_discriminator(account.discriminator),
-        #[allow(deprecated)]
-        data: Base64String(base64::encode(account.data)),
+        data: match account.data.len() {
+            0 => None,
+            #[allow(deprecated)]
+            _ => Some(Base64String(base64::encode(account.data))),
+        },
         data_hash: account.data_hash.map(|hash| hash.try_into()).transpose()?,
         owner: account.owner.try_into()?,
-        tree: account.tree.map(|tree| tree.try_into()).transpose()?,
+        tree: account
+            .tree
+            .map(|tree| tree.try_into())
+            .transpose()?
+            .ok_or(PhotonApiError::UnexpectedError(
+                "Tree not found".to_string(),
+            ))?,
         leaf_index: parse_leaf_index(account.leaf_index)?,
         lamports: parse_decimal(account.lamports)?,
         slot_updated: account.slot_updated as u64,
@@ -204,6 +213,7 @@ pub struct TokenAcccount {
     pub mint: SerializablePubkey,
     pub amount: Decimal,
     pub delegate: Option<SerializablePubkey>,
+    pub delegated_amount: Decimal,
     pub is_native: bool,
     pub frozen: bool,
     pub data: Base64String,
@@ -213,6 +223,7 @@ pub struct TokenAcccount {
     pub tree: Option<SerializablePubkey>,
     pub seq: Option<u64>,
     pub leaf_index: u32,
+    pub slot_updated: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -409,6 +420,8 @@ pub fn parse_token_accounts_model(
             .transpose()?,
         leaf_index: parse_leaf_index(token_account.leaf_index)?,
         seq: token_account.seq.map(|seq| seq as u64),
+        delegated_amount: token_account.delegated_amount,
+        slot_updated: token_account.slot_updated as u64,
     })
 }
 
