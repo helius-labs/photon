@@ -9,7 +9,7 @@ use super::{
     },
     utils::{Context, HashRequest},
 };
-use crate::common::typedefs::hash::Hash;
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.

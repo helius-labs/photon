@@ -14,7 +14,7 @@ use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
 use sqlx::types::chrono::DateTime;
-use sqlx::types::chrono::FixedOffset;
+
 
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;

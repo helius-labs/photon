@@ -1,20 +1,16 @@
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{DatabaseConnection};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    get_multiple_compressed_account_proofs::{
-        get_multiple_compressed_account_proofs_helper, MerkleProofWithContext,
-    },
     utils::{
-        search_for_signatures, Context, GetPaginatedSignaturesResponse, HashRequest, Limit,
-        SignatureFilter, SignatureInfoList, SignatureSearchType,
+        search_for_signatures, Context, GetPaginatedSignaturesResponse, Limit,
+        SignatureFilter, SignatureSearchType,
     },
 };
 use crate::{
-    common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
-    dao::generated::{account_transactions, transactions},
+    common::typedefs::{serializable_pubkey::SerializablePubkey},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
