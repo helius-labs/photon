@@ -619,7 +619,7 @@ pub async fn search_for_signatures(
             })?;
 
             (
-                format!("AND transactions.slot >= $2 AND transactions.signature > $3"),
+                format!("AND transactions.slot <= $2 AND transactions.signature < $3"),
                 vec![
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
@@ -642,6 +642,7 @@ pub async fn search_for_signatures(
         LIMIT {limit}
     "
     );
+
     let signatures: Vec<SignatureInfoModel> =
         SignatureInfoModel::find_by_statement(Statement::from_sql_and_values(
             conn.get_database_backend(),
