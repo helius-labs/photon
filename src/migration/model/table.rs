@@ -26,7 +26,6 @@ pub enum Accounts {
     Spent,
     Seq,
     SlotUpdated,
-    CreatedAt,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -42,7 +41,6 @@ pub enum TokenAccounts {
     // of token accounts.
     Spent,
     SlotUpdated,
-    CreatedAt,
 }
 
 #[derive(Copy, Clone, Iden)]

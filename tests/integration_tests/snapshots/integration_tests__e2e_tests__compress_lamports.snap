@@ -21,6 +21,7 @@ expression: accounts
         "seq": 1,
         "slotUpdated": 0
       }
-    ]
+    ],
+    "cursor": null
   }
 }

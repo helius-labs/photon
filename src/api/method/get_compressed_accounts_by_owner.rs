@@ -30,7 +30,6 @@ pub struct GetCompressedAccountsByOwnerRequest {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PaginatedAccountList {
     pub items: Vec<Account>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Hash>,
 }
 

@@ -17,7 +17,6 @@ pub struct Model {
     pub seq: Option<i64>,
     pub slot_updated: i64,
     pub spent: bool,
-    pub created_at: Option<DateTime>,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub lamports: Decimal,
 }

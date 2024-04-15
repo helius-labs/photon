@@ -14,7 +14,6 @@ pub struct Model {
     pub frozen: bool,
     pub spent: bool,
     pub slot_updated: i64,
-    pub created_at: Option<DateTime>,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub amount: Decimal,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]

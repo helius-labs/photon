@@ -13,6 +13,8 @@ use sea_orm::EntityTrait;
 use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
+use sqlx::types::chrono::DateTime;
+use sqlx::types::chrono::FixedOffset;
 
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
@@ -50,16 +52,22 @@ async fn index_block_metadatas(
     for block_chunk in blocks.chunks(MAX_SQL_INSERTS) {
         let block_models: Vec<blocks::ActiveModel> = block_chunk
             .iter()
-            .map(|block| blocks::ActiveModel {
-                slot: Set(block.slot as i64),
-                parent_slot: Set(block.parent_slot as i64),
-                block_time: Set(block.block_time),
-                blockhash: Set(block.blockhash.clone().into()),
-                parent_blockhash: Set(block.parent_blockhash.clone().into()),
-                block_height: Set(block.block_height as i64),
-                ..Default::default()
+            .map(|block| {
+                Ok::<blocks::ActiveModel, IngesterError>(blocks::ActiveModel {
+                    slot: Set(block.slot as i64),
+                    parent_slot: Set(block.parent_slot as i64),
+                    block_time: Set(DateTime::from_timestamp(block.block_time, 0)
+                        .ok_or(IngesterError::ParserError(
+                            "Failed to convert timestamp".to_string(),
+                        ))?
+                        .into()),
+                    blockhash: Set(block.blockhash.clone().into()),
+                    parent_blockhash: Set(block.parent_blockhash.clone().into()),
+                    block_height: Set(block.block_height as i64),
+                    ..Default::default()
+                })
             })
-            .collect();
+            .collect::<Result<Vec<blocks::ActiveModel>, IngesterError>>()?;
 
         // We first build the query and then execute it because SeaORM has a bug where it always throws
         // expected not to insert anything if the key already exists.

@@ -8,7 +8,7 @@ pub enum IngesterError {
     MalformedEvent { msg: String },
     #[error("Database error: {0}")]
     DatabaseError(String),
-    #[error("Ingestion error: {0}")]
+    #[error("Parser error: {0}")]
     ParserError(String),
 }
 

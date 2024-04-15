@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
+use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
+use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -11,8 +13,8 @@ use sea_orm::{
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Number;
-use solana_sdk::clock::UnixTimestamp;
 use solana_sdk::signature::Signature;
+use sqlx::types::chrono::{DateTime, FixedOffset};
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -217,7 +219,7 @@ pub struct TokenAcccount {
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
     pub items: Vec<TokenAcccount>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
 }
 
 pub enum Authority {
@@ -229,7 +231,7 @@ pub enum Authority {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByAuthorityOptions {
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
@@ -238,7 +240,7 @@ pub struct GetCompressedTokenAccountsByAuthorityOptions {
 pub struct GetCompressedTokenAccountsByOwner {
     pub owner: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
@@ -247,7 +249,7 @@ pub struct GetCompressedTokenAccountsByOwner {
 pub struct GetCompressedTokenAccountsByDelegate {
     pub delegate: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
@@ -293,9 +295,9 @@ pub async fn fetch_token_accounts(
         filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
     }
     if let Some(cursor) = options.cursor {
-        let bytes = bs58::decode(cursor.clone())
+        let bytes = bs58::decode(cursor.0.clone())
             .into_vec()
-            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor)))?;
+            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor.0)))?;
         let expected_cursor_length = 64;
         if bytes.len() != expected_cursor_length {
             return Err(PhotonApiError::ValidationError(format!(
@@ -367,7 +369,10 @@ pub async fn fetch_token_accounts(
     }
 
     Ok(TokenAccountListResponse {
-        value: TokenAccountList { items, cursor },
+        value: TokenAccountList {
+            items,
+            cursor: cursor.map(|x| Base58String(x)),
+        },
         context,
     })
 }
@@ -508,16 +513,16 @@ pub struct HashRequest(pub Hash);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SignatureInfo {
-    pub signature: Signature,
+    pub signature: SerializableSignature,
     pub slot: u64,
-    pub block_time: Option<UnixTimestamp>,
+    pub block_time: DateTime<FixedOffset>,
 }
 
 #[derive(FromQueryResult)]
 pub struct SignatureInfoModel {
     pub signature: Vec<u8>,
     pub slot: i64,
-    pub block_time: Option<i64>,
+    pub block_time: DateTime<FixedOffset>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -637,13 +642,13 @@ pub async fn search_for_signatures(
         .into_iter()
         .map(|signature| {
             Ok(SignatureInfo {
-                signature: Signature::try_from(signature.signature).map_err(|_| {
-                    PhotonApiError::UnexpectedError("Invalid signature".to_string())
-                })?,
+                signature: SerializableSignature(
+                    Signature::try_from(signature.signature).map_err(|_| {
+                        PhotonApiError::UnexpectedError("Invalid signature".to_string())
+                    })?,
+                ),
                 slot: signature.slot as u64,
-                block_time: signature
-                    .block_time
-                    .map(|block_time| block_time as UnixTimestamp),
+                block_time: signature.block_time,
             })
         })
         .collect::<Result<Vec<SignatureInfo>, PhotonApiError>>()?;
@@ -653,7 +658,7 @@ pub async fn search_for_signatures(
         false => signatures.last().map(|signature| {
             bs58::encode::<Vec<u8>>({
                 let mut bytes = signature.slot.to_le_bytes().to_vec();
-                bytes.extend_from_slice(signature.signature.as_ref());
+                bytes.extend_from_slice(signature.signature.0.as_ref());
                 bytes
             })
             .into_string()

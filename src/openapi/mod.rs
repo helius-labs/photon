@@ -7,11 +7,16 @@ use crate::api::method::utils::Account;
 
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
+use crate::api::method::utils::PaginatedSignatureInfoList;
+use crate::api::method::utils::SignatureInfo;
+use crate::api::method::utils::SignatureInfoList;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
+use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::serializable_signature::SerializableSignature;
 use dirs;
 use utoipa::openapi::Response;
 
@@ -52,7 +57,12 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenAccountBalance,
     AccountList,
     Limit,
-    Base64String
+    Base58String,
+    Base64String,
+    SignatureInfoList,
+    PaginatedSignatureInfoList,
+    SignatureInfo,
+    SerializableSignature
 )))]
 struct ApiDoc;
 
