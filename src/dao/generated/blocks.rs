@@ -11,10 +11,19 @@ pub struct Model {
     pub parent_blockhash: Vec<u8>,
     pub blockhash: Vec<u8>,
     pub block_height: i64,
-    pub block_time: i64,
+    pub block_time: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::transactions::Entity")]
+    Transactions,
+}
+
+impl Related<super::transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Transactions.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

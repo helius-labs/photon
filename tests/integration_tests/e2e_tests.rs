@@ -22,7 +22,10 @@ use serial_test::serial;
 async fn test_e2e_mint_and_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+    use photon_indexer::api::method::{
+        get_multiple_compressed_account_proofs::HashList,
+        get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
+    };
 
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
@@ -34,7 +37,6 @@ async fn test_e2e_mint_and_transfer(
     )
     .await;
 
-    // HACK: We index a block so that API methods can fetch the current slot.
     index_block(
         &setup.db_conn,
         &BlockInfo {
@@ -69,7 +71,7 @@ async fn test_e2e_mint_and_transfer(
             let accounts = setup
                 .api
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                    owner: pubkey,
+                    owner: pubkey.clone(),
                     ..Default::default()
                 })
                 .await
@@ -88,6 +90,31 @@ async fn test_e2e_mint_and_transfer(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+
+            let mut cursor = None;
+            let limit = Limit::new(1).unwrap();
+            let mut signatures = Vec::new();
+            loop {
+                let res = setup
+                    .api
+                    .get_signatures_for_token_owner(GetSignaturesForTokenOwnerRequest {
+                        owner: pubkey.clone(),
+                        cursor,
+                        limit: Some(limit.clone()),
+                    })
+                    .await
+                    .unwrap()
+                    .value;
+                signatures.extend(res.items);
+                cursor = res.cursor;
+                if cursor.is_none() {
+                    break;
+                }
+            }
+            assert_json_snapshot!(
+                format!("{}-{}-token-signatures", name.clone(), person),
+                signatures
+            );
         }
     }
 }
@@ -99,6 +126,11 @@ async fn test_e2e_mint_and_transfer(
 async fn test_e2e_lamport_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon_indexer::api::method::{
+        get_signatures_for_owner::GetSignaturesForOwnerRequest,
+        utils::{HashRequest, Limit},
+    };
+
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -132,12 +164,42 @@ async fn test_e2e_lamport_transfer(
     let accounts = setup
         .api
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-            owner: bob_pubkey,
+            owner: bob_pubkey.clone(),
             ..Default::default()
         })
         .await
         .unwrap();
+
     assert_json_snapshot!(name.clone(), accounts);
+
+    let hash = accounts.value.items[0].hash.clone();
+    let signatures = setup
+        .api
+        .get_signatures_for_compressed_account(HashRequest(hash))
+        .await
+        .unwrap();
+    assert_json_snapshot!(format!("{}-signatures", name.clone()), signatures);
+
+    let mut cursor = None;
+    let mut signatures = Vec::new();
+    loop {
+        let res = setup
+            .api
+            .get_signatures_for_owner(GetSignaturesForOwnerRequest {
+                owner: bob_pubkey.clone(),
+                cursor,
+                limit: Some(Limit::new(10).unwrap()),
+            })
+            .await
+            .unwrap()
+            .value;
+        signatures.extend(res.items);
+        cursor = res.cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert_json_snapshot!(format!("{}-owner-signatures", name.clone()), signatures);
 }
 
 #[named]
@@ -197,6 +259,8 @@ async fn test_compress_lamports(
 async fn test_index_block_metadata(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use sqlx::types::chrono::DateTime;
+
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -232,7 +296,10 @@ async fn test_index_block_metadata(
         "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
     );
     assert_eq!(block_model.block_height, 234724352);
-    assert_eq!(block_model.block_time, 1710441678);
+    assert_eq!(
+        block_model.block_time,
+        DateTime::from_timestamp(1710441678, 0).unwrap()
+    );
 
     // Verify that we don't get an error if we try to index the same block again
     index_block(&setup.db_conn, &block).await.unwrap();

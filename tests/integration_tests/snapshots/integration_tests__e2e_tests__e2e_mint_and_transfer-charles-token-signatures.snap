@@ -1,0 +1,11 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: signatures
+---
+[
+  {
+    "signature": "46VP2T7zPwcFJzU3HDjCh5PWwxKP9LahgGbPQcsePXUwhFrFa2wHCEh4kDu4KCv18BtCw5RxauJt832DmbF4dUPt",
+    "slot": 0,
+    "blockTime": "1970-01-01T00:00:00Z"
+  }
+]

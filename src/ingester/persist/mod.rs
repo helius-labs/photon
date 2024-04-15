@@ -1,11 +1,17 @@
+use std::collections::HashSet;
+
 use super::{
     error,
     parser::{
         indexer_events::{AccountState, CompressedAccount, TokenData},
-        state_update::{EnrichedAccount, EnrichedPathNode},
+        state_update::{AccountTransaction, EnrichedAccount, EnrichedPathNode},
     },
 };
-use crate::common::typedefs::hash::Hash;
+use crate::{
+    common::typedefs::hash::Hash,
+    dao::generated::{account_transactions, transactions},
+    ingester::parser::state_update::Transaction,
+};
 use crate::{
     dao::generated::{accounts, state_trees, token_accounts},
     ingester::parser::state_update::StateUpdate,
@@ -35,6 +41,7 @@ pub async fn persist_state_update(
         in_accounts,
         out_accounts,
         path_nodes,
+        account_transactions,
     } = state_update;
     if in_accounts.is_empty() && out_accounts.is_empty() && path_nodes.is_empty() {
         return Ok(());
@@ -58,6 +65,32 @@ pub async fn persist_state_update(
     debug!("Persisting path nodes...");
     for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
         persist_path_nodes(txn, chunk).await?;
+    }
+
+    debug!("Persisting path nodes...");
+    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
+        persist_path_nodes(txn, chunk).await?;
+    }
+
+    let transactions: HashSet<Transaction> = account_transactions
+        .iter()
+        .map(|t| Transaction {
+            signature: t.signature,
+            slot: t.slot,
+        })
+        .collect();
+
+    let mut transactions: Vec<Transaction> = transactions.into_iter().collect();
+    transactions.sort_by_key(|t| t.signature);
+
+    debug!("Persisting transactions nodes...");
+    for chunk in transactions.chunks(MAX_SQL_INSERTS) {
+        persist_transactions(txn, chunk).await?;
+    }
+
+    debug!("Persisting account transactions...");
+    for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
+        persist_account_transactions(txn, chunk).await?;
     }
 
     Ok(())
@@ -85,7 +118,7 @@ async fn spend_input_accounts(
             hash: Set(account.hash.to_vec()),
             spent: Set(true),
             data: Set(vec![]),
-            owner: Set(vec![]),
+            owner: Set(account.account.owner.to_bytes().to_vec()),
             discriminator: Set(vec![]),
             lamports: Set(Decimal::from(0)),
             slot_updated: Set(account.slot as i64),
@@ -150,7 +183,6 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
-    pub address: Option<[u8; 32]>,
     pub slot_updated: u64,
 }
 
@@ -197,7 +229,6 @@ async fn append_output_accounts(
                 token_data,
                 hash: Hash::from(*hash),
                 slot_updated: *slot,
-                address: account.address,
             });
         }
     }
@@ -237,11 +268,9 @@ pub async fn persist_token_accounts(
                  token_data,
                  hash,
                  slot_updated,
-                 address,
              }| {
                 token_accounts::ActiveModel {
                     hash: Set(hash.into()),
-                    address: Set(address.map(|x| x.to_vec())),
                     mint: Set(token_data.mint.to_bytes().to_vec()),
                     owner: Set(token_data.owner.to_bytes().to_vec()),
                     amount: Set(Decimal::from(token_data.amount)),
@@ -308,6 +337,69 @@ async fn persist_path_nodes(
         .build(txn.get_database_backend());
     query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
     txn.execute(query).await?;
+
+    Ok(())
+}
+
+async fn persist_transactions(
+    txn: &DatabaseTransaction,
+    transactions: &[Transaction],
+) -> Result<(), IngesterError> {
+    let transaction_models = transactions
+        .iter()
+        .map(|transaction| transactions::ActiveModel {
+            signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
+            slot: Set(transaction.slot as i64),
+        })
+        .collect::<Vec<_>>();
+
+    if !transaction_models.is_empty() {
+        // We first build the query and then execute it because SeaORM has a bug where it always throws
+        // an error if we do not insert a record in an insert statement. However, in this case, it's
+        // expected not to insert anything if the key already exists.
+        let query = transactions::Entity::insert_many(transaction_models)
+            .on_conflict(
+                OnConflict::columns([transactions::Column::Signature])
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+    }
+
+    Ok(())
+}
+
+async fn persist_account_transactions(
+    txn: &DatabaseTransaction,
+    account_transactions: &[AccountTransaction],
+) -> Result<(), IngesterError> {
+    let account_transaction_models = account_transactions
+        .iter()
+        .map(|transaction| account_transactions::ActiveModel {
+            hash: Set(transaction.hash.to_vec()),
+            signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
+            closure: Set(transaction.closure),
+        })
+        .collect::<Vec<_>>();
+
+    if !account_transaction_models.is_empty() {
+        // We first build the query and then execute it because SeaORM has a bug where it always throws
+        // an error if we do not insert a record in an insert statement. However, in this case, it's
+        // expected not to insert anything if the key already exists.
+        let query = account_transactions::Entity::insert_many(account_transaction_models)
+            .on_conflict(
+                OnConflict::columns([
+                    account_transactions::Column::Hash,
+                    account_transactions::Column::Signature,
+                    account_transactions::Column::Closure,
+                ])
+                .do_nothing()
+                .to_owned(),
+            )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+    }
 
     Ok(())
 }

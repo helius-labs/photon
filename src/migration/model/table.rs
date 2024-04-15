@@ -26,14 +26,12 @@ pub enum Accounts {
     Spent,
     Seq,
     SlotUpdated,
-    CreatedAt,
 }
 
 #[derive(Copy, Clone, Iden)]
 pub enum TokenAccounts {
     Table,
     Hash,
-    Address,
     Owner,
     Mint,
     Delegate,
@@ -42,7 +40,6 @@ pub enum TokenAccounts {
     // of token accounts.
     Spent,
     SlotUpdated,
-    CreatedAt,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -54,4 +51,19 @@ pub enum Blocks {
     ParentBlockhash,
     BlockHeight,
     BlockTime,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum Transactions {
+    Table,
+    Signature,
+    Slot,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum AccountTransactions {
+    Table,
+    Hash,
+    Signature,
+    Closure,
 }

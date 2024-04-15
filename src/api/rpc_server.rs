@@ -181,5 +181,53 @@ fn build_rpc_module(
         },
     )?;
 
+    module.register_async_method(
+        "getSignaturesForCompressedAccount",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_signatures_for_compressed_account(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getSignaturesForAddress",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_signatures_for_address(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getSignaturesForOwner",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_signatures_for_owner(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getSignaturesForTokenOwner",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_signatures_for_token_owner(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
     Ok(module)
 }

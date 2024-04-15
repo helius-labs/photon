@@ -5,7 +5,7 @@ use sea_orm_migration::{
 
 use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
 
-use super::model::table::Blocks;
+use super::model::table::{AccountTransactions, Blocks, Transactions};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -106,11 +106,6 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(Accounts::Spent).boolean().not_null())
-                    .col(
-                        ColumnDef::new(Accounts::CreatedAt)
-                            .timestamp()
-                            .default(Expr::current_timestamp()),
-                    )
                     .primary_key(Index::create().name("pk_accounts").col(Accounts::Hash))
                     .to_owned(),
             )
@@ -146,7 +141,6 @@ impl MigrationTrait for Migration {
                     .table(TokenAccounts::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(TokenAccounts::Hash).binary().not_null())
-                    .col(ColumnDef::new(TokenAccounts::Address).binary())
                     .col(ColumnDef::new(TokenAccounts::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Mint).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Delegate).binary())
@@ -163,11 +157,6 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(TokenAccounts::SlotUpdated)
                             .big_integer()
                             .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TokenAccounts::CreatedAt)
-                            .timestamp()
-                            .default(Expr::current_timestamp()),
                     )
                     .primary_key(
                         Index::create()
@@ -231,16 +220,6 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("token_accounts_address_idx")
-                    .table(TokenAccounts::Table)
-                    .col(TokenAccounts::Address)
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
                     .name("token_accounts_owner_mint_hash_idx")
                     .table(TokenAccounts::Table)
                     .col(TokenAccounts::Spent)
@@ -276,8 +255,80 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Blocks::ParentBlockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::Blockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::BlockHeight).big_integer().not_null())
-                    .col(ColumnDef::new(Blocks::BlockTime).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(Blocks::BlockTime)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
                     .primary_key(Index::create().name("pk_blocks").col(Blocks::Slot))
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(Transactions::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Transactions::Signature).binary().not_null())
+                    .col(ColumnDef::new(Transactions::Slot).big_integer().not_null())
+                    .primary_key(
+                        Index::create()
+                            .name("pk_transactions")
+                            .col(Transactions::Signature),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("transactions_slot_fk")
+                            .from(Transactions::Table, Transactions::Slot)
+                            .to(Blocks::Table, Blocks::Slot)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(AccountTransactions::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(AccountTransactions::Hash)
+                            .binary()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountTransactions::Signature)
+                            .binary()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountTransactions::Closure)
+                            .boolean()
+                            .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name("pk_account_transaction_history")
+                            .col(AccountTransactions::Hash)
+                            .col(AccountTransactions::Signature)
+                            .col(AccountTransactions::Closure),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("account_transactions_hash_fk")
+                            .from(AccountTransactions::Table, AccountTransactions::Hash)
+                            .to(Accounts::Table, Accounts::Hash)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("account_transactions_signature_fk")
+                            .from(AccountTransactions::Table, AccountTransactions::Signature)
+                            .to(Transactions::Table, Transactions::Signature)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -300,6 +351,14 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(Blocks::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(Transactions::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(AccountTransactions::Table).to_owned())
             .await?;
 
         Ok(())

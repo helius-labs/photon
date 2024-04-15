@@ -2,16 +2,19 @@ use borsh::BorshDeserialize;
 use log::debug;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-use crate::ingester::parser::{
-    indexer_events::{CompressedAccountWithMerkleContext, PathNode},
-    state_update::{EnrichedAccount, EnrichedPathNode},
+use crate::{
+    common::typedefs::hash::Hash,
+    ingester::parser::{
+        indexer_events::{CompressedAccountWithMerkleContext, PathNode},
+        state_update::{EnrichedAccount, EnrichedPathNode},
+    },
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
     indexer_events::{ChangelogEvent, Changelogs, PublicTransactionEvent},
-    state_update::{PathUpdate, StateUpdate},
+    state_update::{AccountTransaction, PathUpdate, StateUpdate},
 };
 
 pub mod indexer_events;
@@ -167,6 +170,30 @@ fn parse_public_transaction_event(
                     })
             }),
     );
+
+    state_update
+        .account_transactions
+        .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
+            hash: Hash::from(a.hash),
+            signature: tx,
+            closure: true,
+            slot,
+        }));
+
+    state_update
+        .account_transactions
+        .extend(
+            state_update
+                .out_accounts
+                .iter()
+                .map(|a| AccountTransaction {
+                    hash: Hash::from(a.hash),
+                    signature: tx,
+                    closure: false,
+                    slot,
+                }),
+        );
+
     Ok(state_update)
 }
 

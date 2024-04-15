@@ -8,6 +8,7 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
+use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
@@ -98,7 +99,7 @@ async fn test_persist_state_update_basic(
         .value;
 
     #[allow(deprecated)]
-    let raw_data = base64::decode(res.data.0).unwrap();
+    let raw_data = base64::decode(res.data.unwrap_or(Base64String("".to_string())).0).unwrap();
     assert_eq!(account.account.data.unwrap().data, raw_data);
     assert_eq!(res.lamports, account.account.lamports);
     assert_eq!(res.slot_updated, account.slot);
@@ -394,7 +395,6 @@ async fn test_persist_token_data(
             hash,
             token_data: *token_data,
             slot_updated: slot as u64,
-            address: None,
         });
     }
 
@@ -469,7 +469,7 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(balance.amount, token_account.amount);
+            assert_eq!(balance.amount, Into::<u64>::into(token_account.amount));
         }
     }
     for delegate in [delegate1, delegate2] {
@@ -583,6 +583,7 @@ async fn test_load_test(
             path_nodes: (0..num_elements)
                 .map(|i| generate_random_leaf_index(tree, i as u32, i))
                 .collect(),
+            account_transactions: vec![],
         };
         persist_state_update(&txn, state_update).await.unwrap();
         txn.commit().await.unwrap();

@@ -1,16 +1,20 @@
 use std::str::FromStr;
 
+use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
+use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QueryOrder,
-    QuerySelect,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Number;
+use solana_sdk::signature::Signature;
+use sqlx::types::chrono::{DateTime, FixedOffset};
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -44,6 +48,12 @@ impl Limit {
 
     pub fn value(&self) -> u64 {
         self.0
+    }
+}
+
+impl Default for Limit {
+    fn default() -> Self {
+        Limit(PAGE_LIMIT)
     }
 }
 
@@ -129,11 +139,11 @@ pub struct Account {
     pub hash: Hash,
     pub address: Option<SerializablePubkey>,
     pub discriminator: u64,
-    pub data: Base64String,
+    pub data: Option<Base64String>,
     pub data_hash: Option<Hash>,
     pub owner: SerializablePubkey,
     pub lamports: u64,
-    pub tree: Option<SerializablePubkey>,
+    pub tree: SerializablePubkey,
     pub leaf_index: u32,
     pub seq: Option<u64>,
     pub slot_updated: u64,
@@ -166,11 +176,20 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
             .map(SerializablePubkey::try_from)
             .transpose()?,
         discriminator: parse_discriminator(account.discriminator),
-        #[allow(deprecated)]
-        data: Base64String(base64::encode(account.data)),
+        data: match account.data.len() {
+            0 => None,
+            #[allow(deprecated)]
+            _ => Some(Base64String(base64::encode(account.data))),
+        },
         data_hash: account.data_hash.map(|hash| hash.try_into()).transpose()?,
         owner: account.owner.try_into()?,
-        tree: account.tree.map(|tree| tree.try_into()).transpose()?,
+        tree: account
+            .tree
+            .map(|tree| tree.try_into())
+            .transpose()?
+            .ok_or(PhotonApiError::UnexpectedError(
+                "Tree not found".to_string(),
+            ))?,
         leaf_index: parse_leaf_index(account.leaf_index)?,
         lamports: parse_decimal(account.lamports)?,
         slot_updated: account.slot_updated as u64,
@@ -189,11 +208,11 @@ pub struct TokenAccountListResponse {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAcccount {
     pub hash: Hash,
-    pub address: Option<SerializablePubkey>,
     pub owner: SerializablePubkey,
     pub mint: SerializablePubkey,
-    pub amount: Decimal,
+    pub amount: u64,
     pub delegate: Option<SerializablePubkey>,
+    pub delegated_amount: u64,
     pub is_native: bool,
     pub frozen: bool,
     pub data: Base64String,
@@ -203,14 +222,14 @@ pub struct TokenAcccount {
     pub tree: Option<SerializablePubkey>,
     pub seq: Option<u64>,
     pub leaf_index: u32,
+    pub slot_updated: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
     pub items: Vec<TokenAcccount>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
 }
 
 pub enum Authority {
@@ -222,7 +241,7 @@ pub enum Authority {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByAuthorityOptions {
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
@@ -231,7 +250,7 @@ pub struct GetCompressedTokenAccountsByAuthorityOptions {
 pub struct GetCompressedTokenAccountsByOwner {
     pub owner: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
@@ -240,14 +259,13 @@ pub struct GetCompressedTokenAccountsByOwner {
 pub struct GetCompressedTokenAccountsByDelegate {
     pub delegate: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
 #[derive(FromQueryResult)]
 pub struct EnrichedTokenAccountModel {
     pub hash: Vec<u8>,
-    pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub mint: Vec<u8>,
     pub amount: Decimal,
@@ -286,9 +304,9 @@ pub async fn fetch_token_accounts(
         filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
     }
     if let Some(cursor) = options.cursor {
-        let bytes = bs58::decode(cursor.clone())
+        let bytes = bs58::decode(cursor.0.clone())
             .into_vec()
-            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor)))?;
+            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor.0)))?;
         let expected_cursor_length = 64;
         if bytes.len() != expected_cursor_length {
             return Err(PhotonApiError::ValidationError(format!(
@@ -321,7 +339,6 @@ pub async fn fetch_token_accounts(
             ))?;
             Ok(EnrichedTokenAccountModel {
                 hash: token_account.hash,
-                address: token_account.address,
                 owner: token_account.owner,
                 mint: token_account.mint,
                 amount: token_account.amount,
@@ -360,7 +377,10 @@ pub async fn fetch_token_accounts(
     }
 
     Ok(TokenAccountListResponse {
-        value: TokenAccountList { items, cursor },
+        value: TokenAccountList {
+            items,
+            cursor: cursor.map(|x| Base58String(x)),
+        },
         context,
     })
 }
@@ -370,13 +390,9 @@ pub fn parse_token_accounts_model(
 ) -> Result<TokenAcccount, PhotonApiError> {
     Ok(TokenAcccount {
         hash: token_account.hash.try_into()?,
-        address: token_account
-            .address
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
         owner: token_account.owner.try_into()?,
         mint: token_account.mint.try_into()?,
-        amount: token_account.amount,
+        amount: parse_decimal(token_account.amount)?,
         delegate: token_account
             .delegate
             .map(SerializablePubkey::try_from)
@@ -397,6 +413,8 @@ pub fn parse_token_accounts_model(
             .transpose()?,
         leaf_index: parse_leaf_index(token_account.leaf_index)?,
         seq: token_account.seq.map(|seq| seq as u64),
+        delegated_amount: parse_decimal(token_account.delegated_amount)?,
+        slot_updated: token_account.slot_updated as u64,
     })
 }
 
@@ -492,4 +510,177 @@ pub struct BalanceModel {
 #[derive(FromQueryResult)]
 pub struct LamportModel {
     pub lamports: Decimal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HashRequest(pub Hash);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SignatureInfo {
+    pub signature: SerializableSignature,
+    pub slot: u64,
+    pub block_time: DateTime<FixedOffset>,
+}
+
+#[derive(FromQueryResult)]
+pub struct SignatureInfoModel {
+    pub signature: Vec<u8>,
+    pub slot: i64,
+    pub block_time: DateTime<FixedOffset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SignatureInfoList {
+    pub items: Vec<SignatureInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginatedSignatureInfoList {
+    pub items: Vec<SignatureInfo>,
+    pub cursor: Option<String>,
+}
+
+pub enum SignatureFilter {
+    Account(Hash),
+    Address(SerializablePubkey),
+    Owner(SerializablePubkey),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignatureSearchType {
+    Standard,
+    Token,
+}
+
+pub async fn search_for_signatures(
+    conn: &DatabaseConnection,
+    search_type: SignatureSearchType,
+    signature_filter: SignatureFilter,
+    cursor: Option<String>,
+    limit: Option<Limit>,
+) -> Result<PaginatedSignatureInfoList, PhotonApiError> {
+    if search_type == SignatureSearchType::Token {
+        match signature_filter {
+            SignatureFilter::Owner(_) => {}
+            _ => {
+                return Err(PhotonApiError::ValidationError(
+                    "Only owner search is supported for token signatures".to_string(),
+                ))
+            }
+        }
+    }
+
+    let base_table = match search_type {
+        SignatureSearchType::Standard => "accounts",
+        SignatureSearchType::Token => "token_accounts",
+    };
+
+    let (filter, arg): (String, Vec<u8>) = match signature_filter {
+        SignatureFilter::Account(hash) => ("WHERE account_transactions.hash = $1".to_string(), hash.into()),
+        SignatureFilter::Address(address) => {
+            ("JOIN accounts ON account_transactions.hash = accounts.hash WHERE account.address = $1".to_string(), address.into())
+        }
+        SignatureFilter::Owner(owner) => (format!(
+            "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
+        ), owner.into()),
+    };
+    let arg: Value = arg.into();
+
+    let (cursor_filter, cursor_args): (String, Vec<Value>) = match cursor {
+        Some(cursor) => {
+            let bytes = bs58::decode(cursor.clone()).into_vec().map_err(|_| {
+                PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor))
+            })?;
+            let slot_bytes = 8;
+            let signature_bytes = 64;
+            let expected_cursor_length = slot_bytes + signature_bytes;
+            if bytes.len() != expected_cursor_length {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Invalid cursor length. Expected {}. Received {}.",
+                    expected_cursor_length,
+                    bytes.len()
+                )));
+            }
+            let (slot, signature) = bytes.split_at(slot_bytes);
+            let slot = LittleEndian::read_u64(slot);
+            let signature = Signature::try_from(signature).map_err(|_| {
+                PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
+            })?;
+
+            (
+                format!("AND transactions.slot <= $2 AND transactions.signature < $3"),
+                vec![
+                    slot.into(),
+                    Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
+                ],
+            )
+        }
+        None => ("".to_string(), vec![]),
+    };
+    let limit = limit.unwrap_or_default().0;
+
+    let raw_sql = format!(
+        "
+        SELECT transactions.signature, transactions.slot, blocks.block_time
+        FROM account_transactions
+        JOIN transactions ON account_transactions.signature = transactions.signature
+        JOIN blocks ON transactions.slot = blocks.slot
+        {filter}
+        {cursor_filter}
+        ORDER BY transactions.slot, transactions.signature DESC
+        LIMIT {limit}
+    "
+    );
+
+    let signatures: Vec<SignatureInfoModel> =
+        SignatureInfoModel::find_by_statement(Statement::from_sql_and_values(
+            conn.get_database_backend(),
+            &raw_sql,
+            vec![arg].into_iter().chain(cursor_args),
+        ))
+        .all(conn)
+        .await?;
+
+    let signatures = signatures
+        .into_iter()
+        .map(|signature| {
+            Ok(SignatureInfo {
+                signature: SerializableSignature(
+                    Signature::try_from(signature.signature).map_err(|_| {
+                        PhotonApiError::UnexpectedError("Invalid signature".to_string())
+                    })?,
+                ),
+                slot: signature.slot as u64,
+                block_time: signature.block_time,
+            })
+        })
+        .collect::<Result<Vec<SignatureInfo>, PhotonApiError>>()?;
+
+    let cursor = match signatures.len() < limit as usize {
+        true => None,
+        false => signatures.last().map(|signature| {
+            bs58::encode::<Vec<u8>>({
+                let mut bytes = signature.slot.to_le_bytes().to_vec();
+                bytes.extend_from_slice(signature.signature.0.as_ref());
+                bytes
+            })
+            .into_string()
+        }),
+    };
+
+    Ok(PaginatedSignatureInfoList {
+        items: signatures,
+        cursor,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+pub struct GetPaginatedSignaturesResponse {
+    pub context: Context,
+    pub value: PaginatedSignatureInfoList,
 }

@@ -3,30 +3,25 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "accounts")]
+#[sea_orm(table_name = "transactions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub hash: Vec<u8>,
-    pub data: Vec<u8>,
-    pub data_hash: Option<Vec<u8>>,
-    pub discriminator: Vec<u8>,
-    pub address: Option<Vec<u8>>,
-    pub owner: Vec<u8>,
-    pub tree: Option<Vec<u8>>,
-    pub leaf_index: Option<i64>,
-    pub seq: Option<i64>,
-    pub slot_updated: i64,
-    pub spent: bool,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
-    pub lamports: Decimal,
+    pub signature: Vec<u8>,
+    pub slot: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(has_many = "super::account_transactions::Entity")]
     AccountTransactions,
-    #[sea_orm(has_many = "super::token_accounts::Entity")]
-    TokenAccounts,
+    #[sea_orm(
+        belongs_to = "super::blocks::Entity",
+        from = "Column::Slot",
+        to = "super::blocks::Column::Slot",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Blocks,
 }
 
 impl Related<super::account_transactions::Entity> for Entity {
@@ -35,9 +30,9 @@ impl Related<super::account_transactions::Entity> for Entity {
     }
 }
 
-impl Related<super::token_accounts::Entity> for Entity {
+impl Related<super::blocks::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::TokenAccounts.def()
+        Relation::Blocks.def()
     }
 }
 

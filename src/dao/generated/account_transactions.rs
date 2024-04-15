@@ -3,22 +3,14 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "token_accounts")]
+#[sea_orm(table_name = "account_transactions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub hash: Vec<u8>,
-    pub owner: Vec<u8>,
-    pub mint: Vec<u8>,
-    pub delegate: Option<Vec<u8>>,
-    pub frozen: bool,
-    pub spent: bool,
-    pub slot_updated: i64,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
-    pub amount: Decimal,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]
-    pub is_native: Option<Decimal>,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
-    pub delegated_amount: Decimal,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub signature: Vec<u8>,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub closure: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -31,11 +23,25 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Accounts,
+    #[sea_orm(
+        belongs_to = "super::transactions::Entity",
+        from = "Column::Signature",
+        to = "super::transactions::Column::Signature",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Transactions,
 }
 
 impl Related<super::accounts::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Accounts.def()
+    }
+}
+
+impl Related<super::transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Transactions.def()
     }
 }
 

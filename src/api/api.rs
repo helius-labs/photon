@@ -8,12 +8,25 @@ use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use super::method::get_compressed_account::AccountResponse;
+use super::method::get_signatures_for_address::{
+    get_signatures_for_address, GetSignaturesForAddressRequest,
+};
+use super::method::get_signatures_for_compressed_account::{
+    get_signatures_for_compressed_account, GetSignaturesForCompressedAccountResponse,
+};
+use super::method::get_signatures_for_owner::{
+    get_signatures_for_owner, GetSignaturesForOwnerRequest,
+};
+use super::method::get_signatures_for_token_owner::{
+    get_signatures_for_token_owner, GetSignaturesForTokenOwnerRequest,
+};
+use super::method::utils::{GetPaginatedSignaturesResponse, HashRequest};
 use super::{
     error::PhotonApiError,
     method::{
         get_compressed_account::get_compressed_account,
         get_compressed_account_proof::{
-            get_compressed_account_proof, GetCompressedAccountProofResponse, HashRequest,
+            get_compressed_account_proof, GetCompressedAccountProofResponse,
         },
         get_compressed_accounts_by_owner::{
             get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
@@ -171,6 +184,34 @@ impl PhotonApi {
         get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_signatures_for_compressed_account(
+        &self,
+        request: HashRequest,
+    ) -> Result<GetSignaturesForCompressedAccountResponse, PhotonApiError> {
+        get_signatures_for_compressed_account(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_signatures_for_address(
+        &self,
+        request: GetSignaturesForAddressRequest,
+    ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
+        get_signatures_for_address(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_signatures_for_owner(
+        &self,
+        request: GetSignaturesForOwnerRequest,
+    ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
+        get_signatures_for_owner(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_signatures_for_token_owner(
+        &self,
+        request: GetSignaturesForTokenOwnerRequest,
+    ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
+        get_signatures_for_token_owner(self.db_conn.as_ref(), request).await
+    }
+
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
             OpenApiSpec {
@@ -217,6 +258,26 @@ impl PhotonApi {
                 name: "getMultipleCompressedAccounts".to_string(),
                 request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
                 response: GetMultipleCompressedAccountsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getSignaturesForCompressedAccount".to_string(),
+                request: Some(HashRequest::schema().1),
+                response: GetSignaturesForCompressedAccountResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getSignaturesForAddress".to_string(),
+                request: Some(GetSignaturesForAddressRequest::schema().1),
+                response: GetPaginatedSignaturesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getSignaturesForOwner".to_string(),
+                request: Some(GetSignaturesForOwnerRequest::schema().1),
+                response: GetPaginatedSignaturesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getSignaturesForTokenOwner".to_string(),
+                request: Some(GetSignaturesForTokenOwnerRequest::schema().1),
+                response: GetPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getHealth".to_string(),
