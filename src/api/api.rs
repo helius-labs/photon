@@ -8,6 +8,10 @@ use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use super::method::get_compressed_account::AccountResponse;
+use super::method::get_compressed_owner_balance::get_compressed_owner_balance;
+use super::method::get_compressed_owner_token_balances::{
+    get_compressed_owner_token_balances, GetCompressedOwnerTokenBalances, TokenBalancesResponse,
+};
 use super::method::get_signatures_for_address::{
     get_signatures_for_address, GetSignaturesForAddressRequest,
 };
@@ -20,7 +24,9 @@ use super::method::get_signatures_for_owner::{
 use super::method::get_signatures_for_token_owner::{
     get_signatures_for_token_owner, GetSignaturesForTokenOwnerRequest,
 };
-use super::method::utils::{GetPaginatedSignaturesResponse, HashRequest};
+use super::method::utils::{
+    AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest, PubkeyRequest,
+};
 use super::{
     error::PhotonApiError,
     method::{
@@ -32,7 +38,7 @@ use super::{
             get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
             GetCompressedAccountsByOwnerResponse,
         },
-        get_compressed_balance::{get_compressed_balance, GetCompressedAccountBalance},
+        get_compressed_balance::get_compressed_balance,
         get_compressed_token_account_balance::{
             get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
@@ -148,6 +154,20 @@ impl PhotonApi {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
 
+    pub async fn get_compressed_owner_balance(
+        &self,
+        request: PubkeyRequest,
+    ) -> Result<AccountBalanceResponse, PhotonApiError> {
+        get_compressed_owner_balance(&self.db_conn, request).await
+    }
+
+    pub async fn get_compressed_owner_token_balances(
+        &self,
+        request: GetCompressedOwnerTokenBalances,
+    ) -> Result<TokenBalancesResponse, PhotonApiError> {
+        get_compressed_owner_token_balances(&self.db_conn, request).await
+    }
+
     pub async fn get_compressed_token_account_balance(
         &self,
         request: CompressedAccountRequest,
@@ -158,7 +178,7 @@ impl PhotonApi {
     pub async fn get_compressed_balance(
         &self,
         request: CompressedAccountRequest,
-    ) -> Result<GetCompressedAccountBalance, PhotonApiError> {
+    ) -> Result<AccountBalanceResponse, PhotonApiError> {
         get_compressed_balance(&self.db_conn, request).await
     }
 
@@ -240,16 +260,6 @@ impl PhotonApi {
                 response: TokenAccountListResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getCompressedTokenAccountBalance".to_string(),
-                request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: GetCompressedTokenAccountBalanceResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedBalance".to_string(),
-                request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: GetCompressedAccountBalance::adjusted_schema(),
-            },
-            OpenApiSpec {
                 name: "getCompressedAccountsByOwner".to_string(),
                 request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
                 response: GetCompressedAccountsByOwnerResponse::schema().1,
@@ -258,6 +268,26 @@ impl PhotonApi {
                 name: "getMultipleCompressedAccounts".to_string(),
                 request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
                 response: GetMultipleCompressedAccountsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountBalance".to_string(),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
+                response: GetCompressedTokenAccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedBalance".to_string(),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
+                response: AccountBalanceResponse::adjusted_schema(),
+            },
+            OpenApiSpec {
+                name: "getCompressedOwnerBalance".to_string(),
+                request: Some(PubkeyRequest::schema().1),
+                response: AccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedOwnerTokenBalances".to_string(),
+                request: Some(GetCompressedOwnerTokenBalances::schema().1),
+                response: TokenBalancesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getSignaturesForCompressedAccount".to_string(),

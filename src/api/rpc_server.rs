@@ -124,6 +124,30 @@ fn build_rpc_module(
     )?;
 
     module.register_async_method(
+        "getCompressedOwnerBalance",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_compressed_owner_balance(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedOwnerTokenBalances",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_compressed_owner_token_balances(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
         "getCompressedTokenAccountBalance",
         |rpc_params, rpc_context| async move {
             let ApiAndIndexer { api, indexer } = rpc_context.as_ref();

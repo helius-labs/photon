@@ -340,6 +340,7 @@ pub fn assert_account_response_list_matches_input(
     account_response: &mut Vec<Account>,
     input_accounts: &mut Vec<EnrichedAccount>,
 ) {
+    assert_eq!(account_response.len(), input_accounts.len());
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
     input_accounts.sort_by(|a, b| a.hash.cmp(&b.hash));
 

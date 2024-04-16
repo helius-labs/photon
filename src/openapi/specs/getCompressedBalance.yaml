@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.9.0
+  version: 0.12.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -217,7 +217,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111117SQekjmcMtR25wEPPiL6m1Mb5586NkLL4X
+      example: 111111193m4hAxmCcGXMfnjVPfNhWSjb69sDgffKu
     Limit:
       type: integer
       format: int64
@@ -270,8 +270,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
-      example: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
+      default: 11111118eRTi4fUVRoeYEeeTyL4DPAwxatvWT5q1Z
+      example: 11111118eRTi4fUVRoeYEeeTyL4DPAwxatvWT5q1Z
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
@@ -387,3 +387,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TokenAcccount'
+    TokenBalance:
+      type: object
+      required:
+      - mint
+      - balance
+      properties:
+        balance:
+          type: integer
+          format: int64
+          minimum: 0
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+    TokenBalanceList:
+      type: object
+      required:
+      - token_balances
+      properties:
+        cursor:
+          type: string
+          nullable: true
+        token_balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenBalance'

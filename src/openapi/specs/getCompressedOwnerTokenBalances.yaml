@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getHealth
+    summary: getCompressedOwnerTokenBalances
     post:
       requestBody:
         content:
@@ -20,6 +20,7 @@ paths:
               - jsonrpc
               - id
               - method
+              - params
               properties:
                 id:
                   type: string
@@ -35,7 +36,26 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getHealth
+                  - getCompressedOwnerTokenBalances
+                params:
+                  type: object
+                  required:
+                  - owner
+                  properties:
+                    cursor:
+                      allOf:
+                      - $ref: '#/components/schemas/Base58String'
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
+                    mint:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                    owner:
+                      $ref: '#/components/schemas/SerializablePubkey'
         required: true
       responses:
         '200':
@@ -43,11 +63,15 @@ paths:
           content:
             application/json:
               schema:
-                type: string
-                description: ok if healthy
-                default: ok
-                enum:
-                - ok
+                type: object
+                required:
+                - context
+                - value
+                properties:
+                  context:
+                    $ref: '#/components/schemas/Context'
+                  value:
+                    $ref: '#/components/schemas/TokenBalanceList'
         '400':
           description: Invalid request.
           content:
@@ -182,7 +206,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111EgVWUh8o98knojjwqGKqVGFkQ9m5AxqKkj
+      example: 1111111Af7Udc9v3L82dQM5b4zee1Xt77Be4czzbH
     Limit:
       type: integer
       format: int64
@@ -235,8 +259,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
-      example: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
+      default: 1111111AFmseVrdL9f9oyCzZefL9tG6UbvhMPRAGw
+      example: 1111111AFmseVrdL9f9oyCzZefL9tG6UbvhMPRAGw
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

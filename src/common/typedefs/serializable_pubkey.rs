@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 
 use std::convert::TryFrom;
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
 /// A Solana public key.
 pub struct SerializablePubkey(SolanaPubkey);
 
