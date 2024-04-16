@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.9.0
+  version: 0.12.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -359,3 +359,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TokenAcccount'
+    TokenBalance:
+      type: object
+      required:
+      - mint
+      - balance
+      properties:
+        balance:
+          type: integer
+          format: int64
+          minimum: 0
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+    TokenBalanceList:
+      type: object
+      required:
+      - token_balances
+      properties:
+        cursor:
+          type: string
+          nullable: true
+        token_balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenBalance'
