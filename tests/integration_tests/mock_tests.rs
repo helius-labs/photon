@@ -3,10 +3,11 @@ use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_compressed_owner_token_balances::GetCompressedOwnerTokenBalances;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
-    GetCompressedTokenAccountsByOwner,
+    GetCompressedTokenAccountsByOwner, PubkeyRequest,
 };
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -184,7 +185,7 @@ async fn test_multiple_accounts(
             leaf_index: Some(10),
             slot: 0,
             seq: Some(1),
-            hash: [0; 32],
+            hash: [1; 32],
         },
         EnrichedAccount {
             account: CompressedAccount {
@@ -201,7 +202,7 @@ async fn test_multiple_accounts(
             leaf_index: Some(11),
             slot: 0,
             seq: Some(2),
-            hash: [0; 32],
+            hash: [2; 32],
         },
         EnrichedAccount {
             account: CompressedAccount {
@@ -218,7 +219,7 @@ async fn test_multiple_accounts(
             leaf_index: Some(13),
             slot: 1,
             seq: Some(3),
-            hash: [0; 32],
+            hash: [3; 32],
         },
         EnrichedAccount {
             account: CompressedAccount {
@@ -235,7 +236,7 @@ async fn test_multiple_accounts(
             leaf_index: Some(23),
             slot: 0,
             seq: Some(1),
-            hash: [0; 32],
+            hash: [4; 32],
         },
     ];
 
@@ -278,6 +279,7 @@ async fn test_multiple_accounts(
             }
         }
         assert_eq!(response_accounts, paginated_response_accounts);
+
         let mut accounts_of_interest = accounts
             .clone()
             .into_iter()
@@ -288,6 +290,19 @@ async fn test_multiple_accounts(
             &mut response_accounts,
             &mut accounts_of_interest,
         );
+
+        let total_balance = accounts_of_interest
+            .iter()
+            .fold(0, |acc, x| acc + x.account.lamports);
+
+        let res = setup
+            .api
+            .get_compressed_owner_balance(PubkeyRequest(SerializablePubkey::from(owner)))
+            .await
+            .unwrap()
+            .value;
+        
+        assert_eq!(res, total_balance);
     }
 
     let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
@@ -311,6 +326,8 @@ async fn test_multiple_accounts(
 async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use std::collections::HashMap;
+
     use photon_indexer::ingester::parser::indexer_events::AccountState;
     use sqlx::types::Decimal;
 
@@ -457,6 +474,30 @@ async fn test_persist_token_data(
             }
         }
         assert_eq!(paginated_res, res.items);
+
+        let mut mint_to_balance: HashMap<SerializablePubkey, u64> = HashMap::new();
+
+        for token_account in paginated_res.iter() {
+            let balance = mint_to_balance
+                .entry(token_account.mint.clone())
+                .or_insert(0);
+            *balance += token_account.amount;
+        }
+        for (mint, balance) in mint_to_balance.iter() {
+            let request = GetCompressedOwnerTokenBalances {
+                owner: SerializablePubkey::from(owner),
+                mint: Some(mint.clone()),
+                ..Default::default()
+            };
+            let res = setup
+                .api
+                .get_compressed_owner_token_balances(request)
+                .await
+                .unwrap()
+                .value;
+            assert_eq!(res.token_balances[0].balance, *balance);
+        }
+
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
         for token_account in res.items {
             let request = CompressedAccountRequest {
