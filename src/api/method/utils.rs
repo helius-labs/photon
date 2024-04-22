@@ -317,7 +317,7 @@ pub async fn fetch_token_accounts(
                     state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(
                             "Unable to parse account state {}",
-                            e.to_string()
+                            e
                         ))
                     })?,
                 },
@@ -342,7 +342,7 @@ pub async fn fetch_token_accounts(
     Ok(TokenAccountListResponse {
         value: TokenAccountList {
             items,
-            cursor: cursor.map(|x| Base58String(x)),
+            cursor: cursor.map(Base58String),
         },
         context,
     })
@@ -391,14 +391,14 @@ impl AccountIdentifier {
         match table {
             AccountDataTable::Accounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    accounts::Column::Address.eq::<Vec<u8>>(address.clone().into())
+                    accounts::Column::Address.eq::<Vec<u8>>((*address).into())
                 }
                 AccountIdentifier::Hash(hash) => accounts::Column::Hash.eq(hash.to_vec()),
             }
             .and(accounts::Column::Spent.eq(false)),
             AccountDataTable::TokenAccounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    token_accounts::Column::Owner.eq::<Vec<u8>>(address.clone().into())
+                    token_accounts::Column::Owner.eq::<Vec<u8>>((*address).into())
                 }
                 AccountIdentifier::Hash(hash) => token_accounts::Column::Hash.eq(hash.to_vec()),
             }
@@ -421,7 +421,7 @@ impl AccountIdentifier {
 impl CompressedAccountRequest {
     pub fn parse_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
         if let Some(address) = &self.address {
-            Ok(AccountIdentifier::Address(address.clone()))
+            Ok(AccountIdentifier::Address(*address))
         } else if let Some(hash) = &self.hash {
             Ok(AccountIdentifier::Hash(hash.clone()))
         } else {
@@ -546,7 +546,7 @@ pub async fn search_for_signatures(
             })?;
 
             (
-                format!("AND transactions.slot <= $2 AND transactions.signature < $3"),
+                "AND transactions.slot <= $2 AND transactions.signature < $3".to_string(),
                 vec![
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),

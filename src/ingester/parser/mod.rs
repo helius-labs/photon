@@ -114,7 +114,7 @@ fn parse_account_data(
         owner: owner.into(),
         lamports,
         address: address.map(SerializablePubkey::from),
-        data: data,
+        data,
         hash: hash.into(),
         slot_updated: slot,
         leaf_index,
@@ -214,7 +214,7 @@ fn parse_public_transaction_event(
     state_update
         .account_transactions
         .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
-            hash: Hash::from(a.hash.clone()),
+            hash: a.hash.clone(),
             signature: tx,
             closure: true,
             slot,
@@ -227,7 +227,7 @@ fn parse_public_transaction_event(
                 .out_accounts
                 .iter()
                 .map(|a| AccountTransaction {
-                    hash: Hash::from(a.hash.clone()),
+                    hash: a.hash.clone(),
                     signature: tx,
                     closure: false,
                     slot,

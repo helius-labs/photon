@@ -27,7 +27,7 @@ pub async fn get_compressed_owner_balance(
         .map(|x| parse_decimal(x.lamports))
         .collect::<Result<Vec<u64>, PhotonApiError>>()?;
 
-    let total_balance = balances.iter().fold(0, |acc, balance| acc + balance);
+    let total_balance = balances.iter().sum::<u64>();
 
     Ok(AccountBalanceResponse {
         value: total_balance,

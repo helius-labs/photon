@@ -41,7 +41,7 @@ pub async fn get_signatures_for_compressed_account(
         ));
     }
 
-    if signatures.len() == 0 {
+    if signatures.is_empty() {
         return Err(PhotonApiError::RecordNotFound(
             "Account not found".to_string(),
         ));

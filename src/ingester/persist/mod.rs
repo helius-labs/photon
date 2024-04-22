@@ -144,7 +144,7 @@ async fn spend_input_accounts(
     }
     let mut token_models = Vec::new();
     for in_accounts in in_accounts {
-        let token_data = parse_token_data(&in_accounts)?;
+        let token_data = parse_token_data(in_accounts)?;
         if let Some(token_data) = token_data {
             token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
@@ -192,7 +192,7 @@ async fn append_output_accounts(
     for account in out_accounts {
         account_models.push(accounts::ActiveModel {
             hash: Set(account.hash.to_vec()),
-            address: Set(account.address.clone().map(|x| x.to_bytes_vec())),
+            address: Set(account.address.map(|x| x.to_bytes_vec())),
             discriminator: Set(account
                 .data
                 .as_ref()
@@ -206,7 +206,6 @@ async fn append_output_accounts(
             spent: Set(false),
             slot_updated: Set(account.slot_updated as i64),
             seq: Set(account.seq.map(|s| s as i64)),
-            ..Default::default()
         });
 
         if let Some(token_data) = parse_token_data(account)? {
@@ -258,7 +257,6 @@ pub async fn persist_token_accounts(
                 delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
                 is_native: Set(token_data.is_native.map(Decimal::from)),
                 spent: Set(false),
-                ..Default::default()
             },
         )
         .collect::<Vec<_>>();

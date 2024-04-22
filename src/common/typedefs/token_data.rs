@@ -18,20 +18,18 @@ use super::serializable_pubkey::SerializablePubkey;
     Serialize,
 )]
 #[repr(u8)]
+#[derive(Default)]
 pub enum AccountState {
     #[allow(non_camel_case_types)]
     uninitialized,
     #[allow(non_camel_case_types)]
+    #[default]
     initialized,
     #[allow(non_camel_case_types)]
     frozen,
 }
 
-impl Default for AccountState {
-    fn default() -> Self {
-        AccountState::initialized
-    }
-}
+
 
 #[derive(
     Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default,
