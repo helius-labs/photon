@@ -342,7 +342,7 @@ async fn test_persist_token_data(
         owner: owner1,
         amount: 1,
         delegate: Some(delegate1),
-        state: AccountState::Frozen,
+        state: AccountState::frozen,
         is_native: Some(1),
         delegated_amount: 1,
     };
@@ -352,7 +352,7 @@ async fn test_persist_token_data(
         owner: owner1,
         amount: 2,
         delegate: Some(delegate2),
-        state: AccountState::Initialized,
+        state: AccountState::initialized,
         is_native: None,
         delegated_amount: 2,
     };
@@ -362,7 +362,7 @@ async fn test_persist_token_data(
         owner: owner2,
         amount: 3,
         delegate: Some(delegate1),
-        state: AccountState::Frozen,
+        state: AccountState::frozen,
         is_native: Some(1000),
         delegated_amount: 3,
     };
@@ -386,7 +386,8 @@ async fn test_persist_token_data(
             lamports: Set(Decimal::from(10)),
             slot_updated: Set(slot),
             leaf_index: Set(i as i64),
-            discriminator: Set(None),
+            discriminator: Set(Some(Decimal::from(1))),
+            data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             ..Default::default()
         };

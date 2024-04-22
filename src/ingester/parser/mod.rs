@@ -119,7 +119,7 @@ fn parse_account_data(
         slot_updated: slot,
         leaf_index,
         tree: SerializablePubkey::from(tree),
-        seq: None,
+        seq,
     }
 }
 
@@ -157,7 +157,7 @@ fn parse_public_transaction_event(
             pubkey_array[merkle_tree_pubkey_index as usize],
             leaf_index,
             slot,
-            None
+            None,
         );
 
         state_update.in_accounts.push(enriched_account);
@@ -179,8 +179,14 @@ fn parse_public_transaction_event(
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
-        let enriched_account =
-            parse_account_data(out_account, hash, path.tree.into(), *leaf_index, slot);
+        let enriched_account = parse_account_data(
+            out_account,
+            hash,
+            path.tree.into(),
+            *leaf_index,
+            slot,
+            Some(path.seq),
+        );
         state_update.out_accounts.push(enriched_account);
     }
 

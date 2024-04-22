@@ -6,44 +6,37 @@ use utoipa::ToSchema;
 use super::serializable_pubkey::SerializablePubkey;
 
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, TryFromPrimitive,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    AnchorSerialize,
+    AnchorDeserialize,
+    TryFromPrimitive,
+    ToSchema,
+    Serialize,
 )]
 #[repr(u8)]
 pub enum AccountState {
-    Uninitialized,
-    Initialized,
-    Frozen,
-}
-
-impl serde::Serialize for AccountState {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
+    #[allow(non_camel_case_types)]
+    uninitialized,
+    #[allow(non_camel_case_types)]
+    initialized,
+    #[allow(non_camel_case_types)]
+    frozen,
 }
 
 impl Default for AccountState {
     fn default() -> Self {
-        AccountState::Initialized
-    }
-}
-
-impl AccountState {
-    pub fn to_string(&self) -> String {
-        match self {
-            AccountState::Uninitialized => "uninitialized",
-            AccountState::Initialized => "initialized",
-            AccountState::Frozen => "frozen",
-        }
-        .to_string()
+        AccountState::initialized
     }
 }
 
 #[derive(
     Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct TokenData {
     /// The mint associated with this account
     pub mint: SerializablePubkey,

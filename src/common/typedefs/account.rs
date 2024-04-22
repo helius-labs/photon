@@ -28,4 +28,3 @@ pub struct AccountData {
     pub data: Base64String,
     pub data_hash: Hash,
 }
-
