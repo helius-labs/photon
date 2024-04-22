@@ -1,9 +1,6 @@
-
-use serde::{Serialize};
+use serde::Serialize;
 
 use utoipa::ToSchema;
-
-
 
 use super::{bs64_string::Base64String, hash::Hash, serializable_pubkey::SerializablePubkey};
 
