@@ -1,6 +1,9 @@
 use core::fmt;
+use std::io::Read;
 use std::str::FromStr;
 
+use anchor_lang::{AnchorDeserialize, AnchorSerialize};
+use borsh::BorshDeserialize;
 use serde::Deserialize;
 use solana_sdk::pubkey::ParsePubkeyError;
 
@@ -14,9 +17,37 @@ use utoipa::ToSchema;
 
 use std::convert::TryFrom;
 
-#[derive(Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Copy)]
 /// A Solana public key.
-pub struct SerializablePubkey(SolanaPubkey);
+pub struct SerializablePubkey(pub SolanaPubkey);
+
+impl SerializablePubkey {
+    pub fn to_bytes_vec(&self) -> Vec<u8> {
+        self.0.to_bytes().to_vec()
+    }
+
+    pub fn new_unique() -> Self {
+        SerializablePubkey(SolanaPubkey::new_unique())
+    }
+}
+
+impl anchor_lang::AnchorDeserialize for SerializablePubkey {
+    fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
+        <solana_sdk::pubkey::Pubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
+    }
+
+    fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
+        let mut buffer = [0u8; 32]; // SolanaPubkey is 32 bytes
+        reader.read_exact(&mut buffer)?;
+        Ok(SerializablePubkey(SolanaPubkey::new_from_array(buffer)))
+    }
+}
+
+impl anchor_lang::AnchorSerialize for SerializablePubkey {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        writer.write_all(&self.0.to_bytes())
+    }
+}
 
 impl<'__s> ToSchema<'__s> for SerializablePubkey {
     fn schema() -> (&'__s str, RefOr<Schema>) {

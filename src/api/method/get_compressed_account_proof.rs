@@ -10,7 +10,6 @@ use super::{
     utils::{Context, HashRequest},
 };
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.
 pub struct GetCompressedAccountProofResponse {

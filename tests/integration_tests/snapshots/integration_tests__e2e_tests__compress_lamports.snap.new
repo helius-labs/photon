@@ -1,5 +1,6 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
+assertion_line: 252
 expression: accounts
 ---
 {
@@ -11,14 +12,12 @@ expression: accounts
       {
         "hash": "2qqaxZsryHeVpnF1Gs55qrnBBYoUpFHxVN31GryNeVnw",
         "address": null,
-        "discriminator": null,
         "data": null,
-        "dataHash": null,
         "owner": "9Mrg8qhh4862JK83S9tWBGudP7QhPwNDiX7giDGcH8Bg",
         "lamports": 20,
         "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
         "leafIndex": 0,
-        "seq": 1,
+        "seq": null,
         "slotUpdated": 0
       }
     ],

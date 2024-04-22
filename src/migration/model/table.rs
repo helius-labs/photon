@@ -35,11 +35,8 @@ pub enum TokenAccounts {
     Owner,
     Mint,
     Delegate,
-    Frozen,
-    // Duplicate to Spent in accounts. Added to simplify the handling of concurrent insertions and deletions
-    // of token accounts.
+    State,
     Spent,
-    SlotUpdated,
 }
 
 #[derive(Copy, Clone, Iden)]

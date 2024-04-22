@@ -1,19 +1,14 @@
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use utoipa::ToSchema;
 
+use crate::common::typedefs::account::Account;
+use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::indexer_events::{CompressedAccount, PathNode};
-
-#[derive(Debug, Clone)]
-pub struct EnrichedAccount {
-    pub account: CompressedAccount,
-    pub tree: Pubkey,
-    pub seq: Option<u64>,
-    pub hash: [u8; 32],
-    pub slot: u64,
-    pub leaf_index: Option<u32>,
-}
 
 pub struct EnrichedPathNode {
     pub node: PathNode,
@@ -47,8 +42,8 @@ pub struct AccountTransaction {
 #[derive(Default)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
-    pub in_accounts: Vec<EnrichedAccount>,
-    pub out_accounts: Vec<EnrichedAccount>,
+    pub in_accounts: Vec<Account>,
+    pub out_accounts: Vec<Account>,
     pub path_nodes: Vec<EnrichedPathNode>,
     pub account_transactions: Vec<AccountTransaction>,
 }
@@ -59,7 +54,7 @@ impl StateUpdate {
     }
 
     pub fn prune_redundant_updates(&mut self) {
-        let in_account_set: HashSet<[u8; 32]> = self.in_accounts.iter().map(|a| a.hash).collect();
+        let in_account_set: HashSet<Hash> = self.in_accounts.iter().map(|a| a.hash.clone()).collect();
         // NOTE: For snapshot verification, we might need to persist accounts data until accounts are
         //       removed from the tree through the nullifier crank.
         self.out_accounts

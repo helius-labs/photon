@@ -1,19 +1,23 @@
 use borsh::BorshDeserialize;
+use byteorder::{ByteOrder, LittleEndian};
 use log::debug;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::{
-    common::typedefs::hash::Hash,
+    common::typedefs::{
+        account::Account, account::AccountData, bs64_string::Base64String, hash::Hash,
+        serializable_pubkey::SerializablePubkey,
+    },
     ingester::parser::{
         indexer_events::{CompressedAccountWithMerkleContext, PathNode},
-        state_update::{EnrichedAccount, EnrichedPathNode},
+        state_update::EnrichedPathNode,
     },
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
-    indexer_events::{ChangelogEvent, Changelogs, PublicTransactionEvent},
+    indexer_events::{ChangelogEvent, Changelogs, CompressedAccount, PublicTransactionEvent},
     state_update::{AccountTransaction, PathUpdate, StateUpdate},
 };
 
@@ -85,6 +89,39 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     Ok(StateUpdate::merge_updates(state_updates))
 }
 
+fn parse_account_data(
+    compressed_account: CompressedAccount,
+    hash: [u8; 32],
+    tree: Pubkey,
+    leaf_index: u32,
+    slot: u64,
+) -> Account {
+    let CompressedAccount {
+        owner,
+        lamports,
+        address,
+        data,
+    } = compressed_account;
+
+    let data = data.map(|d| AccountData {
+        discriminator: LittleEndian::read_u64(&d.discriminator),
+        data: Base64String(d.data),
+        data_hash: Hash::from(d.data_hash),
+    });
+
+    Account {
+        owner: owner.into(),
+        lamports,
+        address: address.map(SerializablePubkey::from),
+        data: data,
+        hash: hash.into(),
+        slot_updated: slot,
+        leaf_index,
+        tree: SerializablePubkey::from(tree),
+        seq: None,
+    }
+}
+
 fn parse_public_transaction_event(
     tx: Signature,
     slot: u64,
@@ -109,17 +146,18 @@ fn parse_public_transaction_event(
         let CompressedAccountWithMerkleContext {
             compressed_account,
             merkle_tree_pubkey_index,
+            leaf_index,
             ..
         } = account.clone();
 
-        let enriched_account = EnrichedAccount {
-            account: compressed_account,
-            tree: pubkey_array[merkle_tree_pubkey_index as usize],
-            seq: None,
-            slot,
+        let enriched_account = parse_account_data(
+            compressed_account,
             hash,
-            leaf_index: None,
-        };
+            pubkey_array[merkle_tree_pubkey_index as usize],
+            leaf_index,
+            slot,
+        );
+
         state_update.in_accounts.push(enriched_account);
     }
     let path_updates = extract_path_updates(changelogs);
@@ -139,14 +177,8 @@ fn parse_public_transaction_event(
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
-        let enriched_account = EnrichedAccount {
-            account: out_account,
-            tree: Pubkey::from(path.tree),
-            seq: Some(path.seq),
-            slot,
-            hash,
-            leaf_index: Some(*leaf_index),
-        };
+        let enriched_account =
+            parse_account_data(out_account, hash, path.tree.into(), *leaf_index, slot);
         state_update.out_accounts.push(enriched_account);
     }
 
@@ -174,7 +206,7 @@ fn parse_public_transaction_event(
     state_update
         .account_transactions
         .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
-            hash: Hash::from(a.hash),
+            hash: Hash::from(a.hash.clone()),
             signature: tx,
             closure: true,
             slot,
@@ -187,7 +219,7 @@ fn parse_public_transaction_event(
                 .out_accounts
                 .iter()
                 .map(|a| AccountTransaction {
-                    hash: Hash::from(a.hash),
+                    hash: Hash::from(a.hash.clone()),
                     signature: tx,
                     closure: false,
                     slot,

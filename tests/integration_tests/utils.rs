@@ -1,18 +1,15 @@
 use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use photon_indexer::{
-    api::{
-        api::PhotonApi,
-        method::utils::{Account, TokenAccountList},
-    },
-    common::relative_project_path,
-    common::typedefs::serializable_pubkey::SerializablePubkey,
-    ingester::{
-        parser::{
-            indexer_events::{AccountState, TokenData},
-            parse_transaction,
-            state_update::{EnrichedAccount, StateUpdate},
+    api::{api::PhotonApi, method::utils::TokenAccountList},
+    common::{
+        relative_project_path,
+        typedefs::{
+            account::Account, serializable_pubkey::SerializablePubkey, token_data::TokenData,
         },
+    },
+    ingester::{
+        parser::{parse_transaction, state_update::StateUpdate},
         persist::persist_state_update,
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     },
@@ -310,7 +307,7 @@ fn order_token_datas(mut token_datas: Vec<TokenData>) -> Vec<TokenData> {
             token_datas
         );
     }
-    token_datas.sort_by(|a, b| a.mint.cmp(&b.mint));
+    token_datas.sort_by(|a, b| a.mint.0.cmp(&b.mint.0));
     token_datas
 }
 
@@ -326,45 +323,21 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     let token_accounts = response.items;
     for (account, tlv) in token_accounts.iter().zip(order_token_datas(tlvs).iter()) {
         let account = account.clone();
-        assert_eq!(account.mint, tlv.mint.into());
-        assert_eq!(account.owner, tlv.owner.into());
-        assert_eq!(account.amount, tlv.amount);
-        assert_eq!(account.delegate, tlv.delegate.map(Into::into));
-        assert_eq!(account.is_native, tlv.is_native.is_some());
-        assert_eq!(account.frozen, tlv.state == AccountState::Frozen);
-        assert_eq!(account.is_native, tlv.is_native.is_some());
+        assert_eq!(account.token_data.mint, tlv.mint.into());
+        assert_eq!(account.token_data.owner, tlv.owner.into());
+        assert_eq!(account.token_data.amount, tlv.amount);
+        assert_eq!(account.token_data.delegate, tlv.delegate.map(Into::into));
+        assert_eq!(account.token_data.is_native, tlv.is_native);
     }
 }
-
 pub fn assert_account_response_list_matches_input(
     account_response: &mut Vec<Account>,
-    input_accounts: &mut Vec<EnrichedAccount>,
+    input_accounts: &mut Vec<Account>,
 ) {
     assert_eq!(account_response.len(), input_accounts.len());
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
-    input_accounts.sort_by(|a, b| a.hash.cmp(&b.hash));
-
-    for (res, account) in account_response.iter().zip(input_accounts.iter()) {
-        let EnrichedAccount {
-            account,
-            tree,
-            seq,
-            slot,
-            hash,
-            leaf_index,
-        } = account.clone();
-
-        #[allow(deprecated)]
-        let input_data = base64::encode(&account.data.clone().unwrap().data.to_vec());
-        assert_eq!(res.hash, hash.into());
-        assert_eq!(res.owner, SerializablePubkey::from(account.owner));
-        assert_eq!(res.tree, SerializablePubkey::from(tree.clone()));
-        assert_eq!(res.seq, seq);
-        assert_eq!(res.lamports, account.lamports);
-        assert_eq!(res.slot_updated, slot);
-        assert_eq!(res.data.clone().unwrap_or_default().0, input_data);
-        assert_eq!(res.leaf_index, leaf_index.unwrap());
-    }
+    input_accounts.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
+    assert_eq!(account_response, input_accounts);
 }
 
 /// Persist using a database connection instead of a transaction. Should only be use for tests.

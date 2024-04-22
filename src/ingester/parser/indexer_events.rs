@@ -2,6 +2,11 @@
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
+use num_enum::TryFromPrimitive;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct PublicTransactionEvent {
@@ -76,37 +81,4 @@ pub struct ChangelogEventV1 {
     pub seq: u64,
     /// Changelog event index.
     pub index: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
-#[repr(u8)]
-pub enum AccountState {
-    Uninitialized,
-    Initialized,
-    Frozen,
-}
-
-#[derive(Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, Clone, Copy)]
-pub struct TokenData {
-    /// The mint associated with this account
-    pub mint: Pubkey,
-    /// The owner of this account.
-    pub owner: Pubkey,
-    /// The amount of tokens this account holds.
-    pub amount: u64,
-    /// If `delegate` is `Some` then `delegated_amount` represents
-    /// the amount authorized by the delegate
-    pub delegate: Option<Pubkey>,
-    /// The account's state
-    pub state: AccountState,
-    /// If is_some, this is a native token, and the value logs the rent-exempt
-    /// reserve. An Account is required to be rent-exempt, so the value is
-    /// used by the Processor to ensure that wrapped SOL accounts do not
-    /// drop below this threshold.
-    pub is_native: Option<u64>,
-    /// The amount delegated
-    pub delegated_amount: u64, // TODO: make instruction data optional
-                               // TODO: validate that we don't need close authority
-                               // /// Optional authority to close the account.
-                               // pub close_authority: Option<Pubkey>,
 }

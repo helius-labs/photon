@@ -9,12 +9,12 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner, PubkeyRequest,
 };
+use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
-use photon_indexer::ingester::parser::indexer_events::TokenData;
-use photon_indexer::ingester::parser::state_update::{EnrichedAccount, StateUpdate};
+use photon_indexer::ingester::parser::state_update::StateUpdate;
 use photon_indexer::ingester::persist::{
     persist_state_update, persist_token_accounts, EnrichedTokenAccount,
 };
@@ -22,6 +22,16 @@ use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 
+use photon_indexer::{
+    common::typedefs::account::AccountData,
+    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
+};
+use std::collections::HashMap;
+
+use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
+use sqlx::types::Decimal;
+
+use photon_indexer::api::method::utils::Limit;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
 
@@ -43,10 +53,6 @@ struct Person {
 async fn test_persist_state_update_basic(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::ingester::parser::indexer_events::{
-        CompressedAccount, CompressedAccountData,
-    };
-
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
@@ -65,23 +71,22 @@ async fn test_persist_state_update_basic(
     .unwrap();
 
     let mut state_update = StateUpdate::new();
-    let account = EnrichedAccount {
-        account: CompressedAccount {
-            data: Some(CompressedAccountData {
-                discriminator: [1; 8],
-                data: vec![1; 500],
-                data_hash: [1; 32],
-            }),
-            address: Some(Pubkey::new_unique().to_bytes()),
-            lamports: 1000,
-            owner: Pubkey::new_unique(),
-        },
-        tree: Pubkey::new_unique(),
-        leaf_index: Some(0),
+    let account = Account {
+        hash: Hash::new_unique(),
+        address: Some(SerializablePubkey::new_unique()),
+        data: Some(AccountData {
+            discriminator: 1,
+            data: Base64String(vec![1; 500]),
+            data_hash: Hash::new_unique(),
+        }),
+        owner: SerializablePubkey::new_unique(),
+        lamports: 1000,
+        tree: SerializablePubkey::new_unique(),
+        leaf_index: 0,
         seq: Some(0),
-        hash: [0; 32],
-        slot: 0,
+        slot_updated: 0,
     };
+
     state_update.out_accounts.push(account.clone());
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
@@ -89,7 +94,7 @@ async fn test_persist_state_update_basic(
 
     let request = CompressedAccountRequest {
         address: None,
-        hash: Some(Hash::from(account.hash)),
+        hash: Some(Hash::from(account.hash.clone())),
     };
 
     let res = setup
@@ -99,16 +104,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    #[allow(deprecated)]
-    let raw_data = base64::decode(res.data.unwrap_or(Base64String("".to_string())).0).unwrap();
-    assert_eq!(account.account.data.unwrap().data, raw_data);
-    assert_eq!(res.lamports, account.account.lamports);
-    assert_eq!(res.slot_updated, account.slot);
-    assert_eq!(
-        res.address,
-        account.account.address.map(SerializablePubkey::from)
-    );
-    assert_eq!(res.owner, SerializablePubkey::from(account.account.owner));
+    assert_eq!(res, account);
 
     let res = setup
         .api
@@ -117,7 +113,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    assert_eq!(res, account.account.lamports as u64);
+    assert_eq!(res, account.lamports as u64);
 
     // Assert that we get an error if we input a non-existent account.
     // TODO: Test spent accounts
@@ -143,11 +139,6 @@ async fn test_persist_state_update_basic(
 async fn test_multiple_accounts(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::{
-        api::method::utils::Limit,
-        ingester::parser::indexer_events::{CompressedAccount, CompressedAccountData},
-    };
-
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
@@ -165,81 +156,72 @@ async fn test_multiple_accounts(
     .await
     .unwrap();
 
-    let owner1 = Pubkey::new_unique();
-    let owner2 = Pubkey::new_unique();
+    let owner1 = SerializablePubkey::new_unique();
+    let owner2 = SerializablePubkey::new_unique();
     let mut state_update = StateUpdate::default();
 
     let accounts = vec![
-        EnrichedAccount {
-            account: CompressedAccount {
-                data: Some(CompressedAccountData {
-                    discriminator: [0; 8],
-                    data: vec![1; 500],
-                    data_hash: [1; 32],
-                }),
-                address: Some(Pubkey::new_unique().to_bytes()),
-                lamports: 1000,
-                owner: owner1,
-            },
-            tree: Pubkey::new_unique(),
-            leaf_index: Some(10),
-            slot: 0,
+        Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: 0,
+                data: Base64String(vec![1; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner1,
+            lamports: 1000,
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: 10,
             seq: Some(1),
-            hash: [1; 32],
+            slot_updated: 0,
         },
-        EnrichedAccount {
-            account: CompressedAccount {
-                data: Some(CompressedAccountData {
-                    discriminator: [1; 8],
-                    data: vec![2; 500],
-                    data_hash: [1; 32],
-                }),
-                address: None,
-                lamports: 1030,
-                owner: owner1,
-            },
-            tree: Pubkey::new_unique(),
-            leaf_index: Some(11),
-            slot: 0,
+        Account {
+            hash: Hash::new_unique(),
+            address: None,
+            data: Some(AccountData {
+                discriminator: 1,
+                data: Base64String(vec![2; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner1,
+            lamports: 1030,
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: 11,
             seq: Some(2),
-            hash: [2; 32],
+            slot_updated: 0,
         },
-        EnrichedAccount {
-            account: CompressedAccount {
-                data: Some(CompressedAccountData {
-                    discriminator: [4; 8],
-                    data: vec![4; 500],
-                    data_hash: [3; 32],
-                }),
-                address: Some(Pubkey::new_unique().to_bytes()),
-                lamports: 10020,
-                owner: owner2,
-            },
-            tree: Pubkey::new_unique(),
-            leaf_index: Some(13),
-            slot: 1,
+        Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: 4,
+                data: Base64String(vec![4; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner2,
+            lamports: 10020,
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: 13,
             seq: Some(3),
-            hash: [3; 32],
+            slot_updated: 1,
         },
-        EnrichedAccount {
-            account: CompressedAccount {
-                data: Some(CompressedAccountData {
-                    discriminator: [10; 8],
-                    data: vec![5; 500],
-                    data_hash: [6; 32],
-                }),
-                address: Some(Pubkey::new_unique().to_bytes()),
-                lamports: 10100,
-                owner: owner2,
-            },
-            tree: Pubkey::new_unique(),
-            leaf_index: Some(23),
-            slot: 0,
+        Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: 10,
+                data: Base64String(vec![5; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner2,
+            lamports: 10100,
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: 23,
             seq: Some(1),
-            hash: [4; 32],
+            slot_updated: 0,
         },
     ];
-
     state_update.out_accounts = accounts.clone();
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
@@ -283,8 +265,8 @@ async fn test_multiple_accounts(
         let mut accounts_of_interest = accounts
             .clone()
             .into_iter()
-            .filter(|x| x.account.owner == owner)
-            .collect::<Vec<EnrichedAccount>>();
+            .filter(|x| x.owner == owner)
+            .collect::<Vec<Account>>();
 
         assert_account_response_list_matches_input(
             &mut response_accounts,
@@ -293,7 +275,7 @@ async fn test_multiple_accounts(
 
         let total_balance = accounts_of_interest
             .iter()
-            .fold(0, |acc, x| acc + x.account.lamports);
+            .fold(0, |acc, x| acc + x.lamports);
 
         let res = setup
             .api
@@ -301,7 +283,7 @@ async fn test_multiple_accounts(
             .await
             .unwrap()
             .value;
-        
+
         assert_eq!(res, total_balance);
     }
 
@@ -310,7 +292,12 @@ async fn test_multiple_accounts(
         .api
         .get_multiple_compressed_accounts(GetMultipleCompressedAccountsRequest {
             addresses: None,
-            hashes: Some(accounts_of_interest.iter().map(|x| x.hash.into()).collect()),
+            hashes: Some(
+                accounts_of_interest
+                    .iter()
+                    .map(|x| x.hash.clone())
+                    .collect(),
+            ),
         })
         .await
         .unwrap()
@@ -326,20 +313,15 @@ async fn test_multiple_accounts(
 async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use std::collections::HashMap;
-
-    use photon_indexer::ingester::parser::indexer_events::AccountState;
-    use sqlx::types::Decimal;
-
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
-    let mint1 = Pubkey::new_unique();
-    let mint2 = Pubkey::new_unique();
-    let mint3 = Pubkey::new_unique();
-    let owner1 = Pubkey::new_unique();
-    let owner2 = Pubkey::new_unique();
-    let delegate1 = Pubkey::new_unique();
-    let delegate2 = Pubkey::new_unique();
+    let mint1 = SerializablePubkey::new_unique();
+    let mint2 = SerializablePubkey::new_unique();
+    let mint3 = SerializablePubkey::new_unique();
+    let owner1 = SerializablePubkey::new_unique();
+    let owner2 = SerializablePubkey::new_unique();
+    let delegate1 = SerializablePubkey::new_unique();
+    let delegate2 = SerializablePubkey::new_unique();
 
     // HACK: We index a block so that API methods can fetch the current slot.
     index_block(
@@ -399,19 +381,19 @@ async fn test_persist_token_data(
             hash: Set(hash.clone().into()),
             address: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
             spent: Set(false),
-            data: Set(to_vec(&token_data).unwrap()),
-            owner: Set(token_data.owner.to_bytes().to_vec()),
+            data: Set(Some(to_vec(&token_data).unwrap())),
+            owner: Set(token_data.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(10)),
             slot_updated: Set(slot),
-            leaf_index: Set(Some(i as i64)),
-            discriminator: Set(Vec::new()),
+            leaf_index: Set(i as i64),
+            discriminator: Set(None),
+            tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();
         token_datas.push(EnrichedTokenAccount {
             hash,
-            token_data: *token_data,
-            slot_updated: slot as u64,
+            token_data: token_data.clone(),
         });
     }
 
@@ -479,9 +461,9 @@ async fn test_persist_token_data(
 
         for token_account in paginated_res.iter() {
             let balance = mint_to_balance
-                .entry(token_account.mint.clone())
+                .entry(token_account.token_data.mint.clone())
                 .or_insert(0);
-            *balance += token_account.amount;
+            *balance += token_account.token_data.amount;
         }
         for (mint, balance) in mint_to_balance.iter() {
             let request = GetCompressedOwnerTokenBalances {
@@ -502,7 +484,7 @@ async fn test_persist_token_data(
         for token_account in res.items {
             let request = CompressedAccountRequest {
                 address: None,
-                hash: Some(token_account.hash),
+                hash: Some(token_account.account.hash),
             };
             let balance = setup
                 .api
@@ -510,7 +492,10 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(balance.amount, Into::<u64>::into(token_account.amount));
+            assert_eq!(
+                balance.amount,
+                Into::<u64>::into(token_account.token_data.amount)
+            );
         }
     }
     for delegate in [delegate1, delegate2] {
@@ -563,31 +548,24 @@ async fn test_persist_token_data(
 async fn test_load_test(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::ingester::parser::{
-        indexer_events::{CompressedAccount, CompressedAccountData, PathNode},
-        state_update::EnrichedPathNode,
-    };
-
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
-    fn generate_random_account(tree: Pubkey, seq: i64) -> EnrichedAccount {
-        EnrichedAccount {
-            account: CompressedAccount {
-                data: Some(CompressedAccountData {
-                    discriminator: [0; 8],
-                    data: vec![1; 500],
-                    data_hash: [0; 32],
-                }),
-                address: Some(Pubkey::new_unique().to_bytes()),
-                lamports: 1000,
-                owner: Pubkey::new_unique(),
-            },
-            tree,
-            leaf_index: Some(20),
-            seq: Some(seq as u64),
-            hash: [0; 32],
-            slot: 0,
+    fn generate_random_account(tree: Pubkey, seq: i64) -> Account {
+        Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: 10,
+                data: Base64String(vec![5; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: SerializablePubkey::new_unique(),
+            lamports: 10100,
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: 23,
+            seq: Some(1),
+            slot_updated: 0,
         }
     }
 

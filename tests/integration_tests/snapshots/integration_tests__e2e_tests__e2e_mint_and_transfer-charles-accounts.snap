@@ -9,22 +9,28 @@ expression: accounts
   "value": {
     "items": [
       {
-        "hash": "3WCurN17webNLBJqAgCpjPjJbgWvAPnzXzxU2vEjS4YV",
-        "owner": "FjLHdH44f8uN3kxrnxEuuLyLqeR7mp6jZ4d8NT3bk5os",
-        "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
-        "amount": 700,
-        "delegate": null,
-        "delegatedAmount": 0,
-        "isNative": false,
-        "frozen": false,
-        "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgTa29GEotUm8evdXAb9rZNZsih1m01/edZmifolSq2FRrwCAAAAAAAAAAEAAAAAAAAAAAA=",
-        "dataHash": "37iQQorCPpRDmQ7hddqrdFPFhzh5KnQHNs1CnVUVzfz9",
-        "discriminator": 2,
-        "lamports": 0,
-        "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-        "seq": 3,
-        "leafIndex": 1,
-        "slotUpdated": 0
+        "account": {
+          "hash": "3WCurN17webNLBJqAgCpjPjJbgWvAPnzXzxU2vEjS4YV",
+          "address": null,
+          "discriminator": 2,
+          "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgTa29GEotUm8evdXAb9rZNZsih1m01/edZmifolSq2FRrwCAAAAAAAAAAEAAAAAAAAAAAA=",
+          "dataHash": "37iQQorCPpRDmQ7hddqrdFPFhzh5KnQHNs1CnVUVzfz9",
+          "owner": "9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 1,
+          "seq": 3,
+          "slotUpdated": 0
+        },
+        "tokenData": {
+          "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
+          "owner": "FjLHdH44f8uN3kxrnxEuuLyLqeR7mp6jZ4d8NT3bk5os",
+          "amount": 700,
+          "delegate": null,
+          "delegatedAmount": 0,
+          "isNative": false,
+          "state": "initialized"
+        }
       }
     ],
     "cursor": null

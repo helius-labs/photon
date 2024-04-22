@@ -3513,6 +3513,7 @@ dependencies = [
  "lazy_static",
  "light-poseidon",
  "log",
+ "num_enum 0.7.2",
  "once_cell",
  "rstest",
  "sea-orm",

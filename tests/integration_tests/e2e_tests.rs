@@ -84,7 +84,7 @@ async fn test_e2e_mint_and_transfer(
                         .value
                         .items
                         .iter()
-                        .map(|x| x.hash.clone())
+                        .map(|x| x.account.hash.clone())
                         .collect(),
                 ))
                 .await

@@ -58,9 +58,11 @@ pub async fn get_compressed_owner_token_balances(
 
     for token_account in token_accounts.value.items.iter() {
         let balance = mint_to_balance
-            .entry(token_account.mint.clone())
+            .entry(SerializablePubkey::from(
+                token_account.token_data.mint.clone(),
+            ))
             .or_insert(0);
-        *balance += token_account.amount;
+        *balance += token_account.token_data.amount;
     }
     let token_balances: Vec<TokenBalance> = mint_to_balance
         .into_iter()

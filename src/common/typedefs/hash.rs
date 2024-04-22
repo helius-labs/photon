@@ -22,7 +22,7 @@ const MAX_BASE58_LEN: usize = 44;
 ///
 /// Also a `Hash` is used to represent other types of hashes, such as account hashes and Merkle
 /// tree node hashes. This is why `Hash` is a separate struct from the the Solana Public Key struct.
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct Hash([u8; 32]);
 
 impl Hash {

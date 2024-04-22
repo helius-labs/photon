@@ -1,3 +1,4 @@
+use crate::common::typedefs::account::Account;
 use crate::dao::generated::accounts;
 
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
@@ -5,12 +6,10 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
-use super::utils::{
-    parse_account_model, Account, AccountDataTable, CompressedAccountRequest, Context,
-};
+use super::utils::{parse_account_model, AccountDataTable, CompressedAccountRequest, Context};
 
 // We do not use generics to simply documentation generation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 pub struct AccountResponse {
     pub context: Context,
     pub value: Account,

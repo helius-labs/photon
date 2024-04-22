@@ -3,12 +3,12 @@ use std::collections::HashSet;
 use super::{
     error,
     parser::{
-        indexer_events::{AccountState, CompressedAccount, TokenData},
-        state_update::{AccountTransaction, EnrichedAccount, EnrichedPathNode},
+        indexer_events::CompressedAccount,
+        state_update::{AccountTransaction, EnrichedPathNode},
     },
 };
 use crate::{
-    common::typedefs::hash::Hash,
+    common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
 };
@@ -96,10 +96,10 @@ pub async fn persist_state_update(
     Ok(())
 }
 
-fn parse_token_data(account: &CompressedAccount) -> Result<Option<TokenData>, IngesterError> {
+fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
     match account.data.clone() {
-        Some(data) if account.owner == COMPRESSED_TOKEN_PROGRAM => {
-            let token_data = TokenData::try_from_slice(&data.data).map_err(|_| {
+        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+            let token_data = TokenData::try_from_slice(&data.data.0).map_err(|_| {
                 IngesterError::ParserError("Failed to parse token data".to_string())
             })?;
             Ok(Some(token_data))
@@ -110,19 +110,20 @@ fn parse_token_data(account: &CompressedAccount) -> Result<Option<TokenData>, In
 
 async fn spend_input_accounts(
     txn: &DatabaseTransaction,
-    in_accounts: &[EnrichedAccount],
+    in_accounts: &[Account],
 ) -> Result<(), IngesterError> {
     let in_account_models: Vec<accounts::ActiveModel> = in_accounts
         .iter()
         .map(|account| accounts::ActiveModel {
             hash: Set(account.hash.to_vec()),
             spent: Set(true),
-            data: Set(vec![]),
-            owner: Set(account.account.owner.to_bytes().to_vec()),
-            discriminator: Set(vec![]),
+            data: Set(None),
+            owner: Set(account.owner.0.to_bytes().to_vec()),
+            discriminator: Set(None),
             lamports: Set(Decimal::from(0)),
-            slot_updated: Set(account.slot as i64),
-            tree: Set(Some(account.tree.to_bytes().to_vec())),
+            slot_updated: Set(account.slot_updated as i64),
+            tree: Set(account.tree.0.to_bytes().to_vec()),
+            leaf_index: Set(account.leaf_index as i64),
             ..Default::default()
         })
         .collect();
@@ -146,16 +147,16 @@ async fn spend_input_accounts(
     }
     let mut token_models = Vec::new();
     for in_accounts in in_accounts {
-        let token_data = parse_token_data(&in_accounts.account)?;
+        let token_data = parse_token_data(&in_accounts)?;
         if let Some(token_data) = token_data {
             token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
                 amount: Set(Decimal::from(0)),
-                slot_updated: Set(in_accounts.slot as i64),
-                owner: Set(token_data.owner.to_bytes().to_vec()),
-                mint: Set(token_data.mint.to_bytes().to_vec()),
-                frozen: Set(token_data.state == AccountState::Frozen),
+                slot_updated: Set(in_accounts.slot_updated as i64),
+                owner: Set(token_data.owner.to_bytes_vec()),
+                mint: Set(token_data.mint.to_bytes_vec()),
+                state: Set(token_data.state as i32),
                 delegated_amount: Set(Decimal::from(0)),
                 ..Default::default()
             });
@@ -183,52 +184,36 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
-    pub slot_updated: u64,
 }
 
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
-    out_accounts: &[EnrichedAccount],
+    out_accounts: &[Account],
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
 
     for account in out_accounts {
-        let EnrichedAccount {
-            account,
-            tree,
-            seq,
-            hash,
-            slot,
-            leaf_index,
-        } = account;
-
-        let account_data = account.data.clone();
         account_models.push(accounts::ActiveModel {
-            hash: Set(hash.to_vec()),
-            address: Set(account.address.map(|x| x.to_vec())),
-            discriminator: Set(account
-                .data
-                .clone()
-                .map(|d| d.discriminator.to_vec())
-                .unwrap_or(Vec::new())),
-            data: Set(account_data.clone().map(|d| d.data).unwrap_or(Vec::new())),
-            data_hash: Set(account_data.clone().map(|d| d.data_hash.to_vec())),
-            tree: Set(Some(tree.to_bytes().to_vec())),
-            leaf_index: Set(leaf_index.map(|l| l as i64)),
-            owner: Set(account.owner.as_ref().to_vec()),
+            hash: Set(account.hash.to_vec()),
+            address: Set(account.address.clone().map(|x| x.to_bytes_vec())),
+            discriminator: Set(None),
+            data: Set(account.clone().data.map(|x| x.data.0)),
+            data_hash: Set(account.clone().data.map(|x| x.data_hash.to_vec())),
+            tree: Set(account.tree.to_bytes_vec()),
+            leaf_index: Set(account.leaf_index as i64),
+            owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports)),
             spent: Set(false),
-            slot_updated: Set(*slot as i64),
-            seq: Set(seq.map(|s| s as i64)),
+            slot_updated: Set(account.slot_updated as i64),
+            seq: Set(account.seq.map(|s| s as i64)),
             ..Default::default()
         });
 
         if let Some(token_data) = parse_token_data(account)? {
             token_accounts.push(EnrichedTokenAccount {
                 token_data,
-                hash: Hash::from(*hash),
-                slot_updated: *slot,
+                hash: account.hash.clone(),
             });
         }
     }
@@ -264,24 +249,17 @@ pub async fn persist_token_accounts(
     let token_models = token_accounts
         .into_iter()
         .map(
-            |EnrichedTokenAccount {
-                 token_data,
-                 hash,
-                 slot_updated,
-             }| {
-                token_accounts::ActiveModel {
-                    hash: Set(hash.into()),
-                    mint: Set(token_data.mint.to_bytes().to_vec()),
-                    owner: Set(token_data.owner.to_bytes().to_vec()),
-                    amount: Set(Decimal::from(token_data.amount)),
-                    delegate: Set(token_data.delegate.map(|d| d.to_bytes().to_vec())),
-                    frozen: Set(token_data.state == AccountState::Frozen),
-                    delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
-                    is_native: Set(token_data.is_native.map(Decimal::from)),
-                    spent: Set(false),
-                    slot_updated: Set(slot_updated as i64),
-                    ..Default::default()
-                }
+            |EnrichedTokenAccount { token_data, hash }| token_accounts::ActiveModel {
+                hash: Set(hash.into()),
+                mint: Set(token_data.mint.to_bytes_vec()),
+                owner: Set(token_data.owner.to_bytes_vec()),
+                amount: Set(Decimal::from(token_data.amount)),
+                delegate: Set(token_data.delegate.map(|d| d.to_bytes_vec())),
+                state: Set(token_data.state as i32),
+                delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
+                is_native: Set(token_data.is_native.map(Decimal::from)),
+                spent: Set(false),
+                ..Default::default()
             },
         )
         .collect::<Vec<_>>();
