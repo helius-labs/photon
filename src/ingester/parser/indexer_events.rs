@@ -6,7 +6,7 @@ use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct PublicTransactionEvent {

@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use super::{
     error,
     parser::{
-        indexer_events::CompressedAccount,
         state_update::{AccountTransaction, EnrichedPathNode},
     },
 };

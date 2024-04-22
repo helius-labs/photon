@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use utoipa::ToSchema;
+
+use solana_sdk::{signature::Signature};
+
 
 use crate::common::typedefs::account::Account;
-use crate::common::typedefs::bs64_string::Base64String;
+
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::parser::indexer_events::{CompressedAccount, PathNode};
+
+use crate::ingester::parser::indexer_events::{PathNode};
 
 pub struct EnrichedPathNode {
     pub node: PathNode,

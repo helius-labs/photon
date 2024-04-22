@@ -2,7 +2,7 @@ use core::fmt;
 use std::io::Read;
 use std::str::FromStr;
 
-use anchor_lang::{AnchorDeserialize, AnchorSerialize};
+
 use borsh::BorshDeserialize;
 use serde::Deserialize;
 use solana_sdk::pubkey::ParsePubkeyError;
