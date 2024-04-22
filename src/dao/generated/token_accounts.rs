@@ -12,7 +12,6 @@ pub struct Model {
     pub delegate: Option<Vec<u8>>,
     pub state: i32,
     pub spent: bool,
-    pub slot_updated: i64,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub amount: Decimal,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]

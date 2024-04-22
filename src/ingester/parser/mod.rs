@@ -95,6 +95,7 @@ fn parse_account_data(
     tree: Pubkey,
     leaf_index: u32,
     slot: u64,
+    seq: Option<u64>,
 ) -> Account {
     let CompressedAccount {
         owner,
@@ -156,6 +157,7 @@ fn parse_public_transaction_event(
             pubkey_array[merkle_tree_pubkey_index as usize],
             leaf_index,
             slot,
+            None
         );
 
         state_update.in_accounts.push(enriched_account);

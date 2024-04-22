@@ -1,29 +1,27 @@
-
-
 use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use num_enum::TryFromPrimitive;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::serializable_pubkey::SerializablePubkey;
 
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    AnchorSerialize,
-    AnchorDeserialize,
-    TryFromPrimitive,
-    Deserialize,
-    Serialize,
+    Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, TryFromPrimitive,
 )]
 #[repr(u8)]
 pub enum AccountState {
     Uninitialized,
     Initialized,
     Frozen,
+}
+
+impl serde::Serialize for AccountState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
 impl Default for AccountState {
@@ -43,7 +41,9 @@ impl AccountState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default)]
+#[derive(
+    Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default,
+)]
 pub struct TokenData {
     /// The mint associated with this account
     pub mint: SerializablePubkey,

@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use super::{
     error,
-    parser::{
-        state_update::{AccountTransaction, EnrichedPathNode},
-    },
+    parser::state_update::{AccountTransaction, EnrichedPathNode},
 };
 use crate::{
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
@@ -152,7 +150,6 @@ async fn spend_input_accounts(
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
                 amount: Set(Decimal::from(0)),
-                slot_updated: Set(in_accounts.slot_updated as i64),
                 owner: Set(token_data.owner.to_bytes_vec()),
                 mint: Set(token_data.mint.to_bytes_vec()),
                 state: Set(token_data.state as i32),
@@ -196,9 +193,12 @@ async fn append_output_accounts(
         account_models.push(accounts::ActiveModel {
             hash: Set(account.hash.to_vec()),
             address: Set(account.address.clone().map(|x| x.to_bytes_vec())),
-            discriminator: Set(None),
-            data: Set(account.clone().data.map(|x| x.data.0)),
-            data_hash: Set(account.clone().data.map(|x| x.data_hash.to_vec())),
+            discriminator: Set(account
+                .data
+                .as_ref()
+                .map(|x| Decimal::from(x.discriminator))),
+            data: Set(account.data.as_ref().map(|x| x.data.clone().0)),
+            data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
             leaf_index: Set(account.leaf_index as i64),
             owner: Set(account.owner.to_bytes_vec()),

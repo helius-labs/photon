@@ -9,7 +9,6 @@ pub struct Model {
     pub hash: Vec<u8>,
     pub data: Option<Vec<u8>>,
     pub data_hash: Option<Vec<u8>>,
-    pub discriminator: Option<Vec<u8>>,
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
@@ -19,6 +18,8 @@ pub struct Model {
     pub spent: bool,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub lamports: Decimal,
+    #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]
+    pub discriminator: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

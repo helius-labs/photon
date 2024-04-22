@@ -150,7 +150,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
             data: Base64String(data),
             data_hash: data_hash.try_into()?,
-            discriminator: LittleEndian::read_u64(&discriminator),
+            discriminator: parse_decimal(discriminator)?,
         }),
         (None, None, None) => None,
         _ => {
