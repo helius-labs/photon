@@ -19,7 +19,6 @@ pub enum Accounts {
     Address,
     Data,
     DataHash,
-    Discriminator,
     Owner,
     Tree,
     LeafIndex,
