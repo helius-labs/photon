@@ -551,7 +551,7 @@ async fn test_load_test(
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
-    fn generate_random_account(tree: Pubkey, seq: i64) -> Account {
+    fn generate_random_account(_tree: Pubkey, _seq: i64) -> Account {
         Account {
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),

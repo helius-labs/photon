@@ -5,7 +5,7 @@ use photon_indexer::{
     common::{
         relative_project_path,
         typedefs::{
-            account::Account, serializable_pubkey::SerializablePubkey, token_data::TokenData,
+            account::Account, token_data::TokenData,
         },
     },
     ingester::{
