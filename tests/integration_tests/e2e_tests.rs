@@ -1,6 +1,7 @@
 use function_name::named;
 use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_transaction::{get_transaction_helper, GetTransactionRequest};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 
@@ -22,10 +23,16 @@ use serial_test::serial;
 async fn test_e2e_mint_and_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::api::method::{
-        get_multiple_compressed_account_proofs::HashList,
-        get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
+    use std::str::FromStr;
+
+    use photon_indexer::{
+        api::method::{
+            get_multiple_compressed_account_proofs::HashList,
+            get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
+        },
+        common::typedefs::serializable_signature::SerializableSignature,
     };
+    use solana_sdk::signature::Signature;
 
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
@@ -117,6 +124,17 @@ async fn test_e2e_mint_and_transfer(
             );
         }
     }
+
+    for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
+        let txn = cached_fetch_transaction(&setup, txn_signature).await;
+        let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
+        // Test get transaction
+        let parsed_transaction: photon_indexer::api::method::get_transaction::GetTransactionResponse = get_transaction_helper(txn_signature, txn).unwrap();
+        assert_json_snapshot!(
+            format!("{}-{}-transaction", name.clone(), txn_name),
+            parsed_transaction
+        );
+    }
 }
 
 #[named]
@@ -175,7 +193,7 @@ async fn test_e2e_lamport_transfer(
     let hash = accounts.value.items[0].hash.clone();
     let signatures = setup
         .api
-        .get_signatures_for_compressed_account(HashRequest(hash))
+        .get_signatures_for_compressed_account(HashRequest { hash })
         .await
         .unwrap();
     assert_json_snapshot!(format!("{}-signatures", name.clone()), signatures);

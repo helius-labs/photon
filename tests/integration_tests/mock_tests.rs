@@ -3,11 +3,12 @@ use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_compressed_owner_balance::GetCompressedOwnerBalanceRequest;
 use photon_indexer::api::method::get_compressed_owner_token_balances::GetCompressedOwnerTokenBalances;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
-    GetCompressedTokenAccountsByOwner, PubkeyRequest,
+    GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -279,7 +280,9 @@ async fn test_multiple_accounts(
 
         let res = setup
             .api
-            .get_compressed_owner_balance(PubkeyRequest(SerializablePubkey::from(owner)))
+            .get_compressed_owner_balance(GetCompressedOwnerBalanceRequest {
+                owner: SerializablePubkey::from(owner),
+            })
             .await
             .unwrap()
             .value;

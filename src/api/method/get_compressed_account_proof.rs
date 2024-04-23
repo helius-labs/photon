@@ -22,7 +22,7 @@ pub async fn get_compressed_account_proof(
     request: HashRequest,
 ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let hash = request.0;
+    let hash = request.hash;
 
     get_multiple_compressed_account_proofs_helper(conn, vec![hash])
         .await?

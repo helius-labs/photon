@@ -2,7 +2,7 @@ use crate::common::typedefs::account::Account;
 use crate::dao::generated::accounts;
 
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
-use serde::{Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;

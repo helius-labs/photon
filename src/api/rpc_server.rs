@@ -253,5 +253,14 @@ fn build_rpc_module(
         },
     )?;
 
+    module.register_async_method("getTransaction", |rpc_params, rpc_context| async move {
+        let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+        conditionally_index_latest_blocks(indexer).await;
+        let payload = rpc_params.parse()?;
+        api.get_transaction(payload)
+            .await
+            .map_err(Into::into)
+    })?;
+
     Ok(module)
 }

@@ -93,7 +93,7 @@ pub async fn persist_state_update(
     Ok(())
 }
 
-fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
+pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
             let token_data = TokenData::try_from_slice(&data.data.0).map_err(|_| {

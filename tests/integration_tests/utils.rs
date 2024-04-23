@@ -4,9 +4,7 @@ use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
         relative_project_path,
-        typedefs::{
-            account::Account, token_data::TokenData,
-        },
+        typedefs::{account::Account, token_data::TokenData},
     },
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
@@ -245,7 +243,10 @@ pub async fn fetch_transaction(
     txn
 }
 
-pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> TransactionInfo {
+pub async fn cached_fetch_transaction(
+    setup: &TestSetup,
+    tx: &str,
+) -> EncodedConfirmedTransactionWithStatusMeta {
     let sig = Signature::from_str(tx).unwrap();
     let dir = relative_project_path(&format!("tests/data/transactions/{}", setup.name));
     if !Path::new(&dir).exists() {
@@ -253,15 +254,14 @@ pub async fn cached_fetch_transaction(setup: &TestSetup, tx: &str) -> Transactio
     }
     let file_path = dir.join(sig.to_string());
 
-    let tx: EncodedConfirmedTransactionWithStatusMeta = if file_path.exists() {
+    if file_path.exists() {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
         let tx = fetch_transaction(&setup.client, sig).await;
         std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
         tx
-    };
-    tx.try_into().unwrap()
+    }
 }
 
 async fn fetch_block(client: &RpcClient, slot: Slot) -> UiConfirmedBlock {
@@ -353,7 +353,7 @@ pub async fn persist_state_update_using_connection(
 
 pub async fn index_transaction(setup: &TestSetup, tx: &str) {
     let tx = cached_fetch_transaction(setup, tx).await;
-    let state_update = parse_transaction(&tx, 0).unwrap();
+    let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();

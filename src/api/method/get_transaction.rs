@@ -1,151 +1,168 @@
-// use crate::common::typedefs::account::Account;
-// use crate::common::typedefs::bs64_string::Base64String;
-// use crate::common::typedefs::hash::Hash;
-// use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-// use crate::common::typedefs::serializable_signature::SerializableSignature;
-// use crate::dao::generated::accounts;
-// use crate::ingester::parser::indexer_events::{
-//     CompressedAccount, CompressedAccountData, TokenData,
-// };
-// use crate::ingester::parser::parse_transaction;
+use crate::common::typedefs::account::Account;
+use crate::common::typedefs::serializable_signature::SerializableSignature;
+use crate::common::typedefs::token_data::TokenData;
+use crate::ingester::parser::parse_transaction;
+use crate::ingester::persist::parse_token_data;
 
-// use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
-// use serde::{Deserialize, Serialize};
-// use solana_client::nonblocking::rpc_client::RpcClient;
-// use solana_client::rpc_config::RpcTransactionConfig;
-// use solana_client::rpc_request::RpcRequest;
-// use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-// use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-// use utoipa::ToSchema;
+use serde::{Deserialize, Serialize};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcTransactionConfig;
+use solana_client::rpc_request::RpcRequest;
+use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use utoipa::{
+    openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
+    ToSchema,
+};
 
-// use super::super::error::PhotonApiError;
-// use super::utils::{
-//     parse_account_model, parse_discriminator, AccountDataTable, CompressedAccountRequest, Context,
-// };
+use super::super::error::PhotonApiError;
 
-// const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
-//     encoding: Some(UiTransactionEncoding::Base64),
-//     commitment: Some(CommitmentConfig {
-//         commitment: CommitmentLevel::Confirmed,
-//     }),
-//     max_supported_transaction_version: Some(0),
-// };
+const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
+    encoding: Some(UiTransactionEncoding::Base64),
+    commitment: Some(CommitmentConfig {
+        commitment: CommitmentLevel::Confirmed,
+    }),
+    max_supported_transaction_version: Some(0),
+};
 
-// // We do not use generics to simply documentation generation.
-// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-// pub struct GetTransactionRequest {
-//     pub signature: SerializableSignature,
-// }
+// We do not use generics to simply documentation generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct GetTransactionRequest {
+    pub signature: SerializableSignature,
+}
 
-// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-// pub struct CompressionInfo {
-//     pub closed_accounts: Vec<AccountWithOptionalTokenData>,
-//     pub opened_accounts: Vec<AccountWithOptionalTokenData>,
-// }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct CompressionInfo {
+    pub closed_accounts: Vec<AccountWithOptionalTokenData>,
+    pub opened_accounts: Vec<AccountWithOptionalTokenData>,
+}
 
-// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-// pub struct AccountWithOptionalTokenData {
-//     pub account: Account,
-//     pub optional_token_data: Option<TokenData>,
-// }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct AccountWithOptionalTokenData {
+    pub account: Account,
+    pub optional_token_data: Option<TokenData>,
+}
 
-// pub struct GetTransactionResponse {
-//     pub transaction: EncodedConfirmedTransactionWithStatusMeta,
-//     pub compression_info: CompressionInfo,
-// }
+#[derive(Debug, PartialEq, Serialize)]
+pub struct GetTransactionResponse {
+    pub transaction: EncodedConfirmedTransactionWithStatusMeta,
+    pub compression_info: CompressionInfo,
+}
 
-// // fn parsed_enriched_account(account: EnrichedAccount) -> Result<Account, PhotonApiError> {
-// //     let EnrichedAccount {
-// //         account,
-// //         tree,
-// //         seq,
-// //         hash,
-// //         slot,
-// //         leaf_index,
-// //     } = account;
-// //     let CompressedAccount {
-// //         owner,
-// //         lamports,
-// //         address,
-// //         data,
-// //     } = account;
-// //     Ok(Account {
-// //         owner: SerializablePubkey::from(owner),
-// //         lamports,
-// //         address: address.map(SerializablePubkey::from),
-// //         #[allow(deprecated)]
-// //         data: data.map(|x| Base64String(base64::encode(x.data))),
-// //         discriminator: data.and_then(|x| parse_discriminator(x.discriminator.to_vec())),
-// //         data_hash: data.map(|data| Hash::from(data.data_hash)),
-// //         hash: Hash::from(hash),
-// //         tree: SerializablePubkey::from(tree),
-// //         leaf_index,
-// //         seq,
-// //         slot_updated: slot,
-// //     })
-// // }
+impl<'__s> ToSchema<'__s> for GetTransactionResponse {
+    fn schema() -> (&'__s str, RefOr<Schema>) {
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::Object)
+                .description(Some(
+                    "A Solana transaction with additional compression information",
+                ))
+                // TODO: Improve OpenAPI documentation here.
+                .property(
+                    "transaction",
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::Object)
+                        .description(Some(
+                            "An encoded confirmed transaction with status meta".to_string(),
+                        ))
+                        .build(),
+                )
+                .property("compression_info", CompressionInfo::schema().1)
+                .build(),
+        );
 
-// pub async fn get_transaction(
-//     conn: &DatabaseConnection,
-//     rpc_client: &RpcClient,
-//     request: GetTransactionRequest,
-// ) -> Result<GetTransactionResponse, PhotonApiError> {
-//     let context = Context::extract(conn).await?;
-//     let txn: EncodedConfirmedTransactionWithStatusMeta = rpc_client
-//         .send(
-//             RpcRequest::GetTransaction,
-//             serde_json::json!([request.signature.0.to_string(), RPC_CONFIG,]),
-//         )
-//         .await
-//         .map_err(|e| {
-//             PhotonApiError::UnexpectedError(format!(
-//                 "Failed to fetch transaction {}: {}",
-//                 request.signature.0, e
-//             ))
-//         })?;
+        ("GetTransactionResponse", RefOr::T(schema))
+    }
 
-//     // Ignore if tx failed or meta is missed
-//     let meta = txn.transaction.meta.as_ref();
-//     if meta.map(|meta| meta.status.is_err()).unwrap_or(true) {
-//         return Err(PhotonApiError::ValidationError(
-//             "Transaction missing metatada information".to_string(),
-//         ));
-//     }
-//     let slot = txn.slot;
-//     let status_update = parse_transaction(
-//         &txn.try_into().map_err(|_e| {
-//             PhotonApiError::UnexpectedError(format!(
-//                 "Failed to parse transaction {}",
-//                 request.signature.0
-//             ))
-//         })?,
-//         slot,
-//     )
-//     .map_err(|_e| {
-//         PhotonApiError::UnexpectedError(format!(
-//             "Failed to parse transaction {}",
-//             request.signature.0
-//         ))
-//     })?;
+    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+        Vec::new()
+    }
+}
+fn parse_optional_token_data(
+    account: Account,
+) -> Result<AccountWithOptionalTokenData, PhotonApiError> {
+    let hash = account.hash.clone();
+    Ok(AccountWithOptionalTokenData {
+        optional_token_data: parse_token_data(&account).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!(
+                "Failed to parse token data for account {}: {}",
+                hash, e
+            ))
+        })?,
+        account,
+    })
+}
 
-//     // let opened_accounts = status_update
-//     //     .in_accounts
-//     //     .into_iter()
-//     //     .map(parsed_enriched_account)
-//     //     .collect::<Result<Vec<Account>, PhotonApiError>>()?;
+fn parse_optional_token_data_for_multiple_accounts(
+    accounts: Vec<Account>,
+) -> Result<Vec<AccountWithOptionalTokenData>, PhotonApiError> {
+    accounts
+        .into_iter()
+        .map(parse_optional_token_data)
+        .collect()
+}
 
-//     // let closed_accounts = status_update
-//     //     .out_accounts
-//     //     .into_iter()
-//     //     .map(parsed_enriched_account)
-//     //     .collect::<Result<Vec<Account>, PhotonApiError>>()?;
+fn clone_tx(
+    txn: &EncodedConfirmedTransactionWithStatusMeta,
+) -> EncodedConfirmedTransactionWithStatusMeta {
+    EncodedConfirmedTransactionWithStatusMeta {
+        slot: txn.slot,
+        transaction: txn.transaction.clone(),
+        block_time: txn.block_time,
+    }
+}
 
-//     todo!();
-//     // Ok(GetTransactionResponse {
-//     //     transaction: txn,
-//     //     compression_info: CompressionInfo {
-//     //         closed_accounts,
-//     //         opened_accounts,
-//     //     },
-//     // })
-// }
+pub fn get_transaction_helper(
+    signature: SerializableSignature,
+    txn: EncodedConfirmedTransactionWithStatusMeta,
+) -> Result<GetTransactionResponse, PhotonApiError> {
+    // Ignore if tx failed or meta is missed
+    let meta = txn.transaction.meta.as_ref();
+    if meta.map(|meta| meta.status.is_err()).unwrap_or(true) {
+        return Err(PhotonApiError::ValidationError(
+            "Transaction missing metatada information".to_string(),
+        ));
+    }
+    let slot = txn.slot;
+
+    let status_update = parse_transaction(
+        &clone_tx(&txn).try_into().map_err(|_e| {
+            PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+        })?,
+        slot,
+    )
+    .map_err(|_e| {
+        PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+    })?;
+
+    Ok(GetTransactionResponse {
+        transaction: txn,
+        compression_info: CompressionInfo {
+            closed_accounts: parse_optional_token_data_for_multiple_accounts(
+                status_update.in_accounts,
+            )?,
+            opened_accounts: parse_optional_token_data_for_multiple_accounts(
+                status_update.out_accounts,
+            )?,
+        },
+    })
+}
+
+pub async fn get_transaction(
+    rpc_client: &RpcClient,
+    request: GetTransactionRequest,
+) -> Result<GetTransactionResponse, PhotonApiError> {
+    let txn: EncodedConfirmedTransactionWithStatusMeta = rpc_client
+        .send(
+            RpcRequest::GetTransaction,
+            serde_json::json!([request.signature.0.to_string(), RPC_CONFIG,]),
+        )
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!(
+                "Failed to fetch transaction {}: {}",
+                request.signature.0, e
+            ))
+        })?;
+    get_transaction_helper(request.signature, txn)
+}

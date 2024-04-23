@@ -6,6 +6,7 @@ use crate::api::method::get_compressed_token_account_balance::TokenAccountBalanc
 use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
+use crate::api::method::get_transaction::AccountWithOptionalTokenData;
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -72,7 +73,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenBalance,
     TokenData,
     AccountData,
-    AccountState
+    AccountState,
+    AccountWithOptionalTokenData
 )))]
 struct ApiDoc;
 
