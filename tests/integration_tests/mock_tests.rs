@@ -3,8 +3,8 @@ use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
 use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::api::method::get_compressed_owner_balance::GetCompressedOwnerBalanceRequest;
-use photon_indexer::api::method::get_compressed_owner_token_balances::GetCompressedOwnerTokenBalances;
+use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
+use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwner;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
@@ -280,7 +280,7 @@ async fn test_multiple_accounts(
 
         let res = setup
             .api
-            .get_compressed_owner_balance(GetCompressedOwnerBalanceRequest {
+            .get_compressed_balance_by_owner(GetCompressedBalanceByOwnerRequest {
                 owner: SerializablePubkey::from(owner),
             })
             .await
@@ -470,14 +470,14 @@ async fn test_persist_token_data(
             *balance += token_account.token_data.amount;
         }
         for (mint, balance) in mint_to_balance.iter() {
-            let request = GetCompressedOwnerTokenBalances {
+            let request = GetCompressedTokenBalancesByOwner {
                 owner: SerializablePubkey::from(owner),
                 mint: Some(mint.clone()),
                 ..Default::default()
             };
             let res = setup
                 .api
-                .get_compressed_owner_token_balances(request)
+                .get_compressed_token_balances_by_owner(request)
                 .await
                 .unwrap()
                 .value;

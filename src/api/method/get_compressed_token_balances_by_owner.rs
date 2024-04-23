@@ -30,18 +30,18 @@ pub struct TokenBalancesResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-pub struct GetCompressedOwnerTokenBalances {
+pub struct GetCompressedTokenBalancesByOwner {
     pub owner: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,
     pub cursor: Option<Base58String>,
     pub limit: Option<Limit>,
 }
 
-pub async fn get_compressed_owner_token_balances(
+pub async fn get_compressed_token_balances_by_owner(
     conn: &DatabaseConnection,
-    request: GetCompressedOwnerTokenBalances,
+    request: GetCompressedTokenBalancesByOwner,
 ) -> Result<TokenBalancesResponse, PhotonApiError> {
-    let GetCompressedOwnerTokenBalances {
+    let GetCompressedTokenBalancesByOwner {
         owner,
         mint,
         cursor,
