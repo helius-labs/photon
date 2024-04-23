@@ -21,7 +21,7 @@ use sea_orm::{
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
-use photon_indexer::ingester::typedefs::block_info::TransactionInfo;
+
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
