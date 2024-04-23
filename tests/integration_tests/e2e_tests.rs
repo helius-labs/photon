@@ -1,7 +1,7 @@
 use function_name::named;
 use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::api::method::get_transaction::{get_transaction_helper};
+use photon_indexer::api::method::get_transaction::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 
