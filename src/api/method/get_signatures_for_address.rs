@@ -1,17 +1,15 @@
-use sea_orm::{DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
     utils::{
-        search_for_signatures, Context, GetPaginatedSignaturesResponse, Limit,
-        SignatureFilter, SignatureSearchType,
+        search_for_signatures, Context, GetPaginatedSignaturesResponse, Limit, SignatureFilter,
+        SignatureSearchType,
     },
 };
-use crate::{
-    common::typedefs::{serializable_pubkey::SerializablePubkey},
-};
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct GetSignaturesForAddressRequest {

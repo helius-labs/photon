@@ -16,4 +16,5 @@ pub mod get_signatures_for_owner;
 pub mod get_signatures_for_token_owner;
 pub mod get_slot;
 pub mod get_transaction;
+pub mod get_validity_proof;
 pub mod utils;
