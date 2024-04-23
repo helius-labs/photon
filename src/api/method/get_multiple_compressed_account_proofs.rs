@@ -23,6 +23,7 @@ pub struct MerkleProofWithContext {
     pub leaf_index: u32,
     pub hash: Hash,
     pub merkle_tree: SerializablePubkey,
+    pub root_seq: u64,
 }
 
 // We do not use generics to simplify documentation generation.
@@ -110,7 +111,7 @@ pub async fn get_multiple_compressed_account_proofs_helper(
         .all(conn)
         .await?;
 
-    let node_to_proof = proof_nodes
+    let node_to_model = proof_nodes
         .iter()
         .map(|node| ((node.tree.clone(), node.node_idx), node.clone()))
         .collect::<HashMap<(Vec<u8>, i64), state_trees::Model>>();
@@ -129,7 +130,7 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                 .iter()
                 .enumerate()
                 .map(|(level, idx)| {
-                    node_to_proof
+                    node_to_model
                         .get(&(tree.clone(), *idx))
                         .map(|node| {
                             Hash::try_from(node.hash.clone()).map_err(|_| {
@@ -141,6 +142,17 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                         .unwrap_or(Ok(Hash::from(ZERO_BYTES[level])))
                 })
                 .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
+
+            let root_seq = node_to_model
+                .get(&(tree.clone(), 1))
+                .ok_or({
+                    let tree_rep: SerializablePubkey = tree.clone().try_into()?;
+                    PhotonApiError::UnexpectedError(format!(
+                        "Missing root index for tree {}",
+                        tree_rep
+                    ))
+                })?
+                .seq as u64;
 
             let leaf_model =
                 leaf_hashes_to_model
@@ -157,6 +169,7 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                 ))? as u32,
                 hash: hash.clone(),
                 merkle_tree: leaf_model.tree.clone().try_into()?,
+                root_seq,
             })
         })
         .collect()
