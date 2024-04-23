@@ -104,14 +104,15 @@ fn setup_logging(logging_format: LoggingFormat) {
     }
 }
 
-async fn setup_sqllite_in_memory_pool(max_connections: u32) -> SqlitePool {
-    setup_sqllite_pool("sqlite::memory:", max_connections).await
+async fn setup_sqllite_in_memory_pool() -> SqlitePool {
+    setup_sqllite_pool("sqlite::memory:", 1).await
 }
 
 async fn setup_sqllite_pool(db_url: &str, max_connections: u32) -> SqlitePool {
     let options: SqliteConnectOptions = db_url.parse().unwrap();
     SqlitePoolOptions::new()
         .max_connections(max_connections)
+        .min_connections(1)
         .connect_with(options)
         .await
         .unwrap()
@@ -144,9 +145,7 @@ async fn setup_database_connection(
                 _ => unimplemented!("Unsupported database type: {}", db_url),
             }
         }
-        None => SqlxSqliteConnector::from_sqlx_sqlite_pool(
-            setup_sqllite_in_memory_pool(max_connections).await,
-        ),
+        None => SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_in_memory_pool().await),
     })
 }
 
