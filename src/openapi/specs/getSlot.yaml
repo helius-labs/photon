@@ -217,6 +217,7 @@ components:
       - leafIndex
       - hash
       - merkleTree
+      - rootSeq
       properties:
         hash:
           $ref: '#/components/schemas/Hash'
@@ -230,6 +231,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Hash'
+        rootSeq:
+          type: integer
+          format: int64
+          minimum: 0
       additionalProperties: false
     PaginatedAccountList:
       type: object
