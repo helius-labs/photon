@@ -10,13 +10,13 @@ use super::utils::{parse_decimal, AccountBalanceResponse, LamportModel};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct GetCompressedOwnerBalanceRequest {
+pub struct GetCompressedBalanceByOwnerRequest {
     pub owner: SerializablePubkey,
 }
 
-pub async fn get_compressed_owner_balance(
+pub async fn get_compressed_balance_by_owner(
     conn: &DatabaseConnection,
-    request: GetCompressedOwnerBalanceRequest,
+    request: GetCompressedBalanceByOwnerRequest,
 ) -> Result<AccountBalanceResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let owner = request.owner;

@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressedOwnerTokenBalances
+    summary: getCompressedTokenBalancesByOwner
     post:
       requestBody:
         content:
@@ -36,7 +36,7 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedOwnerTokenBalances
+                  - getCompressedTokenBalancesByOwner
                 params:
                   type: object
                   required:

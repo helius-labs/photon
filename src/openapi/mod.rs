@@ -1,8 +1,8 @@
 use crate::api::api::PhotonApi;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
-use crate::api::method::get_compressed_owner_token_balances::TokenBalance;
-use crate::api::method::get_compressed_owner_token_balances::TokenBalanceList;
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
+use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
+use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
