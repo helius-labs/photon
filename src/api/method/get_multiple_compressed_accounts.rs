@@ -1,4 +1,4 @@
-use crate::dao::generated::accounts;
+use crate::{common::typedefs::account::Account, dao::generated::accounts};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use utoipa::{
@@ -13,7 +13,7 @@ use super::{
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
-use super::utils::{parse_account_model, Account};
+use super::utils::parse_account_model;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -43,13 +43,13 @@ impl GetMultipleCompressedAccountsRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountList {
     pub items: Vec<Account>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 // We do not use generics in order to simplify documentation generation
 pub struct GetMultipleCompressedAccountsResponse {
     pub context: Context,

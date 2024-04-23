@@ -1,8 +1,10 @@
 use std::str::FromStr;
 
+use crate::common::typedefs::account::{Account, AccountData};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
+use crate::common::typedefs::token_data::{AccountState, TokenData};
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -133,63 +135,40 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Account {
-    pub hash: Hash,
-    pub address: Option<SerializablePubkey>,
-    pub discriminator: u64,
-    pub data: Option<Base64String>,
-    pub data_hash: Option<Hash>,
-    pub owner: SerializablePubkey,
-    pub lamports: u64,
-    pub tree: SerializablePubkey,
-    pub leaf_index: u32,
-    pub seq: Option<u64>,
-    pub slot_updated: u64,
+pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
+    discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
 }
 
-fn parse_discriminator(discriminator: Vec<u8>) -> u64 {
-    match discriminator.len() {
-        0 => 0,
-        _ => LittleEndian::read_u64(&discriminator),
-    }
-}
-
-fn parse_leaf_index(leaf_index: Option<i64>) -> Result<u32, PhotonApiError> {
+fn parse_leaf_index(leaf_index: i64) -> Result<u32, PhotonApiError> {
     leaf_index
-        .ok_or(PhotonApiError::UnexpectedError(
-            "Leaf index not found".to_string(),
-        ))
-        .and_then(|leaf_index| {
-            leaf_index
-                .try_into()
-                .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
-        })
+        .try_into()
+        .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
 }
 
 pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
+    let data = match (account.data, account.data_hash, account.discriminator) {
+        (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
+            data: Base64String(data),
+            data_hash: data_hash.try_into()?,
+            discriminator: parse_decimal(discriminator)?,
+        }),
+        (None, None, None) => None,
+        _ => {
+            return Err(PhotonApiError::UnexpectedError(
+                "Invalid account data".to_string(),
+            ))
+        }
+    };
+
     Ok(Account {
         hash: account.hash.try_into()?,
         address: account
             .address
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        discriminator: parse_discriminator(account.discriminator),
-        data: match account.data.len() {
-            0 => None,
-            #[allow(deprecated)]
-            _ => Some(Base64String(base64::encode(account.data))),
-        },
-        data_hash: account.data_hash.map(|hash| hash.try_into()).transpose()?,
+        data,
         owner: account.owner.try_into()?,
-        tree: account
-            .tree
-            .map(|tree| tree.try_into())
-            .transpose()?
-            .ok_or(PhotonApiError::UnexpectedError(
-                "Tree not found".to_string(),
-            ))?,
+        tree: account.tree.try_into()?,
         leaf_index: parse_leaf_index(account.leaf_index)?,
         lamports: parse_decimal(account.lamports)?,
         slot_updated: account.slot_updated as u64,
@@ -198,34 +177,20 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
 }
 
 // We do not use generics to simplify documentation generation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 pub struct TokenAccountListResponse {
     pub context: Context,
     pub value: TokenAccountList,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAcccount {
-    pub hash: Hash,
-    pub owner: SerializablePubkey,
-    pub mint: SerializablePubkey,
-    pub amount: u64,
-    pub delegate: Option<SerializablePubkey>,
-    pub delegated_amount: u64,
-    pub is_native: bool,
-    pub frozen: bool,
-    pub data: Base64String,
-    pub data_hash: Option<Hash>,
-    pub discriminator: u64,
-    pub lamports: u64,
-    pub tree: Option<SerializablePubkey>,
-    pub seq: Option<u64>,
-    pub leaf_index: u32,
-    pub slot_updated: u64,
+    pub account: Account,
+    pub token_data: TokenData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
     pub items: Vec<TokenAcccount>,
@@ -324,7 +289,7 @@ pub async fn fetch_token_accounts(
         limit = l.value();
     }
 
-    let result = token_accounts::Entity::find()
+    let items = token_accounts::Entity::find()
         .find_also_related(accounts::Entity)
         .filter(filter)
         .order_by_asc(token_accounts::Column::Mint)
@@ -337,36 +302,34 @@ pub async fn fetch_token_accounts(
             let account = account.ok_or(PhotonApiError::RecordNotFound(
                 "Base account not found for token account".to_string(),
             ))?;
-            Ok(EnrichedTokenAccountModel {
-                hash: token_account.hash,
-                owner: token_account.owner,
-                mint: token_account.mint,
-                amount: token_account.amount,
-                delegate: token_account.delegate,
-                frozen: token_account.frozen,
-                is_native: token_account.is_native,
-                delegated_amount: token_account.delegated_amount,
-                spent: token_account.spent,
-                slot_updated: token_account.slot_updated,
-                data: account.data,
-                data_hash: account.data_hash,
-                discriminator: account.discriminator,
-                lamports: account.lamports,
-                tree: account.tree,
-                leaf_index: account.leaf_index,
-                seq: account.seq,
+            Ok(TokenAcccount {
+                account: parse_account_model(account)?,
+                token_data: TokenData {
+                    mint: token_account.mint.try_into()?,
+                    owner: token_account.owner.try_into()?,
+                    amount: parse_decimal(token_account.amount)?,
+                    delegate: token_account
+                        .delegate
+                        .map(SerializablePubkey::try_from)
+                        .transpose()?,
+                    delegated_amount: parse_decimal(token_account.delegated_amount)?,
+                    is_native: token_account.is_native.map(parse_decimal).transpose()?,
+                    state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
+                        PhotonApiError::UnexpectedError(format!(
+                            "Unable to parse account state {}",
+                            e
+                        ))
+                    })?,
+                },
             })
         })
-        .collect::<Result<Vec<EnrichedTokenAccountModel>, PhotonApiError>>()?;
+        .collect::<Result<Vec<TokenAcccount>, PhotonApiError>>()?;
 
-    let items: Result<Vec<TokenAcccount>, PhotonApiError> =
-        result.into_iter().map(parse_token_accounts_model).collect();
-    let items = items?;
     let mut cursor = items.last().map(|item| {
         bs58::encode::<Vec<u8>>({
             let item = item.clone();
-            let mut bytes: Vec<u8> = item.mint.into();
-            let hash_bytes: Vec<u8> = item.hash.into();
+            let mut bytes: Vec<u8> = item.token_data.mint.into();
+            let hash_bytes: Vec<u8> = item.account.hash.into();
             bytes.extend_from_slice(hash_bytes.as_slice());
             bytes
         })
@@ -379,42 +342,9 @@ pub async fn fetch_token_accounts(
     Ok(TokenAccountListResponse {
         value: TokenAccountList {
             items,
-            cursor: cursor.map(|x| Base58String(x)),
+            cursor: cursor.map(Base58String),
         },
         context,
-    })
-}
-
-pub fn parse_token_accounts_model(
-    token_account: EnrichedTokenAccountModel,
-) -> Result<TokenAcccount, PhotonApiError> {
-    Ok(TokenAcccount {
-        hash: token_account.hash.try_into()?,
-        owner: token_account.owner.try_into()?,
-        mint: token_account.mint.try_into()?,
-        amount: parse_decimal(token_account.amount)?,
-        delegate: token_account
-            .delegate
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
-        is_native: token_account.is_native.is_some(),
-        frozen: token_account.frozen,
-        #[allow(deprecated)]
-        data: Base64String(base64::encode(token_account.data)),
-        data_hash: token_account
-            .data_hash
-            .map(|hash| hash.try_into())
-            .transpose()?,
-        discriminator: parse_discriminator(token_account.discriminator),
-        lamports: parse_decimal(token_account.lamports)?,
-        tree: token_account
-            .tree
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
-        leaf_index: parse_leaf_index(token_account.leaf_index)?,
-        seq: token_account.seq.map(|seq| seq as u64),
-        delegated_amount: parse_decimal(token_account.delegated_amount)?,
-        slot_updated: token_account.slot_updated as u64,
     })
 }
 
@@ -461,14 +391,14 @@ impl AccountIdentifier {
         match table {
             AccountDataTable::Accounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    accounts::Column::Address.eq::<Vec<u8>>(address.clone().into())
+                    accounts::Column::Address.eq::<Vec<u8>>((*address).into())
                 }
                 AccountIdentifier::Hash(hash) => accounts::Column::Hash.eq(hash.to_vec()),
             }
             .and(accounts::Column::Spent.eq(false)),
             AccountDataTable::TokenAccounts => match &self {
                 AccountIdentifier::Address(address) => {
-                    token_accounts::Column::Owner.eq::<Vec<u8>>(address.clone().into())
+                    token_accounts::Column::Owner.eq::<Vec<u8>>((*address).into())
                 }
                 AccountIdentifier::Hash(hash) => token_accounts::Column::Hash.eq(hash.to_vec()),
             }
@@ -491,7 +421,7 @@ impl AccountIdentifier {
 impl CompressedAccountRequest {
     pub fn parse_id(&self) -> Result<AccountIdentifier, PhotonApiError> {
         if let Some(address) = &self.address {
-            Ok(AccountIdentifier::Address(address.clone()))
+            Ok(AccountIdentifier::Address(*address))
         } else if let Some(hash) = &self.hash {
             Ok(AccountIdentifier::Hash(hash.clone()))
         } else {
@@ -514,11 +444,9 @@ pub struct LamportModel {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct HashRequest(pub Hash);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PubkeyRequest(pub SerializablePubkey);
+pub struct HashRequest {
+    pub hash: Hash,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
@@ -616,7 +544,7 @@ pub async fn search_for_signatures(
             })?;
 
             (
-                format!("AND transactions.slot <= $2 AND transactions.signature < $3"),
+                "AND transactions.slot <= $2 AND transactions.signature < $3".to_string(),
                 vec![
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),

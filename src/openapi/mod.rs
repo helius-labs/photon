@@ -5,8 +5,8 @@ use crate::api::method::get_compressed_owner_token_balances::TokenBalanceList;
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
-use crate::api::method::utils::Account;
 
+use crate::api::method::get_transaction::AccountWithOptionalTokenData;
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -14,11 +14,15 @@ use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
+use crate::common::typedefs::account::Account;
+use crate::common::typedefs::account::AccountData;
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
+use crate::common::typedefs::token_data::AccountState;
+use crate::common::typedefs::token_data::TokenData;
 use dirs;
 use utoipa::openapi::Response;
 
@@ -66,7 +70,11 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     SignatureInfo,
     SerializableSignature,
     TokenBalanceList,
-    TokenBalance
+    TokenBalance,
+    TokenData,
+    AccountData,
+    AccountState,
+    AccountWithOptionalTokenData
 )))]
 struct ApiDoc;
 

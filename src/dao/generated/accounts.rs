@@ -7,18 +7,19 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub hash: Vec<u8>,
-    pub data: Vec<u8>,
+    pub data: Option<Vec<u8>>,
     pub data_hash: Option<Vec<u8>>,
-    pub discriminator: Vec<u8>,
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
-    pub tree: Option<Vec<u8>>,
-    pub leaf_index: Option<i64>,
+    pub tree: Vec<u8>,
+    pub leaf_index: i64,
     pub seq: Option<i64>,
     pub slot_updated: i64,
     pub spent: bool,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub lamports: Decimal,
+    #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]
+    pub discriminator: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

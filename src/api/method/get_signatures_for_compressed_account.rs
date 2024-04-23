@@ -22,7 +22,7 @@ pub async fn get_signatures_for_compressed_account(
     request: HashRequest,
 ) -> Result<GetSignaturesForCompressedAccountResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let hash = request.0;
+    let hash = request.hash;
 
     let signatures = search_for_signatures(
         conn,
@@ -41,7 +41,7 @@ pub async fn get_signatures_for_compressed_account(
         ));
     }
 
-    if signatures.len() == 0 {
+    if signatures.is_empty() {
         return Err(PhotonApiError::RecordNotFound(
             "Account not found".to_string(),
         ));

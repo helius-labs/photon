@@ -15,7 +15,6 @@ use sea_orm::Set;
 use sea_orm::TransactionTrait;
 use sqlx::types::chrono::DateTime;
 
-
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
 use self::persist::MAX_SQL_INSERTS;
@@ -64,7 +63,6 @@ async fn index_block_metadatas(
                     blockhash: Set(block.blockhash.clone().into()),
                     parent_blockhash: Set(block.parent_blockhash.clone().into()),
                     block_height: Set(block.block_height as i64),
-                    ..Default::default()
                 })
             })
             .collect::<Result<Vec<blocks::ActiveModel>, IngesterError>>()?;

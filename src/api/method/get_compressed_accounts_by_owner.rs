@@ -1,4 +1,4 @@
-use crate::dao::generated::accounts;
+use crate::{common::typedefs::account::Account, dao::generated::accounts};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -9,7 +9,7 @@ use super::{
 };
 use crate::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 
-use super::utils::{parse_account_model, Account};
+use super::utils::parse_account_model;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -26,14 +26,14 @@ pub struct GetCompressedAccountsByOwnerRequest {
     pub limit: Option<Limit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PaginatedAccountList {
     pub items: Vec<Account>,
     pub cursor: Option<Hash>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 pub struct GetCompressedAccountsByOwnerResponse {
     pub context: Context,
     pub value: PaginatedAccountList,

@@ -1,12 +1,24 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::{
     openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
     ToSchema,
 };
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Base64String(pub String);
+use serde::Serializer;
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Base64String(pub Vec<u8>);
+
+impl Serialize for Base64String {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[allow(deprecated)]
+        let base64_encoded = base64::encode(&self.0);
+        serializer.serialize_str(&base64_encoded)
+    }
+}
 
 impl<'__s> ToSchema<'__s> for Base64String {
     fn schema() -> (&'__s str, RefOr<Schema>) {

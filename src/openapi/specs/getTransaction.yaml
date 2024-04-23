@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressedTokenAccountBalance
+    summary: getTransaction
     post:
       requestBody:
         content:
@@ -36,26 +36,14 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedTokenAccountBalance
+                  - getTransaction
                 params:
                   type: object
-                  description: Request for compressed account data
-                  default:
-                    address: null
-                    hash: '11111111111111111111111111111111'
+                  required:
+                  - signature
                   properties:
-                    address:
-                      allOf:
-                      - $ref: '#/components/schemas/SerializablePubkey'
-                      nullable: true
-                    hash:
-                      allOf:
-                      - $ref: '#/components/schemas/Hash'
-                      nullable: true
-                  additionalProperties: false
-                  example:
-                    address: null
-                    hash: '11111111111111111111111111111111'
+                    signature:
+                      $ref: '#/components/schemas/SerializableSignature'
         required: true
       responses:
         '200':
@@ -64,14 +52,25 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                - context
-                - value
+                description: A Solana transaction with additional compression information
                 properties:
-                  context:
-                    $ref: '#/components/schemas/Context'
-                  value:
-                    $ref: '#/components/schemas/TokenAccountBalance'
+                  compression_info:
+                    type: object
+                    required:
+                    - closed_accounts
+                    - opened_accounts
+                    properties:
+                      closed_accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AccountWithOptionalTokenData'
+                      opened_accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AccountWithOptionalTokenData'
+                  transaction:
+                    type: object
+                    description: An encoded confirmed transaction with status meta
         '400':
           description: Invalid request.
           content:
@@ -230,7 +229,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
+      example: 1111111CGTta3M4t3yXu8uRgkKvaWd2d8DQuZLKrf
     Limit:
       type: integer
       format: int64
@@ -283,8 +282,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
-      example: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
+      default: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
+      example: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

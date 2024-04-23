@@ -127,7 +127,6 @@ components:
       type: object
       required:
       - hash
-      - discriminator
       - owner
       - lamports
       - tree
@@ -137,13 +136,7 @@ components:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
         data:
-          $ref: '#/components/schemas/Base64String'
-        dataHash:
-          $ref: '#/components/schemas/Hash'
-        discriminator:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/AccountData'
         hash:
           $ref: '#/components/schemas/Hash'
         lamports:
@@ -168,6 +161,22 @@ components:
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
+    AccountData:
+      type: object
+      required:
+      - discriminator
+      - data
+      - dataHash
+      properties:
+        data:
+          $ref: '#/components/schemas/Base64String'
+        dataHash:
+          $ref: '#/components/schemas/Hash'
+        discriminator:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: false
     AccountList:
       type: object
       required:
@@ -178,6 +187,21 @@ components:
           items:
             $ref: '#/components/schemas/Account'
       additionalProperties: false
+    AccountState:
+      type: string
+      enum:
+      - uninitialized
+      - initialized
+      - frozen
+    AccountWithOptionalTokenData:
+      type: object
+      required:
+      - account
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        optional_token_data:
+          $ref: '#/components/schemas/TokenData'
     Base58String:
       type: string
       description: A base 58 encoded string.
@@ -201,7 +225,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
+      example: 1111111EgVWUh8o98knojjwqGKqVGFkQ9m5AxqKkj
     Limit:
       type: integer
       format: int64
@@ -254,8 +278,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
-      example: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
+      default: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
+      example: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
@@ -289,66 +313,13 @@ components:
     TokenAcccount:
       type: object
       required:
-      - hash
-      - owner
-      - mint
-      - amount
-      - delegatedAmount
-      - isNative
-      - frozen
-      - data
-      - discriminator
-      - lamports
-      - leafIndex
-      - slotUpdated
+      - account
+      - tokenData
       properties:
-        amount:
-          type: integer
-          format: int64
-          minimum: 0
-        data:
-          $ref: '#/components/schemas/Base64String'
-        dataHash:
-          $ref: '#/components/schemas/Hash'
-        delegate:
-          $ref: '#/components/schemas/SerializablePubkey'
-        delegatedAmount:
-          type: integer
-          format: int64
-          minimum: 0
-        discriminator:
-          type: integer
-          format: int64
-          minimum: 0
-        frozen:
-          type: boolean
-        hash:
-          $ref: '#/components/schemas/Hash'
-        isNative:
-          type: boolean
-        lamports:
-          type: integer
-          format: int64
-          minimum: 0
-        leafIndex:
-          type: integer
-          format: int32
-          minimum: 0
-        mint:
-          $ref: '#/components/schemas/SerializablePubkey'
-        owner:
-          $ref: '#/components/schemas/SerializablePubkey'
-        seq:
-          type: integer
-          format: int64
-          nullable: true
-          minimum: 0
-        slotUpdated:
-          type: integer
-          format: int64
-          minimum: 0
-        tree:
-          $ref: '#/components/schemas/SerializablePubkey'
+        account:
+          $ref: '#/components/schemas/Account'
+        tokenData:
+          $ref: '#/components/schemas/TokenData'
       additionalProperties: false
     TokenAccountBalance:
       type: object
@@ -395,3 +366,40 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TokenBalance'
+    TokenData:
+      type: object
+      required:
+      - mint
+      - owner
+      - amount
+      - state
+      - delegatedAmount
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: The amount of tokens this account holds.
+          minimum: 0
+        delegate:
+          $ref: '#/components/schemas/SerializablePubkey'
+        delegatedAmount:
+          type: integer
+          format: int64
+          description: The amount delegated
+          minimum: 0
+        isNative:
+          type: integer
+          format: int64
+          description: |-
+            If is_some, this is a native token, and the value logs the rent-exempt
+            reserve. An Account is required to be rent-exempt, so the value is
+            used by the Processor to ensure that wrapped SOL accounts do not
+            drop below this threshold.
+          nullable: true
+          minimum: 0
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        state:
+          $ref: '#/components/schemas/AccountState'

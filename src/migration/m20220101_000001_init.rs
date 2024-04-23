@@ -92,13 +92,12 @@ impl MigrationTrait for Migration {
                     .table(Accounts::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(Accounts::Hash).binary().not_null())
-                    .col(ColumnDef::new(Accounts::Data).binary().not_null())
+                    .col(ColumnDef::new(Accounts::Data).binary())
                     .col(ColumnDef::new(Accounts::DataHash).binary())
-                    .col(ColumnDef::new(Accounts::Discriminator).binary().not_null())
                     .col(ColumnDef::new(Accounts::Address).binary())
                     .col(ColumnDef::new(Accounts::Owner).binary().not_null())
-                    .col(ColumnDef::new(Accounts::Tree).binary())
-                    .col(ColumnDef::new(Accounts::LeafIndex).big_integer())
+                    .col(ColumnDef::new(Accounts::Tree).binary().not_null())
+                    .col(ColumnDef::new(Accounts::LeafIndex).big_integer().not_null())
                     .col(ColumnDef::new(Accounts::Seq).big_integer())
                     .col(
                         ColumnDef::new(Accounts::SlotUpdated)
@@ -144,7 +143,9 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(TokenAccounts::Owner).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Mint).binary().not_null())
                     .col(ColumnDef::new(TokenAccounts::Delegate).binary())
-                    .col(ColumnDef::new(TokenAccounts::Frozen).boolean().not_null())
+                    // TODO: We use an int to represent the state enum since SQL-lite does not
+                    //       support enums.
+                    .col(ColumnDef::new(TokenAccounts::State).integer().not_null())
                     .col(ColumnDef::new(TokenAccounts::Spent).boolean().not_null())
                     .foreign_key(
                         ForeignKey::create()
@@ -152,11 +153,6 @@ impl MigrationTrait for Migration {
                             .from(TokenAccounts::Table, TokenAccounts::Hash)
                             .to(Accounts::Table, Accounts::Hash)
                             .on_delete(ForeignKeyAction::Cascade),
-                    )
-                    .col(
-                        ColumnDef::new(TokenAccounts::SlotUpdated)
-                            .big_integer()
-                            .not_null(),
                     )
                     .primary_key(
                         Index::create()
@@ -172,6 +168,12 @@ impl MigrationTrait for Migration {
                 execute_sql(
                     manager,
                     "ALTER TABLE accounts ADD COLUMN lamports uint64_t NOT NULL;",
+                )
+                .await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE accounts ADD COLUMN discriminator uint64_t;",
                 )
                 .await?;
 
@@ -196,6 +198,13 @@ impl MigrationTrait for Migration {
             DatabaseBackend::Sqlite => {
                 // HACK: SQLx Decimal is not compatible with INTEGER so we use REAL instead.
                 execute_sql(manager, "ALTER TABLE accounts ADD COLUMN lamports REAL;").await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE accounts ADD COLUMN discriminator REAL;",
+                )
+                .await?;
+
                 execute_sql(
                     manager,
                     "ALTER TABLE token_accounts ADD COLUMN amount REAL;",
