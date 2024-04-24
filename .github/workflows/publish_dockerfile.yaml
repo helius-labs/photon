@@ -2,6 +2,9 @@ name: Publish Dockerfile
 
 on:
   push:
+    branches:
+      - main
+      - add-docker-image-and-ci
 
 jobs:
   build:
