@@ -4,6 +4,7 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressed
 use photon_indexer::api::method::get_transaction::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
+use solana_sdk::pubkey::Pubkey;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
@@ -44,18 +45,6 @@ async fn test_e2e_mint_and_transfer(
     )
     .await;
 
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
     let bob_pubkey =
         SerializablePubkey::try_from("8EYKVyNCsDFHkxos7V4kr8bMouYU2nPJ1QXk2ET8FBc7").unwrap();
     let charles_pubkey =
@@ -68,6 +57,20 @@ async fn test_e2e_mint_and_transfer(
     let txs = [mint_tx, transfer_tx];
 
     for tx_permutation in txs.iter().permutations(txs.len()) {
+        reset_tables(&setup.db_conn).await.unwrap();
+        // HACK: We index a block so that API methods can fetch the current slot.
+        index_block(
+            &setup.db_conn,
+            &BlockInfo {
+                metadata: BlockMetadata {
+                    slot: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
         for tx in tx_permutation {
             index_transaction(&setup, tx).await;
         }
@@ -327,4 +330,92 @@ async fn test_index_block_metadata(
     let block = cached_fetch_block(&setup, slot + 1).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     assert_eq!(setup.api.get_slot().await.unwrap(), slot + 1);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_debug_incorrect_root(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let compress_tx =
+        "25AB4R2YwmRz4S4u455wYWbZBEH45MWsnmKJZpbdgfGnutZMu53eYq4kefU3AYK2tmLbXXBFy6LchxYqUQP9kL1k";
+    let transfer_tx =
+        "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe";
+
+    let payer_bukey = SerializablePubkey(
+        Pubkey::try_from("4Vuk7ucQkkKbbF9mr7FoAq3tf5KbPsm1y436zg368L9U").unwrap(),
+    );
+    let txs = [compress_tx, transfer_tx];
+
+    for tx_permutation in txs.iter().permutations(txs.len()) {
+        for individually in [true, false] {
+            reset_tables(&setup.db_conn).await.unwrap();
+
+            // HACK: We index a block so that API methods can fetch the current slot.
+            index_block(
+                &setup.db_conn,
+                &BlockInfo {
+                    metadata: BlockMetadata {
+                        slot: 0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+            match individually {
+                true => {
+                    for tx in tx_permutation.iter() {
+                        index_transaction(&setup, tx).await;
+                    }
+                }
+                false => {
+                    index_multiple_transactions(
+                        &setup,
+                        #[allow(suspicious_double_ref_op)]
+                        tx_permutation.iter().map(|x| *x.clone()).collect(),
+                    )
+                    .await;
+                }
+            }
+            let accounts = setup
+                .api
+                .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                    owner: payer_bukey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-accounts", name.clone()), accounts);
+            let proofs = setup
+                .api
+                .get_multiple_compressed_account_proofs(HashList(
+                    accounts
+                        .value
+                        .items
+                        .iter()
+                        .map(|x| x.hash.clone())
+                        .collect(),
+                ))
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+        }
+    }
 }

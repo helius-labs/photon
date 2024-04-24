@@ -1,0 +1,25 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: accounts
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "hash": "4FiwxQ8b1kVRTQHjsj56nKzHFrGykxUsffBH2oxTjCQP",
+        "address": null,
+        "data": null,
+        "owner": "4Vuk7ucQkkKbbF9mr7FoAq3tf5KbPsm1y436zg368L9U",
+        "lamports": 999999000,
+        "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+        "leafIndex": 1,
+        "seq": 2,
+        "slotUpdated": 0
+      }
+    ],
+    "cursor": null
+  }
+}
