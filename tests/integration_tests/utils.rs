@@ -9,7 +9,7 @@ use photon_indexer::{
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
         persist::persist_state_update,
-        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
 };
 
@@ -20,7 +20,6 @@ use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
-
 
 pub use rstest::rstest;
 use solana_client::{
@@ -354,6 +353,23 @@ pub async fn persist_state_update_using_connection(
 pub async fn index_transaction(setup: &TestSetup, tx: &str) {
     let tx = cached_fetch_transaction(setup, tx).await;
     let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
+    persist_state_update_using_connection(&setup.db_conn, state_update)
+        .await
+        .unwrap();
+}
+
+pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
+    let mut transactions_infos = Vec::<TransactionInfo>::new();
+    for tx in txs {
+        let tx = cached_fetch_transaction(setup, tx).await;
+        transactions_infos.push(tx.try_into().unwrap());
+    }
+    let mut state_updates = Vec::new();
+    for transaction_info in transactions_infos {
+        let tx_state_update = parse_transaction(&transaction_info, 0).unwrap();
+        state_updates.push(tx_state_update);
+    }
+    let state_update = StateUpdate::merge_updates(state_updates);
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
