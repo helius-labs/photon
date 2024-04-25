@@ -11,7 +11,7 @@ use super::{
 };
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 pub struct GetSignaturesForOwnerRequest {
     pub owner: SerializablePubkey,
     pub limit: Option<Limit>,
