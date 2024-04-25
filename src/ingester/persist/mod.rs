@@ -118,9 +118,9 @@ async fn spend_input_accounts(
             owner: Set(account.owner.0.to_bytes().to_vec()),
             discriminator: Set(None),
             lamports: Set(Decimal::from(0)),
-            slot_updated: Set(account.slot_updated as i64),
+            slot_updated: Set(account.slot_updated.0 as i64),
             tree: Set(account.tree.0.to_bytes().to_vec()),
-            leaf_index: Set(account.leaf_index as i64),
+            leaf_index: Set(account.leaf_index.0 as i64),
             ..Default::default()
         })
         .collect();
@@ -196,16 +196,16 @@ async fn append_output_accounts(
             discriminator: Set(account
                 .data
                 .as_ref()
-                .map(|x| Decimal::from(x.discriminator))),
+                .map(|x| Decimal::from(x.discriminator.0))),
             data: Set(account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
-            leaf_index: Set(account.leaf_index as i64),
+            leaf_index: Set(account.leaf_index.0 as i64),
             owner: Set(account.owner.to_bytes_vec()),
-            lamports: Set(Decimal::from(account.lamports)),
+            lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
-            slot_updated: Set(account.slot_updated as i64),
-            seq: Set(account.seq.map(|s| s as i64)),
+            slot_updated: Set(account.slot_updated.0 as i64),
+            seq: Set(account.seq.map(|s| s.0 as i64)),
         });
 
         if let Some(token_data) = parse_token_data(account)? {
@@ -251,11 +251,11 @@ pub async fn persist_token_accounts(
                 hash: Set(hash.into()),
                 mint: Set(token_data.mint.to_bytes_vec()),
                 owner: Set(token_data.owner.to_bytes_vec()),
-                amount: Set(Decimal::from(token_data.amount)),
+                amount: Set(Decimal::from(token_data.amount.0)),
                 delegate: Set(token_data.delegate.map(|d| d.to_bytes_vec())),
                 state: Set(token_data.state as i32),
-                delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
-                is_native: Set(token_data.is_native.map(Decimal::from)),
+                delegated_amount: Set(Decimal::from(token_data.delegated_amount.0)),
+                is_native: Set(token_data.is_native.map(|x| Decimal::from(x.0))),
                 spent: Set(false),
             },
         )

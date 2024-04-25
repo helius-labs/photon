@@ -5,8 +5,11 @@ use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::{
     common::typedefs::{
-        account::Account, account::AccountData, bs64_string::Base64String, hash::Hash,
+        account::{Account, AccountData},
+        bs64_string::Base64String,
+        hash::Hash,
         serializable_pubkey::SerializablePubkey,
+        unsigned_integer::UnsignedInteger,
     },
     ingester::parser::{
         indexer_events::{CompressedAccountWithMerkleContext, PathNode},
@@ -105,21 +108,21 @@ fn parse_account_data(
     } = compressed_account;
 
     let data = data.map(|d| AccountData {
-        discriminator: LittleEndian::read_u64(&d.discriminator),
+        discriminator: UnsignedInteger(LittleEndian::read_u64(&d.discriminator)),
         data: Base64String(d.data),
         data_hash: Hash::from(d.data_hash),
     });
 
     Account {
         owner: owner.into(),
-        lamports,
+        lamports: UnsignedInteger(lamports),
         address: address.map(SerializablePubkey::from),
         data,
         hash: hash.into(),
-        slot_updated: slot,
-        leaf_index,
+        slot_updated: UnsignedInteger(slot),
+        leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
-        seq,
+        seq: seq.map(|s| UnsignedInteger(s)),
     }
 }
 

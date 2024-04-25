@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use crate::api::method::utils::slot_schema;
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
+
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 use super::method::get_compressed_account::AccountResponse;
 use super::method::get_compressed_balance_by_owner::{
@@ -190,7 +191,7 @@ impl PhotonApi {
         get_indexer_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
     }
 
-    pub async fn get_indexer_slot(&self) -> Result<u64, PhotonApiError> {
+    pub async fn get_indexer_slot(&self) -> Result<UnsignedInteger, PhotonApiError> {
         get_indexer_slot(self.db_conn.as_ref()).await
     }
 
@@ -288,7 +289,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedBalance".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: AccountBalanceResponse::adjusted_schema(),
+                response: AccountBalanceResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedBalanceByOwner".to_string(),
@@ -345,7 +346,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getIndexerSlot".to_string(),
                 request: None,
-                response: RefOr::T(slot_schema()),
+                response: UnsignedInteger::schema().1,
             },
         ]
     }
