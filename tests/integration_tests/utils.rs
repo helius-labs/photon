@@ -71,7 +71,6 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
             // We run migrations from fresh everytime for SQLite
             Migrator::fresh(db).await.unwrap();
         }
-
         *init = Some(())
     }
 }
