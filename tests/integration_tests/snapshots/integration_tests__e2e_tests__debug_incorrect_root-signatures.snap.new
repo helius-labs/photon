@@ -1,0 +1,30 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+assertion_line: 430
+expression: signatures
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "signature": "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe",
+        "slot": 0,
+        "blockTime": "1970-01-01T00:00:00Z"
+      },
+      {
+        "signature": "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe",
+        "slot": 0,
+        "blockTime": "1970-01-01T00:00:00Z"
+      },
+      {
+        "signature": "25AB4R2YwmRz4S4u455wYWbZBEH45MWsnmKJZpbdgfGnutZMu53eYq4kefU3AYK2tmLbXXBFy6LchxYqUQP9kL1k",
+        "slot": 0,
+        "blockTime": "1970-01-01T00:00:00Z"
+      }
+    ],
+    "cursor": null
+  }
+}
