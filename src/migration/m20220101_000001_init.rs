@@ -312,17 +312,11 @@ impl MigrationTrait for Migration {
                             .binary()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(AccountTransactions::Closure)
-                            .boolean()
-                            .not_null(),
-                    )
                     .primary_key(
                         Index::create()
                             .name("pk_account_transaction_history")
                             .col(AccountTransactions::Hash)
-                            .col(AccountTransactions::Signature)
-                            .col(AccountTransactions::Closure),
+                            .col(AccountTransactions::Signature),
                     )
                     .foreign_key(
                         ForeignKey::create()

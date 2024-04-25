@@ -1,6 +1,5 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
-assertion_line: 430
 expression: signatures
 ---
 {
@@ -9,11 +8,6 @@ expression: signatures
   },
   "value": {
     "items": [
-      {
-        "signature": "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe",
-        "slot": 0,
-        "blockTime": "1970-01-01T00:00:00Z"
-      },
       {
         "signature": "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe",
         "slot": 0,
