@@ -419,3 +419,94 @@ async fn test_debug_incorrect_root(
         }
     }
 }
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_debug_incorrect_root_v2(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    //     CompressTxn 4iwrzL2gexZSTAxyiGMDwhMwS3eHrUXgtFjRFeYD2RnUWg5uh2LhCJQdRLh1ieioBFGuhWtBbC1mv7xAjySGSVf2
+    // TransferTxn 4D2tDE2Sjv5vpccDQdQnDZztgwvvD6RUMHUCk7u3ov5NY9QrUjCMpcjAXcKQfTRr4G9yN9T8DaLRXeFV6wwYAQtX
+
+    let compress_tx =
+        "4iwrzL2gexZSTAxyiGMDwhMwS3eHrUXgtFjRFeYD2RnUWg5uh2LhCJQdRLh1ieioBFGuhWtBbC1mv7xAjySGSVf2";
+    let transfer_tx =
+        "4D2tDE2Sjv5vpccDQdQnDZztgwvvD6RUMHUCk7u3ov5NY9QrUjCMpcjAXcKQfTRr4G9yN9T8DaLRXeFV6wwYAQtX";
+
+    let payer_bukey = SerializablePubkey(
+        Pubkey::try_from("CTTAXk8M6Pyb251jPdg56ySFd893eQTbLcdjnFu5ZRWL").unwrap(),
+    );
+    let txs = [compress_tx, transfer_tx];
+
+    for tx_permutation in txs.iter().permutations(txs.len()) {
+        for individually in [true, false] {
+            reset_tables(&setup.db_conn).await.unwrap();
+
+            // HACK: We index a block so that API methods can fetch the current slot.
+            index_block(
+                &setup.db_conn,
+                &BlockInfo {
+                    metadata: BlockMetadata {
+                        slot: 0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+            match individually {
+                true => {
+                    for tx in tx_permutation.iter() {
+                        index_transaction(&setup, tx).await;
+                    }
+                }
+                false => {
+                    index_multiple_transactions(
+                        &setup,
+                        #[allow(suspicious_double_ref_op)]
+                        tx_permutation.iter().map(|x| *x.clone()).collect(),
+                    )
+                    .await;
+                }
+            }
+            let accounts = setup
+                .api
+                .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                    owner: payer_bukey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-accounts", name.clone()), accounts);
+            let proofs = setup
+                .api
+                .get_multiple_compressed_account_proofs(HashList(
+                    accounts
+                        .value
+                        .items
+                        .iter()
+                        .map(|x| x.hash.clone())
+                        .collect(),
+                ))
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+        }
+    }
+}

@@ -606,7 +606,11 @@ async fn test_load_test(
             // overwritten anyways. So the amortized number of writes will be in each tree
             // will be close to 1.
             path_nodes: (0..num_elements)
-                .map(|i| generate_random_leaf_index(tree, i as u32, i))
+                .map(|i| {
+                    let leaf = generate_random_leaf_index(tree, i as u32, i);
+                    let key = (leaf.tree.clone(), leaf.leaf_index.unwrap());
+                    (key, leaf)
+                })
                 .collect(),
             account_transactions: HashSet::new(),
         };

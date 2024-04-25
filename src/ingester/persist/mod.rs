@@ -60,14 +60,15 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting path nodes...");
-    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
+    for chunk in path_nodes
+        .into_values()
+        .collect::<Vec<_>>()
+        .chunks(MAX_SQL_INSERTS)
+    {
         persist_path_nodes(txn, chunk).await?;
     }
+    panic!("Bla bla");
 
-    debug!("Persisting path nodes...");
-    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
-        persist_path_nodes(txn, chunk).await?;
-    }
 
     let transactions: HashSet<Transaction> = account_transactions
         .iter()
