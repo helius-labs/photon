@@ -55,11 +55,7 @@ async fn index_block_metadatas(
                 Ok::<blocks::ActiveModel, IngesterError>(blocks::ActiveModel {
                     slot: Set(block.slot as i64),
                     parent_slot: Set(block.parent_slot as i64),
-                    block_time: Set(DateTime::from_timestamp(block.block_time, 0)
-                        .ok_or(IngesterError::ParserError(
-                            "Failed to convert timestamp".to_string(),
-                        ))?
-                        .into()),
+                    block_time: Set(block.block_time),
                     blockhash: Set(block.blockhash.clone().into()),
                     parent_blockhash: Set(block.parent_blockhash.clone().into()),
                     block_height: Set(block.block_height as i64),

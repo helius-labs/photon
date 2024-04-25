@@ -282,8 +282,6 @@ async fn test_compress_lamports(
 async fn test_index_block_metadata(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use sqlx::types::chrono::DateTime;
-
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -319,10 +317,7 @@ async fn test_index_block_metadata(
         "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
     );
     assert_eq!(block_model.block_height, 234724352);
-    assert_eq!(
-        block_model.block_time,
-        DateTime::from_timestamp(1710441678, 0).unwrap()
-    );
+    assert_eq!(block_model.block_time, 1710441678);
 
     // Verify that we don't get an error if we try to index the same block again
     index_block(&setup.db_conn, &block).await.unwrap();

@@ -11,7 +11,7 @@ pub struct Model {
     pub parent_blockhash: Vec<u8>,
     pub blockhash: Vec<u8>,
     pub block_height: i64,
-    pub block_time: DateTimeWithTimeZone,
+    pub block_time: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
