@@ -67,8 +67,6 @@ pub async fn persist_state_update(
     {
         persist_path_nodes(txn, chunk).await?;
     }
-    panic!("Bla bla");
-
 
     let transactions: HashSet<Transaction> = account_transactions
         .iter()
@@ -313,7 +311,9 @@ async fn persist_path_nodes(
         )
         .build(txn.get_database_backend());
     query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
-    txn.execute(query).await?;
+    txn.execute(query).await.map_err(|e| {
+        IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
+    })?;
 
     Ok(())
 }

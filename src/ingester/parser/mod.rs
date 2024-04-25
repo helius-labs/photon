@@ -192,21 +192,22 @@ fn parse_public_transaction_event(
         state_update.out_accounts.push(enriched_account);
     }
 
-    for (path, leaf_index) in path_updates
+    for ((path_index, path), leaf_index) in path_updates
         .into_iter()
+        .enumerate()
         .zip(transaction_event.output_leaf_indices)
     {
         for (i, node) in path.path.iter().enumerate() {
             state_update.path_nodes.insert(
-                (node.node, leaf_index),
+                (path.tree, node.index),
                 EnrichedPathNode {
                     node: node.clone(),
                     slot,
                     tree: path.tree,
-                    seq: path.seq,
+                    seq: path.seq + path_index as u64,
                     level: i,
                     tree_depth: path.path.len(),
-                    leaf_index: Some(leaf_index),
+                    leaf_index: if i == 0 { Some(leaf_index) } else { None },
                 },
             );
         }
