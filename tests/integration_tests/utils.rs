@@ -70,7 +70,6 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
         if db.get_database_backend() == DbBackend::Postgres {
             // We run migrations from fresh everytime for SQLite
             Migrator::fresh(db).await.unwrap();
-            panic!("bla bla");
         }
 
         *init = Some(())
