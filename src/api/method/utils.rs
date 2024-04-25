@@ -557,7 +557,7 @@ pub async fn search_for_signatures(
 
     let raw_sql = format!(
         "
-        SELECT transactions.signature, transactions.slot, blocks.block_time
+        SELECT DISTINCT transactions.signature, transactions.slot, blocks.block_time
         FROM account_transactions
         JOIN transactions ON account_transactions.signature = transactions.signature
         JOIN blocks ON transactions.slot = blocks.slot

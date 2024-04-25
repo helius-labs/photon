@@ -552,6 +552,8 @@ async fn test_persist_token_data(
 async fn test_load_test(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use std::collections::HashSet;
+
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
@@ -606,7 +608,7 @@ async fn test_load_test(
             path_nodes: (0..num_elements)
                 .map(|i| generate_random_leaf_index(tree, i as u32, i))
                 .collect(),
-            account_transactions: vec![],
+            account_transactions: HashSet::new(),
         };
         persist_state_update(&txn, state_update).await.unwrap();
         txn.commit().await.unwrap();

@@ -86,6 +86,7 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting account transactions...");
+    let account_transactions = account_transactions.into_iter().collect::<Vec<_>>();
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
@@ -354,7 +355,6 @@ async fn persist_account_transactions(
         .map(|transaction| account_transactions::ActiveModel {
             hash: Set(transaction.hash.to_vec()),
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
-            closure: Set(transaction.closure),
         })
         .collect::<Vec<_>>();
 
@@ -367,7 +367,6 @@ async fn persist_account_transactions(
                 OnConflict::columns([
                     account_transactions::Column::Hash,
                     account_transactions::Column::Signature,
-                    account_transactions::Column::Closure,
                 ])
                 .do_nothing()
                 .to_owned(),

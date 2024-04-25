@@ -31,10 +31,10 @@ pub struct Transaction {
     pub slot: u64,
 }
 
+#[derive(Hash, PartialEq, Eq)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
-    pub closure: bool,
     pub slot: u64,
 }
 
@@ -44,7 +44,7 @@ pub struct StateUpdate {
     pub in_accounts: Vec<Account>,
     pub out_accounts: Vec<Account>,
     pub path_nodes: Vec<EnrichedPathNode>,
-    pub account_transactions: Vec<AccountTransaction>,
+    pub account_transactions: HashSet<AccountTransaction>,
 }
 
 impl StateUpdate {

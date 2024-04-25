@@ -216,7 +216,6 @@ fn parse_public_transaction_event(
         .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
             hash: a.hash.clone(),
             signature: tx,
-            closure: true,
             slot,
         }));
 
@@ -229,7 +228,6 @@ fn parse_public_transaction_event(
                 .map(|a| AccountTransaction {
                     hash: a.hash.clone(),
                     signature: tx,
-                    closure: false,
                     slot,
                 }),
         );
