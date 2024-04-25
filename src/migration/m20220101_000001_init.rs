@@ -5,7 +5,9 @@ use sea_orm_migration::{
 
 use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
 
-use super::model::table::{AccountTransactions, Blocks, Transactions};
+use super::model::table::{
+    AccountTransactions, Blocks, OwnerBalances, TokenOwnerBalances, Transactions,
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -163,6 +165,42 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_table(
+                Table::create()
+                    .table(OwnerBalances::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(OwnerBalances::Owner).binary().not_null())
+                    .primary_key(
+                        Index::create()
+                            .name("pk_owner_balances")
+                            .col(OwnerBalances::Owner),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(TokenOwnerBalances::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(TokenOwnerBalances::Owner)
+                            .binary()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(TokenOwnerBalances::Mint).binary().not_null())
+                    .primary_key(
+                        Index::create()
+                            .name("pk_token_owner_balances")
+                            .col(TokenOwnerBalances::Owner)
+                            .col(TokenOwnerBalances::Mint),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
         match manager.get_database_backend() {
             DatabaseBackend::Postgres => {
                 execute_sql(
@@ -194,6 +232,18 @@ impl MigrationTrait for Migration {
                     "ALTER TABLE token_accounts ADD COLUMN delegated_amount uint64_t NOT NULL;",
                 )
                 .await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE owner_balances ADD COLUMN lamports uint64_t NOT NULL;",
+                )
+                .await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE token_owner_balances ADD COLUMN amount uint64_t NOT NULL;",
+                )
+                .await?;
             }
             DatabaseBackend::Sqlite => {
                 // HACK: SQLx Decimal is not compatible with INTEGER so we use REAL instead.
@@ -218,6 +268,18 @@ impl MigrationTrait for Migration {
                 execute_sql(
                     manager,
                     "ALTER TABLE token_accounts ADD COLUMN delegated_amount REAL;",
+                )
+                .await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE owner_balances ADD COLUMN lamports REAL;",
+                )
+                .await?;
+
+                execute_sql(
+                    manager,
+                    "ALTER TABLE token_owner_balances ADD COLUMN amount REAL;",
                 )
                 .await?;
             }

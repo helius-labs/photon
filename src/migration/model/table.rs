@@ -63,3 +63,16 @@ pub enum AccountTransactions {
     Signature,
     Closure,
 }
+
+#[derive(Copy, Clone, Iden)]
+pub enum OwnerBalances {
+    Table,
+    Owner,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum TokenOwnerBalances {
+    Table,
+    Owner,
+    Mint,
+}

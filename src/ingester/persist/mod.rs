@@ -16,7 +16,8 @@ use crate::{
 use borsh::BorshDeserialize;
 use log::debug;
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
+    sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, FromQueryResult,
+    QueryTrait, Set, Statement,
 };
 
 use error::IngesterError;
@@ -125,23 +126,23 @@ async fn spend_input_accounts(
         })
         .collect();
 
-    if !in_account_models.is_empty() {
-        accounts::Entity::insert_many(in_account_models)
-            .on_conflict(
-                OnConflict::column(accounts::Column::Hash)
-                    .update_columns([
-                        accounts::Column::Hash,
-                        accounts::Column::Data,
-                        accounts::Column::Lamports,
-                        accounts::Column::Spent,
-                        accounts::Column::SlotUpdated,
-                        accounts::Column::Tree,
-                    ])
-                    .to_owned(),
-            )
-            .exec(txn)
-            .await?;
-    }
+    let mut query = accounts::Entity::insert_many(in_account_models)
+        .on_conflict(
+            OnConflict::column(accounts::Column::Hash)
+                .update_columns([
+                    accounts::Column::Hash,
+                    accounts::Column::Data,
+                    accounts::Column::Lamports,
+                    accounts::Column::Spent,
+                    accounts::Column::SlotUpdated,
+                    accounts::Column::Tree,
+                ])
+                .to_owned(),
+        )
+        .exec(txn)
+        .await?;
+    let hashes = execute_on_conflict_query_and_return_modified_hashes(txn, query).await?;
+
     let mut token_models = Vec::new();
     for in_accounts in in_accounts {
         let token_data = parse_token_data(in_accounts)?;
@@ -180,6 +181,24 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
+}
+
+async fn execute_on_conflict_query_and_return_modified_hashes(
+    txn: &DatabaseTransaction,
+    query: Statement,
+) -> Result<HashSet<Hash>, IngesterError> {
+    let result = txn.query_all(query).await.map_err(|e| {
+        IngesterError::DatabaseError(format!("Got error appending accounts {}", e.to_string()))
+    })?;
+
+    let mut modified_hashes = HashSet::new();
+    for row in result {
+        let hash: Vec<u8> = row.try_get("", "hash")?;
+        modified_hashes.insert(Hash::try_from(hash).map_err(|_| {
+            IngesterError::DatabaseError("Failed to parse hash from database".to_string())
+        })?);
+    }
+    Ok(modified_hashes)
 }
 
 async fn append_output_accounts(
@@ -223,14 +242,21 @@ async fn append_output_accounts(
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
     if !out_accounts.is_empty() {
-        let query = accounts::Entity::insert_many(account_models)
+        let mut query = accounts::Entity::insert_many(account_models)
             .on_conflict(
                 OnConflict::column(accounts::Column::Hash)
                     .do_nothing()
                     .to_owned(),
             )
             .build(txn.get_database_backend());
-        txn.execute(query).await?;
+        query.sql = format!("{} RETURNING hash", query.sql);
+
+        let hashes = execute_on_conflict_query_and_return_modified_hashes(txn, query).await?;
+        let out_accounts_modified = out_accounts
+            .iter()
+            .filter(|account| hashes.contains(&account.hash))
+            .count();
+
         if !token_accounts.is_empty() {
             debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;

@@ -1,5 +1,5 @@
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::accounts;
+use crate::dao::generated::{accounts, owner_balances};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -21,14 +21,10 @@ pub async fn get_compressed_balance_by_owner(
     let context = Context::extract(conn).await?;
     let owner = request.owner;
 
-    let balances = accounts::Entity::find()
+    let balances = owner_balances::Entity::find()
         .select_only()
-        .column(accounts::Column::Lamports)
-        .filter(
-            accounts::Column::Owner
-                .eq::<Vec<u8>>(owner.into())
-                .and(accounts::Column::Spent.eq(false)),
-        )
+        .column(owner_balances::Column::Lamports)
+        .filter(owner_balances::Column::Owner.eq::<Vec<u8>>(owner.into()))
         .into_model::<LamportModel>()
         .all(conn)
         .await?
@@ -37,6 +33,12 @@ pub async fn get_compressed_balance_by_owner(
         .collect::<Result<Vec<u64>, PhotonApiError>>()?;
 
     let total_balance = balances.iter().sum::<u64>();
+    if total_balance == 0 {
+        return Err(PhotonApiError::RecordNotFound(format!(
+            "No balance found for owner: {}",
+            owner
+        )));
+    }
 
     Ok(AccountBalanceResponse {
         value: total_balance,
