@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use borsh::BorshDeserialize;
 use byteorder::{ByteOrder, LittleEndian};
 use log::debug;
