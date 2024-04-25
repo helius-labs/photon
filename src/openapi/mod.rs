@@ -6,7 +6,7 @@ use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList
 use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
-use crate::api::method::get_transaction::AccountWithOptionalTokenData;
+use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;

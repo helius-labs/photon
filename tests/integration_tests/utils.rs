@@ -60,7 +60,6 @@ fn setup_logging() {
 }
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
-    std::env::set_var("INIT_FILE_PATH", "../init.sql");
     Migrator::fresh(db).await.unwrap();
 }
 
@@ -68,9 +67,9 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
     let mut init = INIT.lock().unwrap();
     if init.is_none() {
         setup_logging();
-        if db.get_database_backend() != DbBackend::Sqlite {
+        if db.get_database_backend() == DbBackend::Postgres {
             // We run migrations from fresh everytime for SQLite
-            run_migrations_from_fresh(db).await;
+            Migrator::fresh(db).await.unwrap();
         }
         *init = Some(())
     }

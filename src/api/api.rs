@@ -15,20 +15,20 @@ use super::method::get_compressed_token_balances_by_owner::{
     get_compressed_token_balances_by_owner, GetCompressedTokenBalancesByOwner,
     TokenBalancesResponse,
 };
-use super::method::get_signatures_for_address::{
-    get_signatures_for_address, GetSignaturesForAddressRequest,
+use super::method::get_compression_signatures_for_account::{
+    get_compression_signatures_for_account, GetCompressionSignaturesForAccountResponse,
 };
-use super::method::get_signatures_for_compressed_account::{
-    get_signatures_for_compressed_account, GetSignaturesForCompressedAccountResponse,
+use super::method::get_compression_signatures_for_address::{
+    get_compression_signatures_for_address, GetCompressionSignaturesForAddressRequest,
 };
-use super::method::get_signatures_for_owner::{
-    get_signatures_for_owner, GetSignaturesForOwnerRequest,
+use super::method::get_compression_signatures_for_owner::{
+    get_compression_signatures_for_owner, GetCompressionSignaturesForOwnerRequest,
 };
-use super::method::get_signatures_for_token_owner::{
-    get_signatures_for_token_owner, GetSignaturesForTokenOwnerRequest,
+use super::method::get_compression_signatures_for_token_owner::{
+    get_compression_signatures_for_token_owner, GetCompressionSignaturesForTokenOwnerRequest,
 };
-use super::method::get_transaction::{
-    get_transaction, GetTransactionRequest, GetTransactionResponse,
+use super::method::get_transaction_with_compression_info::{
+    get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
 use super::{
@@ -48,7 +48,8 @@ use super::{
         },
         get_compressed_token_accounts_by_delegate::get_compressed_account_token_accounts_by_delegate,
         get_compressed_token_accounts_by_owner::get_compressed_token_accounts_by_owner,
-        get_health::get_health,
+        get_indexer_health::get_indexer_health,
+        get_indexer_slot::get_indexer_slot,
         get_multiple_compressed_account_proofs::{
             get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse,
             HashList,
@@ -57,7 +58,6 @@ use super::{
             get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
             GetMultipleCompressedAccountsResponse,
         },
-        get_slot::get_slot,
         utils::{
             CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
             GetCompressedTokenAccountsByOwner, TokenAccountListResponse,
@@ -186,12 +186,12 @@ impl PhotonApi {
         get_compressed_balance(&self.db_conn, request).await
     }
 
-    pub async fn get_health(&self) -> Result<String, PhotonApiError> {
-        get_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
+    pub async fn get_indexer_health(&self) -> Result<String, PhotonApiError> {
+        get_indexer_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
     }
 
-    pub async fn get_slot(&self) -> Result<u64, PhotonApiError> {
-        get_slot(self.db_conn.as_ref()).await
+    pub async fn get_indexer_slot(&self) -> Result<u64, PhotonApiError> {
+        get_indexer_slot(self.db_conn.as_ref()).await
     }
 
     pub async fn get_compressed_accounts_by_owner(
@@ -208,39 +208,39 @@ impl PhotonApi {
         get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_signatures_for_compressed_account(
+    pub async fn get_compression_signatures_for_account(
         &self,
         request: HashRequest,
-    ) -> Result<GetSignaturesForCompressedAccountResponse, PhotonApiError> {
-        get_signatures_for_compressed_account(self.db_conn.as_ref(), request).await
+    ) -> Result<GetCompressionSignaturesForAccountResponse, PhotonApiError> {
+        get_compression_signatures_for_account(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_signatures_for_address(
+    pub async fn get_compression_signatures_for_address(
         &self,
-        request: GetSignaturesForAddressRequest,
+        request: GetCompressionSignaturesForAddressRequest,
     ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
-        get_signatures_for_address(self.db_conn.as_ref(), request).await
+        get_compression_signatures_for_address(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_signatures_for_owner(
+    pub async fn get_compression_signatures_for_owner(
         &self,
-        request: GetSignaturesForOwnerRequest,
+        request: GetCompressionSignaturesForOwnerRequest,
     ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
-        get_signatures_for_owner(self.db_conn.as_ref(), request).await
+        get_compression_signatures_for_owner(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_signatures_for_token_owner(
+    pub async fn get_compression_signatures_for_token_owner(
         &self,
-        request: GetSignaturesForTokenOwnerRequest,
+        request: GetCompressionSignaturesForTokenOwnerRequest,
     ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
-        get_signatures_for_token_owner(self.db_conn.as_ref(), request).await
+        get_compression_signatures_for_token_owner(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_transaction(
+    pub async fn get_transaction_with_compression_info(
         &self,
         request: GetTransactionRequest,
     ) -> Result<GetTransactionResponse, PhotonApiError> {
-        get_transaction(self.rpc_client.as_ref(), request).await
+        get_transaction_with_compression_info(self.rpc_client.as_ref(), request).await
     }
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
@@ -301,37 +301,37 @@ impl PhotonApi {
                 response: TokenBalancesResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getSignaturesForCompressedAccount".to_string(),
+                name: "getCompressionSignaturesForAccount".to_string(),
                 request: Some(HashRequest::schema().1),
-                response: GetSignaturesForCompressedAccountResponse::schema().1,
+                response: GetCompressionSignaturesForAccountResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getTransaction".to_string(),
+                name: "getTransactionWithCompressionInfo".to_string(),
                 request: Some(GetTransactionRequest::schema().1),
                 response: GetTransactionResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getSignaturesForCompressedAccount".to_string(),
+                name: "getCompressionSignaturesForAccount".to_string(),
                 request: Some(HashRequest::schema().1),
-                response: GetSignaturesForCompressedAccountResponse::schema().1,
+                response: GetCompressionSignaturesForAccountResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getSignaturesForAddress".to_string(),
-                request: Some(GetSignaturesForAddressRequest::schema().1),
+                name: "getCompressionSignaturesForAddress".to_string(),
+                request: Some(GetCompressionSignaturesForAddressRequest::schema().1),
                 response: GetPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getSignaturesForOwner".to_string(),
-                request: Some(GetSignaturesForOwnerRequest::schema().1),
+                name: "getCompressionSignaturesForOwner".to_string(),
+                request: Some(GetCompressionSignaturesForOwnerRequest::schema().1),
                 response: GetPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getSignaturesForTokenOwner".to_string(),
-                request: Some(GetSignaturesForTokenOwnerRequest::schema().1),
+                name: "getCompressionSignaturesForTokenOwner".to_string(),
+                request: Some(GetCompressionSignaturesForTokenOwnerRequest::schema().1),
                 response: GetPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getHealth".to_string(),
+                name: "getIndexerHealth".to_string(),
                 request: None,
                 response: RefOr::T(Schema::Object(
                     ObjectBuilder::new()
@@ -343,7 +343,7 @@ impl PhotonApi {
                 )),
             },
             OpenApiSpec {
-                name: "getSlot".to_string(),
+                name: "getIndexerSlot".to_string(),
                 request: None,
                 response: RefOr::T(slot_schema()),
             },

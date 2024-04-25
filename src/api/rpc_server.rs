@@ -171,14 +171,18 @@ fn build_rpc_module(
         },
     )?;
 
-    module.register_async_method("getHealth", |_rpc_params, rpc_context| async move {
-        rpc_context.api.get_health().await.map_err(Into::into)
+    module.register_async_method("getIndexerHealth", |_rpc_params, rpc_context| async move {
+        rpc_context
+            .api
+            .get_indexer_health()
+            .await
+            .map_err(Into::into)
     })?;
 
-    module.register_async_method("getSlot", |_rpc_params, rpc_context| async move {
+    module.register_async_method("getIndexerSlot", |_rpc_params, rpc_context| async move {
         let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
         conditionally_index_latest_blocks(indexer).await;
-        api.get_slot().await.map_err(Into::into)
+        api.get_indexer_slot().await.map_err(Into::into)
     })?;
 
     module.register_async_method(
@@ -206,59 +210,64 @@ fn build_rpc_module(
     )?;
 
     module.register_async_method(
-        "getSignaturesForCompressedAccount",
+        "getCompressionSignaturesForAccount",
         |rpc_params, rpc_context| async move {
             let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
             conditionally_index_latest_blocks(indexer).await;
             let payload = rpc_params.parse()?;
-            api.get_signatures_for_compressed_account(payload)
+            api.get_compression_signatures_for_account(payload)
                 .await
                 .map_err(Into::into)
         },
     )?;
 
     module.register_async_method(
-        "getSignaturesForAddress",
+        "getCompressionSignaturesForAddress",
         |rpc_params, rpc_context| async move {
             let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
             conditionally_index_latest_blocks(indexer).await;
             let payload = rpc_params.parse()?;
-            api.get_signatures_for_address(payload)
+            api.get_compression_signatures_for_address(payload)
                 .await
                 .map_err(Into::into)
         },
     )?;
 
     module.register_async_method(
-        "getSignaturesForOwner",
+        "getCompressionSignaturesForOwner",
         |rpc_params, rpc_context| async move {
             let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
             conditionally_index_latest_blocks(indexer).await;
             let payload = rpc_params.parse()?;
-            api.get_signatures_for_owner(payload)
+            api.get_compression_signatures_for_owner(payload)
                 .await
                 .map_err(Into::into)
         },
     )?;
 
     module.register_async_method(
-        "getSignaturesForTokenOwner",
+        "getCompressionSignaturesForTokenOwner",
         |rpc_params, rpc_context| async move {
             let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
             conditionally_index_latest_blocks(indexer).await;
             let payload = rpc_params.parse()?;
-            api.get_signatures_for_token_owner(payload)
+            api.get_compression_signatures_for_token_owner(payload)
                 .await
                 .map_err(Into::into)
         },
     )?;
 
-    module.register_async_method("getTransaction", |rpc_params, rpc_context| async move {
-        let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-        conditionally_index_latest_blocks(indexer).await;
-        let payload = rpc_params.parse()?;
-        api.get_transaction(payload).await.map_err(Into::into)
-    })?;
+    module.register_async_method(
+        "getTransactionWithCompressionInfo",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_transaction_with_compression_info(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
 
     Ok(module)
 }

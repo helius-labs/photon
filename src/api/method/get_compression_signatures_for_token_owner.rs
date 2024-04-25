@@ -12,15 +12,15 @@ use super::{
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct GetSignaturesForTokenOwnerRequest {
+pub struct GetCompressionSignaturesForTokenOwnerRequest {
     pub owner: SerializablePubkey,
     pub limit: Option<Limit>,
     pub cursor: Option<String>,
 }
 
-pub async fn get_signatures_for_token_owner(
+pub async fn get_compression_signatures_for_token_owner(
     conn: &DatabaseConnection,
-    request: GetSignaturesForTokenOwnerRequest,
+    request: GetCompressionSignaturesForTokenOwnerRequest,
 ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 

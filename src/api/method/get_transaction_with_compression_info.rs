@@ -148,7 +148,7 @@ pub fn get_transaction_helper(
     })
 }
 
-pub async fn get_transaction(
+pub async fn get_transaction_with_compression_info(
     rpc_client: &RpcClient,
     request: GetTransactionRequest,
 ) -> Result<GetTransactionResponse, PhotonApiError> {

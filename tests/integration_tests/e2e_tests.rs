@@ -1,7 +1,7 @@
 use function_name::named;
 use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::api::method::get_transaction::get_transaction_helper;
+use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_sdk::pubkey::Pubkey;
@@ -28,8 +28,8 @@ async fn test_e2e_mint_and_transfer(
 
     use photon_indexer::{
         api::method::{
-            get_multiple_compressed_account_proofs::HashList,
-            get_signatures_for_token_owner::GetSignaturesForTokenOwnerRequest, utils::Limit,
+            get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
+            get_multiple_compressed_account_proofs::HashList, utils::Limit,
         },
         common::typedefs::serializable_signature::SerializableSignature,
     };
@@ -107,11 +107,13 @@ async fn test_e2e_mint_and_transfer(
             loop {
                 let res = setup
                     .api
-                    .get_signatures_for_token_owner(GetSignaturesForTokenOwnerRequest {
-                        owner: pubkey.clone(),
-                        cursor,
-                        limit: Some(limit.clone()),
-                    })
+                    .get_compression_signatures_for_token_owner(
+                        GetCompressionSignaturesForTokenOwnerRequest {
+                            owner: pubkey.clone(),
+                            cursor,
+                            limit: Some(limit.clone()),
+                        },
+                    )
                     .await
                     .unwrap()
                     .value;
@@ -132,7 +134,7 @@ async fn test_e2e_mint_and_transfer(
         let txn = cached_fetch_transaction(&setup, txn_signature).await;
         let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
         // Test get transaction
-        let parsed_transaction: photon_indexer::api::method::get_transaction::GetTransactionResponse = get_transaction_helper(txn_signature, txn).unwrap();
+        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(txn_signature, txn).unwrap();
         assert_json_snapshot!(
             format!("{}-{}-transaction", name.clone(), txn_name),
             parsed_transaction
@@ -148,7 +150,7 @@ async fn test_e2e_lamport_transfer(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::{
-        get_signatures_for_owner::GetSignaturesForOwnerRequest,
+        get_compression_signatures_for_owner::GetCompressionSignaturesForOwnerRequest,
         utils::{HashRequest, Limit},
     };
 
@@ -196,7 +198,7 @@ async fn test_e2e_lamport_transfer(
     let hash = accounts.value.items[0].hash.clone();
     let signatures = setup
         .api
-        .get_signatures_for_compressed_account(HashRequest { hash })
+        .get_compression_signatures_for_account(HashRequest { hash })
         .await
         .unwrap();
     assert_json_snapshot!(format!("{}-signatures", name.clone()), signatures);
@@ -206,7 +208,7 @@ async fn test_e2e_lamport_transfer(
     loop {
         let res = setup
             .api
-            .get_signatures_for_owner(GetSignaturesForOwnerRequest {
+            .get_compression_signatures_for_owner(GetCompressionSignaturesForOwnerRequest {
                 owner: bob_pubkey.clone(),
                 cursor,
                 limit: Some(Limit::new(10).unwrap()),
@@ -280,8 +282,6 @@ async fn test_compress_lamports(
 async fn test_index_block_metadata(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use sqlx::types::chrono::DateTime;
-
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -317,19 +317,16 @@ async fn test_index_block_metadata(
         "5GG5pzTbH6KgZM54M9XWfBNmBupQuZXdQxoZRRQXHcpM"
     );
     assert_eq!(block_model.block_height, 234724352);
-    assert_eq!(
-        block_model.block_time,
-        DateTime::from_timestamp(1710441678, 0).unwrap()
-    );
+    assert_eq!(block_model.block_time, 1710441678);
 
     // Verify that we don't get an error if we try to index the same block again
     index_block(&setup.db_conn, &block).await.unwrap();
-    assert_eq!(setup.api.get_slot().await.unwrap(), slot);
+    assert_eq!(setup.api.get_indexer_slot().await.unwrap(), slot);
 
-    // Verify that get_slot() gets updated a new block is indexed.
+    // Verify that get_indexer_slot() gets updated a new block is indexed.
     let block = cached_fetch_block(&setup, slot + 1).await;
     index_block(&setup.db_conn, &block).await.unwrap();
-    assert_eq!(setup.api.get_slot().await.unwrap(), slot + 1);
+    assert_eq!(setup.api.get_indexer_slot().await.unwrap(), slot + 1);
 }
 
 #[named]
@@ -419,7 +416,7 @@ async fn test_debug_incorrect_root(
 
             let signatures = setup
                 .api
-                .get_signatures_for_owner(photon_indexer::api::method::get_signatures_for_owner::GetSignaturesForOwnerRequest {
+                .get_compression_signatures_for_owner(photon_indexer::api::method::get_compression_signatures_for_owner::GetCompressionSignaturesForOwnerRequest {
                     owner: payer_pubkey.clone(),
                     ..Default::default()
                 })

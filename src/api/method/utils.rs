@@ -16,7 +16,7 @@ use sea_orm::{
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Number;
 use solana_sdk::signature::Signature;
-use sqlx::types::chrono::{DateTime, FixedOffset};
+
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -453,14 +453,14 @@ pub struct HashRequest {
 pub struct SignatureInfo {
     pub signature: SerializableSignature,
     pub slot: u64,
-    pub block_time: DateTime<FixedOffset>,
+    pub block_time: i64,
 }
 
 #[derive(FromQueryResult)]
 pub struct SignatureInfoModel {
     pub signature: Vec<u8>,
     pub slot: i64,
-    pub block_time: DateTime<FixedOffset>,
+    pub block_time: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]

@@ -6,6 +6,6 @@ expression: signatures
   {
     "signature": "4iXfgDbgAEQU8hcto67feZsNHxFGm3JKKo97zDgnT84VAUTTjiSCEyi1ZSMFdiybS5XmRHy3nW1qDtKkTPEBpsV9",
     "slot": 0,
-    "blockTime": "1970-01-01T00:00:00Z"
+    "blockTime": 0
   }
 ]
