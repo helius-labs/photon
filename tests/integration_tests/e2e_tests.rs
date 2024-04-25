@@ -356,7 +356,7 @@ async fn test_debug_incorrect_root(
     let transfer_tx =
         "53YSD72HvhH2imD2N2FqdUwknEp8gYzPbtKzUjMCkR9AbDMdG4zvmpKMuXuJLaQ8oPrbLfT2TdddzsREw2PCVUYe";
 
-    let payer_bukey = SerializablePubkey(
+    let payer_pubkey = SerializablePubkey(
         Pubkey::try_from("4Vuk7ucQkkKbbF9mr7FoAq3tf5KbPsm1y436zg368L9U").unwrap(),
     );
     let txs = [compress_tx, transfer_tx];
@@ -397,7 +397,7 @@ async fn test_debug_incorrect_root(
             let accounts = setup
                 .api
                 .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                    owner: payer_bukey,
+                    owner: payer_pubkey,
                     ..Default::default()
                 })
                 .await
@@ -416,6 +416,16 @@ async fn test_debug_incorrect_root(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+
+            let signatures = setup
+                .api
+                .get_signatures_for_owner(photon_indexer::api::method::get_signatures_for_owner::GetSignaturesForOwnerRequest {
+                    owner: payer_pubkey.clone(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-signatures", name.clone()), signatures);
         }
     }
 }

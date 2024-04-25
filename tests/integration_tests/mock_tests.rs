@@ -552,6 +552,8 @@ async fn test_persist_token_data(
 async fn test_load_test(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use std::collections::HashSet;
+
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
 
@@ -604,9 +606,13 @@ async fn test_load_test(
             // overwritten anyways. So the amortized number of writes will be in each tree
             // will be close to 1.
             path_nodes: (0..num_elements)
-                .map(|i| generate_random_leaf_index(tree, i as u32, i))
+                .map(|i| {
+                    let leaf = generate_random_leaf_index(tree, i as u32, i);
+                    let key = (leaf.tree.clone(), leaf.leaf_index.unwrap());
+                    (key, leaf)
+                })
                 .collect(),
-            account_transactions: vec![],
+            account_transactions: HashSet::new(),
         };
         persist_state_update(&txn, state_update).await.unwrap();
         txn.commit().await.unwrap();

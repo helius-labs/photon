@@ -61,5 +61,4 @@ pub enum AccountTransactions {
     Table,
     Hash,
     Signature,
-    Closure,
 }

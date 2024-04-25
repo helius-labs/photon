@@ -190,33 +190,32 @@ fn parse_public_transaction_event(
         state_update.out_accounts.push(enriched_account);
     }
 
-    state_update.path_nodes.extend(
-        path_updates
-            .into_iter()
-            .zip(transaction_event.output_leaf_indices)
-            .flat_map(|(p, leaf_idx)| {
-                let tree_height = p.path.len();
-                p.path
-                    .into_iter()
-                    .enumerate()
-                    .map(move |(i, node)| EnrichedPathNode {
-                        node: node.clone(),
-                        slot,
-                        tree: p.tree,
-                        seq: p.seq,
-                        level: i,
-                        tree_depth: tree_height,
-                        leaf_index: if i == 0 { Some(leaf_idx) } else { None },
-                    })
-            }),
-    );
+    for ((path_index, path), leaf_index) in path_updates
+        .into_iter()
+        .enumerate()
+        .zip(transaction_event.output_leaf_indices)
+    {
+        for (i, node) in path.path.iter().enumerate() {
+            state_update.path_nodes.insert(
+                (path.tree, node.index),
+                EnrichedPathNode {
+                    node: node.clone(),
+                    slot,
+                    tree: path.tree,
+                    seq: path.seq + path_index as u64,
+                    level: i,
+                    tree_depth: path.path.len(),
+                    leaf_index: if i == 0 { Some(leaf_index) } else { None },
+                },
+            );
+        }
+    }
 
     state_update
         .account_transactions
         .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
             hash: a.hash.clone(),
             signature: tx,
-            closure: true,
             slot,
         }));
 
@@ -229,7 +228,6 @@ fn parse_public_transaction_event(
                 .map(|a| AccountTransaction {
                     hash: a.hash.clone(),
                     signature: tx,
-                    closure: false,
                     slot,
                 }),
         );
