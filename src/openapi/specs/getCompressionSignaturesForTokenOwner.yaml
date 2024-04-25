@@ -4,12 +4,12 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.12.0
+  version: 0.15.0
 servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressionSignaturesForOwner
+    summary: getCompressionSignaturesForTokenOwner
     post:
       requestBody:
         content:
@@ -36,7 +36,7 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressionSignaturesForOwner
+                  - getCompressionSignaturesForTokenOwner
                 params:
                   type: object
                   required:
@@ -225,7 +225,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111EgVWUh8o98knojjwqGKqVGFkQ9m5AxqKkj
+      example: 1111111FVAiSujNZVgYSc27t6zUTWoKfAGxbRzzPR
     Limit:
       type: integer
       format: int64
@@ -283,8 +283,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
-      example: 1111111EH9uVaqWRxHuzJbroqzX18yxmeW8TjFVSP
+      default: 1111111F5q7ToS5rKDfdAt2rgf9yPXY2f21tCRA55
+      example: 1111111F5q7ToS5rKDfdAt2rgf9yPXY2f21tCRA55
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
@@ -298,8 +298,8 @@ components:
       - blockTime
       properties:
         blockTime:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
         signature:
           $ref: '#/components/schemas/SerializableSignature'
         slot:
