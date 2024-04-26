@@ -3,7 +3,7 @@ use num_enum::TryFromPrimitive;
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use super::{serializable_pubkey::SerializablePubkey, unsigned_integer::UnsignedInteger};
+use super::serializable_pubkey::SerializablePubkey;
 
 #[derive(
     Clone,
@@ -29,6 +29,8 @@ pub enum AccountState {
     frozen,
 }
 
+
+
 #[derive(
     Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default,
 )]
@@ -39,7 +41,7 @@ pub struct TokenData {
     /// The owner of this account.
     pub owner: SerializablePubkey,
     /// The amount of tokens this account holds.
-    pub amount: UnsignedInteger,
+    pub amount: u64,
     /// If `delegate` is `Some` then `delegated_amount` represents
     /// the amount authorized by the delegate
     pub delegate: Option<SerializablePubkey>,
@@ -49,10 +51,10 @@ pub struct TokenData {
     /// reserve. An Account is required to be rent-exempt, so the value is
     /// used by the Processor to ensure that wrapped SOL accounts do not
     /// drop below this threshold.
-    pub is_native: Option<UnsignedInteger>,
+    pub is_native: Option<u64>,
     /// The amount delegated
-    pub delegated_amount: UnsignedInteger, // TODO: make instruction data optional
-                                           // TODO: validate that we don't need close authority
-                                           // /// Optional authority to close the account.
-                                           // pub close_authority: Option<Pubkey>,
+    pub delegated_amount: u64, // TODO: make instruction data optional
+                               // TODO: validate that we don't need close authority
+                               // /// Optional authority to close the account.
+                               // pub close_authority: Option<Pubkey>,
 }

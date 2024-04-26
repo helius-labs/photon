@@ -321,12 +321,12 @@ async fn test_index_block_metadata(
 
     // Verify that we don't get an error if we try to index the same block again
     index_block(&setup.db_conn, &block).await.unwrap();
-    assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot);
+    assert_eq!(setup.api.get_indexer_slot().await.unwrap(), slot);
 
     // Verify that get_indexer_slot() gets updated a new block is indexed.
     let block = cached_fetch_block(&setup, slot + 1).await;
     index_block(&setup.db_conn, &block).await.unwrap();
-    assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot + 1);
+    assert_eq!(setup.api.get_indexer_slot().await.unwrap(), slot + 1);
 }
 
 #[named]

@@ -1,4 +1,3 @@
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::token_accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
@@ -14,7 +13,7 @@ use super::utils::{BalanceModel, CompressedAccountRequest, Context};
 // This is a struct because in the future we might add other fields here like decimals or uiAmount,
 // which is a string representation with decimals in the form of "10.00"
 pub struct TokenAccountBalance {
-    pub amount: UnsignedInteger,
+    pub amount: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -41,7 +40,7 @@ pub async fn get_compressed_token_account_balance(
 
     Ok(GetCompressedTokenAccountBalanceResponse {
         value: TokenAccountBalance {
-            amount: UnsignedInteger(parse_decimal(balance.amount)?),
+            amount: parse_decimal(balance.amount)?,
         },
         context,
     })

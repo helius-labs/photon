@@ -2,10 +2,7 @@ use serde::Serialize;
 
 use utoipa::ToSchema;
 
-use super::{
-    bs64_string::Base64String, hash::Hash, serializable_pubkey::SerializablePubkey,
-    unsigned_integer::UnsignedInteger,
-};
+use super::{bs64_string::Base64String, hash::Hash, serializable_pubkey::SerializablePubkey};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -14,17 +11,17 @@ pub struct Account {
     pub address: Option<SerializablePubkey>,
     pub data: Option<AccountData>,
     pub owner: SerializablePubkey,
-    pub lamports: UnsignedInteger,
+    pub lamports: u64,
     pub tree: SerializablePubkey,
-    pub leaf_index: UnsignedInteger,
-    pub seq: Option<UnsignedInteger>,
-    pub slot_updated: UnsignedInteger,
+    pub leaf_index: u32,
+    pub seq: Option<u64>,
+    pub slot_updated: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountData {
-    pub discriminator: UnsignedInteger,
+    pub discriminator: u64,
     pub data: Base64String,
     pub data_hash: Hash,
 }

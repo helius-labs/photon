@@ -10,8 +10,6 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
-use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -78,16 +76,16 @@ async fn test_persist_state_update_basic(
         hash: Hash::new_unique(),
         address: Some(SerializablePubkey::new_unique()),
         data: Some(AccountData {
-            discriminator: UnsignedInteger(1),
+            discriminator: 1,
             data: Base64String(vec![1; 500]),
             data_hash: Hash::new_unique(),
         }),
         owner: SerializablePubkey::new_unique(),
-        lamports: UnsignedInteger(1000),
+        lamports: 1000,
         tree: SerializablePubkey::new_unique(),
-        leaf_index: UnsignedInteger(0),
-        seq: Some(UnsignedInteger(0)),
-        slot_updated: UnsignedInteger(0),
+        leaf_index: 0,
+        seq: Some(0),
+        slot_updated: 0,
     };
 
     state_update.out_accounts.push(account.clone());
@@ -116,7 +114,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    assert_eq!(res, account.lamports);
+    assert_eq!(res, account.lamports as u64);
 
     // Assert that we get an error if we input a non-existent account.
     // TODO: Test spent accounts
@@ -168,61 +166,61 @@ async fn test_multiple_accounts(
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: UnsignedInteger(0),
+                discriminator: 0,
                 data: Base64String(vec![1; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner1,
-            lamports: UnsignedInteger(1000),
+            lamports: 1000,
             tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(10),
-            seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
+            leaf_index: 10,
+            seq: Some(1),
+            slot_updated: 0,
         },
         Account {
             hash: Hash::new_unique(),
             address: None,
             data: Some(AccountData {
-                discriminator: UnsignedInteger(1),
+                discriminator: 1,
                 data: Base64String(vec![2; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner1,
-            lamports: UnsignedInteger(1030),
+            lamports: 1030,
             tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(11),
-            seq: Some(UnsignedInteger(2)),
-            slot_updated: UnsignedInteger(0),
+            leaf_index: 11,
+            seq: Some(2),
+            slot_updated: 0,
         },
         Account {
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: UnsignedInteger(4),
+                discriminator: 4,
                 data: Base64String(vec![4; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner2,
-            lamports: UnsignedInteger(10020),
+            lamports: 10020,
             tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(13),
-            seq: Some(UnsignedInteger(3)),
-            slot_updated: UnsignedInteger(1),
+            leaf_index: 13,
+            seq: Some(3),
+            slot_updated: 1,
         },
         Account {
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: UnsignedInteger(10),
+                discriminator: 10,
                 data: Base64String(vec![5; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner2,
-            lamports: UnsignedInteger(10100),
+            lamports: 10100,
             tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(23),
-            seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
+            leaf_index: 23,
+            seq: Some(1),
+            slot_updated: 0,
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -278,7 +276,7 @@ async fn test_multiple_accounts(
 
         let total_balance = accounts_of_interest
             .iter()
-            .fold(0, |acc, x| acc + x.lamports.0);
+            .fold(0, |acc, x| acc + x.lamports);
 
         let res = setup
             .api
@@ -289,7 +287,7 @@ async fn test_multiple_accounts(
             .unwrap()
             .value;
 
-        assert_eq!(res.0, total_balance);
+        assert_eq!(res, total_balance);
     }
 
     let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
@@ -345,31 +343,31 @@ async fn test_persist_token_data(
     let token_data1 = TokenData {
         mint: mint1,
         owner: owner1,
-        amount: UnsignedInteger(1),
+        amount: 1,
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(UnsignedInteger(1)),
-        delegated_amount: UnsignedInteger(1),
+        is_native: Some(1),
+        delegated_amount: 1,
     };
 
     let token_data2 = TokenData {
         mint: mint2,
         owner: owner1,
-        amount: UnsignedInteger(2),
+        amount: 2,
         delegate: Some(delegate2),
         state: AccountState::initialized,
         is_native: None,
-        delegated_amount: UnsignedInteger(2),
+        delegated_amount: 2,
     };
 
     let token_data3 = TokenData {
         mint: mint3,
         owner: owner2,
-        amount: UnsignedInteger(3),
+        amount: 3,
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(UnsignedInteger(1000)),
-        delegated_amount: UnsignedInteger(3),
+        is_native: Some(1000),
+        delegated_amount: 3,
     };
     let all_token_data = vec![token_data1, token_data2, token_data3];
 
@@ -469,7 +467,7 @@ async fn test_persist_token_data(
             let balance = mint_to_balance
                 .entry(token_account.token_data.mint.clone())
                 .or_insert(0);
-            *balance += token_account.token_data.amount.0;
+            *balance += token_account.token_data.amount;
         }
         for (mint, balance) in mint_to_balance.iter() {
             let request = GetCompressedTokenBalancesByOwner {
@@ -483,7 +481,7 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(res.token_balances[0].balance.0, *balance);
+            assert_eq!(res.token_balances[0].balance, *balance);
         }
 
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
@@ -498,8 +496,10 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-
-            assert_eq!(balance.amount, token_account.token_data.amount);
+            assert_eq!(
+                balance.amount,
+                Into::<u64>::into(token_account.token_data.amount)
+            );
         }
     }
     for delegate in [delegate1, delegate2] {
@@ -562,16 +562,16 @@ async fn test_load_test(
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: UnsignedInteger(10),
+                discriminator: 10,
                 data: Base64String(vec![5; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: SerializablePubkey::new_unique(),
-            lamports: UnsignedInteger(10100),
+            lamports: 10100,
             tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(23),
-            seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
+            leaf_index: 23,
+            seq: Some(1),
+            slot_updated: 0,
         }
     }
 

@@ -23,8 +23,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::token_data::TokenData;
-use crate::common::typedefs::unix_timestamp::UnixTimestamp;
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use dirs;
 use utoipa::openapi::Response;
 
@@ -76,9 +74,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenData,
     AccountData,
     AccountState,
-    AccountWithOptionalTokenData,
-    UnixTimestamp,
-    UnsignedInteger
+    AccountWithOptionalTokenData
 )))]
 struct ApiDoc;
 

@@ -1,4 +1,3 @@
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 
@@ -23,7 +22,7 @@ pub async fn get_compressed_balance(
         .ok_or(id.not_found_error())?;
 
     Ok(AccountBalanceResponse {
-        value: UnsignedInteger(parse_decimal(balance.lamports)?),
+        value: parse_decimal(balance.lamports)?,
         context,
     })
 }
