@@ -8,8 +8,8 @@ use super::utils::Context;
 // TODO: Make this an environment variable.
 const HEALTH_CHECK_SLOT_DISTANCE: i64 = 5;
 
-// TODO: Make sure that get_health formatting matches the Solana RPC formatting.
-pub async fn get_health(
+// TODO: Make sure that get_indexer_health formatting matches the Solana RPC formatting.
+pub async fn get_indexer_health(
     conn: &DatabaseConnection,
     rpc: &RpcClient,
 ) -> Result<String, PhotonApiError> {

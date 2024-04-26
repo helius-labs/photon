@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 use super::utils::{Authority, Context, GetCompressedTokenAccountsByAuthorityOptions, Limit};
 use super::{super::error::PhotonApiError, utils::fetch_token_accounts};
@@ -13,7 +14,7 @@ use super::{super::error::PhotonApiError, utils::fetch_token_accounts};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TokenBalance {
     pub mint: SerializablePubkey,
-    pub balance: u64,
+    pub balance: UnsignedInteger,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -60,11 +61,14 @@ pub async fn get_compressed_token_balances_by_owner(
         let balance = mint_to_balance
             .entry(token_account.token_data.mint)
             .or_insert(0);
-        *balance += token_account.token_data.amount;
+        *balance += token_account.token_data.amount.0;
     }
     let token_balances: Vec<TokenBalance> = mint_to_balance
         .into_iter()
-        .map(|(mint, balance)| TokenBalance { mint, balance })
+        .map(|(mint, balance)| TokenBalance {
+            mint,
+            balance: UnsignedInteger(balance),
+        })
         .collect();
 
     Ok(TokenBalancesResponse {

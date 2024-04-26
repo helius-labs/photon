@@ -61,12 +61,11 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting path nodes...");
-    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
-        persist_path_nodes(txn, chunk).await?;
-    }
-
-    debug!("Persisting path nodes...");
-    for chunk in path_nodes.chunks(MAX_SQL_INSERTS) {
+    for chunk in path_nodes
+        .into_values()
+        .collect::<Vec<_>>()
+        .chunks(MAX_SQL_INSERTS)
+    {
         persist_path_nodes(txn, chunk).await?;
     }
 
@@ -87,6 +86,7 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting account transactions...");
+    let account_transactions = account_transactions.into_iter().collect::<Vec<_>>();
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
@@ -119,9 +119,9 @@ async fn spend_input_accounts(
             owner: Set(account.owner.0.to_bytes().to_vec()),
             discriminator: Set(None),
             lamports: Set(Decimal::from(0)),
-            slot_updated: Set(account.slot_updated as i64),
+            slot_updated: Set(account.slot_updated.0 as i64),
             tree: Set(account.tree.0.to_bytes().to_vec()),
-            leaf_index: Set(account.leaf_index as i64),
+            leaf_index: Set(account.leaf_index.0 as i64),
             ..Default::default()
         })
         .collect();
@@ -215,16 +215,16 @@ async fn append_output_accounts(
             discriminator: Set(account
                 .data
                 .as_ref()
-                .map(|x| Decimal::from(x.discriminator))),
+                .map(|x| Decimal::from(x.discriminator.0))),
             data: Set(account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
-            leaf_index: Set(account.leaf_index as i64),
+            leaf_index: Set(account.leaf_index.0 as i64),
             owner: Set(account.owner.to_bytes_vec()),
-            lamports: Set(Decimal::from(account.lamports)),
+            lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
-            slot_updated: Set(account.slot_updated as i64),
-            seq: Set(account.seq.map(|s| s as i64)),
+            slot_updated: Set(account.slot_updated.0 as i64),
+            seq: Set(account.seq.map(|s| s.0 as i64)),
         });
 
         if let Some(token_data) = parse_token_data(account)? {
@@ -277,11 +277,11 @@ pub async fn persist_token_accounts(
                 hash: Set(hash.into()),
                 mint: Set(token_data.mint.to_bytes_vec()),
                 owner: Set(token_data.owner.to_bytes_vec()),
-                amount: Set(Decimal::from(token_data.amount)),
+                amount: Set(Decimal::from(token_data.amount.0)),
                 delegate: Set(token_data.delegate.map(|d| d.to_bytes_vec())),
                 state: Set(token_data.state as i32),
-                delegated_amount: Set(Decimal::from(token_data.delegated_amount)),
-                is_native: Set(token_data.is_native.map(Decimal::from)),
+                delegated_amount: Set(Decimal::from(token_data.delegated_amount.0)),
+                is_native: Set(token_data.is_native.map(|x| Decimal::from(x.0))),
                 spent: Set(false),
             },
         )
@@ -337,7 +337,9 @@ async fn persist_path_nodes(
         )
         .build(txn.get_database_backend());
     query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
-    txn.execute(query).await?;
+    txn.execute(query).await.map_err(|e| {
+        IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
+    })?;
 
     Ok(())
 }
@@ -380,7 +382,6 @@ async fn persist_account_transactions(
         .map(|transaction| account_transactions::ActiveModel {
             hash: Set(transaction.hash.to_vec()),
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
-            closure: Set(transaction.closure),
         })
         .collect::<Vec<_>>();
 
@@ -393,7 +394,6 @@ async fn persist_account_transactions(
                 OnConflict::columns([
                     account_transactions::Column::Hash,
                     account_transactions::Column::Signature,
-                    account_transactions::Column::Closure,
                 ])
                 .do_nothing()
                 .to_owned(),

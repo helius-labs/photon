@@ -31,10 +31,10 @@ pub struct Transaction {
     pub slot: u64,
 }
 
+#[derive(Hash, PartialEq, Eq)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
-    pub closure: bool,
     pub slot: u64,
 }
 
@@ -43,8 +43,8 @@ pub struct AccountTransaction {
 pub struct StateUpdate {
     pub in_accounts: Vec<Account>,
     pub out_accounts: Vec<Account>,
-    pub path_nodes: Vec<EnrichedPathNode>,
-    pub account_transactions: Vec<AccountTransaction>,
+    pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
+    pub account_transactions: HashSet<AccountTransaction>,
 }
 
 impl StateUpdate {
@@ -59,23 +59,6 @@ impl StateUpdate {
         //       removed from the tree through the nullifier crank.
         self.out_accounts
             .retain(|a| !in_account_set.contains(&a.hash));
-
-        // TODO: Use seq instead of slot.
-
-        // Assuming the type of `path_nodes` and fields inside `node` such as `tree`, `node.index`, and `seq`.
-        let mut latest_nodes: HashMap<([u8; 32], u32), EnrichedPathNode> = HashMap::new();
-
-        for node in self.path_nodes.drain(..) {
-            let key = (node.tree, node.node.index);
-            if let Some(existing) = latest_nodes.get_mut(&key) {
-                if (*existing).seq < node.seq {
-                    *existing = node;
-                }
-            } else {
-                latest_nodes.insert(key, node);
-            }
-        }
-        self.path_nodes = latest_nodes.into_values().collect();
     }
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
@@ -83,10 +66,19 @@ impl StateUpdate {
         for update in updates {
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
-            merged.path_nodes.extend(update.path_nodes);
             merged
                 .account_transactions
                 .extend(update.account_transactions);
+
+            for (key, node) in update.path_nodes {
+                if let Some(existing) = merged.path_nodes.get_mut(&key) {
+                    if (*existing).seq < node.seq {
+                        *existing = node;
+                    }
+                } else {
+                    merged.path_nodes.insert(key, node);
+                }
+            }
         }
         merged
     }

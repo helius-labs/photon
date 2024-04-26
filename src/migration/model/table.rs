@@ -61,7 +61,6 @@ pub enum AccountTransactions {
     Table,
     Hash,
     Signature,
-    Closure,
 }
 
 #[derive(Copy, Clone, Iden)]

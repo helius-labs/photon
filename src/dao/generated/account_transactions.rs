@@ -9,8 +9,6 @@ pub struct Model {
     pub hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub signature: Vec<u8>,
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub closure: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

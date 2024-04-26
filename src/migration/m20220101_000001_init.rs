@@ -326,11 +326,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Blocks::ParentBlockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::Blockhash).binary().not_null())
                     .col(ColumnDef::new(Blocks::BlockHeight).big_integer().not_null())
-                    .col(
-                        ColumnDef::new(Blocks::BlockTime)
-                            .timestamp_with_time_zone()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Blocks::BlockTime).big_integer().not_null())
                     .primary_key(Index::create().name("pk_blocks").col(Blocks::Slot))
                     .to_owned(),
             )
@@ -374,17 +370,11 @@ impl MigrationTrait for Migration {
                             .binary()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(AccountTransactions::Closure)
-                            .boolean()
-                            .not_null(),
-                    )
                     .primary_key(
                         Index::create()
                             .name("pk_account_transaction_history")
                             .col(AccountTransactions::Hash)
-                            .col(AccountTransactions::Signature)
-                            .col(AccountTransactions::Closure),
+                            .col(AccountTransactions::Signature),
                     )
                     .foreign_key(
                         ForeignKey::create()

@@ -12,15 +12,15 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.
-pub struct GetSignaturesForCompressedAccountResponse {
+pub struct GetCompressionSignaturesForAccountResponse {
     pub context: Context,
     pub value: SignatureInfoList,
 }
 
-pub async fn get_signatures_for_compressed_account(
+pub async fn get_compression_signatures_for_account(
     conn: &DatabaseConnection,
     request: HashRequest,
-) -> Result<GetSignaturesForCompressedAccountResponse, PhotonApiError> {
+) -> Result<GetCompressionSignaturesForAccountResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let hash = request.hash;
 
@@ -47,7 +47,7 @@ pub async fn get_signatures_for_compressed_account(
         ));
     }
 
-    Ok(GetSignaturesForCompressedAccountResponse {
+    Ok(GetCompressionSignaturesForAccountResponse {
         value: SignatureInfoList { items: signatures },
         context,
     })

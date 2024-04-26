@@ -1,4 +1,5 @@
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, owner_balances};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
@@ -41,7 +42,7 @@ pub async fn get_compressed_balance_by_owner(
     }
 
     Ok(AccountBalanceResponse {
-        value: total_balance,
+        value: UnsignedInteger(total_balance),
         context,
     })
 }
