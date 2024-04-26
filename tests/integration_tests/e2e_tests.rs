@@ -127,9 +127,22 @@ async fn test_e2e_mint_and_transfer(
                 format!("{}-{}-token-signatures", name.clone(), person),
                 signatures
             );
+
+            let token_balances = setup
+                .api
+                .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
+                    owner: pubkey.clone(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            assert_json_snapshot!(
+                format!("{}-{}-token-balances", name.clone(), person),
+                token_balances
+            );
         }
     }
-
     for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
         let txn = cached_fetch_transaction(&setup, txn_signature).await;
         let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
@@ -357,38 +370,42 @@ async fn test_debug_incorrect_root(
         Pubkey::try_from("4Vuk7ucQkkKbbF9mr7FoAq3tf5KbPsm1y436zg368L9U").unwrap(),
     );
     let txs = [compress_tx, transfer_tx];
+    let number_of_indexes = [1, 2];
 
     for tx_permutation in txs.iter().permutations(txs.len()) {
         for individually in [true, false] {
             reset_tables(&setup.db_conn).await.unwrap();
-
-            // HACK: We index a block so that API methods can fetch the current slot.
-            index_block(
-                &setup.db_conn,
-                &BlockInfo {
-                    metadata: BlockMetadata {
-                        slot: 0,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-
-            match individually {
-                true => {
-                    for tx in tx_permutation.iter() {
-                        index_transaction(&setup, tx).await;
-                    }
-                }
-                false => {
-                    index_multiple_transactions(
-                        &setup,
-                        #[allow(suspicious_double_ref_op)]
-                        tx_permutation.iter().map(|x| *x.clone()).collect(),
+            for number in number_of_indexes.iter() {
+                for _ in 0..*number {
+                    // HACK: We index a block so that API methods can fetch the current slot.
+                    index_block(
+                        &setup.db_conn,
+                        &BlockInfo {
+                            metadata: BlockMetadata {
+                                slot: 0,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
                     )
-                    .await;
+                    .await
+                    .unwrap();
+
+                    match individually {
+                        true => {
+                            for tx in tx_permutation.iter() {
+                                index_transaction(&setup, tx).await;
+                            }
+                        }
+                        false => {
+                            index_multiple_transactions(
+                                &setup,
+                                #[allow(suspicious_double_ref_op)]
+                                tx_permutation.iter().map(|x| *x.clone()).collect(),
+                            )
+                            .await;
+                        }
+                    }
                 }
             }
             let accounts = setup
@@ -423,6 +440,24 @@ async fn test_debug_incorrect_root(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-signatures", name.clone()), signatures);
+
+            let balance = setup
+                .api
+                .get_compressed_balance_by_owner(photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest {
+                    owner: payer_pubkey.clone(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                accounts
+                    .value
+                    .items
+                    .iter()
+                    .map(|x| x.lamports.0)
+                    .sum::<u64>(),
+                balance.value.0,
+            );
         }
     }
 }

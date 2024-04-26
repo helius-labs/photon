@@ -23,6 +23,7 @@ pub enum Accounts {
     Tree,
     LeafIndex,
     Spent,
+    PrevSpent,
     Seq,
     SlotUpdated,
 }
@@ -36,6 +37,7 @@ pub enum TokenAccounts {
     Delegate,
     State,
     Spent,
+    PrevSpent,
 }
 
 #[derive(Copy, Clone, Iden)]
