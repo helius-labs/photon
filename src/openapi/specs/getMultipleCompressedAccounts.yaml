@@ -151,15 +151,24 @@ components:
         hash:
           $ref: '#/components/schemas/Hash'
         lamports:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
         leafIndex:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int32
+          minimum: 0
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
         seq:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
         slotUpdated:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
@@ -175,7 +184,9 @@ components:
         dataHash:
           $ref: '#/components/schemas/Hash'
         discriminator:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
       additionalProperties: false
     AccountList:
       type: object
@@ -219,8 +230,9 @@ components:
       properties:
         slot:
           type: integer
-          default: 100
-          example: 100
+          description: The current slot
+          default: 1
+          example: 1
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
@@ -297,11 +309,14 @@ components:
       - blockTime
       properties:
         blockTime:
-          $ref: '#/components/schemas/UnixTimestamp'
+          type: integer
+          format: int64
         signature:
           $ref: '#/components/schemas/SerializableSignature'
         slot:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
     SignatureInfoList:
       type: object
       required:
@@ -328,7 +343,9 @@ components:
       - amount
       properties:
         amount:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
       additionalProperties: false
     TokenAccountList:
       type: object
@@ -348,7 +365,9 @@ components:
       - balance
       properties:
         balance:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          minimum: 0
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
     TokenBalanceList:
@@ -373,25 +392,30 @@ components:
       - delegatedAmount
       properties:
         amount:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          description: The amount of tokens this account holds.
+          minimum: 0
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
         delegatedAmount:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          description: The amount delegated
+          minimum: 0
         isNative:
-          $ref: '#/components/schemas/UnsignedInteger'
+          type: integer
+          format: int64
+          description: |-
+            If is_some, this is a native token, and the value logs the rent-exempt
+            reserve. An Account is required to be rent-exempt, so the value is
+            used by the Processor to ensure that wrapped SOL accounts do not
+            drop below this threshold.
+          nullable: true
+          minimum: 0
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
         state:
           $ref: '#/components/schemas/AccountState'
-    UnixTimestamp:
-      type: integer
-      description: An Unix timestamp (seconds)
-      default: 1714081554
-      example: 1714081554
-    UnsignedInteger:
-      type: integer
-      default: 100
-      example: 100
