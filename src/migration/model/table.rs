@@ -23,6 +23,7 @@ pub enum Accounts {
     Tree,
     LeafIndex,
     Spent,
+    PrevSpent,
     Seq,
     SlotUpdated,
 }
@@ -36,6 +37,7 @@ pub enum TokenAccounts {
     Delegate,
     State,
     Spent,
+    PrevSpent,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -61,4 +63,17 @@ pub enum AccountTransactions {
     Table,
     Hash,
     Signature,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum OwnerBalances {
+    Table,
+    Owner,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum TokenOwnerBalances {
+    Table,
+    Owner,
+    Mint,
 }

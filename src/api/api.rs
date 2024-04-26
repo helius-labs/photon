@@ -13,7 +13,7 @@ use super::method::get_compressed_balance_by_owner::{
     get_compressed_balance_by_owner, GetCompressedBalanceByOwnerRequest,
 };
 use super::method::get_compressed_token_balances_by_owner::{
-    get_compressed_token_balances_by_owner, GetCompressedTokenBalancesByOwner,
+    get_compressed_token_balances_by_owner, GetCompressedTokenBalancesByOwnerRequest,
     TokenBalancesResponse,
 };
 use super::method::get_compression_signatures_for_account::{
@@ -168,7 +168,7 @@ impl PhotonApi {
 
     pub async fn get_compressed_token_balances_by_owner(
         &self,
-        request: GetCompressedTokenBalancesByOwner,
+        request: GetCompressedTokenBalancesByOwnerRequest,
     ) -> Result<TokenBalancesResponse, PhotonApiError> {
         get_compressed_token_balances_by_owner(&self.db_conn, request).await
     }
@@ -298,7 +298,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getCompressedTokenBalancesByOwner".to_string(),
-                request: Some(GetCompressedTokenBalancesByOwner::schema().1),
+                request: Some(GetCompressedTokenBalancesByOwnerRequest::schema().1),
                 response: TokenBalancesResponse::schema().1,
             },
             OpenApiSpec {

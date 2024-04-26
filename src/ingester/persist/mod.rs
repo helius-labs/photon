@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::{
     error,
     parser::state_update::{AccountTransaction, EnrichedPathNode},
@@ -16,8 +14,10 @@ use crate::{
 use borsh::BorshDeserialize;
 use log::debug;
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set,
+    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait,
+    QueryTrait, Set, Statement,
 };
+use std::collections::{HashMap, HashSet};
 
 use error::IngesterError;
 use solana_program::pubkey;
@@ -117,7 +117,7 @@ async fn spend_input_accounts(
             data: Set(None),
             owner: Set(account.owner.0.to_bytes().to_vec()),
             discriminator: Set(None),
-            lamports: Set(Decimal::from(0)),
+            lamports: Set(Decimal::from(account.lamports.0)),
             slot_updated: Set(account.slot_updated.0 as i64),
             tree: Set(account.tree.0.to_bytes().to_vec()),
             leaf_index: Set(account.leaf_index.0 as i64),
@@ -125,23 +125,29 @@ async fn spend_input_accounts(
         })
         .collect();
 
-    if !in_account_models.is_empty() {
-        accounts::Entity::insert_many(in_account_models)
-            .on_conflict(
-                OnConflict::column(accounts::Column::Hash)
-                    .update_columns([
-                        accounts::Column::Hash,
-                        accounts::Column::Data,
-                        accounts::Column::Lamports,
-                        accounts::Column::Spent,
-                        accounts::Column::SlotUpdated,
-                        accounts::Column::Tree,
-                    ])
-                    .to_owned(),
-            )
-            .exec(txn)
-            .await?;
-    }
+    let query = accounts::Entity::insert_many(in_account_models)
+        .on_conflict(
+            OnConflict::column(accounts::Column::Hash)
+                .update_columns([
+                    accounts::Column::Hash,
+                    accounts::Column::Data,
+                    accounts::Column::Lamports,
+                    accounts::Column::Spent,
+                    accounts::Column::SlotUpdated,
+                    accounts::Column::Tree,
+                ])
+                .to_owned(),
+        )
+        .build(txn.get_database_backend());
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::Account,
+        ModificationType::Spend,
+    )
+    .await?;
+
     let mut token_models = Vec::new();
     for in_accounts in in_accounts {
         let token_data = parse_token_data(in_accounts)?;
@@ -149,7 +155,7 @@ async fn spend_input_accounts(
             token_models.push(token_accounts::ActiveModel {
                 hash: Set(in_accounts.hash.to_vec()),
                 spent: Set(true),
-                amount: Set(Decimal::from(0)),
+                amount: Set(Decimal::from(token_data.amount.0)),
                 owner: Set(token_data.owner.to_bytes_vec()),
                 mint: Set(token_data.mint.to_bytes_vec()),
                 state: Set(token_data.state as i32),
@@ -160,7 +166,7 @@ async fn spend_input_accounts(
     }
     if !token_models.is_empty() {
         debug!("Marking {} token accounts as spent...", token_models.len());
-        token_accounts::Entity::insert_many(token_models)
+        let query = token_accounts::Entity::insert_many(token_models)
             .on_conflict(
                 OnConflict::column(token_accounts::Column::Hash)
                     .update_columns([
@@ -170,8 +176,14 @@ async fn spend_input_accounts(
                     ])
                     .to_owned(),
             )
-            .exec(txn)
-            .await?;
+            .build(txn.get_database_backend());
+        execute_account_update_query_and_update_balances(
+            txn,
+            query,
+            AccountType::TokenAccount,
+            ModificationType::Spend,
+        )
+        .await?;
     }
 
     Ok(())
@@ -180,6 +192,130 @@ async fn spend_input_accounts(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
+}
+
+#[derive(Debug)]
+enum AccountType {
+    Account,
+    TokenAccount,
+}
+
+#[derive(Debug)]
+enum ModificationType {
+    Append,
+    Spend,
+}
+
+fn bytes_to_sql_format(database_backend: DatabaseBackend, bytes: Vec<u8>) -> String {
+    match database_backend {
+        DatabaseBackend::Postgres => bytes_to_postgres_sql_format(bytes),
+        DatabaseBackend::Sqlite => bytes_to_sqlite_sql_format(bytes),
+        _ => panic!("Unsupported database backend"),
+    }
+}
+
+fn bytes_to_postgres_sql_format(bytes: Vec<u8>) -> String {
+    let hex_string = bytes
+        .iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<String>();
+    format!("'\\x{}'", hex_string) // Properly formatted for PostgreSQL BYTEA
+}
+
+fn bytes_to_sqlite_sql_format(bytes: Vec<u8>) -> String {
+    let hex_string = bytes
+        .iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<String>();
+    format!("X'{}'", hex_string) // Properly formatted for SQLite BLOB
+}
+
+async fn execute_account_update_query_and_update_balances(
+    txn: &DatabaseTransaction,
+    mut query: Statement,
+    account_type: AccountType,
+    modification_type: ModificationType,
+) -> Result<(), IngesterError> {
+    let (original_table_name, owner_table_name, balance_column, additional_columns) =
+        match account_type {
+            AccountType::Account => ("accounts", "owner_balances", "lamports", ""),
+            AccountType::TokenAccount => {
+                ("token_accounts", "token_owner_balances", "amount", ", mint")
+            }
+        };
+    let prev_spent_set = match modification_type {
+        ModificationType::Append => "".to_string(),
+        ModificationType::Spend => {
+            format!(", \"prev_spent\" = \"{original_table_name}\".\"spent\"")
+        }
+    };
+    query.sql = format!(
+        "{} {} RETURNING owner,prev_spent,{}{}",
+        query.sql, prev_spent_set, balance_column, additional_columns
+    );
+    let result = txn.query_all(query).await.map_err(|e| {
+        IngesterError::DatabaseError(format!(
+            "Got error appending {:?} accounts {}",
+            account_type,
+            e.to_string()
+        ))
+    })?;
+    let multiplier = Decimal::from(match &modification_type {
+        ModificationType::Append => 1,
+        ModificationType::Spend => -1,
+    });
+    let mut balance_modifications = HashMap::new();
+    let db_backend = txn.get_database_backend();
+    for row in result {
+        let prev_spent: Option<bool> = row.try_get("", "prev_spent")?;
+        match (prev_spent, &modification_type) {
+            (_, ModificationType::Append) | (Some(false), ModificationType::Spend) => {
+                let mut amount_of_interest = match db_backend {
+                    DatabaseBackend::Postgres => row.try_get("", balance_column)?,
+                    DatabaseBackend::Sqlite => {
+                        let amount: i64 = row.try_get("", balance_column)?;
+                        Decimal::from(amount)
+                    }
+                    _ => panic!("Unsupported database backend"),
+                };
+                amount_of_interest *= multiplier;
+                let owner = bytes_to_sql_format(db_backend, row.try_get("", "owner")?);
+                let key = match account_type {
+                    AccountType::Account => owner,
+                    AccountType::TokenAccount => {
+                        format!(
+                            "{},{}",
+                            owner,
+                            bytes_to_sql_format(db_backend, row.try_get("", "mint")?)
+                        )
+                    }
+                };
+                balance_modifications
+                    .entry(key)
+                    .and_modify(|amount| *amount += amount_of_interest)
+                    .or_insert(amount_of_interest);
+            }
+            _ => {}
+        }
+    }
+    let values = balance_modifications
+        .into_iter()
+        .filter(|(_, value)| *value != Decimal::from(0))
+        .map(|(key, value)| format!("({}, {})", key, value))
+        .collect::<Vec<String>>();
+
+    if values.len() > 0 {
+        let values_string = values.join(", ");
+        let raw_sql = format!(
+            "INSERT INTO {owner_table_name} (owner {additional_columns}, {balance_column})
+            VALUES {values_string} ON CONFLICT (owner{additional_columns})
+            DO UPDATE SET {balance_column} = {owner_table_name}.{balance_column} + excluded.{balance_column}",
+        );
+        txn.execute(Statement::from_string(db_backend, raw_sql))
+            .await?;
+    }
+
+    Ok(())
 }
 
 async fn append_output_accounts(
@@ -206,6 +342,7 @@ async fn append_output_accounts(
             spent: Set(false),
             slot_updated: Set(account.slot_updated.0 as i64),
             seq: Set(account.seq.map(|s| s.0 as i64)),
+            prev_spent: Set(None),
         });
 
         if let Some(token_data) = parse_token_data(account)? {
@@ -216,12 +353,6 @@ async fn append_output_accounts(
         }
     }
 
-    // The state tree is append-only so conflicts only occur if a record is already inserted or
-    // marked as spent spent.
-    //
-    // We first build the query and then execute it because SeaORM has a bug where it always throws
-    // an error if we do not insert a record in an insert statement. However, in this case, it's
-    // expected not to insert anything if the key already exists.
     if !out_accounts.is_empty() {
         let query = accounts::Entity::insert_many(account_models)
             .on_conflict(
@@ -230,7 +361,14 @@ async fn append_output_accounts(
                     .to_owned(),
             )
             .build(txn.get_database_backend());
-        txn.execute(query).await?;
+        execute_account_update_query_and_update_balances(
+            txn,
+            query,
+            AccountType::Account,
+            ModificationType::Append,
+        )
+        .await?;
+
         if !token_accounts.is_empty() {
             debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;
@@ -257,13 +395,11 @@ pub async fn persist_token_accounts(
                 delegated_amount: Set(Decimal::from(token_data.delegated_amount.0)),
                 is_native: Set(token_data.is_native.map(|x| Decimal::from(x.0))),
                 spent: Set(false),
+                prev_spent: Set(None),
             },
         )
         .collect::<Vec<_>>();
 
-    // We first build the query and then execute it because SeaORM has a bug where it always throws
-    // an error if we do not insert a record in an insert statement. However, in this case, it's
-    // expected not to insert anything if the key already exists.
     let query = token_accounts::Entity::insert_many(token_models)
         .on_conflict(
             OnConflict::column(token_accounts::Column::Hash)
@@ -271,7 +407,14 @@ pub async fn persist_token_accounts(
                 .to_owned(),
         )
         .build(txn.get_database_backend());
-    txn.execute(query).await?;
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::TokenAccount,
+        ModificationType::Append,
+    )
+    .await?;
 
     Ok(())
 }
