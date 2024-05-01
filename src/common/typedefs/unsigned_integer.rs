@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use utoipa::{
-    openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
+    openapi::{KnownFormat, ObjectBuilder, RefOr, Schema, SchemaFormat, SchemaType},
     ToSchema,
 };
 
@@ -18,6 +18,7 @@ impl<'__s> ToSchema<'__s> for UnsignedInteger {
                 .example(Some(serde_json::Value::Number(serde_json::Number::from(
                     100,
                 ))))
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::UInt64)))
                 .build(),
         );
         ("UnsignedInteger", RefOr::T(schema))

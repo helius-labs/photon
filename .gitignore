@@ -4,3 +4,6 @@ test-ledger/
 
 /target
 /.cargo
+
+.DS_Store
+.idea
