@@ -598,7 +598,7 @@ async fn test_load_test(
             .unwrap();
         let num_elements = 2000;
         let state_update = StateUpdate {
-            in_accounts: vec![],
+            in_accounts: HashSet::new(),
             out_accounts: (0..num_elements)
                 .map(|i| generate_random_account(tree, i))
                 .collect(),

@@ -41,7 +41,7 @@ pub struct AccountTransaction {
 #[derive(Default)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
-    pub in_accounts: Vec<Account>,
+    pub in_accounts: HashSet<Hash>,
     pub out_accounts: Vec<Account>,
     pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
     pub account_transactions: HashSet<AccountTransaction>,
@@ -53,12 +53,10 @@ impl StateUpdate {
     }
 
     pub fn prune_redundant_updates(&mut self) {
-        let in_account_set: HashSet<Hash> =
-            self.in_accounts.iter().map(|a| a.hash.clone()).collect();
         // NOTE: For snapshot verification, we might need to persist accounts data until accounts are
         //       removed from the tree through the nullifier crank.
         self.out_accounts
-            .retain(|a| !in_account_set.contains(&a.hash));
+            .retain(|a| !self.in_accounts.contains(&a.hash));
     }
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {

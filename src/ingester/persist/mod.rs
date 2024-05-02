@@ -14,7 +14,8 @@ use crate::{
 use borsh::BorshDeserialize;
 use log::debug;
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait,
+    sea_query::{Expr, OnConflict},
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, QueryFilter,
     QueryTrait, Set, Statement,
 };
 use std::collections::{HashMap, HashSet};
@@ -51,7 +52,11 @@ pub async fn persist_state_update(
     );
 
     debug!("Persisting spent accounts...");
-    for chunk in in_accounts.chunks(MAX_SQL_INSERTS) {
+    for chunk in in_accounts
+        .into_iter()
+        .collect::<Vec<_>>()
+        .chunks(MAX_SQL_INSERTS)
+    {
         spend_input_accounts(txn, chunk).await?;
     }
     debug!("Persisting output accounts...");
@@ -107,36 +112,18 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
 
 async fn spend_input_accounts(
     txn: &DatabaseTransaction,
-    in_accounts: &[Account],
+    in_accounts: &[Hash],
 ) -> Result<(), IngesterError> {
-    let in_account_models: Vec<accounts::ActiveModel> = in_accounts
-        .iter()
-        .map(|account| accounts::ActiveModel {
-            hash: Set(account.hash.to_vec()),
-            spent: Set(true),
-            data: Set(None),
-            owner: Set(account.owner.0.to_bytes().to_vec()),
-            discriminator: Set(None),
-            lamports: Set(Decimal::from(account.lamports.0)),
-            slot_updated: Set(account.slot_updated.0 as i64),
-            tree: Set(account.tree.0.to_bytes().to_vec()),
-            leaf_index: Set(account.leaf_index.0 as i64),
-            ..Default::default()
-        })
-        .collect();
-
-    let query = accounts::Entity::insert_many(in_account_models)
-        .on_conflict(
-            OnConflict::column(accounts::Column::Hash)
-                .update_columns([
-                    accounts::Column::Hash,
-                    accounts::Column::Data,
-                    accounts::Column::Lamports,
-                    accounts::Column::Spent,
-                    accounts::Column::SlotUpdated,
-                    accounts::Column::Tree,
-                ])
-                .to_owned(),
+    // Perform the update operation on the identified records
+    let query = accounts::Entity::update_many()
+        .col_expr(accounts::Column::Spent, Expr::value(true))
+        .filter(
+            accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
         )
         .build(txn.get_database_backend());
 
@@ -148,43 +135,26 @@ async fn spend_input_accounts(
     )
     .await?;
 
-    let mut token_models = Vec::new();
-    for in_accounts in in_accounts {
-        let token_data = parse_token_data(in_accounts)?;
-        if let Some(token_data) = token_data {
-            token_models.push(token_accounts::ActiveModel {
-                hash: Set(in_accounts.hash.to_vec()),
-                spent: Set(true),
-                amount: Set(Decimal::from(token_data.amount.0)),
-                owner: Set(token_data.owner.to_bytes_vec()),
-                mint: Set(token_data.mint.to_bytes_vec()),
-                state: Set(token_data.state as i32),
-                delegated_amount: Set(Decimal::from(0)),
-                ..Default::default()
-            });
-        }
-    }
-    if !token_models.is_empty() {
-        debug!("Marking {} token accounts as spent...", token_models.len());
-        let query = token_accounts::Entity::insert_many(token_models)
-            .on_conflict(
-                OnConflict::column(token_accounts::Column::Hash)
-                    .update_columns([
-                        token_accounts::Column::Hash,
-                        token_accounts::Column::Amount,
-                        token_accounts::Column::Spent,
-                    ])
-                    .to_owned(),
-            )
-            .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::TokenAccount,
-            ModificationType::Spend,
+    debug!("Marking token accounts as spent...",);
+    let query = token_accounts::Entity::update_many()
+        .col_expr(token_accounts::Column::Spent, Expr::value(true))
+        .filter(
+            token_accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
         )
-        .await?;
-    }
+        .build(txn.get_database_backend());
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::TokenAccount,
+        ModificationType::Spend,
+    )
+    .await?;
 
     Ok(())
 }

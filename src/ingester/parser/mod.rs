@@ -11,10 +11,7 @@ use crate::{
         serializable_pubkey::SerializablePubkey,
         unsigned_integer::UnsignedInteger,
     },
-    ingester::parser::{
-        indexer_events::{CompressedAccountWithMerkleContext, PathNode},
-        state_update::EnrichedPathNode,
-    },
+    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
@@ -135,35 +132,14 @@ fn parse_public_transaction_event(
     let PublicTransactionEvent {
         input_compressed_account_hashes,
         output_compressed_account_hashes,
-        input_compressed_accounts,
         output_compressed_accounts,
-        pubkey_array,
         ..
     } = transaction_event;
 
     let mut state_update = StateUpdate::new();
 
-    for (account, hash) in input_compressed_accounts
-        .iter()
-        .zip(input_compressed_account_hashes)
-    {
-        let CompressedAccountWithMerkleContext {
-            compressed_account,
-            merkle_tree_pubkey_index,
-            leaf_index,
-            ..
-        } = account.clone();
-
-        let enriched_account = parse_account_data(
-            compressed_account,
-            hash,
-            pubkey_array[merkle_tree_pubkey_index as usize],
-            leaf_index,
-            slot,
-            None,
-        );
-
-        state_update.in_accounts.push(enriched_account);
+    for hash in input_compressed_account_hashes {
+        state_update.in_accounts.insert(hash.into());
     }
     let path_updates = extract_path_updates(changelogs);
 
@@ -216,11 +192,16 @@ fn parse_public_transaction_event(
 
     state_update
         .account_transactions
-        .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
-            hash: a.hash.clone(),
-            signature: tx,
-            slot,
-        }));
+        .extend(
+            state_update
+                .in_accounts
+                .iter()
+                .map(|hash| AccountTransaction {
+                    hash: hash.clone(),
+                    signature: tx,
+                    slot,
+                }),
+        );
 
     state_update
         .account_transactions

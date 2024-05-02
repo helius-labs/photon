@@ -147,7 +147,7 @@ async fn test_e2e_mint_and_transfer(
         let txn = cached_fetch_transaction(&setup, txn_signature).await;
         let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
         // Test get transaction
-        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(txn_signature, txn).unwrap();
+        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
         assert_json_snapshot!(
             format!("{}-{}-transaction", name.clone(), txn_name),
             parsed_transaction

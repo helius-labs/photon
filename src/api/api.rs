@@ -241,7 +241,12 @@ impl PhotonApi {
         &self,
         request: GetTransactionRequest,
     ) -> Result<GetTransactionResponse, PhotonApiError> {
-        get_transaction_with_compression_info(self.rpc_client.as_ref(), request).await
+        get_transaction_with_compression_info(
+            &self.db_conn.as_ref(),
+            self.rpc_client.as_ref(),
+            request,
+        )
+        .await
     }
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
