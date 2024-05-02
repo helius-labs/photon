@@ -31,14 +31,14 @@ pub struct Transaction {
     pub slot: u64,
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
     pub slot: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
@@ -50,13 +50,6 @@ pub struct StateUpdate {
 impl StateUpdate {
     pub fn new() -> Self {
         StateUpdate::default()
-    }
-
-    pub fn prune_redundant_updates(&mut self) {
-        // NOTE: For snapshot verification, we might need to persist accounts data until accounts are
-        //       removed from the tree through the nullifier crank.
-        self.out_accounts
-            .retain(|a| !self.in_accounts.contains(&a.hash));
     }
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {

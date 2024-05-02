@@ -143,16 +143,17 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                 })
                 .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
 
-            let root_seq = node_to_model
-                .get(&(tree.clone(), 1))
-                .ok_or({
-                    let tree_rep: SerializablePubkey = tree.clone().try_into()?;
-                    PhotonApiError::UnexpectedError(format!(
-                        "Missing root index for tree {}",
-                        tree_rep
-                    ))
-                })?
-                .seq as u64;
+            let root_seq = 0;
+            // let root_seq = node_to_model
+            //     .get(&(tree.clone(), 1))
+            //     .ok_or({
+            //         let tree_rep: SerializablePubkey = tree.clone().try_into()?;
+            //         PhotonApiError::UnexpectedError(format!(
+            //             "Missing root index for tree {}",
+            //             tree_rep
+            //         ))
+            //     })?
+            //     .seq as u64;
 
             let leaf_model =
                 leaf_hashes_to_model

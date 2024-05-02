@@ -32,9 +32,8 @@ pub const MAX_SQL_INSERTS: usize = 1000;
 
 pub async fn persist_state_update(
     txn: &DatabaseTransaction,
-    mut state_update: StateUpdate,
+    state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
-    state_update.prune_redundant_updates();
     let StateUpdate {
         in_accounts,
         out_accounts,
@@ -50,6 +49,10 @@ pub async fn persist_state_update(
         out_accounts.len(),
         path_nodes.len()
     );
+    debug!("Persisting output accounts...");
+    for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
+        append_output_accounts(txn, chunk).await?;
+    }
 
     debug!("Persisting spent accounts...");
     for chunk in in_accounts
@@ -58,10 +61,6 @@ pub async fn persist_state_update(
         .chunks(MAX_SQL_INSERTS)
     {
         spend_input_accounts(txn, chunk).await?;
-    }
-    debug!("Persisting output accounts...");
-    for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
-        append_output_accounts(txn, chunk).await?;
     }
 
     debug!("Persisting path nodes...");
@@ -117,6 +116,10 @@ async fn spend_input_accounts(
     // Perform the update operation on the identified records
     let query = accounts::Entity::update_many()
         .col_expr(accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            accounts::Column::PrevSpent,
+            Expr::col(accounts::Column::Spent).into(),
+        )
         .filter(
             accounts::Column::Hash.is_in(
                 in_accounts
@@ -138,6 +141,10 @@ async fn spend_input_accounts(
     debug!("Marking token accounts as spent...",);
     let query = token_accounts::Entity::update_many()
         .col_expr(token_accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            token_accounts::Column::PrevSpent,
+            Expr::col(token_accounts::Column::Spent).into(),
+        )
         .filter(
             token_accounts::Column::Hash.is_in(
                 in_accounts
@@ -206,28 +213,21 @@ async fn execute_account_update_query_and_update_balances(
     account_type: AccountType,
     modification_type: ModificationType,
 ) -> Result<(), IngesterError> {
-    let (original_table_name, owner_table_name, balance_column, additional_columns) =
-        match account_type {
-            AccountType::Account => ("accounts", "owner_balances", "lamports", ""),
-            AccountType::TokenAccount => {
-                ("token_accounts", "token_owner_balances", "amount", ", mint")
-            }
-        };
-    let prev_spent_set = match modification_type {
-        ModificationType::Append => "".to_string(),
-        ModificationType::Spend => {
-            format!(", \"prev_spent\" = \"{original_table_name}\".\"spent\"")
-        }
+    let (owner_table_name, balance_column, additional_columns) = match account_type {
+        AccountType::Account => ("owner_balances", "lamports", ""),
+        AccountType::TokenAccount => ("token_owner_balances", "amount", ", mint"),
     };
+
     query.sql = format!(
-        "{} {} RETURNING owner,prev_spent,{}{}",
-        query.sql, prev_spent_set, balance_column, additional_columns
+        "{} RETURNING owner,prev_spent,{}{}",
+        query.sql, balance_column, additional_columns
     );
-    let result = txn.query_all(query).await.map_err(|e| {
+    let result = txn.query_all(query.clone()).await.map_err(|e| {
         IngesterError::DatabaseError(format!(
-            "Got error appending {:?} accounts {}",
+            "Got error appending {:?} accounts {}. Query {}",
             account_type,
-            e.to_string()
+            e.to_string(),
+            query.sql
         ))
     })?;
     let multiplier = Decimal::from(match &modification_type {

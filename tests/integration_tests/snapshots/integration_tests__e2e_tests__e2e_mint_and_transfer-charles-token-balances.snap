@@ -9,8 +9,8 @@ expression: token_balances
   "value": {
     "token_balances": [
       {
-        "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
-        "balance": 700
+        "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
+        "balance": 895
       }
     ],
     "cursor": null
