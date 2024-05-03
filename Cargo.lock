@@ -3492,6 +3492,7 @@ version = "0.15.0"
 dependencies = [
  "anchor-lang",
  "anyhow",
+ "ark-bn254",
  "async-std",
  "async-trait",
  "base64 0.21.7",

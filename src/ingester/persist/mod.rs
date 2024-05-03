@@ -3,6 +3,7 @@ use super::{
     parser::state_update::{AccountTransaction, EnrichedPathNode},
 };
 use crate::{
+    api::method::get_multiple_compressed_account_proofs::{get_proof_nodes, ZERO_BYTES},
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
@@ -11,6 +12,9 @@ use crate::{
     dao::generated::{accounts, state_trees, token_accounts},
     ingester::parser::state_update::StateUpdate,
 };
+use light_poseidon::{Poseidon, PoseidonBytesHasher};
+
+use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use log::debug;
 use sea_orm::{
@@ -389,6 +393,24 @@ pub async fn persist_token_accounts(
     Ok(())
 }
 
+fn get_node_direct_ancestors(leaf_index: i64) -> Vec<i64> {
+    let mut path: Vec<i64> = Vec::new();
+    let mut current_index = leaf_index;
+    while current_index > 1 {
+        current_index >>= 1;
+        path.push(current_index);
+    }
+    path
+}
+
+pub fn compute_parent_hash(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, IngesterError> {
+    let mut poseidon = Poseidon::<Fr>::new_circom(2).unwrap();
+    poseidon
+        .hash_bytes_be(&[&left, &right])
+        .map_err(|e| IngesterError::ParserError(format!("Failed to compute parent hash: {}", e)))
+        .map(|x| x.to_vec())
+}
+
 async fn persist_path_nodes(
     txn: &DatabaseTransaction,
     nodes: &[EnrichedPathNode],
@@ -396,23 +418,89 @@ async fn persist_path_nodes(
     if nodes.is_empty() {
         return Ok(());
     }
-    let node_models = nodes
+    if txn.get_database_backend() == DatabaseBackend::Postgres {
+        txn.execute(Statement::from_string(
+            txn.get_database_backend(),
+            "LOCK TABLE state_trees IN EXCLUSIVE MODE;".to_string(),
+        ))
+        .await
+        .map_err(|e| {
+            IngesterError::DatabaseError(format!("Failed to lock state_trees table: {}", e))
+        })?;
+    }
+
+    let mut leaf_nodes = nodes
         .iter()
-        .map(|node| state_trees::ActiveModel {
-            tree: Set(node.tree.to_vec()),
-            level: Set(node.level as i64),
-            node_idx: Set(node.node.index as i64),
-            hash: Set(node.node.node.to_vec()),
-            leaf_idx: Set(node.leaf_index.map(|x| x as i64)),
-            seq: Set(node.seq as i64),
-            slot_updated: Set(node.slot as i64),
-        })
+        .filter(|node| node.leaf_index.is_some())
         .collect::<Vec<_>>();
+
+    leaf_nodes.sort_by_key(|node| node.seq);
+
+    let leaf_locations = leaf_nodes
+        .iter()
+        .map(|node| (node.tree.to_vec(), node.leaf_index.unwrap() as i64))
+        .collect::<Vec<_>>();
+
+    let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
+    let mut node_locations_to_hashes = node_locations_to_models
+        .iter()
+        .map(|(key, value)| (key.clone(), value.hash.clone()))
+        .collect::<HashMap<_, _>>();
+
+    let mut models_to_updates = HashMap::new();
+
+    for leaf_node in leaf_nodes {
+        let tree = leaf_node.tree.to_vec();
+        let key = (tree.clone(), leaf_node.node.index as i64);
+
+        let model = state_trees::ActiveModel {
+            tree: Set(leaf_node.tree.to_vec()),
+            level: Set(leaf_node.level as i64),
+            node_idx: Set(leaf_node.node.index as i64),
+            hash: Set(leaf_node.node.node.to_vec()),
+            leaf_idx: Set(leaf_node.leaf_index.map(|x| x as i64)),
+            seq: Set(leaf_node.seq as i64),
+            slot_updated: Set(leaf_node.slot as i64),
+        };
+        models_to_updates.insert(key.clone(), model);
+        node_locations_to_hashes.insert(key, leaf_node.node.node.to_vec());
+
+        for (child_level, node_index) in get_node_direct_ancestors(leaf_node.node.index as i64)
+            .iter()
+            .enumerate()
+        {
+            let left_child = node_locations_to_hashes
+                .get(&(tree.clone(), node_index * 2))
+                .map(Clone::clone)
+                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+
+            let right_child = node_locations_to_hashes
+                .get(&(tree.clone(), node_index * 2 + 1))
+                .map(Clone::clone)
+                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+
+            let hash = compute_parent_hash(left_child, right_child)?;
+
+            let model = state_trees::ActiveModel {
+                tree: Set(tree.clone()),
+                level: Set(child_level as i64 + 1),
+                node_idx: Set(*node_index),
+                hash: Set(hash.clone()),
+                leaf_idx: Set(None),
+                seq: Set(leaf_node.seq as i64),
+                slot_updated: Set(leaf_node.slot as i64),
+            };
+
+            let key = (tree.clone(), *node_index);
+            models_to_updates.insert(key.clone(), model);
+            node_locations_to_hashes.insert(key, hash);
+        }
+    }
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    let mut query = state_trees::Entity::insert_many(node_models)
+    let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
         .on_conflict(
             OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
                 .update_columns([

@@ -1,5 +1,4 @@
 use function_name::named;
-use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -79,7 +78,6 @@ async fn test_e2e_mint_and_transfer(
     .unwrap();
 
     for tx in txs {
-        info!("{}", tx);
         index_transaction(&setup, tx).await;
     }
     for (person, pubkey) in [

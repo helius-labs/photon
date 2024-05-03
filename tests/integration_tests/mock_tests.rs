@@ -5,6 +5,7 @@ use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
+use photon_indexer::api::method::get_multiple_compressed_account_proofs::ZERO_BYTES;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
@@ -19,7 +20,7 @@ use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
 use photon_indexer::ingester::persist::{
-    persist_state_update, persist_token_accounts, EnrichedTokenAccount,
+    compute_parent_hash, persist_state_update, persist_token_accounts, EnrichedTokenAccount,
 };
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
@@ -543,78 +544,10 @@ async fn test_persist_token_data(
     }
 }
 
-#[named]
-#[rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 25)]
-#[serial]
-#[ignore]
-/// Test for testing how fast we can index accounts.
-async fn test_load_test(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    use std::collections::HashSet;
-
-    let name = trim_test_name(function_name!());
-    let setup = setup(name, db_backend).await;
-
-    fn generate_random_account(_tree: Pubkey, _seq: i64) -> Account {
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(10),
-                data: Base64String(vec![5; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: SerializablePubkey::new_unique(),
-            lamports: UnsignedInteger(10100),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(23),
-            seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
-        }
-    }
-
-    fn generate_random_leaf_index(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
-        EnrichedPathNode {
-            node: PathNode {
-                node: Pubkey::new_unique().to_bytes(),
-                index: node_index,
-            },
-            slot: 0,
-            tree: tree.to_bytes(),
-            seq: seq as u64,
-            level: 0,
-            leaf_index: Some(seq as u32),
-            tree_depth: 20,
-        }
-    }
-
-    let loops = 25;
-    for _ in 0..loops {
-        let tree: Pubkey = Pubkey::new_unique();
-        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
-            .await
-            .unwrap();
-        let num_elements = 2000;
-        let state_update = StateUpdate {
-            in_accounts: HashSet::new(),
-            out_accounts: (0..num_elements)
-                .map(|i| generate_random_account(tree, i))
-                .collect(),
-            // We only include the leaf index because we think the most path nodes will be
-            // overwritten anyways. So the amortized number of writes will be in each tree
-            // will be close to 1.
-            path_nodes: (0..num_elements)
-                .map(|i| {
-                    let leaf = generate_random_leaf_index(tree, i as u32, i);
-                    let key = (leaf.tree.clone(), leaf.leaf_index.unwrap());
-                    (key, leaf)
-                })
-                .collect(),
-            account_transactions: HashSet::new(),
-        };
-        persist_state_update(&txn, state_update).await.unwrap();
-        txn.commit().await.unwrap();
-    }
+#[tokio::test]
+async fn test_compute_parent_hash() {
+    let child = ZERO_BYTES[0];
+    let parent = ZERO_BYTES[1];
+    let computed_parent = compute_parent_hash(child.to_vec(), child.to_vec()).unwrap();
+    assert_eq!(computed_parent, parent.to_vec());
 }
