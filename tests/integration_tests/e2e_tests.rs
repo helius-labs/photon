@@ -25,7 +25,7 @@ async fn test_e2e_mint_and_transfer(
 ) {
     use std::str::FromStr;
 
-    use log::info;
+    
     use photon_indexer::{
         api::method::{
             get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,

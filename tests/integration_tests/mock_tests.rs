@@ -20,7 +20,7 @@ use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
 use photon_indexer::ingester::persist::{
-    compute_parent_hash, persist_state_update, persist_token_accounts, EnrichedTokenAccount,
+    compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
 };
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
@@ -28,7 +28,6 @@ use serial_test::serial;
 
 use photon_indexer::{
     common::typedefs::account::AccountData,
-    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
 };
 use std::collections::HashMap;
 
