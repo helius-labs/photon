@@ -4,7 +4,7 @@ use crate::{
     common::typedefs::serializable_pubkey::SerializablePubkey, dao::generated::state_trees,
 };
 use itertools::Itertools;
-use log::info;
+
 use sea_orm::{
     sea_query::Expr, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
     EntityTrait, QueryFilter, TransactionTrait,

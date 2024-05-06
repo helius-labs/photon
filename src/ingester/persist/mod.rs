@@ -16,7 +16,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
-use log::{debug, info};
+use log::{debug};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, QueryFilter,
