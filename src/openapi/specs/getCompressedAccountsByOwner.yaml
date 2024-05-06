@@ -133,7 +133,7 @@ components:
       - lamports
       - tree
       - leafIndex
-      - slotUpdated
+      - slotCreated
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -149,7 +149,7 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         seq:
           $ref: '#/components/schemas/UnsignedInteger'
-        slotUpdated:
+        slotCreated:
           $ref: '#/components/schemas/UnsignedInteger'
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
