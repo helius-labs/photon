@@ -3674,10 +3674,11 @@ dependencies = [
 
 [[package]]
 name = "photon-indexer"
-version = "0.12.0"
+version = "0.17.0"
 dependencies = [
  "anchor-lang",
  "anyhow",
+ "ark-bn254",
  "async-std",
  "async-trait",
  "base64 0.21.7",

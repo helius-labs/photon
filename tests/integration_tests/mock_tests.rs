@@ -4,12 +4,15 @@ use function_name::named;
 use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
-use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwner;
+use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
+use photon_indexer::api::method::get_multiple_compressed_account_proofs::ZERO_BYTES;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
+use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
+
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
@@ -17,16 +20,13 @@ use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
 use photon_indexer::ingester::persist::{
-    persist_state_update, persist_token_accounts, EnrichedTokenAccount,
+    compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
 };
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 
-use photon_indexer::{
-    common::typedefs::account::AccountData,
-    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
-};
+use photon_indexer::common::typedefs::account::AccountData;
 use std::collections::HashMap;
 
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
@@ -76,16 +76,16 @@ async fn test_persist_state_update_basic(
         hash: Hash::new_unique(),
         address: Some(SerializablePubkey::new_unique()),
         data: Some(AccountData {
-            discriminator: 1,
+            discriminator: UnsignedInteger(1),
             data: Base64String(vec![1; 500]),
             data_hash: Hash::new_unique(),
         }),
         owner: SerializablePubkey::new_unique(),
-        lamports: 1000,
+        lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
-        leaf_index: 0,
-        seq: Some(0),
-        slot_updated: 0,
+        leaf_index: UnsignedInteger(0),
+        seq: Some(UnsignedInteger(0)),
+        slot_created: UnsignedInteger(0),
     };
 
     state_update.out_accounts.push(account.clone());
@@ -114,7 +114,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    assert_eq!(res, account.lamports as u64);
+    assert_eq!(res, account.lamports);
 
     // Assert that we get an error if we input a non-existent account.
     // TODO: Test spent accounts
@@ -166,61 +166,61 @@ async fn test_multiple_accounts(
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: 0,
+                discriminator: UnsignedInteger(0),
                 data: Base64String(vec![1; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner1,
-            lamports: 1000,
+            lamports: UnsignedInteger(1000),
             tree: SerializablePubkey::new_unique(),
-            leaf_index: 10,
-            seq: Some(1),
-            slot_updated: 0,
+            leaf_index: UnsignedInteger(10),
+            seq: Some(UnsignedInteger(1)),
+            slot_created: UnsignedInteger(0),
         },
         Account {
             hash: Hash::new_unique(),
             address: None,
             data: Some(AccountData {
-                discriminator: 1,
+                discriminator: UnsignedInteger(1),
                 data: Base64String(vec![2; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner1,
-            lamports: 1030,
+            lamports: UnsignedInteger(1030),
             tree: SerializablePubkey::new_unique(),
-            leaf_index: 11,
-            seq: Some(2),
-            slot_updated: 0,
+            leaf_index: UnsignedInteger(11),
+            seq: Some(UnsignedInteger(2)),
+            slot_created: UnsignedInteger(0),
         },
         Account {
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: 4,
+                discriminator: UnsignedInteger(4),
                 data: Base64String(vec![4; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner2,
-            lamports: 10020,
+            lamports: UnsignedInteger(10020),
             tree: SerializablePubkey::new_unique(),
-            leaf_index: 13,
-            seq: Some(3),
-            slot_updated: 1,
+            leaf_index: UnsignedInteger(13),
+            seq: Some(UnsignedInteger(3)),
+            slot_created: UnsignedInteger(1),
         },
         Account {
             hash: Hash::new_unique(),
             address: Some(SerializablePubkey::new_unique()),
             data: Some(AccountData {
-                discriminator: 10,
+                discriminator: UnsignedInteger(10),
                 data: Base64String(vec![5; 500]),
                 data_hash: Hash::new_unique(),
             }),
             owner: owner2,
-            lamports: 10100,
+            lamports: UnsignedInteger(10100),
             tree: SerializablePubkey::new_unique(),
-            leaf_index: 23,
-            seq: Some(1),
-            slot_updated: 0,
+            leaf_index: UnsignedInteger(23),
+            seq: Some(UnsignedInteger(1)),
+            slot_created: UnsignedInteger(0),
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -276,7 +276,7 @@ async fn test_multiple_accounts(
 
         let total_balance = accounts_of_interest
             .iter()
-            .fold(0, |acc, x| acc + x.lamports);
+            .fold(0, |acc, x| acc + x.lamports.0);
 
         let res = setup
             .api
@@ -287,7 +287,7 @@ async fn test_multiple_accounts(
             .unwrap()
             .value;
 
-        assert_eq!(res, total_balance);
+        assert_eq!(res.0, total_balance);
     }
 
     let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
@@ -343,31 +343,31 @@ async fn test_persist_token_data(
     let token_data1 = TokenData {
         mint: mint1,
         owner: owner1,
-        amount: 1,
+        amount: UnsignedInteger(1),
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(1),
-        delegated_amount: 1,
+        is_native: Some(UnsignedInteger(1)),
+        delegated_amount: UnsignedInteger(1),
     };
 
     let token_data2 = TokenData {
         mint: mint2,
         owner: owner1,
-        amount: 2,
+        amount: UnsignedInteger(2),
         delegate: Some(delegate2),
         state: AccountState::initialized,
         is_native: None,
-        delegated_amount: 2,
+        delegated_amount: UnsignedInteger(2),
     };
 
     let token_data3 = TokenData {
         mint: mint3,
         owner: owner2,
-        amount: 3,
+        amount: UnsignedInteger(3),
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(1000),
-        delegated_amount: 3,
+        is_native: Some(UnsignedInteger(1000)),
+        delegated_amount: UnsignedInteger(3),
     };
     let all_token_data = vec![token_data1, token_data2, token_data3];
 
@@ -387,7 +387,7 @@ async fn test_persist_token_data(
             data: Set(Some(to_vec(&token_data).unwrap())),
             owner: Set(token_data.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(10)),
-            slot_updated: Set(slot),
+            slot_created: Set(slot),
             leaf_index: Set(i as i64),
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
@@ -467,10 +467,10 @@ async fn test_persist_token_data(
             let balance = mint_to_balance
                 .entry(token_account.token_data.mint.clone())
                 .or_insert(0);
-            *balance += token_account.token_data.amount;
+            *balance += token_account.token_data.amount.0;
         }
         for (mint, balance) in mint_to_balance.iter() {
-            let request = GetCompressedTokenBalancesByOwner {
+            let request = GetCompressedTokenBalancesByOwnerRequest {
                 owner: SerializablePubkey::from(owner),
                 mint: Some(mint.clone()),
                 ..Default::default()
@@ -481,7 +481,7 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(res.token_balances[0].balance, *balance);
+            assert_eq!(res.token_balances[0].balance.0, *balance);
         }
 
         verify_responses_match_tlv_data(res.clone(), owner_tlv);
@@ -496,10 +496,8 @@ async fn test_persist_token_data(
                 .await
                 .unwrap()
                 .value;
-            assert_eq!(
-                balance.amount,
-                Into::<u64>::into(token_account.token_data.amount)
-            );
+
+            assert_eq!(balance.amount, token_account.token_data.amount);
         }
     }
     for delegate in [delegate1, delegate2] {
@@ -543,72 +541,10 @@ async fn test_persist_token_data(
     }
 }
 
-#[named]
-#[rstest]
-#[tokio::test(flavor = "multi_thread", worker_threads = 25)]
-#[serial]
-#[ignore]
-/// Test for testing how fast we can index accounts.
-async fn test_load_test(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup(name, db_backend).await;
-
-    fn generate_random_account(_tree: Pubkey, _seq: i64) -> Account {
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: 10,
-                data: Base64String(vec![5; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: SerializablePubkey::new_unique(),
-            lamports: 10100,
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: 23,
-            seq: Some(1),
-            slot_updated: 0,
-        }
-    }
-
-    fn generate_random_leaf_index(tree: Pubkey, node_index: u32, seq: i64) -> EnrichedPathNode {
-        EnrichedPathNode {
-            node: PathNode {
-                node: Pubkey::new_unique().to_bytes(),
-                index: node_index,
-            },
-            slot: 0,
-            tree: tree.to_bytes(),
-            seq: seq as u64,
-            level: 0,
-            leaf_index: Some(seq as u32),
-            tree_depth: 20,
-        }
-    }
-
-    let loops = 25;
-    for _ in 0..loops {
-        let tree: Pubkey = Pubkey::new_unique();
-        let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
-            .await
-            .unwrap();
-        let num_elements = 2000;
-        let state_update = StateUpdate {
-            in_accounts: vec![],
-            out_accounts: (0..num_elements)
-                .map(|i| generate_random_account(tree, i))
-                .collect(),
-            // We only include the leaf index because we think the most path nodes will be
-            // overwritten anyways. So the amortized number of writes will be in each tree
-            // will be close to 1.
-            path_nodes: (0..num_elements)
-                .map(|i| generate_random_leaf_index(tree, i as u32, i))
-                .collect(),
-            account_transactions: vec![],
-        };
-        persist_state_update(&txn, state_update).await.unwrap();
-        txn.commit().await.unwrap();
-    }
+#[tokio::test]
+async fn test_compute_parent_hash() {
+    let child = ZERO_BYTES[0];
+    let parent = ZERO_BYTES[1];
+    let computed_parent = compute_parent_hash(child.to_vec(), child.to_vec()).unwrap();
+    assert_eq!(computed_parent, parent.to_vec());
 }

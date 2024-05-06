@@ -4,6 +4,7 @@ use crate::common::typedefs::token_data::TokenData;
 use crate::ingester::parser::parse_transaction;
 use crate::ingester::persist::parse_token_data;
 
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcTransactionConfig;
@@ -15,7 +16,10 @@ use utoipa::{
     ToSchema,
 };
 
-use super::super::error::PhotonApiError;
+use super::{
+    super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
+    utils::parse_account_model,
+};
 
 const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
     encoding: Some(UiTransactionEncoding::Base64),
@@ -112,7 +116,8 @@ fn clone_tx(
     }
 }
 
-pub fn get_transaction_helper(
+pub async fn get_transaction_helper(
+    conn: &DatabaseConnection,
     signature: SerializableSignature,
     txn: EncodedConfirmedTransactionWithStatusMeta,
 ) -> Result<GetTransactionResponse, PhotonApiError> {
@@ -135,12 +140,20 @@ pub fn get_transaction_helper(
         PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
     })?;
 
+    let closed_accounts = fetch_accounts_from_hashes(
+        conn,
+        status_update.in_accounts.iter().cloned().collect(),
+        true,
+    )
+    .await?
+    .into_iter()
+    .map(parse_account_model)
+    .collect::<Result<Vec<Account>, PhotonApiError>>()?;
+
     Ok(GetTransactionResponse {
         transaction: txn,
         compression_info: CompressionInfo {
-            closed_accounts: parse_optional_token_data_for_multiple_accounts(
-                status_update.in_accounts,
-            )?,
+            closed_accounts: parse_optional_token_data_for_multiple_accounts(closed_accounts)?,
             opened_accounts: parse_optional_token_data_for_multiple_accounts(
                 status_update.out_accounts,
             )?,
@@ -148,7 +161,8 @@ pub fn get_transaction_helper(
     })
 }
 
-pub async fn get_transaction(
+pub async fn get_transaction_with_compression_info(
+    conn: &DatabaseConnection,
     rpc_client: &RpcClient,
     request: GetTransactionRequest,
 ) -> Result<GetTransactionResponse, PhotonApiError> {
@@ -164,5 +178,5 @@ pub async fn get_transaction(
                 request.signature.0, e
             ))
         })?;
-    get_transaction_helper(request.signature, txn)
+    get_transaction_helper(conn, request.signature, txn).await
 }

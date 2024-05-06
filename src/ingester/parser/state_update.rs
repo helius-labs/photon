@@ -1,15 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-
-use solana_sdk::{signature::Signature};
-
+use solana_sdk::signature::Signature;
 
 use crate::common::typedefs::account::Account;
 
 use crate::common::typedefs::hash::Hash;
 
-use crate::ingester::parser::indexer_events::{PathNode};
+use crate::ingester::parser::indexer_events::PathNode;
 
+#[derive(Debug, Clone)]
 pub struct EnrichedPathNode {
     pub node: PathNode,
     pub slot: u64,
@@ -32,20 +31,20 @@ pub struct Transaction {
     pub slot: u64,
 }
 
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
-    pub closure: bool,
     pub slot: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
-    pub in_accounts: Vec<Account>,
+    pub in_accounts: HashSet<Hash>,
     pub out_accounts: Vec<Account>,
-    pub path_nodes: Vec<EnrichedPathNode>,
-    pub account_transactions: Vec<AccountTransaction>,
+    pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
+    pub account_transactions: HashSet<AccountTransaction>,
 }
 
 impl StateUpdate {
@@ -53,37 +52,25 @@ impl StateUpdate {
         StateUpdate::default()
     }
 
-    pub fn prune_redundant_updates(&mut self) {
-        let in_account_set: HashSet<Hash> = self.in_accounts.iter().map(|a| a.hash.clone()).collect();
-        // NOTE: For snapshot verification, we might need to persist accounts data until accounts are
-        //       removed from the tree through the nullifier crank.
-        self.out_accounts
-            .retain(|a| !in_account_set.contains(&a.hash));
-
-        // TODO: Use seq instead of slot.
-        let mut seen_path_nodes = HashSet::new();
-
-        self.path_nodes.sort_by(|a, b| a.slot.cmp(&b.seq));
-        self.path_nodes = self
-            .path_nodes
-            .drain(..)
-            .rev()
-            .filter(|p| seen_path_nodes.insert((p.tree, p.node.index)))
-            .rev()
-            .collect();
-    }
-
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
         for update in updates {
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
-            merged.path_nodes.extend(update.path_nodes);
             merged
                 .account_transactions
                 .extend(update.account_transactions);
+
+            for (key, node) in update.path_nodes {
+                if let Some(existing) = merged.path_nodes.get_mut(&key) {
+                    if (*existing).seq < node.seq {
+                        *existing = node;
+                    }
+                } else {
+                    merged.path_nodes.insert(key, node);
+                }
+            }
         }
-        merged.prune_redundant_updates();
         merged
     }
 }

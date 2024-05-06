@@ -3,33 +3,18 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-
-
-
-
-
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct PublicTransactionEvent {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_account_hashes: Vec<[u8; 32]>,
-    pub input_compressed_accounts: Vec<CompressedAccountWithMerkleContext>,
     pub output_compressed_accounts: Vec<CompressedAccount>,
-    // index of Merkle tree account in remaining accounts
     pub output_state_merkle_tree_account_indices: Vec<u8>,
     pub output_leaf_indices: Vec<u32>,
     pub relay_fee: Option<u64>,
     pub is_compress: bool,
-    pub de_compress_amount: Option<u64>,
+    pub compression_lamports: Option<u64>,
     pub pubkey_array: Vec<Pubkey>,
     pub message: Option<Vec<u8>>,
-}
-
-#[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
-pub struct CompressedAccountWithMerkleContext {
-    pub compressed_account: CompressedAccount,
-    pub merkle_tree_pubkey_index: u8,
-    pub nullifier_queue_pubkey_index: u8,
-    pub leaf_index: u32,
 }
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]

@@ -4,12 +4,12 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.12.0
+  version: 0.15.0
 servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getSignaturesForTokenOwner
+    summary: getIndexerHealth
     post:
       requestBody:
         content:
@@ -20,7 +20,6 @@ paths:
               - jsonrpc
               - id
               - method
-              - params
               properties:
                 id:
                   type: string
@@ -36,21 +35,7 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getSignaturesForTokenOwner
-                params:
-                  type: object
-                  required:
-                  - owner
-                  properties:
-                    cursor:
-                      type: string
-                      nullable: true
-                    limit:
-                      allOf:
-                      - $ref: '#/components/schemas/Limit'
-                      nullable: true
-                    owner:
-                      $ref: '#/components/schemas/SerializablePubkey'
+                  - getIndexerHealth
         required: true
       responses:
         '200':
@@ -58,15 +43,11 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - context
-                - value
-                properties:
-                  context:
-                    $ref: '#/components/schemas/Context'
-                  value:
-                    $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                type: string
+                description: ok if healthy
+                default: ok
+                enum:
+                - ok
         '400':
           description: Invalid request.
           content:
@@ -131,7 +112,7 @@ components:
       - lamports
       - tree
       - leafIndex
-      - slotUpdated
+      - slotCreated
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -140,24 +121,15 @@ components:
         hash:
           $ref: '#/components/schemas/Hash'
         lamports:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         leafIndex:
-          type: integer
-          format: int32
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
         seq:
-          type: integer
-          format: int64
-          nullable: true
-          minimum: 0
-        slotUpdated:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
+        slotCreated:
+          $ref: '#/components/schemas/UnsignedInteger'
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
@@ -173,9 +145,7 @@ components:
         dataHash:
           $ref: '#/components/schemas/Hash'
         discriminator:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
     AccountList:
       type: object
@@ -219,13 +189,12 @@ components:
       properties:
         slot:
           type: integer
-          description: The current slot
-          default: 1
-          example: 1
+          default: 100
+          example: 100
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111FVAiSujNZVgYSc27t6zUTWoKfAGxbRzzPR
+      example: 1111111GHqvR8KwyrcJ5UJHvwf7RmLtvAnr1uAf27
     Limit:
       type: integer
       format: int64
@@ -283,8 +252,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111F5q7ToS5rKDfdAt2rgf9yPXY2f21tCRA55
-      example: 1111111F5q7ToS5rKDfdAt2rgf9yPXY2f21tCRA55
+      default: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
+      example: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
@@ -298,14 +267,11 @@ components:
       - blockTime
       properties:
         blockTime:
-          type: string
-          format: date-time
+          $ref: '#/components/schemas/UnixTimestamp'
         signature:
           $ref: '#/components/schemas/SerializableSignature'
         slot:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
     SignatureInfoList:
       type: object
       required:
@@ -332,9 +298,7 @@ components:
       - amount
       properties:
         amount:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
     TokenAccountList:
       type: object
@@ -354,9 +318,7 @@ components:
       - balance
       properties:
         balance:
-          type: integer
-          format: int64
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
     TokenBalanceList:
@@ -381,30 +343,25 @@ components:
       - delegatedAmount
       properties:
         amount:
-          type: integer
-          format: int64
-          description: The amount of tokens this account holds.
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
         delegatedAmount:
-          type: integer
-          format: int64
-          description: The amount delegated
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         isNative:
-          type: integer
-          format: int64
-          description: |-
-            If is_some, this is a native token, and the value logs the rent-exempt
-            reserve. An Account is required to be rent-exempt, so the value is
-            used by the Processor to ensure that wrapped SOL accounts do not
-            drop below this threshold.
-          nullable: true
-          minimum: 0
+          $ref: '#/components/schemas/UnsignedInteger'
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
         state:
           $ref: '#/components/schemas/AccountState'
+    UnixTimestamp:
+      type: integer
+      description: An Unix timestamp (seconds)
+      default: 1714081554
+      example: 1714081554
+    UnsignedInteger:
+      type: integer
+      default: 100
+      example: 100

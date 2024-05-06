@@ -6,7 +6,7 @@ use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList
 use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
-use crate::api::method::get_transaction::AccountWithOptionalTokenData;
+use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -23,6 +23,8 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::token_data::TokenData;
+use crate::common::typedefs::unix_timestamp::UnixTimestamp;
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use dirs;
 use utoipa::openapi::Response;
 
@@ -74,7 +76,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenData,
     AccountData,
     AccountState,
-    AccountWithOptionalTokenData
+    AccountWithOptionalTokenData,
+    UnixTimestamp,
+    UnsignedInteger
 )))]
 struct ApiDoc;
 

@@ -1,10 +1,10 @@
-use std::str::FromStr;
-
 use crate::common::typedefs::account::{Account, AccountData};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::{AccountState, TokenData};
+use crate::common::typedefs::unix_timestamp::UnixTimestamp;
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -14,9 +14,8 @@ use sea_orm::{
     QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
-use serde_json::Number;
 use solana_sdk::signature::Signature;
-use sqlx::types::chrono::{DateTime, FixedOffset};
+
 use sqlx::types::Decimal;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
@@ -82,25 +81,12 @@ pub struct Context {
     pub slot: u64,
 }
 
-pub fn slot_schema() -> Schema {
-    Schema::Object(
-        ObjectBuilder::new()
-            .schema_type(SchemaType::Integer)
-            .description(Some("The current slot"))
-            .default(Some(serde_json::Value::Number(
-                Number::from_str("1").unwrap(),
-            )))
-            .example(Some(serde_json::Value::Number(serde_json::Number::from(1))))
-            .build(),
-    )
-}
-
 impl<'__s> ToSchema<'__s> for Context {
     fn schema() -> (&'__s str, RefOr<Schema>) {
         let schema = Schema::Object(
             ObjectBuilder::new()
                 .schema_type(SchemaType::Object)
-                .property("slot", slot_schema())
+                .property("slot", UnsignedInteger::schema().1)
                 .required("slot")
                 .build(),
         );
@@ -150,7 +136,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
             data: Base64String(data),
             data_hash: data_hash.try_into()?,
-            discriminator: parse_decimal(discriminator)?,
+            discriminator: UnsignedInteger(parse_decimal(discriminator)?),
         }),
         (None, None, None) => None,
         _ => {
@@ -169,10 +155,10 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         data,
         owner: account.owner.try_into()?,
         tree: account.tree.try_into()?,
-        leaf_index: parse_leaf_index(account.leaf_index)?,
-        lamports: parse_decimal(account.lamports)?,
-        slot_updated: account.slot_updated as u64,
-        seq: account.seq.map(|seq| seq as u64),
+        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
+        lamports: UnsignedInteger(parse_decimal(account.lamports)?),
+        slot_created: UnsignedInteger(account.slot_created as u64),
+        seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
     })
 }
 
@@ -307,13 +293,22 @@ pub async fn fetch_token_accounts(
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
                     owner: token_account.owner.try_into()?,
-                    amount: parse_decimal(token_account.amount)?,
+                    amount: UnsignedInteger(parse_decimal(token_account.amount)?),
                     delegate: token_account
                         .delegate
                         .map(SerializablePubkey::try_from)
                         .transpose()?,
-                    delegated_amount: parse_decimal(token_account.delegated_amount)?,
-                    is_native: token_account.is_native.map(parse_decimal).transpose()?,
+                    delegated_amount: UnsignedInteger(parse_decimal(
+                        token_account.delegated_amount,
+                    )?),
+                    is_native: token_account
+                        .is_native
+                        .map(|x| {
+                            Ok::<UnsignedInteger, PhotonApiError>(UnsignedInteger(parse_decimal(
+                                x,
+                            )?))
+                        })
+                        .transpose()?,
                     state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(
                             "Unable to parse account state {}",
@@ -452,15 +447,15 @@ pub struct HashRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SignatureInfo {
     pub signature: SerializableSignature,
-    pub slot: u64,
-    pub block_time: DateTime<FixedOffset>,
+    pub slot: UnsignedInteger,
+    pub block_time: UnixTimestamp,
 }
 
 #[derive(FromQueryResult)]
 pub struct SignatureInfoModel {
     pub signature: Vec<u8>,
     pub slot: i64,
-    pub block_time: DateTime<FixedOffset>,
+    pub block_time: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -557,7 +552,7 @@ pub async fn search_for_signatures(
 
     let raw_sql = format!(
         "
-        SELECT transactions.signature, transactions.slot, blocks.block_time
+        SELECT DISTINCT transactions.signature, transactions.slot, blocks.block_time
         FROM account_transactions
         JOIN transactions ON account_transactions.signature = transactions.signature
         JOIN blocks ON transactions.slot = blocks.slot
@@ -586,8 +581,8 @@ pub async fn search_for_signatures(
                         PhotonApiError::UnexpectedError("Invalid signature".to_string())
                     })?,
                 ),
-                slot: signature.slot as u64,
-                block_time: signature.block_time,
+                slot: UnsignedInteger(signature.slot as u64),
+                block_time: UnixTimestamp(signature.block_time as u64),
             })
         })
         .collect::<Result<Vec<SignatureInfo>, PhotonApiError>>()?;
@@ -596,7 +591,7 @@ pub async fn search_for_signatures(
         true => None,
         false => signatures.last().map(|signature| {
             bs58::encode::<Vec<u8>>({
-                let mut bytes = signature.slot.to_le_bytes().to_vec();
+                let mut bytes = signature.slot.0.to_le_bytes().to_vec();
                 bytes.extend_from_slice(signature.signature.0.as_ref());
                 bytes
             })
@@ -621,26 +616,5 @@ pub struct GetPaginatedSignaturesResponse {
 // We do not use generics to simplify documentation generation.
 pub struct AccountBalanceResponse {
     pub context: Context,
-    pub value: u64,
-}
-
-impl AccountBalanceResponse {
-    pub fn adjusted_schema() -> utoipa::openapi::RefOr<utoipa::openapi::Schema> {
-        let mut schema = AccountBalanceResponse::schema().1;
-        let object = match schema {
-            utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(ref mut object)) => {
-                let example = serde_json::to_value(AccountBalanceResponse {
-                    context: { Context { slot: 1 } },
-                    value: 1,
-                })
-                .unwrap();
-                object.default = Some(example.clone());
-                object.example = Some(example);
-                object.description = Some("Response for compressed account balance".to_string());
-                object.clone()
-            }
-            _ => unimplemented!(),
-        };
-        utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(object))
-    }
+    pub value: UnsignedInteger,
 }

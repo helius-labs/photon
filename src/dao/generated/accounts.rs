@@ -14,8 +14,9 @@ pub struct Model {
     pub tree: Vec<u8>,
     pub leaf_index: i64,
     pub seq: Option<i64>,
-    pub slot_updated: i64,
+    pub slot_created: i64,
     pub spent: bool,
+    pub prev_spent: Option<bool>,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub lamports: Decimal,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]

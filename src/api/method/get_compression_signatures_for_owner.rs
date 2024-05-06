@@ -11,23 +11,23 @@ use super::{
 };
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct GetSignaturesForAddressRequest {
-    pub address: SerializablePubkey,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+pub struct GetCompressionSignaturesForOwnerRequest {
+    pub owner: SerializablePubkey,
     pub limit: Option<Limit>,
     pub cursor: Option<String>,
 }
 
-pub async fn get_signatures_for_address(
+pub async fn get_compression_signatures_for_owner(
     conn: &DatabaseConnection,
-    request: GetSignaturesForAddressRequest,
+    request: GetCompressionSignaturesForOwnerRequest,
 ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
     let signatures = search_for_signatures(
         conn,
         SignatureSearchType::Standard,
-        SignatureFilter::Address(request.address),
+        SignatureFilter::Owner(request.owner),
         request.cursor,
         request.limit,
     )
