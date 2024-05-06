@@ -21,7 +21,7 @@ photon
 # Against devnet
 photon --rpc-url=https://api.devnet.solana.com
 
-# Using your local Postgres database instead of the default in in-memory SQLite db
+# Using your local Postgres database instead of the default temporary SQL database
 photon --db-url=postgres://postgres@localhost/postgres
 
 # Specifying a start slot. Defaults to 0 for localnet and current for devnet/mainnet

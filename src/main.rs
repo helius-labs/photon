@@ -1,4 +1,6 @@
 use std::fmt;
+use std::fs::File;
+use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
@@ -18,7 +20,9 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     PgPool, SqlitePool,
 };
+use sqlx::{Connection, SqliteConnection};
 use std::env;
+use std::env::temp_dir;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -104,11 +108,22 @@ fn setup_logging(logging_format: LoggingFormat) {
     }
 }
 
-async fn setup_sqllite_in_memory_pool() -> SqlitePool {
-    setup_sqllite_pool("sqlite::memory:", 1).await
+async fn setup_temporary_sqlite_database_pool(max_connections: u32) -> SqlitePool {
+    let dir = temp_dir();
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir).unwrap();
+    }
+    let db_name = "photon_indexer.db";
+    let path = dir.join(db_name);
+    if path.exists() {
+        std::fs::remove_file(&path).unwrap();
+    }
+    File::create(&path).unwrap();
+    let db_path = format!("sqlite:////{}", path.to_str().unwrap());
+    setup_sqlite_pool(&db_path, max_connections).await
 }
 
-async fn setup_sqllite_pool(db_url: &str, max_connections: u32) -> SqlitePool {
+async fn setup_sqlite_pool(db_url: &str, max_connections: u32) -> SqlitePool {
     let options: SqliteConnectOptions = db_url.parse().unwrap();
     SqlitePoolOptions::new()
         .max_connections(max_connections)
@@ -140,12 +155,14 @@ async fn setup_database_connection(
                     setup_pg_pool(&db_url, max_connections).await,
                 ),
                 DatabaseBackend::Sqlite => SqlxSqliteConnector::from_sqlx_sqlite_pool(
-                    setup_sqllite_pool(&db_url, max_connections).await,
+                    setup_sqlite_pool(&db_url, max_connections).await,
                 ),
                 _ => unimplemented!("Unsupported database type: {}", db_url),
             }
         }
-        None => SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_in_memory_pool().await),
+        None => SqlxSqliteConnector::from_sqlx_sqlite_pool(
+            setup_temporary_sqlite_database_pool(max_connections).await,
+        ),
     })
 }
 
