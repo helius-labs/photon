@@ -26,9 +26,7 @@ use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 
-use photon_indexer::{
-    common::typedefs::account::AccountData,
-};
+use photon_indexer::common::typedefs::account::AccountData;
 use std::collections::HashMap;
 
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
