@@ -9,9 +9,9 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "3iMoAFWvt9u4gcaLvN3DbUUBrBripuRfpZ9xFZ3GBVpZ",
-        "2SFqNMmZ5mbwwibAt8fQV9duVxZCuwtDeqUXC42UiYFs",
-        "3RT118H9FkTRv6ZXAAdKjAbMeoNT25rpEPaLkmQ1ko36",
+        "11111111111111111111111111111111",
+        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
+        "47eQ5FRDYuKE8uNRKc7iTgSnjuEdVyCEa3N9wWWcauym",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -35,18 +35,18 @@ expression: proofs
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "2paQZYR51wHBPnzU47eXsBdGBeoTQURtTy2i6ycyss1L"
+        "3wXkKFCeQgd1wBM5CMp2FtVAVpKuwZQ1BSbToAn8ZUYe"
       ],
       "leafIndex": 4,
-      "hash": "jDz4JTPCYXKCyu4JQHiTUxMLube58nD8BVsGx3nPvyh",
+      "hash": "JibgYnNHnmwEjBvbPUZHDEKapFooA7YNnXh5DYsucBJ",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-      "rootSeq": 7
+      "rootSeq": 5
     },
     {
       "proof": [
-        "jDz4JTPCYXKCyu4JQHiTUxMLube58nD8BVsGx3nPvyh",
-        "2SFqNMmZ5mbwwibAt8fQV9duVxZCuwtDeqUXC42UiYFs",
-        "3RT118H9FkTRv6ZXAAdKjAbMeoNT25rpEPaLkmQ1ko36",
+        "q8hq1gSwtDcyvaCiTaWyF7TXMmw9YqLCGfiCKwPXacr",
+        "xhayXaPtFWmPJ3GKM123H6JnAnKgCrpHX44VMPfLnEN",
+        "44uYH4E7epKcWPK1ZcUJ9psWsHdLPfJw9vHVX6e3C8oz",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -70,12 +70,12 @@ expression: proofs
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "2paQZYR51wHBPnzU47eXsBdGBeoTQURtTy2i6ycyss1L"
+        "3wXkKFCeQgd1wBM5CMp2FtVAVpKuwZQ1BSbToAn8ZUYe"
       ],
-      "leafIndex": 5,
-      "hash": "3iMoAFWvt9u4gcaLvN3DbUUBrBripuRfpZ9xFZ3GBVpZ",
+      "leafIndex": 2,
+      "hash": "3Kx76B8mEveDw1qLaPQtkqqG1XSFrCHSmsunvqEhfy9W",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-      "rootSeq": 7
+      "rootSeq": 5
     }
   ]
 }

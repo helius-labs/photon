@@ -1,6 +1,5 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
-assertion_line: 92
 expression: accounts
 ---
 {

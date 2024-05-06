@@ -10,24 +10,50 @@ expression: accounts
     "items": [
       {
         "account": {
-          "hash": "oZ7nqSySeoVcM3ZF6KjSE3Q4wKj9NTWVA3dF4akhych",
+          "hash": "2at1YwaFnfFcgvti3W3mngEzdSaJsy2apndbd823i6fQ",
           "address": null,
           "data": {
             "discriminator": 2,
-            "data": "Uaavg4642BlU0qzdHNvTw5bjJPaj3sslz6Mzu1JUXgRrecV+aglSOSgsBIGOlhEvPwOkABupelZMI4UqPx6l/CwBAAAAAAAAAAEAAAAAAAAAAAA=",
-            "dataHash": "2oxvZ6Cr89GyYziwQeYhjwyCodJw4D8pr8aCd6AmymoT"
+            "data": "qzqalVwAL3IXoKN0YmHtbP7R2CyP8yiDe7OAtP3MHVs5Kx4YTy22xBULRXO57ikodi45oovdBYueMJ4SkI5sRQUAAAAAAAAAAAEAAAAAAAAAAAA=",
+            "dataHash": "2J7L9GB66sfSeiYp7RS4ow5kHya7juu8jTzRbCXXGQmq"
           },
           "owner": "9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE",
           "lamports": 0,
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-          "leafIndex": 2,
-          "seq": 3,
-          "slotUpdated": 0
+          "leafIndex": 6,
+          "seq": 6,
+          "slotCreated": 0
         },
         "tokenData": {
-          "mint": "6VjSatiqNLk7j52hfQmRY7vari3FLanqZBgE8AY7ocQs",
-          "owner": "8EYKVyNCsDFHkxos7V4kr8bMouYU2nPJ1QXk2ET8FBc7",
-          "amount": 300,
+          "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
+          "owner": "4rANawp9ahHmvaVi3CCeJSam8JTA4DDY3htJKnhYxbHN",
+          "amount": 5,
+          "delegate": null,
+          "state": "initialized",
+          "isNative": null,
+          "delegatedAmount": 0
+        }
+      },
+      {
+        "account": {
+          "hash": "3nK8hDx7M2YQBPtNUjpDaQJD23sDF8DW47d1peUdqH9Q",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "qzqalVwAL3IXoKN0YmHtbP7R2CyP8yiDe7OAtP3MHVs5Kx4YTy22xBULRXO57ikodi45oovdBYueMJ4SkI5sRWQAAAAAAAAAAAEAAAAAAAAAAAA=",
+            "dataHash": "2ZuVcRaq1M4E582zGcKbH5LF8Hco8nmowqRzYJ4knuUg"
+          },
+          "owner": "9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 3,
+          "seq": 4,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
+          "owner": "4rANawp9ahHmvaVi3CCeJSam8JTA4DDY3htJKnhYxbHN",
+          "amount": 100,
           "delegate": null,
           "state": "initialized",
           "isNative": null,

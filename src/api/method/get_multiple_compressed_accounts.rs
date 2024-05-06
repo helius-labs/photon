@@ -56,24 +56,18 @@ pub struct GetMultipleCompressedAccountsResponse {
     pub value: AccountList,
 }
 
-async fn fetch_accounts_from_hashes(
+pub async fn fetch_accounts_from_hashes(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
+    spent: bool,
 ) -> Result<Vec<accounts::Model>, PhotonApiError> {
-    if hashes.len() > PAGE_LIMIT as usize {
-        PhotonApiError::ValidationError(format!(
-            "Too many hashes requested {}. Maximum allowed: {}",
-            hashes.len(),
-            PAGE_LIMIT
-        ));
-    }
     let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
 
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::Hash
                 .is_in(raw_hashes.clone())
-                .and(accounts::Column::Spent.eq(false)),
+                .and(accounts::Column::Spent.eq(spent)),
         )
         .all(conn)
         .await
@@ -111,13 +105,6 @@ async fn fetch_account_from_addresses(
     conn: &DatabaseConnection,
     addresses: Vec<SerializablePubkey>,
 ) -> Result<Vec<accounts::Model>, PhotonApiError> {
-    if addresses.len() > PAGE_LIMIT as usize {
-        PhotonApiError::ValidationError(format!(
-            "Too many addresses requested {}. Maximum allowed: {}",
-            addresses.len(),
-            PAGE_LIMIT
-        ));
-    }
     let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
 
     let accounts = accounts::Entity::find()
@@ -165,8 +152,26 @@ pub async fn get_multiple_compressed_accounts(
     let context = Context::extract(conn).await?;
 
     let accounts = match (request.hashes, request.addresses) {
-        (Some(hashes), None) => fetch_accounts_from_hashes(conn, hashes).await?,
-        (None, Some(addresses)) => fetch_account_from_addresses(conn, addresses).await?,
+        (Some(hashes), None) => {
+            if hashes.len() > PAGE_LIMIT as usize {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Too many hashes requested {}. Maximum allowed: {}",
+                    hashes.len(),
+                    PAGE_LIMIT
+                )));
+            }
+            fetch_accounts_from_hashes(conn, hashes, false).await?
+        }
+        (None, Some(addresses)) => {
+            if addresses.len() > PAGE_LIMIT as usize {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Too many addresses requested {}. Maximum allowed: {}",
+                    addresses.len(),
+                    PAGE_LIMIT
+                )));
+            }
+            fetch_account_from_addresses(conn, addresses).await?
+        }
         _ => panic!("Either hashes or addresses must be provided"),
     };
 

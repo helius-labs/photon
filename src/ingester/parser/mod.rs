@@ -11,10 +11,7 @@ use crate::{
         serializable_pubkey::SerializablePubkey,
         unsigned_integer::UnsignedInteger,
     },
-    ingester::parser::{
-        indexer_events::{CompressedAccountWithMerkleContext, PathNode},
-        state_update::EnrichedPathNode,
-    },
+    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
@@ -31,6 +28,7 @@ use solana_program::pubkey;
 
 const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("5QPEJ5zDsVou9FQS3KCauKswM3VwBEBu4dpL9xTqkWwN");
+const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
@@ -43,16 +41,18 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         ordered_intructions.extend(instruction_group.inner_instructions);
 
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if ordered_intructions.len() - index > 2 {
+            if ordered_intructions.len() - index > 3 {
                 let next_instruction = &ordered_intructions[index + 1];
                 let next_next_instruction = &ordered_intructions[index + 2];
+                let next_next_next_instruction = &ordered_intructions[index + 3];
                 // We need to check if the account compression instruction contains a noop account to determine
                 // if the instruction emits a noop event. If it doesn't then we want avoid indexing
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && instruction.accounts.contains(&NOOP_PROGRAM_ID)
-                    && next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_instruction.program_id == SYSTEM_PROGRAM
                     && next_next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     if !logged_transaction {
                         debug!(
@@ -61,16 +61,17 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         );
                         logged_transaction = true;
                     }
-                    let changelogs = Changelogs::deserialize(&mut next_instruction.data.as_slice())
-                        .map_err(|e| {
-                            IngesterError::ParserError(format!(
-                                "Failed to deserialize Changelogs: {}",
-                                e
-                            ))
-                        })?;
+                    let changelogs =
+                        Changelogs::deserialize(&mut next_next_instruction.data.as_slice())
+                            .map_err(|e| {
+                                IngesterError::ParserError(format!(
+                                    "Failed to deserialize Changelogs: {}",
+                                    e
+                                ))
+                            })?;
 
                     let public_transaction_event = PublicTransactionEvent::deserialize(
-                        &mut next_next_instruction.data.as_slice(),
+                        &mut next_next_next_instruction.data.as_slice(),
                     )
                     .map_err(|e| {
                         IngesterError::ParserError(format!(
@@ -119,7 +120,7 @@ fn parse_account_data(
         address: address.map(SerializablePubkey::from),
         data,
         hash: hash.into(),
-        slot_updated: UnsignedInteger(slot),
+        slot_created: UnsignedInteger(slot),
         leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
         seq: seq.map(|s| UnsignedInteger(s)),
@@ -135,35 +136,14 @@ fn parse_public_transaction_event(
     let PublicTransactionEvent {
         input_compressed_account_hashes,
         output_compressed_account_hashes,
-        input_compressed_accounts,
         output_compressed_accounts,
-        pubkey_array,
         ..
     } = transaction_event;
 
     let mut state_update = StateUpdate::new();
 
-    for (account, hash) in input_compressed_accounts
-        .iter()
-        .zip(input_compressed_account_hashes)
-    {
-        let CompressedAccountWithMerkleContext {
-            compressed_account,
-            merkle_tree_pubkey_index,
-            leaf_index,
-            ..
-        } = account.clone();
-
-        let enriched_account = parse_account_data(
-            compressed_account,
-            hash,
-            pubkey_array[merkle_tree_pubkey_index as usize],
-            leaf_index,
-            slot,
-            None,
-        );
-
-        state_update.in_accounts.push(enriched_account);
+    for hash in input_compressed_account_hashes {
+        state_update.in_accounts.insert(hash.into());
     }
     let path_updates = extract_path_updates(changelogs);
 
@@ -216,11 +196,16 @@ fn parse_public_transaction_event(
 
     state_update
         .account_transactions
-        .extend(state_update.in_accounts.iter().map(|a| AccountTransaction {
-            hash: a.hash.clone(),
-            signature: tx,
-            slot,
-        }));
+        .extend(
+            state_update
+                .in_accounts
+                .iter()
+                .map(|hash| AccountTransaction {
+                    hash: hash.clone(),
+                    signature: tx,
+                    slot,
+                }),
+        );
 
     state_update
         .account_transactions

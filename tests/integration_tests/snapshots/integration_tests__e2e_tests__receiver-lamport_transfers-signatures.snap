@@ -1,0 +1,24 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: signatures
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "signature": "64tDNpAnQHZsuiH8UG8vXDzXbwGHdghfLYerPdaVdgkQ2kSTE65kDT7ajzzhd2ZDW8nVoKYztnjxCaV8bWJxNCXR",
+        "slot": 0,
+        "blockTime": 0
+      },
+      {
+        "signature": "yK3j6TkABz2SVBtvsVwJV5ZoLv1tJBrBR8Z8JsosHQGbeizt7yx8Qx1Nva1ytcKa7hAXsT7R6WyQUiCH43Cwtk5",
+        "slot": 0,
+        "blockTime": 0
+      }
+    ],
+    "cursor": null
+  }
+}

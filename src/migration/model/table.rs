@@ -9,7 +9,6 @@ pub enum StateTrees {
     Level,
     Hash,
     Seq,
-    SlotUpdated,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -25,7 +24,7 @@ pub enum Accounts {
     Spent,
     PrevSpent,
     Seq,
-    SlotUpdated,
+    SlotCreated,
 }
 
 #[derive(Copy, Clone, Iden)]

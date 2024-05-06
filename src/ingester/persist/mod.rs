@@ -3,6 +3,7 @@ use super::{
     parser::state_update::{AccountTransaction, EnrichedPathNode},
 };
 use crate::{
+    api::method::get_multiple_compressed_account_proofs::{get_proof_nodes, ZERO_BYTES},
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
@@ -11,10 +12,14 @@ use crate::{
     dao::generated::{accounts, state_trees, token_accounts},
     ingester::parser::state_update::StateUpdate,
 };
+use light_poseidon::{Poseidon, PoseidonBytesHasher};
+
+use ark_bn254::Fr;
 use borsh::BorshDeserialize;
-use log::debug;
+use log::{debug};
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait,
+    sea_query::{Expr, OnConflict},
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, QueryFilter,
     QueryTrait, Set, Statement,
 };
 use std::collections::{HashMap, HashSet};
@@ -31,9 +36,8 @@ pub const MAX_SQL_INSERTS: usize = 1000;
 
 pub async fn persist_state_update(
     txn: &DatabaseTransaction,
-    mut state_update: StateUpdate,
+    state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
-    state_update.prune_redundant_updates();
     let StateUpdate {
         in_accounts,
         out_accounts,
@@ -49,22 +53,27 @@ pub async fn persist_state_update(
         out_accounts.len(),
         path_nodes.len()
     );
-
-    debug!("Persisting spent accounts...");
-    for chunk in in_accounts.chunks(MAX_SQL_INSERTS) {
-        spend_input_accounts(txn, chunk).await?;
-    }
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
+    }
+
+    debug!("Persisting spent accounts...");
+    for chunk in in_accounts
+        .into_iter()
+        .collect::<Vec<_>>()
+        .chunks(MAX_SQL_INSERTS)
+    {
+        spend_input_accounts(txn, chunk).await?;
     }
 
     debug!("Persisting path nodes...");
     for chunk in path_nodes
         .into_values()
         .collect::<Vec<_>>()
-        .chunks(MAX_SQL_INSERTS)
+        .chunks_mut(MAX_SQL_INSERTS)
     {
+        chunk.sort_by_key(|node| node.level);
         persist_path_nodes(txn, chunk).await?;
     }
 
@@ -107,36 +116,22 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
 
 async fn spend_input_accounts(
     txn: &DatabaseTransaction,
-    in_accounts: &[Account],
+    in_accounts: &[Hash],
 ) -> Result<(), IngesterError> {
-    let in_account_models: Vec<accounts::ActiveModel> = in_accounts
-        .iter()
-        .map(|account| accounts::ActiveModel {
-            hash: Set(account.hash.to_vec()),
-            spent: Set(true),
-            data: Set(None),
-            owner: Set(account.owner.0.to_bytes().to_vec()),
-            discriminator: Set(None),
-            lamports: Set(Decimal::from(account.lamports.0)),
-            slot_updated: Set(account.slot_updated.0 as i64),
-            tree: Set(account.tree.0.to_bytes().to_vec()),
-            leaf_index: Set(account.leaf_index.0 as i64),
-            ..Default::default()
-        })
-        .collect();
-
-    let query = accounts::Entity::insert_many(in_account_models)
-        .on_conflict(
-            OnConflict::column(accounts::Column::Hash)
-                .update_columns([
-                    accounts::Column::Hash,
-                    accounts::Column::Data,
-                    accounts::Column::Lamports,
-                    accounts::Column::Spent,
-                    accounts::Column::SlotUpdated,
-                    accounts::Column::Tree,
-                ])
-                .to_owned(),
+    // Perform the update operation on the identified records
+    let query = accounts::Entity::update_many()
+        .col_expr(accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            accounts::Column::PrevSpent,
+            Expr::col(accounts::Column::Spent).into(),
+        )
+        .filter(
+            accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
         )
         .build(txn.get_database_backend());
 
@@ -148,43 +143,30 @@ async fn spend_input_accounts(
     )
     .await?;
 
-    let mut token_models = Vec::new();
-    for in_accounts in in_accounts {
-        let token_data = parse_token_data(in_accounts)?;
-        if let Some(token_data) = token_data {
-            token_models.push(token_accounts::ActiveModel {
-                hash: Set(in_accounts.hash.to_vec()),
-                spent: Set(true),
-                amount: Set(Decimal::from(token_data.amount.0)),
-                owner: Set(token_data.owner.to_bytes_vec()),
-                mint: Set(token_data.mint.to_bytes_vec()),
-                state: Set(token_data.state as i32),
-                delegated_amount: Set(Decimal::from(0)),
-                ..Default::default()
-            });
-        }
-    }
-    if !token_models.is_empty() {
-        debug!("Marking {} token accounts as spent...", token_models.len());
-        let query = token_accounts::Entity::insert_many(token_models)
-            .on_conflict(
-                OnConflict::column(token_accounts::Column::Hash)
-                    .update_columns([
-                        token_accounts::Column::Hash,
-                        token_accounts::Column::Amount,
-                        token_accounts::Column::Spent,
-                    ])
-                    .to_owned(),
-            )
-            .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::TokenAccount,
-            ModificationType::Spend,
+    debug!("Marking token accounts as spent...",);
+    let query = token_accounts::Entity::update_many()
+        .col_expr(token_accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            token_accounts::Column::PrevSpent,
+            Expr::col(token_accounts::Column::Spent).into(),
         )
-        .await?;
-    }
+        .filter(
+            token_accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
+        )
+        .build(txn.get_database_backend());
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::TokenAccount,
+        ModificationType::Spend,
+    )
+    .await?;
 
     Ok(())
 }
@@ -236,28 +218,21 @@ async fn execute_account_update_query_and_update_balances(
     account_type: AccountType,
     modification_type: ModificationType,
 ) -> Result<(), IngesterError> {
-    let (original_table_name, owner_table_name, balance_column, additional_columns) =
-        match account_type {
-            AccountType::Account => ("accounts", "owner_balances", "lamports", ""),
-            AccountType::TokenAccount => {
-                ("token_accounts", "token_owner_balances", "amount", ", mint")
-            }
-        };
-    let prev_spent_set = match modification_type {
-        ModificationType::Append => "".to_string(),
-        ModificationType::Spend => {
-            format!(", \"prev_spent\" = \"{original_table_name}\".\"spent\"")
-        }
+    let (owner_table_name, balance_column, additional_columns) = match account_type {
+        AccountType::Account => ("owner_balances", "lamports", ""),
+        AccountType::TokenAccount => ("token_owner_balances", "amount", ", mint"),
     };
+
     query.sql = format!(
-        "{} {} RETURNING owner,prev_spent,{}{}",
-        query.sql, prev_spent_set, balance_column, additional_columns
+        "{} RETURNING owner,prev_spent,{}{}",
+        query.sql, balance_column, additional_columns
     );
-    let result = txn.query_all(query).await.map_err(|e| {
+    let result = txn.query_all(query.clone()).await.map_err(|e| {
         IngesterError::DatabaseError(format!(
-            "Got error appending {:?} accounts {}",
+            "Got error appending {:?} accounts {}. Query {}",
             account_type,
-            e.to_string()
+            e.to_string(),
+            query.sql
         ))
     })?;
     let multiplier = Decimal::from(match &modification_type {
@@ -340,7 +315,7 @@ async fn append_output_accounts(
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
-            slot_updated: Set(account.slot_updated.0 as i64),
+            slot_created: Set(account.slot_created.0 as i64),
             seq: Set(account.seq.map(|s| s.0 as i64)),
             prev_spent: Set(None),
         });
@@ -419,6 +394,24 @@ pub async fn persist_token_accounts(
     Ok(())
 }
 
+fn get_node_direct_ancestors(leaf_index: i64) -> Vec<i64> {
+    let mut path: Vec<i64> = Vec::new();
+    let mut current_index = leaf_index;
+    while current_index > 1 {
+        current_index >>= 1;
+        path.push(current_index);
+    }
+    path
+}
+
+pub fn compute_parent_hash(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, IngesterError> {
+    let mut poseidon = Poseidon::<Fr>::new_circom(2).unwrap();
+    poseidon
+        .hash_bytes_be(&[&left, &right])
+        .map_err(|e| IngesterError::ParserError(format!("Failed to compute parent hash: {}", e)))
+        .map(|x| x.to_vec())
+}
+
 async fn persist_path_nodes(
     txn: &DatabaseTransaction,
     nodes: &[EnrichedPathNode],
@@ -426,30 +419,93 @@ async fn persist_path_nodes(
     if nodes.is_empty() {
         return Ok(());
     }
-    let node_models = nodes
+    if txn.get_database_backend() == DatabaseBackend::Postgres {
+        txn.execute(Statement::from_string(
+            txn.get_database_backend(),
+            "LOCK TABLE state_trees IN EXCLUSIVE MODE;".to_string(),
+        ))
+        .await
+        .map_err(|e| {
+            IngesterError::DatabaseError(format!("Failed to lock state_trees table: {}", e))
+        })?;
+    }
+
+    let mut leaf_nodes = nodes
         .iter()
-        .map(|node| state_trees::ActiveModel {
-            tree: Set(node.tree.to_vec()),
-            level: Set(node.level as i64),
-            node_idx: Set(node.node.index as i64),
-            hash: Set(node.node.node.to_vec()),
-            leaf_idx: Set(node.leaf_index.map(|x| x as i64)),
-            seq: Set(node.seq as i64),
-            slot_updated: Set(node.slot as i64),
-        })
+        .filter(|node| node.leaf_index.is_some())
         .collect::<Vec<_>>();
+
+    leaf_nodes.sort_by_key(|node| node.seq);
+
+    let leaf_locations = leaf_nodes
+        .iter()
+        .map(|node| (node.tree.to_vec(), node.node.index as i64))
+        .collect::<Vec<_>>();
+
+    let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
+
+    let mut node_locations_to_hashes = node_locations_to_models
+        .iter()
+        .map(|(key, value)| (key.clone(), value.hash.clone()))
+        .collect::<HashMap<_, _>>();
+
+    let mut models_to_updates = HashMap::new();
+
+    for leaf_node in leaf_nodes {
+        let tree = leaf_node.tree.to_vec();
+        let key = (tree.clone(), leaf_node.node.index as i64);
+
+        let model = state_trees::ActiveModel {
+            tree: Set(leaf_node.tree.to_vec()),
+            level: Set(leaf_node.level as i64),
+            node_idx: Set(leaf_node.node.index as i64),
+            hash: Set(leaf_node.node.node.to_vec()),
+            leaf_idx: Set(leaf_node.leaf_index.map(|x| x as i64)),
+            seq: Set(leaf_node.seq as i64),
+        };
+        models_to_updates.insert(key.clone(), model);
+        node_locations_to_hashes.insert(key, leaf_node.node.node.to_vec());
+
+        for (child_level, node_index) in get_node_direct_ancestors(leaf_node.node.index as i64)
+            .iter()
+            .enumerate()
+        {
+            let left_child = node_locations_to_hashes
+                .get(&(tree.clone(), node_index * 2))
+                .map(Clone::clone)
+                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+
+            let right_child = node_locations_to_hashes
+                .get(&(tree.clone(), node_index * 2 + 1))
+                .map(Clone::clone)
+                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+
+            let level = child_level + 1;
+
+            let hash = compute_parent_hash(left_child, right_child)?;
+
+            let model = state_trees::ActiveModel {
+                tree: Set(tree.clone()),
+                level: Set(level as i64),
+                node_idx: Set(*node_index),
+                hash: Set(hash.clone()),
+                leaf_idx: Set(None),
+                seq: Set(leaf_node.seq as i64),
+            };
+
+            let key = (tree.clone(), *node_index);
+            models_to_updates.insert(key.clone(), model);
+            node_locations_to_hashes.insert(key, hash);
+        }
+    }
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
-    let mut query = state_trees::Entity::insert_many(node_models)
+    let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
         .on_conflict(
             OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
-                .update_columns([
-                    state_trees::Column::Hash,
-                    state_trees::Column::Seq,
-                    state_trees::Column::SlotUpdated,
-                ])
+                .update_columns([state_trees::Column::Hash, state_trees::Column::Seq])
                 .to_owned(),
         )
         .build(txn.get_database_backend());

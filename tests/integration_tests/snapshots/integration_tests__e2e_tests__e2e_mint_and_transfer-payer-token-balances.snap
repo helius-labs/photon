@@ -7,12 +7,7 @@ expression: token_balances
     "slot": 0
   },
   "value": {
-    "token_balances": [
-      {
-        "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
-        "balance": 895
-      }
-    ],
+    "token_balances": [],
     "cursor": null
   }
 }
