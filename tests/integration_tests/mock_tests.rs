@@ -88,7 +88,7 @@ async fn test_persist_state_update_basic(
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
         seq: Some(UnsignedInteger(0)),
-        slot_updated: UnsignedInteger(0),
+        slot_created: UnsignedInteger(0),
     };
 
     state_update.out_accounts.push(account.clone());
@@ -178,7 +178,7 @@ async fn test_multiple_accounts(
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(10),
             seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
+            slot_created: UnsignedInteger(0),
         },
         Account {
             hash: Hash::new_unique(),
@@ -193,7 +193,7 @@ async fn test_multiple_accounts(
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(11),
             seq: Some(UnsignedInteger(2)),
-            slot_updated: UnsignedInteger(0),
+            slot_created: UnsignedInteger(0),
         },
         Account {
             hash: Hash::new_unique(),
@@ -208,7 +208,7 @@ async fn test_multiple_accounts(
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(13),
             seq: Some(UnsignedInteger(3)),
-            slot_updated: UnsignedInteger(1),
+            slot_created: UnsignedInteger(1),
         },
         Account {
             hash: Hash::new_unique(),
@@ -223,7 +223,7 @@ async fn test_multiple_accounts(
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(23),
             seq: Some(UnsignedInteger(1)),
-            slot_updated: UnsignedInteger(0),
+            slot_created: UnsignedInteger(0),
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -390,7 +390,7 @@ async fn test_persist_token_data(
             data: Set(Some(to_vec(&token_data).unwrap())),
             owner: Set(token_data.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(10)),
-            slot_updated: Set(slot),
+            slot_created: Set(slot),
             leaf_index: Set(i as i64),
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),

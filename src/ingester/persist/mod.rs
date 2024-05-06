@@ -315,7 +315,7 @@ async fn append_output_accounts(
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
-            slot_updated: Set(account.slot_updated.0 as i64),
+            slot_created: Set(account.slot_created.0 as i64),
             seq: Set(account.seq.map(|s| s.0 as i64)),
             prev_spent: Set(None),
         });
@@ -462,7 +462,6 @@ async fn persist_path_nodes(
             hash: Set(leaf_node.node.node.to_vec()),
             leaf_idx: Set(leaf_node.leaf_index.map(|x| x as i64)),
             seq: Set(leaf_node.seq as i64),
-            slot_updated: Set(leaf_node.slot as i64),
         };
         models_to_updates.insert(key.clone(), model);
         node_locations_to_hashes.insert(key, leaf_node.node.node.to_vec());
@@ -492,7 +491,6 @@ async fn persist_path_nodes(
                 hash: Set(hash.clone()),
                 leaf_idx: Set(None),
                 seq: Set(leaf_node.seq as i64),
-                slot_updated: Set(leaf_node.slot as i64),
             };
 
             let key = (tree.clone(), *node_index);
@@ -507,11 +505,7 @@ async fn persist_path_nodes(
     let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
         .on_conflict(
             OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
-                .update_columns([
-                    state_trees::Column::Hash,
-                    state_trees::Column::Seq,
-                    state_trees::Column::SlotUpdated,
-                ])
+                .update_columns([state_trees::Column::Hash, state_trees::Column::Seq])
                 .to_owned(),
         )
         .build(txn.get_database_backend());

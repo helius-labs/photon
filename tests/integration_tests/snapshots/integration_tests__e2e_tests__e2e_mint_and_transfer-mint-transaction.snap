@@ -218,7 +218,7 @@ expression: parsed_transaction
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 0,
           "seq": 1,
-          "slotUpdated": 36
+          "slotCreated": 36
         },
         "optional_token_data": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",

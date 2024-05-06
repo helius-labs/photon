@@ -211,7 +211,7 @@ expression: parsed_transaction
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 0,
           "seq": 1,
-          "slotUpdated": 0
+          "slotCreated": 0
         },
         "optional_token_data": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
@@ -239,7 +239,7 @@ expression: parsed_transaction
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 1,
           "seq": 2,
-          "slotUpdated": 37
+          "slotCreated": 37
         },
         "optional_token_data": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
@@ -265,7 +265,7 @@ expression: parsed_transaction
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 2,
           "seq": 2,
-          "slotUpdated": 37
+          "slotCreated": 37
         },
         "optional_token_data": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",

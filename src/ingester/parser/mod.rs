@@ -120,7 +120,7 @@ fn parse_account_data(
         address: address.map(SerializablePubkey::from),
         data,
         hash: hash.into(),
-        slot_updated: UnsignedInteger(slot),
+        slot_created: UnsignedInteger(slot),
         leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
         seq: seq.map(|s| UnsignedInteger(s)),

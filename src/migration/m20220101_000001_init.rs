@@ -54,11 +54,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(StateTrees::Level).big_integer().not_null())
                     .col(ColumnDef::new(StateTrees::Hash).binary().not_null())
                     .col(ColumnDef::new(StateTrees::Seq).big_integer().not_null())
-                    .col(
-                        ColumnDef::new(StateTrees::SlotUpdated)
-                            .big_integer()
-                            .not_null(),
-                    )
                     .primary_key(
                         Index::create()
                             .name("pk_state_trees")
@@ -102,7 +97,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Accounts::LeafIndex).big_integer().not_null())
                     .col(ColumnDef::new(Accounts::Seq).big_integer())
                     .col(
-                        ColumnDef::new(Accounts::SlotUpdated)
+                        ColumnDef::new(Accounts::SlotCreated)
                             .big_integer()
                             .not_null(),
                     )

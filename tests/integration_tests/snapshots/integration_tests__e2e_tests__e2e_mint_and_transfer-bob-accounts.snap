@@ -22,7 +22,7 @@ expression: accounts
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 6,
           "seq": 6,
-          "slotUpdated": 0
+          "slotCreated": 0
         },
         "tokenData": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
@@ -48,7 +48,7 @@ expression: accounts
           "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
           "leafIndex": 3,
           "seq": 4,
-          "slotUpdated": 0
+          "slotCreated": 0
         },
         "tokenData": {
           "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",

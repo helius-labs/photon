@@ -18,7 +18,7 @@ pub struct Account {
     pub tree: SerializablePubkey,
     pub leaf_index: UnsignedInteger,
     pub seq: Option<UnsignedInteger>,
-    pub slot_updated: UnsignedInteger,
+    pub slot_created: UnsignedInteger,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]

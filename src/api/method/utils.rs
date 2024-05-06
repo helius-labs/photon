@@ -157,7 +157,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         tree: account.tree.try_into()?,
         leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
-        slot_updated: UnsignedInteger(account.slot_updated as u64),
+        slot_created: UnsignedInteger(account.slot_created as u64),
         seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
     })
 }
