@@ -16,7 +16,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
-use log::debug;
+use log::{debug, info};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, QueryFilter,
@@ -71,8 +71,9 @@ pub async fn persist_state_update(
     for chunk in path_nodes
         .into_values()
         .collect::<Vec<_>>()
-        .chunks(MAX_SQL_INSERTS)
+        .chunks_mut(MAX_SQL_INSERTS)
     {
+        chunk.sort_by_key(|node| node.level);
         persist_path_nodes(txn, chunk).await?;
     }
 
@@ -438,10 +439,11 @@ async fn persist_path_nodes(
 
     let leaf_locations = leaf_nodes
         .iter()
-        .map(|node| (node.tree.to_vec(), node.leaf_index.unwrap() as i64))
+        .map(|node| (node.tree.to_vec(), node.node.index as i64))
         .collect::<Vec<_>>();
 
     let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
+
     let mut node_locations_to_hashes = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), value.hash.clone()))
@@ -479,11 +481,13 @@ async fn persist_path_nodes(
                 .map(Clone::clone)
                 .unwrap_or(ZERO_BYTES[child_level].to_vec());
 
+            let level = child_level + 1;
+
             let hash = compute_parent_hash(left_child, right_child)?;
 
             let model = state_trees::ActiveModel {
                 tree: Set(tree.clone()),
-                level: Set(child_level as i64 + 1),
+                level: Set(level as i64),
                 node_idx: Set(*node_index),
                 hash: Set(hash.clone()),
                 leaf_idx: Set(None),

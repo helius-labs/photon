@@ -35,12 +35,12 @@ expression: proofs
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "2DTG1EeYyHnDQR4dXYnBRmmgmZCf4rhE7rJMB8Bhouzo"
+        "2paQZYR51wHBPnzU47eXsBdGBeoTQURtTy2i6ycyss1L"
       ],
       "leafIndex": 4,
       "hash": "jDz4JTPCYXKCyu4JQHiTUxMLube58nD8BVsGx3nPvyh",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-      "rootSeq": 0
+      "rootSeq": 7
     },
     {
       "proof": [
@@ -70,12 +70,12 @@ expression: proofs
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "2DTG1EeYyHnDQR4dXYnBRmmgmZCf4rhE7rJMB8Bhouzo"
+        "2paQZYR51wHBPnzU47eXsBdGBeoTQURtTy2i6ycyss1L"
       ],
       "leafIndex": 5,
       "hash": "3iMoAFWvt9u4gcaLvN3DbUUBrBripuRfpZ9xFZ3GBVpZ",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-      "rootSeq": 0
+      "rootSeq": 7
     }
   ]
 }
