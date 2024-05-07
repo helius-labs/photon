@@ -25,7 +25,6 @@ async fn test_e2e_mint_and_transfer(
 ) {
     use std::str::FromStr;
 
-    
     use photon_indexer::{
         api::method::{
             get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
@@ -46,20 +45,20 @@ async fn test_e2e_mint_and_transfer(
     .await;
 
     let payer_pubkey =
-        SerializablePubkey::try_from("Fg5TtbkvcqLedmwFqqbWty9NRqMKKMqy9zNLZZRQXSDc").unwrap();
+        SerializablePubkey::try_from("Eax3ar7Sg53JvTWirvNRNgyxn22LAusNjcmMPdR1zs5t").unwrap();
     let bob_pubkey =
-        SerializablePubkey::try_from("4rANawp9ahHmvaVi3CCeJSam8JTA4DDY3htJKnhYxbHN").unwrap();
+        SerializablePubkey::try_from("6hct2FBjZeQZ7Sscip1Xep3b94jCh7FvtaKqpfhne1Ak").unwrap();
     let charles_pubkey =
-        SerializablePubkey::try_from("GyXNDaUUBwzYp24vEzang6SyCzcA8L3csZkiALqF6KRs").unwrap();
+        SerializablePubkey::try_from("GF94vdJvzB28bSSEy7utrYkisNFuZR3ispD97W7Pd6LS").unwrap();
 
     let mint_tx =
-        "2DcgLz1KwPaMoiRAAmYAirx4213swLbaSM1YYuCkbgzngq61XSWaFCRGuFoMgqW5htsEZRKBm6uQQPAPCXUVL8eH";
+        "67P7sjss5EV1eTzeRSFEejwohTGYvtxgrReAURrEnQJ1JiKzofFt7HdQX8zzyDqymxuggeK31DQRCDLxffc2fHwr";
     let transfer_tx =
-        "DFE7shhwCWd5P14NfA1ELSpd96FaJhBkjSet2Y7t7CtM4oLhP17AYKtyMBjZWi4hgFKvqET8zcAQUDuAC6sARfk";
+        "2FrvajC55EwHptaGyuBTjBUm4XkE2c5KHo6AVez2qy8jXbH1m7gRUXaEVh9NJjBkpugU6QPHweQHkdiq6NP2eu2f";
     let transfer_txn2: &str =
-        "5FDV6xrPRyfEUP2Kg7mwZVj34LVEfq9gsrquyFkvmmdPiiEn3Bhd8sTJTe6UhszNHLgwWfV6j9X4rsceL9mNNyRZ";
+        "62LLe2o1pSdcmos5NH2A1L7LAXU6FnRRHRJ224ZcN1kT5bWuiEYf3DgyS2DxytSm7RkDN6f24n1XCZJudZKQT6MC";
     let transfer_txn3 =
-        "2pGQ7MgWuhrKpeSAzs58CXttKDiws33X68hQv4tRm6NUH6JCsCBk5uteNcjt2fXdToYhC6s8b6SDzoXV9CLJTo94";
+        "3H2R6UT3Pw9ejNmYTphb27jNoRdXmuLXjjxDaSs87uyuq25YJZtLQgACG9ANsvzfZN1s9d6UPZMabAYYsMoZ6GsG";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
@@ -181,17 +180,17 @@ async fn test_lamport_transfers(
     .await;
 
     let compress_tx =
-        "3ZmBETHr8tHPr7iKdgW4NjTzcUCUHtSBFQD2JwSniShBV9fix6xb6FxRyR1cMRW83WerRYU5b1uxDLM3GqomCkYx";
+        "5Mi1rJzJskdDqnyXS1k8rw91Gm9qsnFuAEmF5G2f21PFXGuoDHpdV4iLjvo9VjDp2kWBBxFnugLAdioyeHRcz5JA";
     let transfer_tx1 =
-        "64tDNpAnQHZsuiH8UG8vXDzXbwGHdghfLYerPdaVdgkQ2kSTE65kDT7ajzzhd2ZDW8nVoKYztnjxCaV8bWJxNCXR";
+        "2jLuZajWysScmEeuW7egrnDLK5m15dxECAvFGVqy9B8LNxsQES4Qn2MRykjXrf1SKU9sg9cyUzsCYPcd9GdjqND2";
     let transfer_tx2 =
-        "yK3j6TkABz2SVBtvsVwJV5ZoLv1tJBrBR8Z8JsosHQGbeizt7yx8Qx1Nva1ytcKa7hAXsT7R6WyQUiCH43Cwtk5";
+        "3DGUfF1qnMcXE8er6U6Yaqh83punr2FBK2oW2v6MVpdPRVzPF6K67Z298LiPeech4kBb677HFnYpxqSX3y8PmqtU";
 
     let payer_pubkey = SerializablePubkey(
-        Pubkey::try_from("8wSvtG3dvL7Nso8E3wx6L9SwTRiZuR8ojRX5D6mwx7hJ").unwrap(),
+        Pubkey::try_from("xJVLBBTaxGx9FXW56R3xvhasYck3jpsBhyRJmW52X5z").unwrap(),
     );
     let receiver_pubkey = SerializablePubkey(
-        Pubkey::try_from("G1zCvDhtSdV6m92q3tXBEE4d531fBx1vD7EUpeeQZrNp").unwrap(),
+        Pubkey::try_from("2EnRYUeRy6AXWNhpQrcwb39LeWknBJ2F8q3ofnuti6fN").unwrap(),
     );
     let txs = [compress_tx, transfer_tx1, transfer_tx2];
     let number_of_indexes = [1, 2];

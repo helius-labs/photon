@@ -50,8 +50,8 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && instruction.accounts.contains(&NOOP_PROGRAM_ID)
-                    && next_instruction.program_id == SYSTEM_PROGRAM
-                    && next_next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_next_instruction.program_id == SYSTEM_PROGRAM
                     && next_next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     if !logged_transaction {
@@ -61,14 +61,13 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         );
                         logged_transaction = true;
                     }
-                    let changelogs =
-                        Changelogs::deserialize(&mut next_next_instruction.data.as_slice())
-                            .map_err(|e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to deserialize Changelogs: {}",
-                                    e
-                                ))
-                            })?;
+                    let changelogs = Changelogs::deserialize(&mut next_instruction.data.as_slice())
+                        .map_err(|e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to deserialize Changelogs: {}",
+                                e
+                            ))
+                        })?;
 
                     let public_transaction_event = PublicTransactionEvent::deserialize(
                         &mut next_next_next_instruction.data.as_slice(),

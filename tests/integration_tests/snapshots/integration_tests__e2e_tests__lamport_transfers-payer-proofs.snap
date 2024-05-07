@@ -9,9 +9,9 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "3Kx76B8mEveDw1qLaPQtkqqG1XSFrCHSmsunvqEhfy9W",
-        "xhayXaPtFWmPJ3GKM123H6JnAnKgCrpHX44VMPfLnEN",
-        "44uYH4E7epKcWPK1ZcUJ9psWsHdLPfJw9vHVX6e3C8oz",
+        "13berapdgyicVUiET7SAn1EVXjN7SttUXssCUxhw5KKZ",
+        "3v8NvFXGHV2nhiTEeg3aBR2WCtda6JsSzF54Khzbewg7",
+        "12twwKFpfRBHu7WUmZU6s5D45fqpnbJwoCqGvCnrsk9m",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -35,10 +35,10 @@ expression: proofs
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "3wXkKFCeQgd1wBM5CMp2FtVAVpKuwZQ1BSbToAn8ZUYe"
+        "oBZ8HtbVEkNnC8qiciKc1CjdmjYSCWSpWTbVebsmEFN"
       ],
       "leafIndex": 3,
-      "hash": "q8hq1gSwtDcyvaCiTaWyF7TXMmw9YqLCGfiCKwPXacr",
+      "hash": "227BXTcxfhvpTTAUBu2H3wVaBjqLbXijmsjaSiESBWaE",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 5
     }
