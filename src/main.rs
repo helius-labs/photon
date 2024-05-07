@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fs::File;
-use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
@@ -20,7 +19,6 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     PgPool, SqlitePool,
 };
-use sqlx::{Connection, SqliteConnection};
 use std::env;
 use std::env::temp_dir;
 use std::sync::Arc;
