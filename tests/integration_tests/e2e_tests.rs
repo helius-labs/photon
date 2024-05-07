@@ -25,7 +25,6 @@ async fn test_e2e_mint_and_transfer(
 ) {
     use std::str::FromStr;
 
-    
     use photon_indexer::{
         api::method::{
             get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
@@ -94,19 +93,27 @@ async fn test_e2e_mint_and_transfer(
             .await
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+        let hash_list = HashList(
+            accounts
+                .value
+                .items
+                .iter()
+                .map(|x| x.account.hash.clone())
+                .collect(),
+        );
         let proofs = setup
             .api
-            .get_multiple_compressed_account_proofs(HashList(
-                accounts
-                    .value
-                    .items
-                    .iter()
-                    .map(|x| x.account.hash.clone())
-                    .collect(),
-            ))
+            .get_multiple_compressed_account_proofs(hash_list.clone())
             .await
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+
+        let validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+
+        assert_json_snapshot!(
+            format!("{}-{}-validity-proof", name.clone(), person),
+            validity_proof
+        );
 
         let mut cursor = None;
         let limit = Limit::new(1).unwrap();
@@ -242,19 +249,27 @@ async fn test_lamport_transfers(
                 format!("{}-{}-accounts", name.clone(), owner_name),
                 accounts
             );
+            let hash_list = HashList(
+                accounts
+                    .value
+                    .items
+                    .iter()
+                    .map(|x| x.hash.clone())
+                    .collect(),
+            );
             let proofs = setup
                 .api
-                .get_multiple_compressed_account_proofs(HashList(
-                    accounts
-                        .value
-                        .items
-                        .iter()
-                        .map(|x| x.hash.clone())
-                        .collect(),
-                ))
+                .get_multiple_compressed_account_proofs(hash_list.clone())
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
+
+            let validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+
+            assert_json_snapshot!(
+                format!("{}-{}-validity-proof", name.clone(), owner_name),
+                validity_proof
+            );
 
             let signatures = setup
                 .api

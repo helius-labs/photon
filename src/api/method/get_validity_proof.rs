@@ -1,18 +1,14 @@
-use crate::{
-    api::{api::PhotonApi, error::PhotonApiError},
-    common::typedefs::hash::Hash,
-};
+use crate::{api::error::PhotonApiError, common::typedefs::hash::Hash};
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::error::Error;
-use std::{convert::TryInto, str::FromStr};
+use std::str::FromStr;
+use utoipa::ToSchema;
 
 use super::get_multiple_compressed_account_proofs::{
-    get_multiple_compressed_account_proofs_helper, MerkleProofWithContext,
+    get_multiple_compressed_account_proofs_helper, HashList,
 };
 
 lazy_static! {
@@ -21,39 +17,35 @@ lazy_static! {
     )
     .unwrap();
 }
+
 #[derive(Serialize, Deserialize)]
-struct CompressedProofWithContext {
+struct HexInputsForProver {
+    root: String,
+    path_index: u32,
+    path_elements: Vec<String>,
+    leaf: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct HexBatchInputsForProver {
+    #[serde(rename = "input-compressed-accounts")]
+    input_compressed_accounts: Vec<HexInputsForProver>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct CompressedProofWithContext {
     compressed_proof: CompressedProof,
     roots: Vec<String>,
     root_indices: Vec<u64>,
     leaf_indices: Vec<u32>,
-    leaves: Vec<Hash>,
+    leaves: Vec<String>,
     merkle_trees: Vec<String>,
-    nullifier_queues: Vec<String>,
 }
 
 fn hash_to_hex(hash: &Hash) -> String {
     let bytes = hash.to_vec();
     let hex = hex::encode(bytes);
     hex
-}
-
-#[derive(Default, Serialize)]
-struct GrankProverInput {
-    roots: Vec<String>,
-    in_path_indices: Vec<u32>,
-    in_path_elements: Vec<Vec<String>>,
-    leaves: Vec<String>,
-}
-
-impl GrankProverInput {
-    fn append_proof(&mut self, proof: &MerkleProofWithContext) {
-        self.roots.push(hash_to_hex(&proof.root));
-        self.in_path_indices.push(proof.leaf_index);
-        self.in_path_elements
-            .push(proof.proof.iter().map(hash_to_hex).collect());
-        self.leaves.push(hash_to_hex(&proof.hash));
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,8 +62,8 @@ struct ProofABC {
     c: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct CompressedProof {
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct CompressedProof {
     a: Vec<u8>,
     b: Vec<u8>,
     c: Vec<u8>,
@@ -159,24 +151,34 @@ fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
     }
 }
 
-async fn get_validity_proof(
+pub async fn get_validity_proof(
     conn: &DatabaseConnection,
-    hashes: Vec<Hash>,
-) -> Result<CompressedProofWithContext, Box<dyn Error>> {
+    hashes: HashList,
+) -> Result<CompressedProofWithContext, PhotonApiError> {
     let client = Client::new();
     let prover_endpoint = "http://localhost:3001"; // Change this as necessary
 
     // Get merkle proofs
     let merkle_proofs_with_context =
-        get_multiple_compressed_account_proofs_helper(conn, hashes).await?;
+        get_multiple_compressed_account_proofs_helper(conn, hashes.0).await?;
 
-    let mut grank_proof_input = GrankProverInput::default();
-    for proof in merkle_proofs_with_context.iter() {
-        grank_proof_input.append_proof(proof);
+    let mut inputs: Vec<HexInputsForProver> = Vec::new();
+    for proof in merkle_proofs_with_context.clone() {
+        let input = HexInputsForProver {
+            root: hash_to_hex(&proof.root),
+            path_index: proof.leaf_index,
+            path_elements: proof.proof.iter().map(|x| hash_to_hex(x)).collect(),
+            leaf: hash_to_hex(&proof.hash),
+        };
+        inputs.push(input);
     }
 
-    let inclusion_proof_url = format!("{}/inclusion", prover_endpoint);
-    let json_body = serde_json::to_string(&grank_proof_input).map_err(|e| {
+    let batch_inputs = HexBatchInputsForProver {
+        input_compressed_accounts: inputs,
+    };
+
+    let inclusion_proof_url = format!("{}/prove", prover_endpoint);
+    let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
             "Got an error while serializing the request {}",
             e.to_string()
@@ -187,19 +189,21 @@ async fn get_validity_proof(
         .body(json_body)
         .header("Content-Type", "application/json")
         .send()
-        .await?;
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e.to_string()))
+        })?;
 
     if !res.status().is_success() {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Error fetching proof: {}", res.status()),
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Error fetching proof {}",
+            res.status().to_string()
         )));
     }
 
-    let text = res
-        .text()
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError("Error fetching proof".to_string()))?;
+    let text = res.text().await.map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e.to_string()))
+    })?;
 
     let proof: GnarkProofJson = serde_json::from_str(&text).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
@@ -213,15 +217,25 @@ async fn get_validity_proof(
 
     Ok(CompressedProofWithContext {
         compressed_proof,
-        roots: grank_proof_input
-            .roots
+        roots: merkle_proofs_with_context
             .iter()
-            .map(|x| x.parse().unwrap())
+            .map(|x| x.root.clone().to_string())
             .collect(),
-        root_indices: todo!(),
-        leaf_indices: todo!(),
-        leaves: todo!(),
-        merkle_trees: todo!(),
-        nullifier_queues: todo!(),
+        root_indices: merkle_proofs_with_context
+            .iter()
+            .map(|x| x.root_seq)
+            .collect(),
+        leaf_indices: merkle_proofs_with_context
+            .iter()
+            .map(|x| x.leaf_index)
+            .collect(),
+        leaves: merkle_proofs_with_context
+            .iter()
+            .map(|x| x.hash.clone().to_string())
+            .collect(),
+        merkle_trees: merkle_proofs_with_context
+            .iter()
+            .map(|x| x.merkle_tree.clone().to_string())
+            .collect(),
     })
 }
