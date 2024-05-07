@@ -9,7 +9,7 @@ expression: token_balances
   "value": {
     "token_balances": [
       {
-        "mint": "CXQYfFDoNQaDZTZGJpmATiXNddWBM7mS3ZgeWmoE8vD8",
+        "mint": "G7DSgLMiDVvMGdY9nj9gXA9XW9E1xeGhVNgCBjs6zJ5w",
         "balance": 895
       }
     ],
