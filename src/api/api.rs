@@ -28,6 +28,9 @@ use super::method::get_compression_signatures_for_owner::{
 use super::method::get_compression_signatures_for_token_owner::{
     get_compression_signatures_for_token_owner, GetCompressionSignaturesForTokenOwnerRequest,
 };
+use super::method::get_latest_compression_signatures::{
+    get_latest_compression_signatures, GetLatestCompressionSignaturesRequest,
+};
 use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
@@ -257,6 +260,13 @@ impl PhotonApi {
         get_validity_proof(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_latest_compression_signatures(
+        &self,
+        request: GetLatestCompressionSignaturesRequest,
+    ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
+        get_latest_compression_signatures(self.db_conn.as_ref(), request).await
+    }
+
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
             OpenApiSpec {
@@ -347,6 +357,11 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressionSignaturesForTokenOwner".to_string(),
                 request: Some(GetCompressionSignaturesForTokenOwnerRequest::schema().1),
+                response: GetPaginatedSignaturesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getLatestCompressionSignatures".to_string(),
+                request: Some(GetLatestCompressionSignaturesRequest::schema().1),
                 response: GetPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {

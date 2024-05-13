@@ -1,33 +1,29 @@
+use super::utils::GetPaginatedSignaturesResponse;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::{
     super::error::PhotonApiError,
-    utils::{
-        search_for_signatures, Context, GetPaginatedSignaturesResponse, Limit, SignatureFilter,
-        SignatureSearchType,
-    },
+    utils::{search_for_signatures, Context, Limit, SignatureSearchType},
 };
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct GetCompressionSignaturesForAddressRequest {
-    pub address: SerializablePubkey,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+pub struct GetLatestCompressionSignaturesRequest {
     pub limit: Option<Limit>,
     pub cursor: Option<String>,
 }
 
-pub async fn get_compression_signatures_for_address(
+pub async fn get_latest_compression_signatures(
     conn: &DatabaseConnection,
-    request: GetCompressionSignaturesForAddressRequest,
+    request: GetLatestCompressionSignaturesRequest,
 ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
     let signatures = search_for_signatures(
         conn,
         SignatureSearchType::Standard,
-        Some(SignatureFilter::Address(request.address)),
+        None,
         request.cursor,
         request.limit,
     )

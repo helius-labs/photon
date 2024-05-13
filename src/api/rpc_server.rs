@@ -275,5 +275,17 @@ fn build_rpc_module(
         api.get_validity_proof(payload).await.map_err(Into::into)
     })?;
 
+    module.register_async_method(
+        "getLatestCompressionSignatures",
+        |rpc_params, rpc_context| async move {
+            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
+            conditionally_index_latest_blocks(indexer).await;
+            let payload = rpc_params.parse()?;
+            api.get_latest_compression_signatures(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
     Ok(module)
 }

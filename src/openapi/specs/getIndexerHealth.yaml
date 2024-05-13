@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.15.0
+  version: 0.19.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -48,42 +48,6 @@ paths:
                 default: ok
                 enum:
                 - ok
-        '400':
-          description: Invalid request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        '401':
-          description: Unauthorized request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        '403':
-          description: Request was forbidden.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        '404':
-          description: The specified resource was not found.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
         '429':
           description: Exceeded rate limit.
           content:
@@ -160,7 +124,6 @@ components:
     AccountState:
       type: string
       enum:
-      - uninitialized
       - initialized
       - frozen
     AccountWithOptionalTokenData:
@@ -194,7 +157,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111GHqvR8KwyrcJ5UJHvwf7RmLtvAnr1uAf27
+      example: 1111111H6X8PLvXQDY3iLaTynKkQ1tUBBJjSNLKeo
     Limit:
       type: integer
       format: int64
@@ -252,8 +215,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
-      example: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
+      default: 1111111GhBXQEdEh35AtuSNxMzRutcgYg3nj8kVLT
+      example: 1111111GhBXQEdEh35AtuSNxMzRutcgYg3nj8kVLT
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

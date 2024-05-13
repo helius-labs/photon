@@ -21,8 +21,6 @@ use super::{serializable_pubkey::SerializablePubkey, unsigned_integer::UnsignedI
 #[derive(Default)]
 pub enum AccountState {
     #[allow(non_camel_case_types)]
-    uninitialized,
-    #[allow(non_camel_case_types)]
     #[default]
     initialized,
     #[allow(non_camel_case_types)]
