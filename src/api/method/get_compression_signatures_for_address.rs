@@ -27,7 +27,7 @@ pub async fn get_compression_signatures_for_address(
     let signatures = search_for_signatures(
         conn,
         SignatureSearchType::Standard,
-        SignatureFilter::Address(request.address),
+        Some(SignatureFilter::Address(request.address)),
         request.cursor,
         request.limit,
     )

@@ -1,5 +1,6 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_latest_compression_signatures::GetLatestCompressionSignaturesRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
@@ -158,6 +159,37 @@ async fn test_e2e_mint_and_transfer(
             parsed_transaction
         );
     }
+
+    let mut cursor = None;
+    let limit = Limit::new(1).unwrap();
+    let mut signatures = Vec::new();
+    loop {
+        let res = setup
+            .api
+            .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+                cursor,
+                limit: Some(limit.clone()),
+            })
+            .await
+            .unwrap()
+            .value;
+        signatures.extend(res.items);
+        cursor = res.cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    let all_signatures = setup
+        .api
+        .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(signatures, all_signatures.value.items);
+
+    assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
 }
 
 #[named]

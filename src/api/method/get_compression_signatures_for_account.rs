@@ -27,7 +27,7 @@ pub async fn get_compression_signatures_for_account(
     let signatures = search_for_signatures(
         conn,
         SignatureSearchType::Standard,
-        SignatureFilter::Account(hash),
+        Some(SignatureFilter::Account(hash)),
         None,
         None,
     )
