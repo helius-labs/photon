@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getMultipleCompressedAccountProofs
+    summary: getLatestCompressionSignatures
     post:
       requestBody:
         content:
@@ -36,11 +36,17 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getMultipleCompressedAccountProofs
+                  - getLatestCompressionSignatures
                 params:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Hash'
+                  type: object
+                  properties:
+                    cursor:
+                      type: string
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
         required: true
       responses:
         '200':
@@ -56,9 +62,7 @@ paths:
                   context:
                     $ref: '#/components/schemas/Context'
                   value:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerkleProofWithContext'
+                    $ref: '#/components/schemas/PaginatedSignatureInfoList'
         '400':
           description: Invalid request.
           content:
@@ -204,7 +208,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111114DhpssPJgSi1YU7hCMfYt1BJ334YgsffXm
+      example: 1111111GHqvR8KwyrcJ5UJHvwf7RmLtvAnr1uAf27
     Limit:
       type: integer
       format: int64
@@ -262,8 +266,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
-      example: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
+      default: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
+      example: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

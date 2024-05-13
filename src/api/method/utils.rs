@@ -483,13 +483,10 @@ pub enum SignatureSearchType {
     Token,
 }
 
-pub async fn search_for_signatures(
-    conn: &DatabaseConnection,
+fn compute_search_filter_and_arg(
     search_type: SignatureSearchType,
     signature_filter: SignatureFilter,
-    cursor: Option<String>,
-    limit: Option<Limit>,
-) -> Result<PaginatedSignatureInfoList, PhotonApiError> {
+) -> Result<(String, Value), PhotonApiError> {
     if search_type == SignatureSearchType::Token {
         match signature_filter {
             SignatureFilter::Owner(_) => {}
@@ -500,12 +497,10 @@ pub async fn search_for_signatures(
             }
         }
     }
-
     let base_table = match search_type {
         SignatureSearchType::Standard => "accounts",
         SignatureSearchType::Token => "token_accounts",
     };
-
     let (filter, arg): (String, Vec<u8>) = match signature_filter {
         SignatureFilter::Account(hash) => ("WHERE account_transactions.hash = $1".to_string(), hash.into()),
         SignatureFilter::Address(address) => {
@@ -516,8 +511,14 @@ pub async fn search_for_signatures(
         ), owner.into()),
     };
     let arg: Value = arg.into();
+    Ok((filter, arg))
+}
 
-    let (cursor_filter, cursor_args): (String, Vec<Value>) = match cursor {
+fn compute_cursor_filter(
+    cursor: Option<String>,
+    num_preceding_args: i64,
+) -> Result<(String, Vec<Value>), PhotonApiError> {
+    match cursor {
         Some(cursor) => {
             let bytes = bs58::decode(cursor.clone()).into_vec().map_err(|_| {
                 PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor))
@@ -537,55 +538,92 @@ pub async fn search_for_signatures(
             let signature = Signature::try_from(signature).map_err(|_| {
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
+            let (slot_arg_index, signature_arg_index) =
+                (num_preceding_args + 1, num_preceding_args + 2);
 
-            (
-                "AND transactions.slot <= $2 AND transactions.signature < $3".to_string(),
+            Ok((
+                format!(
+                    "AND transactions.slot <= ${} AND transactions.signature < ${}",
+                    slot_arg_index, signature_arg_index
+                ),
                 vec![
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
                 ],
-            )
+            ))
         }
-        None => ("".to_string(), vec![]),
-    };
+        None => Ok(("".to_string(), vec![])),
+    }
+}
+
+fn compute_raw_sql_query_and_args(
+    search_type: SignatureSearchType,
+    signature_filter: Option<SignatureFilter>,
+    cursor: Option<String>,
+    limit: u64,
+) -> Result<(String, Vec<Value>), PhotonApiError> {
+    match signature_filter {
+        Some(signature_filter) => {
+            let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
+
+            let (filter, arg) = compute_search_filter_and_arg(search_type, signature_filter)?;
+
+            let raw_sql = format!(
+                "
+                SELECT DISTINCT transactions.signature, transactions.slot, blocks.block_time
+                FROM account_transactions
+                JOIN transactions ON account_transactions.signature = transactions.signature
+                JOIN blocks ON transactions.slot = blocks.slot
+                {filter}
+                {cursor_filter}
+                ORDER BY transactions.slot DESC, transactions.signature DESC
+                LIMIT {limit}
+            "
+            );
+
+            Ok((raw_sql, vec![arg].into_iter().chain(cursor_args).collect()))
+        }
+        None => {
+            if search_type == SignatureSearchType::Token {
+                return Err(PhotonApiError::ValidationError(
+                    "Token search requires a filter".to_string(),
+                ));
+            }
+            let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 0)?;
+            let raw_sql = format!(
+                "
+                SELECT transactions.signature, transactions.slot, blocks.block_time
+                FROM transactions
+                JOIN blocks ON transactions.slot = blocks.slot
+                {cursor_filter}
+                ORDER BY transactions.slot DESC, transactions.signature DESC
+                LIMIT {limit}
+            "
+            );
+
+            Ok((raw_sql, cursor_args))
+        }
+    }
+}
+
+pub async fn search_for_signatures(
+    conn: &DatabaseConnection,
+    search_type: SignatureSearchType,
+    signature_filter: Option<SignatureFilter>,
+    cursor: Option<String>,
+    limit: Option<Limit>,
+) -> Result<PaginatedSignatureInfoList, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
+    let (raw_sql, args) =
+        compute_raw_sql_query_and_args(search_type, signature_filter, cursor, limit)?;
 
-    let raw_sql = format!(
-        "
-        SELECT DISTINCT transactions.signature, transactions.slot, blocks.block_time
-        FROM account_transactions
-        JOIN transactions ON account_transactions.signature = transactions.signature
-        JOIN blocks ON transactions.slot = blocks.slot
-        {filter}
-        {cursor_filter}
-        ORDER BY transactions.slot, transactions.signature DESC
-        LIMIT {limit}
-    "
-    );
+    let signatures: Vec<SignatureInfoModel> = SignatureInfoModel::find_by_statement(
+        Statement::from_sql_and_values(conn.get_database_backend(), &raw_sql, args.clone()),
+    )
+    .all(conn)
+    .await?;
 
-    let signatures: Vec<SignatureInfoModel> =
-        SignatureInfoModel::find_by_statement(Statement::from_sql_and_values(
-            conn.get_database_backend(),
-            &raw_sql,
-            vec![arg].into_iter().chain(cursor_args),
-        ))
-        .all(conn)
-        .await?;
-
-    let signatures = signatures
-        .into_iter()
-        .map(|signature| {
-            Ok(SignatureInfo {
-                signature: SerializableSignature(
-                    Signature::try_from(signature.signature).map_err(|_| {
-                        PhotonApiError::UnexpectedError("Invalid signature".to_string())
-                    })?,
-                ),
-                slot: UnsignedInteger(signature.slot as u64),
-                block_time: UnixTimestamp(signature.block_time as u64),
-            })
-        })
-        .collect::<Result<Vec<SignatureInfo>, PhotonApiError>>()?;
+    let signatures = parse_signatures_infos(signatures)?;
 
     let cursor = match signatures.len() < limit as usize {
         true => None,
@@ -602,6 +640,23 @@ pub async fn search_for_signatures(
     Ok(PaginatedSignatureInfoList {
         items: signatures,
         cursor,
+    })
+}
+
+pub fn parse_signatures_infos(
+    signatures: Vec<SignatureInfoModel>,
+) -> Result<Vec<SignatureInfo>, PhotonApiError> {
+    signatures.into_iter().map(parse_signature_info).collect()
+}
+
+fn parse_signature_info(model: SignatureInfoModel) -> Result<SignatureInfo, PhotonApiError> {
+    Ok(SignatureInfo {
+        signature: SerializableSignature(
+            Signature::try_from(model.signature)
+                .map_err(|_| PhotonApiError::UnexpectedError("Invalid signature".to_string()))?,
+        ),
+        slot: UnsignedInteger(model.slot as u64),
+        block_time: UnixTimestamp(model.block_time as u64),
     })
 }
 
