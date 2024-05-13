@@ -19,6 +19,7 @@ lazy_static! {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HexInputsForProver {
     root: String,
     path_index: u32,
@@ -27,14 +28,16 @@ struct HexInputsForProver {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HexBatchInputsForProver {
     #[serde(rename = "input-compressed-accounts")]
     input_compressed_accounts: Vec<HexInputsForProver>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CompressedProofWithContext {
-    compressed_proof: CompressedProof,
+    pub compressed_proof: CompressedProof,
     roots: Vec<String>,
     root_indices: Vec<u64>,
     leaf_indices: Vec<u32>,
@@ -45,10 +48,10 @@ pub struct CompressedProofWithContext {
 fn hash_to_hex(hash: &Hash) -> String {
     let bytes = hash.to_vec();
     let hex = hex::encode(bytes);
-    hex
+    format!("0x{}", hex)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct GnarkProofJson {
     ar: [String; 2],
     bs: [[String; 2]; 2],
@@ -62,7 +65,7 @@ struct ProofABC {
     c: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Default)]
 pub struct CompressedProof {
     a: Vec<u8>,
     b: Vec<u8>,
@@ -70,7 +73,16 @@ pub struct CompressedProof {
 }
 
 fn deserialize_hex_string_to_bytes(hex_str: &str) -> Vec<u8> {
-    hex::decode(hex_str).expect("Failed to decode hex string")
+    let hex_str = if hex_str.starts_with("0x") {
+        &hex_str[2..]
+    } else {
+        hex_str
+    };
+
+    // Left pad with 0s if the length is not 64
+    let hex_str = format!("{:0>64}", hex_str);
+
+    hex::decode(&hex_str).expect("Failed to decode hex string")
 }
 
 fn proof_from_json_struct(json: GnarkProofJson) -> ProofABC {
@@ -186,7 +198,7 @@ pub async fn get_validity_proof(
     })?;
     let res = client
         .post(&inclusion_proof_url)
-        .body(json_body)
+        .body(json_body.clone())
         .header("Content-Type", "application/json")
         .send()
         .await

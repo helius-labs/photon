@@ -1,0 +1,46 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: proofs
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": [
+    {
+      "proof": [
+        "13berapdgyicVUiET7SAn1EVXjN7SttUXssCUxhw5KKZ",
+        "3v8NvFXGHV2nhiTEeg3aBR2WCtda6JsSzF54Khzbewg7",
+        "12twwKFpfRBHu7WUmZU6s5D45fqpnbJwoCqGvCnrsk9m",
+        "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
+        "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
+        "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
+        "46JM2e72mdEAxkSeXc65b3aLWkAQpX6NF7mdyuXQKguu",
+        "WKLyYL7wpK5zVsWoMU2rcUiMwRWp9PowG83GHHH1dqn",
+        "4CztDUcRvGkTyFoVEXXcBwd5UwqJcJJWpdL8FFERrqkU",
+        "yjDkqNqZtBwpG7iUwT3hqKNKZAP9CcBDyBBuGPNk2jQ",
+        "2r8qWibedWpM7QkW6QvDDUEQAHT9isX629UKcUxbY8BT",
+        "38Aoz1ZUAnRqSCxdQuEkLhzYMRi1Tu1rSBy1UymA8yfK",
+        "3zBeAgo5EwPrgsXRLUV6DhQrsUUhwbmQXPnZkudhsnSD",
+        "2Q5cDvZW6hTxFFDTHhAf129PH4z8EZLYA1meeZpPW76F",
+        "2gnsMw1zhpqGeAakoQLarCXVUaeEGDHm5uma1Jznx7qD",
+        "3MXZLrn3tnLMWJznkMombRHkgkfsiBTPru2wjHDd3kLh",
+        "3rrDm8iED4sDyonpLs9J3TDoTP8U4jsvXCmoupoCvvKc",
+        "48YJtP1G5pKWu7Jy1NRagdj29dwxVXFsySrBVw1nALhX",
+        "22tjwuiv6VgeMDs8qXpkZ7cY5rcgrFrG5knp7swZ1wQ2",
+        "2dS4UCZ6RJvwPBaWmcz1L7ips34xnbNMfK9D8UHdFJfT",
+        "3EdF4zvu7uwW7xYdnaKUPzqDY5Msq9FfWn6HgEnRTkDB",
+        "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
+        "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
+        "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
+        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
+        "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
+      ],
+      "root": "oBZ8HtbVEkNnC8qiciKc1CjdmjYSCWSpWTbVebsmEFN",
+      "leafIndex": 3,
+      "hash": "227BXTcxfhvpTTAUBu2H3wVaBjqLbXijmsjaSiESBWaE",
+      "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+      "rootSeq": 5
+    }
+  ]
+}

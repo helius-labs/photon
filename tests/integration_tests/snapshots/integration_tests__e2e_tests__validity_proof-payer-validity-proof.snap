@@ -9,16 +9,16 @@ expression: validity_proof
     "c": []
   },
   "roots": [
-    "oBZ8HtbVEkNnC8qiciKc1CjdmjYSCWSpWTbVebsmEFN"
+    "4B9KobBhDsbtegrWd22VVAcU83tLWbLo8yrKFc9spEEs"
   ],
   "rootIndices": [
-    5
+    1
   ],
   "leafIndices": [
-    3
+    0
   ],
   "leaves": [
-    "227BXTcxfhvpTTAUBu2H3wVaBjqLbXijmsjaSiESBWaE"
+    "4AiUmKwenqJpsvcj4TAoqJw3gnrBRkTpGXsSyrNUu4Xr"
   ],
   "merkleTrees": [
     "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W"

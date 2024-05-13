@@ -2,6 +2,7 @@ use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_latest_compression_signatures::GetLatestCompressionSignaturesRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
+use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_sdk::pubkey::Pubkey;
@@ -109,7 +110,9 @@ async fn test_e2e_mint_and_transfer(
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
 
-        let validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+        let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+        // The Gnark prover has some randomness.
+        validity_proof.compressed_proof = CompressedProof::default();
 
         assert_json_snapshot!(
             format!("{}-{}-validity-proof", name.clone(), person),
@@ -296,7 +299,9 @@ async fn test_lamport_transfers(
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
-            let validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+            let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+            // The Gnark prover has some randomness.
+            validity_proof.compressed_proof = CompressedProof::default();
 
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), owner_name),
@@ -412,4 +417,77 @@ async fn test_index_block_metadata(
     let block = cached_fetch_block(&setup, slot + 1).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot + 1);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_validity_proof(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let compress_tx =
+        "N955JL3hSckkfpaB8r2W6vpMQCGXfuzcsYVdkj15zxUxSNUGnArM8KQyjirY1xxfK8QF9tdS79ANdjFfHCDmdR7";
+
+    let payer_pubkey = SerializablePubkey(
+        Pubkey::try_from("DDjXmGVKYfNfLH2dWp9GCMbXeFwv9CAGkcb45nCaL64w").unwrap(),
+    );
+    let txs = [compress_tx];
+
+    reset_tables(&setup.db_conn).await.unwrap();
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    index_multiple_transactions(&setup, txs.to_vec()).await;
+
+    for (owner, owner_name) in [(payer_pubkey.clone(), "payer")] {
+        let accounts = setup
+            .api
+            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                owner,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let hash_list = HashList(
+            accounts
+                .value
+                .items
+                .iter()
+                .map(|x| x.hash.clone())
+                .collect(),
+        );
+
+        let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+        // The Gnark prover has some randomness.
+        validity_proof.compressed_proof = CompressedProof::default();
+
+        assert_json_snapshot!(
+            format!("{}-{}-validity-proof", name.clone(), owner_name),
+            validity_proof
+        );
+    }
 }
