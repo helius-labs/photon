@@ -201,10 +201,7 @@ pub fn update_docs(is_test: bool) {
                 JSON_CONTENT_TYPE,
                 ContentBuilder::new().schema(fix_examples_for_allOf_references(spec.response)).build(),
             ),
-        ).response("400", build_error_response("Invalid request."))
-        .response("401", build_error_response("Unauthorized request."))
-        .response("403", build_error_response("Request was forbidden."))
-        .response("404", build_error_response("The specified resource was not found."))
+        )
         .response("429", build_error_response("Exceeded rate limit."))
         .response("500", build_error_response("The server encountered an unexpected condition that prevented it from fulfilling the request."));
         let operation = OperationBuilder::new()
