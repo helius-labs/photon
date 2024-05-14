@@ -176,7 +176,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111DspJWUYDimq3AsTmnRfCX1iB99FBkVff83
+      example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
     Limit:
       type: integer
       format: int64
@@ -234,8 +234,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh
-      example: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh
+      default: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
+      example: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

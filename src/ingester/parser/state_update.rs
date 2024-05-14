@@ -8,7 +8,7 @@ use crate::common::typedefs::hash::Hash;
 
 use crate::ingester::parser::indexer_events::PathNode;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrichedPathNode {
     pub node: PathNode,
     pub slot: u64,
@@ -29,22 +29,23 @@ pub struct PathUpdate {
 pub struct Transaction {
     pub signature: Signature,
     pub slot: u64,
+    pub uses_compression: bool,
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
-    pub slot: u64,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
     pub out_accounts: Vec<Account>,
     pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
     pub account_transactions: HashSet<AccountTransaction>,
+    pub transactions: HashSet<Transaction>,
 }
 
 impl StateUpdate {
@@ -70,6 +71,7 @@ impl StateUpdate {
                     merged.path_nodes.insert(key, node);
                 }
             }
+            merged.transactions.extend(update.transactions);
         }
         merged
     }

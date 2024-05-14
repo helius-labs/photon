@@ -6,6 +6,7 @@ use sqlx::{postgres::PgPoolOptions, Executor};
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
+use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 use super::method::get_compressed_account::AccountResponse;
@@ -16,9 +17,7 @@ use super::method::get_compressed_token_balances_by_owner::{
     get_compressed_token_balances_by_owner, GetCompressedTokenBalancesByOwnerRequest,
     TokenBalancesResponse,
 };
-use super::method::get_compression_signatures_for_account::{
-    get_compression_signatures_for_account, GetCompressionSignaturesForAccountResponse,
-};
+use super::method::get_compression_signatures_for_account::get_compression_signatures_for_account;
 use super::method::get_compression_signatures_for_address::{
     get_compression_signatures_for_address, GetCompressionSignaturesForAddressRequest,
 };
@@ -28,12 +27,12 @@ use super::method::get_compression_signatures_for_owner::{
 use super::method::get_compression_signatures_for_token_owner::{
     get_compression_signatures_for_token_owner, GetCompressionSignaturesForTokenOwnerRequest,
 };
-use super::method::get_latest_compression_signatures::{
-    get_latest_compression_signatures, GetLatestCompressionSignaturesRequest,
-};
+use super::method::get_latest_compression_signatures::get_latest_compression_signatures;
+use super::method::get_latest_non_voting_signatures::get_latest_non_voting_signatures;
 use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
+use super::method::utils::GetLatestSignaturesRequest;
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
 use super::{
     error::PhotonApiError,
@@ -215,7 +214,7 @@ impl PhotonApi {
     pub async fn get_compression_signatures_for_account(
         &self,
         request: HashRequest,
-    ) -> Result<GetCompressionSignaturesForAccountResponse, PhotonApiError> {
+    ) -> Result<GetNonPaginatedSignaturesResponse, PhotonApiError> {
         get_compression_signatures_for_account(self.db_conn.as_ref(), request).await
     }
 
@@ -254,9 +253,16 @@ impl PhotonApi {
 
     pub async fn get_latest_compression_signatures(
         &self,
-        request: GetLatestCompressionSignaturesRequest,
+        request: GetLatestSignaturesRequest,
     ) -> Result<GetPaginatedSignaturesResponse, PhotonApiError> {
         get_latest_compression_signatures(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_latest_non_voting_signatures(
+        &self,
+        request: GetLatestSignaturesRequest,
+    ) -> Result<GetNonPaginatedSignaturesResponse, PhotonApiError> {
+        get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
@@ -317,11 +323,6 @@ impl PhotonApi {
                 response: TokenBalancesResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getCompressionSignaturesForAccount".to_string(),
-                request: Some(HashRequest::schema().1),
-                response: GetCompressionSignaturesForAccountResponse::schema().1,
-            },
-            OpenApiSpec {
                 name: "getTransactionWithCompressionInfo".to_string(),
                 request: Some(GetTransactionRequest::schema().1),
                 response: GetTransactionResponse::schema().1,
@@ -329,7 +330,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressionSignaturesForAccount".to_string(),
                 request: Some(HashRequest::schema().1),
-                response: GetCompressionSignaturesForAccountResponse::schema().1,
+                response: GetNonPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressionSignaturesForAddress".to_string(),
@@ -348,8 +349,13 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getLatestCompressionSignatures".to_string(),
-                request: Some(GetLatestCompressionSignaturesRequest::schema().1),
+                request: Some(GetLatestSignaturesRequest::schema().1),
                 response: GetPaginatedSignaturesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getLatestNonVotingSignatures".to_string(),
+                request: Some(GetLatestSignaturesRequest::schema().1),
+                response: GetNonPaginatedSignaturesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getIndexerHealth".to_string(),

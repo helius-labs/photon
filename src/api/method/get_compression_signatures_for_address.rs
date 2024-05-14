@@ -28,6 +28,7 @@ pub async fn get_compression_signatures_for_address(
         conn,
         SignatureSearchType::Standard,
         Some(SignatureFilter::Address(request.address)),
+        true,
         request.cursor,
         request.limit,
     )

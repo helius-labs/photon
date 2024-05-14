@@ -16,13 +16,13 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
-use log::{debug};
+use log::debug;
 use sea_orm::{
     sea_query::{Expr, OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, QueryFilter,
-    QueryTrait, Set, Statement,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, Order,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use error::IngesterError;
 use solana_program::pubkey;
@@ -38,15 +38,17 @@ pub async fn persist_state_update(
     txn: &DatabaseTransaction,
     state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
+    if state_update == StateUpdate::default() {
+        return Ok(());
+    }
     let StateUpdate {
         in_accounts,
         out_accounts,
         path_nodes,
         account_transactions,
+        transactions,
     } = state_update;
-    if in_accounts.is_empty() && out_accounts.is_empty() && path_nodes.is_empty() {
-        return Ok(());
-    }
+
     debug!(
         "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
         in_accounts.len(),
@@ -76,20 +78,10 @@ pub async fn persist_state_update(
         chunk.sort_by_key(|node| node.level);
         persist_path_nodes(txn, chunk).await?;
     }
-
-    let transactions: HashSet<Transaction> = account_transactions
-        .iter()
-        .map(|t| Transaction {
-            signature: t.signature,
-            slot: t.slot,
-        })
-        .collect();
-
-    let mut transactions: Vec<Transaction> = transactions.into_iter().collect();
-    transactions.sort_by_key(|t| t.signature);
+    let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
     debug!("Persisting transactions nodes...");
-    for chunk in transactions.chunks(MAX_SQL_INSERTS) {
+    for chunk in transactions_vec.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
 
@@ -526,6 +518,7 @@ async fn persist_transactions(
         .map(|transaction| transactions::ActiveModel {
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
             slot: Set(transaction.slot as i64),
+            uses_compression: Set(transaction.uses_compression),
         })
         .collect::<Vec<_>>();
 
@@ -539,6 +532,24 @@ async fn persist_transactions(
                     .do_nothing()
                     .to_owned(),
             )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+    }
+
+    let result = transactions::Entity::find()
+        .filter(transactions::Column::UsesCompression.eq(false))
+        .order_by(transactions::Column::Slot, Order::Desc)
+        .order_by(transactions::Column::Signature, Order::Desc)
+        .offset(1000)
+        .limit(1)
+        .all(txn)
+        .await?;
+
+    if let Some(transaction) = result.first() {
+        let query = transactions::Entity::delete_many()
+            .filter(transactions::Column::Slot.lte(transaction.slot))
+            .filter(transactions::Column::Signature.lt(transaction.signature.to_vec()))
+            .filter(transactions::Column::UsesCompression.eq(false))
             .build(txn.get_database_backend());
         txn.execute(query).await?;
     }

@@ -14,6 +14,7 @@ pub mod get_compression_signatures_for_token_owner;
 pub mod get_indexer_health;
 pub mod get_indexer_slot;
 pub mod get_latest_compression_signatures;
+pub mod get_latest_non_voting_signatures;
 pub mod get_multiple_compressed_account_proofs;
 pub mod get_multiple_compressed_accounts;
 pub mod get_transaction_with_compression_info;
