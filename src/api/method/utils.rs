@@ -607,7 +607,6 @@ fn compute_raw_sql_query_and_args(
                 LIMIT {limit}
             "
             );
-
             Ok((raw_sql, cursor_args))
         }
     }

@@ -38,6 +38,9 @@ pub async fn persist_state_update(
     txn: &DatabaseTransaction,
     state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
+    if state_update == StateUpdate::default() {
+        return Ok(());
+    }
     let StateUpdate {
         in_accounts,
         out_accounts,
@@ -45,9 +48,7 @@ pub async fn persist_state_update(
         account_transactions,
         transactions,
     } = state_update;
-    if in_accounts.is_empty() && out_accounts.is_empty() && path_nodes.is_empty() {
-        return Ok(());
-    }
+
     debug!(
         "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
         in_accounts.len(),
@@ -535,7 +536,6 @@ async fn persist_transactions(
         txn.execute(query).await?;
     }
 
-    // Select the 1001 transaction with uses_compression=false then ordered by slot and signature in descending order
     let result = transactions::Entity::find()
         .filter(transactions::Column::UsesCompression.eq(false))
         .order_by(transactions::Column::Slot, Order::Desc)

@@ -412,3 +412,34 @@ async fn test_index_block_metadata(
     index_block(&setup.db_conn, &block).await.unwrap();
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot + 1);
 }
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_get_latest_non_voting_signatures(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Devnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let slot = 270893658;
+    let block = cached_fetch_block(&setup, slot).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    let all_nonvoting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(all_nonvoting_transactions.value.items.len(), 46);
+}
