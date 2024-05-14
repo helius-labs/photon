@@ -1,6 +1,5 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::api::method::get_latest_compression_signatures::GetLatestCompressionSignaturesRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
@@ -8,7 +7,9 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
-use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
+use photon_indexer::api::method::utils::{
+    GetCompressedTokenAccountsByOwner, GetLatestSignaturesRequest,
+};
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -166,7 +167,7 @@ async fn test_e2e_mint_and_transfer(
     loop {
         let res = setup
             .api
-            .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+            .get_latest_compression_signatures(GetLatestSignaturesRequest {
                 cursor,
                 limit: Some(limit.clone()),
             })
@@ -181,13 +182,27 @@ async fn test_e2e_mint_and_transfer(
     }
     let all_signatures = setup
         .api
-        .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+        .get_latest_compression_signatures(GetLatestSignaturesRequest {
             cursor: None,
             limit: None,
         })
         .await
         .unwrap();
     assert_eq!(signatures, all_signatures.value.items);
+
+    let all_non_voting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        all_non_voting_transactions.value.items,
+        all_signatures.value.items
+    );
 
     assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
 }

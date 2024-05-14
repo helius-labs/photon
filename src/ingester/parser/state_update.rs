@@ -29,13 +29,13 @@ pub struct PathUpdate {
 pub struct Transaction {
     pub signature: Signature,
     pub slot: u64,
+    pub uses_compression: bool,
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub struct AccountTransaction {
     pub hash: Hash,
     pub signature: Signature,
-    pub slot: u64,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -45,6 +45,7 @@ pub struct StateUpdate {
     pub out_accounts: Vec<Account>,
     pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
     pub account_transactions: HashSet<AccountTransaction>,
+    pub transactions: HashSet<Transaction>,
 }
 
 impl StateUpdate {
@@ -70,6 +71,7 @@ impl StateUpdate {
                     merged.path_nodes.insert(key, node);
                 }
             }
+            merged.transactions.extend(update.transactions);
         }
         merged
     }

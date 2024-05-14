@@ -18,7 +18,7 @@ use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
     indexer_events::{ChangelogEvent, Changelogs, CompressedAccount, PublicTransactionEvent},
-    state_update::{AccountTransaction, PathUpdate, StateUpdate},
+    state_update::{AccountTransaction, PathUpdate, StateUpdate, Transaction},
 };
 
 pub mod indexer_events;
@@ -30,9 +30,12 @@ const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("5QPEJ5zDsVou9FQS3KCauKswM3VwBEBu4dpL9xTqkWwN");
 const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
+const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
     let mut state_updates = Vec::new();
+    let mut is_compression_transaction = false;
+
     let mut logged_transaction = false;
 
     for instruction_group in tx.clone().instruction_groups {
@@ -84,12 +87,29 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         public_transaction_event,
                         changelogs,
                     )?;
+                    is_compression_transaction = true;
                     state_updates.push(state_update);
                 }
             }
         }
     }
-    Ok(StateUpdate::merge_updates(state_updates))
+    let mut state_update = StateUpdate::merge_updates(state_updates);
+
+    if !is_voting_transaction(tx) {
+        state_update.transactions.insert(Transaction {
+            signature: tx.signature,
+            slot,
+            uses_compression: is_compression_transaction,
+        });
+    }
+
+    Ok(state_update)
+}
+
+fn is_voting_transaction(tx: &TransactionInfo) -> bool {
+    tx.instruction_groups
+        .iter()
+        .any(|group| group.outer_instruction.program_id == VOTE_PROGRAM_ID)
 }
 
 fn parse_account_data(
@@ -202,7 +222,6 @@ fn parse_public_transaction_event(
                 .map(|hash| AccountTransaction {
                     hash: hash.clone(),
                     signature: tx,
-                    slot,
                 }),
         );
 
@@ -215,7 +234,6 @@ fn parse_public_transaction_event(
                 .map(|a| AccountTransaction {
                     hash: a.hash.clone(),
                     signature: tx,
-                    slot,
                 }),
         );
 

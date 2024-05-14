@@ -8,6 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub signature: Vec<u8>,
     pub slot: i64,
+    pub uses_compression: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
