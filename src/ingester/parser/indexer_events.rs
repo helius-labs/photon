@@ -49,7 +49,7 @@ pub enum ChangelogEvent {
 
 /// Node of the Merkle path with an index representing the position in a
 /// non-sparse Merkle tree.
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct PathNode {
     pub node: [u8; 32],
     pub index: u32,

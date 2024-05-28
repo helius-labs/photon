@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressionSignaturesForAccount
+    summary: getLatestNonVotingSignatures
     post:
       requestBody:
         content:
@@ -36,14 +36,17 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressionSignaturesForAccount
+                  - getLatestNonVotingSignatures
                 params:
                   type: object
-                  required:
-                  - hash
                   properties:
-                    hash:
-                      $ref: '#/components/schemas/Hash'
+                    cursor:
+                      type: string
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
         required: true
       responses:
         '200':
@@ -169,7 +172,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111CGTta3M4t3yXu8uRgkKvaWd2d8DQuZLKrf
+      example: 1111111GHqvR8KwyrcJ5UJHvwf7RmLtvAnr1uAf27
     Limit:
       type: integer
       format: int64
@@ -227,8 +230,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
-      example: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
+      default: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
+      example: 1111111FtWKS22fGg9RG3ACuXKnwe57HfXuJfaphm
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

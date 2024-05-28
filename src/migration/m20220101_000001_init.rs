@@ -336,6 +336,11 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Transactions::Signature).binary().not_null())
                     .col(ColumnDef::new(Transactions::Slot).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(Transactions::UsesCompression)
+                            .boolean()
+                            .not_null(),
+                    )
                     .primary_key(
                         Index::create()
                             .name("pk_transactions")
@@ -348,6 +353,31 @@ impl MigrationTrait for Migration {
                             .to(Blocks::Table, Blocks::Slot)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("transactions_slot_signature_idx")
+                    .table(Transactions::Table)
+                    .col(Transactions::Slot)
+                    .col(Transactions::Signature)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("transactions_uses_compression_slot_signature_idx")
+                    .table(Transactions::Table)
+                    .col(Transactions::UsesCompression)
+                    .col(Transactions::Slot)
+                    .col(Transactions::Signature)
+                    .unique()
                     .to_owned(),
             )
             .await?;

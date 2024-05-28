@@ -28,6 +28,7 @@ pub async fn get_compression_signatures_for_token_owner(
         conn,
         SignatureSearchType::Token,
         Some(SignatureFilter::Owner(request.owner)),
+        true,
         request.cursor,
         request.limit,
     )

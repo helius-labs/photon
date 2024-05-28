@@ -1,6 +1,5 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
-use photon_indexer::api::method::get_latest_compression_signatures::GetLatestCompressionSignaturesRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -9,7 +8,9 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::utils::*;
 use insta::assert_json_snapshot;
-use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
+use photon_indexer::api::method::utils::{
+    GetCompressedTokenAccountsByOwner, GetLatestSignaturesRequest,
+};
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -174,7 +175,7 @@ async fn test_e2e_mint_and_transfer(
     loop {
         let res = setup
             .api
-            .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+            .get_latest_compression_signatures(GetLatestSignaturesRequest {
                 cursor,
                 limit: Some(limit.clone()),
             })
@@ -189,13 +190,27 @@ async fn test_e2e_mint_and_transfer(
     }
     let all_signatures = setup
         .api
-        .get_latest_compression_signatures(GetLatestCompressionSignaturesRequest {
+        .get_latest_compression_signatures(GetLatestSignaturesRequest {
             cursor: None,
             limit: None,
         })
         .await
         .unwrap();
     assert_eq!(signatures, all_signatures.value.items);
+
+    let all_non_voting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        all_non_voting_transactions.value.items,
+        all_signatures.value.items
+    );
 
     assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
 }
@@ -420,21 +435,32 @@ async fn test_index_block_metadata(
 #[rstest]
 #[tokio::test]
 #[serial]
+<<<<<<< HEAD
 async fn test_validity_proof(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
 
+=======
+async fn test_get_latest_non_voting_signatures(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+>>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
         TestSetupOptions {
+<<<<<<< HEAD
             network: Network::Localnet,
+=======
+            network: Network::Devnet,
+>>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
             db_backend,
         },
     )
     .await;
 
+<<<<<<< HEAD
     let compress_tx =
         "N955JL3hSckkfpaB8r2W6vpMQCGXfuzcsYVdkj15zxUxSNUGnArM8KQyjirY1xxfK8QF9tdS79ANdjFfHCDmdR7";
 
@@ -487,4 +513,18 @@ async fn test_validity_proof(
             validity_proof
         );
     }
+=======
+    let slot = 270893658;
+    let block = cached_fetch_block(&setup, slot).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    let all_nonvoting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(all_nonvoting_transactions.value.items.len(), 46);
+>>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
 }

@@ -559,6 +559,7 @@ fn compute_cursor_filter(
 fn compute_raw_sql_query_and_args(
     search_type: SignatureSearchType,
     signature_filter: Option<SignatureFilter>,
+    only_compressed: bool,
     cursor: Option<String>,
     limit: u64,
 ) -> Result<(String, Vec<Value>), PhotonApiError> {
@@ -589,6 +590,11 @@ fn compute_raw_sql_query_and_args(
                     "Token search requires a filter".to_string(),
                 ));
             }
+            let compression_filter = if only_compressed {
+                "AND transactions.uses_compression = true"
+            } else {
+                ""
+            };
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 0)?;
             let raw_sql = format!(
                 "
@@ -596,11 +602,11 @@ fn compute_raw_sql_query_and_args(
                 FROM transactions
                 JOIN blocks ON transactions.slot = blocks.slot
                 {cursor_filter}
+                {compression_filter}
                 ORDER BY transactions.slot DESC, transactions.signature DESC
                 LIMIT {limit}
             "
             );
-
             Ok((raw_sql, cursor_args))
         }
     }
@@ -610,12 +616,18 @@ pub async fn search_for_signatures(
     conn: &DatabaseConnection,
     search_type: SignatureSearchType,
     signature_filter: Option<SignatureFilter>,
+    only_compressed: bool,
     cursor: Option<String>,
     limit: Option<Limit>,
 ) -> Result<PaginatedSignatureInfoList, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
-    let (raw_sql, args) =
-        compute_raw_sql_query_and_args(search_type, signature_filter, cursor, limit)?;
+    let (raw_sql, args) = compute_raw_sql_query_and_args(
+        search_type,
+        signature_filter,
+        only_compressed,
+        cursor,
+        limit,
+    )?;
 
     let signatures: Vec<SignatureInfoModel> = SignatureInfoModel::find_by_statement(
         Statement::from_sql_and_values(conn.get_database_backend(), &raw_sql, args.clone()),
@@ -672,4 +684,17 @@ pub struct GetPaginatedSignaturesResponse {
 pub struct AccountBalanceResponse {
     pub context: Context,
     pub value: UnsignedInteger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+pub struct GetLatestSignaturesRequest {
+    pub limit: Option<Limit>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+pub struct GetNonPaginatedSignaturesResponse {
+    pub context: Context,
+    pub value: SignatureInfoList,
 }
