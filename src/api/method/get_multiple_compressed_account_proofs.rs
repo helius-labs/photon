@@ -22,6 +22,7 @@ use crate::common::typedefs::hash::Hash;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct MerkleProofWithContext {
     pub proof: Vec<Hash>,
+    pub root: Hash,
     pub leaf_index: u32,
     pub hash: Hash,
     pub merkle_tree: SerializablePubkey,
@@ -111,7 +112,7 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                 hash
             )))?;
 
-            let proofs = required_node_indices
+            let mut proof = required_node_indices
                 .iter()
                 .enumerate()
                 .map(|(level, idx)| {
@@ -147,8 +148,13 @@ pub async fn get_multiple_compressed_account_proofs_helper(
                         hash
                     )))?;
 
+            let root = proof.pop().ok_or(PhotonApiError::UnexpectedError(
+                "Root node not found in proof".to_string(),
+            ))?;
+
             Ok(MerkleProofWithContext {
-                proof: proofs,
+                proof,
+                root,
                 leaf_index: leaf_model.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
                     "Leaf index not found".to_string(),
                 ))? as u32,

@@ -76,7 +76,11 @@ sqlx = {version = "0.6.2", features = [
 thiserror = "1.0.31"
 # time pinned because of https://github.com/launchbadge/sqlx/issues/3189
 ark-bn254 = "0.4.0"
+hex = "0.4.3"
+num-bigint = "0.4.4"
+num-traits = "0.2.18"
 num_enum = "0.7.2"
+reqwest = "0.12.4"
 time = "=0.3.34"
 tokio = {version = "1.23.0", features = ["full"]}
 tower = {version = "0.4.13", features = ["full"]}

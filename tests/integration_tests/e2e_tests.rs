@@ -1,6 +1,7 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
+use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_sdk::pubkey::Pubkey;
@@ -46,8 +47,6 @@ async fn test_e2e_mint_and_transfer(
     )
     .await;
 
-    let payer_pubkey =
-        SerializablePubkey::try_from("Eax3ar7Sg53JvTWirvNRNgyxn22LAusNjcmMPdR1zs5t").unwrap();
     let bob_pubkey =
         SerializablePubkey::try_from("6hct2FBjZeQZ7Sscip1Xep3b94jCh7FvtaKqpfhne1Ak").unwrap();
     let charles_pubkey =
@@ -84,7 +83,6 @@ async fn test_e2e_mint_and_transfer(
     for (person, pubkey) in [
         ("bob", bob_pubkey.clone()),
         ("charles", charles_pubkey.clone()),
-        ("payer", payer_pubkey.clone()),
     ] {
         let accounts = setup
             .api
@@ -95,19 +93,29 @@ async fn test_e2e_mint_and_transfer(
             .await
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+        let hash_list = HashList(
+            accounts
+                .value
+                .items
+                .iter()
+                .map(|x| x.account.hash.clone())
+                .collect(),
+        );
         let proofs = setup
             .api
-            .get_multiple_compressed_account_proofs(HashList(
-                accounts
-                    .value
-                    .items
-                    .iter()
-                    .map(|x| x.account.hash.clone())
-                    .collect(),
-            ))
+            .get_multiple_compressed_account_proofs(hash_list.clone())
             .await
             .unwrap();
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+
+        let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+        // The Gnark prover has some randomness.
+        validity_proof.compressed_proof = CompressedProof::default();
+
+        assert_json_snapshot!(
+            format!("{}-{}-validity-proof", name.clone(), person),
+            validity_proof
+        );
 
         let mut cursor = None;
         let limit = Limit::new(1).unwrap();
@@ -288,19 +296,29 @@ async fn test_lamport_transfers(
                 format!("{}-{}-accounts", name.clone(), owner_name),
                 accounts
             );
+            let hash_list = HashList(
+                accounts
+                    .value
+                    .items
+                    .iter()
+                    .map(|x| x.hash.clone())
+                    .collect(),
+            );
             let proofs = setup
                 .api
-                .get_multiple_compressed_account_proofs(HashList(
-                    accounts
-                        .value
-                        .items
-                        .iter()
-                        .map(|x| x.hash.clone())
-                        .collect(),
-                ))
+                .get_multiple_compressed_account_proofs(hash_list.clone())
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
+
+            let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+            // The Gnark prover has some randomness.
+            validity_proof.compressed_proof = CompressedProof::default();
+
+            assert_json_snapshot!(
+                format!("{}-{}-validity-proof", name.clone(), owner_name),
+                validity_proof
+            );
 
             let signatures = setup
                 .api

@@ -32,6 +32,7 @@ use super::method::get_latest_non_voting_signatures::get_latest_non_voting_signa
 use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
+use super::method::get_validity_proof::{get_validity_proof, CompressedProofWithContext};
 use super::method::utils::GetLatestSignaturesRequest;
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
 use super::{
@@ -251,6 +252,13 @@ impl PhotonApi {
         .await
     }
 
+    pub async fn get_validity_proof(
+        &self,
+        request: HashList,
+    ) -> Result<CompressedProofWithContext, PhotonApiError> {
+        get_validity_proof(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_latest_compression_signatures(
         &self,
         request: GetLatestSignaturesRequest,
@@ -281,6 +289,11 @@ impl PhotonApi {
                 name: "getMultipleCompressedAccountProofs".to_string(),
                 request: Some(HashList::schema().1),
                 response: GetMultipleCompressedAccountProofsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getValidityProof".to_string(),
+                request: Some(HashList::schema().1),
+                response: CompressedProofWithContext::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByOwner".to_string(),

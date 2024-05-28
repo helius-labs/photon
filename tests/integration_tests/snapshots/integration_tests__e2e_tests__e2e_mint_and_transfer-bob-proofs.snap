@@ -34,9 +34,9 @@ expression: proofs
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
-        "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE"
+        "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
+      "root": "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE",
       "leafIndex": 3,
       "hash": "2kQ8YtyQwKVJkwepnWEKGJLTNp89VcVGFj2VpxaSAfot",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
@@ -69,9 +69,9 @@ expression: proofs
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
-        "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e",
-        "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE"
+        "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
+      "root": "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE",
       "leafIndex": 6,
       "hash": "2uSnD5swaYewEshv4YJdQJpQauciUqCAzMeeFmAQZ5Kk",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
