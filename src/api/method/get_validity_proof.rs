@@ -167,6 +167,11 @@ pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     hashes: HashList,
 ) -> Result<CompressedProofWithContext, PhotonApiError> {
+    if hashes.0.is_empty() {
+        return Err(PhotonApiError::UnexpectedError(
+            "No hashes provided for proof generation".to_string(),
+        ));
+    }
     let client = Client::new();
     let prover_endpoint = "http://localhost:3001"; // Change this as necessary
 
@@ -209,7 +214,7 @@ pub async fn get_validity_proof(
     if !res.status().is_success() {
         return Err(PhotonApiError::UnexpectedError(format!(
             "Error fetching proof {}",
-            res.status().to_string()
+            res.status().to_string(),
         )));
     }
 

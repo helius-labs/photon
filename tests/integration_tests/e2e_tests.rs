@@ -46,8 +46,6 @@ async fn test_e2e_mint_and_transfer(
     )
     .await;
 
-    let payer_pubkey =
-        SerializablePubkey::try_from("Eax3ar7Sg53JvTWirvNRNgyxn22LAusNjcmMPdR1zs5t").unwrap();
     let bob_pubkey =
         SerializablePubkey::try_from("6hct2FBjZeQZ7Sscip1Xep3b94jCh7FvtaKqpfhne1Ak").unwrap();
     let charles_pubkey =
@@ -84,7 +82,6 @@ async fn test_e2e_mint_and_transfer(
     for (person, pubkey) in [
         ("bob", bob_pubkey.clone()),
         ("charles", charles_pubkey.clone()),
-        ("payer", payer_pubkey.clone()),
     ] {
         let accounts = setup
             .api
