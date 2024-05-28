@@ -435,85 +435,19 @@ async fn test_index_block_metadata(
 #[rstest]
 #[tokio::test]
 #[serial]
-<<<<<<< HEAD
-async fn test_validity_proof(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
-
-=======
 async fn test_get_latest_non_voting_signatures(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
->>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
         TestSetupOptions {
-<<<<<<< HEAD
-            network: Network::Localnet,
-=======
             network: Network::Devnet,
->>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
             db_backend,
         },
     )
     .await;
 
-<<<<<<< HEAD
-    let compress_tx =
-        "N955JL3hSckkfpaB8r2W6vpMQCGXfuzcsYVdkj15zxUxSNUGnArM8KQyjirY1xxfK8QF9tdS79ANdjFfHCDmdR7";
-
-    let payer_pubkey = SerializablePubkey(
-        Pubkey::try_from("DDjXmGVKYfNfLH2dWp9GCMbXeFwv9CAGkcb45nCaL64w").unwrap(),
-    );
-    let txs = [compress_tx];
-
-    reset_tables(&setup.db_conn).await.unwrap();
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-
-    index_multiple_transactions(&setup, txs.to_vec()).await;
-
-    for (owner, owner_name) in [(payer_pubkey.clone(), "payer")] {
-        let accounts = setup
-            .api
-            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                owner,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        let hash_list = HashList(
-            accounts
-                .value
-                .items
-                .iter()
-                .map(|x| x.hash.clone())
-                .collect(),
-        );
-
-        let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
-        // The Gnark prover has some randomness.
-        validity_proof.compressed_proof = CompressedProof::default();
-
-        assert_json_snapshot!(
-            format!("{}-{}-validity-proof", name.clone(), owner_name),
-            validity_proof
-        );
-    }
-=======
     let slot = 270893658;
     let block = cached_fetch_block(&setup, slot).await;
     index_block(&setup.db_conn, &block).await.unwrap();
@@ -526,5 +460,4 @@ async fn test_get_latest_non_voting_signatures(
         .await
         .unwrap();
     assert_eq!(all_nonvoting_transactions.value.items.len(), 46);
->>>>>>> ba5b50bd07a7bbe73161dcc3eb464566bcf671cd
 }
