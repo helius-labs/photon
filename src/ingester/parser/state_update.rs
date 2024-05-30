@@ -43,8 +43,6 @@ pub struct AccountTransaction {
     pub signature: Signature,
 }
 
-
-
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
