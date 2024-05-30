@@ -5,7 +5,6 @@ use crate::{
 };
 use itertools::Itertools;
 
-use log::info;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
     EntityTrait, QueryFilter, TransactionTrait,
@@ -64,7 +63,6 @@ pub async fn get_multiple_compressed_account_proofs_helper(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
-    info!("Getting proofs for {:?} hashes", hashes);
     let leaf_nodes = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
