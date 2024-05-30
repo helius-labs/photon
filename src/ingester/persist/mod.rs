@@ -445,10 +445,9 @@ async fn persist_path_nodes(
     let mut models_to_updates = HashMap::new();
 
     for leaf_node in leaf_nodes.clone() {
-        println!("Leaf node {:?}", leaf_node.leaf_index);
         let node_idx = 2_i64.pow(TREE_HEIGHT) - leaf_node.leaf_index.0 as i64;
         let tree = leaf_node.tree.to_bytes_vec();
-        let key = (tree.clone(), leaf_node.leaf_index.0 as i64);
+        let key = (tree.clone(), node_idx);
 
         let model = state_trees::ActiveModel {
             tree: Set(leaf_node.tree.to_bytes_vec()),

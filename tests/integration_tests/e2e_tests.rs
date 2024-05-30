@@ -311,7 +311,16 @@ async fn test_lamport_transfers(
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
-            let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+            let mut validity_proof =
+                setup
+                    .api
+                    .get_validity_proof(hash_list.clone())
+                    .await
+                    .expect(&format!(
+                        "Failed to get validity proof for owner with hash list len: {} {}",
+                        owner_name,
+                        hash_list.0.len()
+                    ));
             // The Gnark prover has some randomness.
             validity_proof.compressed_proof = CompressedProof::default();
 
