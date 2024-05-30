@@ -13,8 +13,6 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::account_transactions::Entity")]
-    AccountTransactions,
     #[sea_orm(
         belongs_to = "super::blocks::Entity",
         from = "Column::Slot",
@@ -25,15 +23,22 @@ pub enum Relation {
     Blocks,
 }
 
-impl Related<super::account_transactions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::AccountTransactions.def()
-    }
-}
-
 impl Related<super::blocks::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Blocks.def()
+    }
+}
+
+impl Related<super::accounts::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::account_transactions::Relation::Accounts.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::account_transactions::Relation::Transactions
+                .def()
+                .rev(),
+        )
     }
 }
 

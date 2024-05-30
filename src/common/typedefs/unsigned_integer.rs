@@ -5,7 +5,7 @@ use utoipa::{
     ToSchema,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Copy, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct UnsignedInteger(pub u64);
 

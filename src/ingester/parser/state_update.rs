@@ -1,12 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use solana_sdk::signature::Signature;
 
 use crate::common::typedefs::account::Account;
 
 use crate::common::typedefs::hash::Hash;
 
-use crate::ingester::parser::indexer_events::PathNode;
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+pub struct PathNode {
+    pub node: [u8; 32],
+    pub index: u32,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrichedPathNode {
@@ -38,12 +43,13 @@ pub struct AccountTransaction {
     pub signature: Signature,
 }
 
+
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
     pub out_accounts: Vec<Account>,
-    pub path_nodes: HashMap<([u8; 32], u32), EnrichedPathNode>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
 }
@@ -61,16 +67,6 @@ impl StateUpdate {
             merged
                 .account_transactions
                 .extend(update.account_transactions);
-
-            for (key, node) in update.path_nodes {
-                if let Some(existing) = merged.path_nodes.get_mut(&key) {
-                    if (*existing).seq < node.seq {
-                        *existing = node;
-                    }
-                } else {
-                    merged.path_nodes.insert(key, node);
-                }
-            }
             merged.transactions.extend(update.transactions);
         }
         merged

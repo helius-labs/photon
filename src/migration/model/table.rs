@@ -55,7 +55,7 @@ pub enum Transactions {
     Table,
     Signature,
     Slot,
-    UsesCompression
+    UsesCompression,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -76,4 +76,13 @@ pub enum TokenOwnerBalances {
     Table,
     Owner,
     Mint,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum IndexedTrees {
+    Table,
+    Index,
+    Value,
+    NextIndex,
+    NextValue,
 }

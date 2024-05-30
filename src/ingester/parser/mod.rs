@@ -3,22 +3,19 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::debug;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-use crate::{
-    common::typedefs::{
-        account::{Account, AccountData},
-        bs64_string::Base64String,
-        hash::Hash,
-        serializable_pubkey::SerializablePubkey,
-        unsigned_integer::UnsignedInteger,
-    },
-    ingester::parser::{indexer_events::PathNode, state_update::EnrichedPathNode},
+use crate::common::typedefs::{
+    account::{Account, AccountData},
+    bs64_string::Base64String,
+    hash::Hash,
+    serializable_pubkey::SerializablePubkey,
+    unsigned_integer::UnsignedInteger,
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
-    indexer_events::{ChangelogEvent, Changelogs, CompressedAccount, PublicTransactionEvent},
-    state_update::{AccountTransaction, PathUpdate, StateUpdate, Transaction},
+    indexer_events::{CompressedAccount, PublicTransactionEvent},
+    state_update::{AccountTransaction, StateUpdate, Transaction},
 };
 
 pub mod indexer_events;
@@ -44,18 +41,16 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         ordered_intructions.extend(instruction_group.inner_instructions);
 
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if ordered_intructions.len() - index > 3 {
+            if ordered_intructions.len() - index > 2 {
                 let next_instruction = &ordered_intructions[index + 1];
                 let next_next_instruction = &ordered_intructions[index + 2];
-                let next_next_next_instruction = &ordered_intructions[index + 3];
                 // We need to check if the account compression instruction contains a noop account to determine
                 // if the instruction emits a noop event. If it doesn't then we want avoid indexing
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && instruction.accounts.contains(&NOOP_PROGRAM_ID)
-                    && next_instruction.program_id == NOOP_PROGRAM_ID
-                    && next_next_instruction.program_id == SYSTEM_PROGRAM
-                    && next_next_next_instruction.program_id == NOOP_PROGRAM_ID
+                    && next_instruction.program_id == SYSTEM_PROGRAM
+                    && next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     if !logged_transaction {
                         debug!(
@@ -64,16 +59,9 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         );
                         logged_transaction = true;
                     }
-                    let changelogs = Changelogs::deserialize(&mut next_instruction.data.as_slice())
-                        .map_err(|e| {
-                            IngesterError::ParserError(format!(
-                                "Failed to deserialize Changelogs: {}",
-                                e
-                            ))
-                        })?;
 
                     let public_transaction_event = PublicTransactionEvent::deserialize(
-                        &mut next_next_next_instruction.data.as_slice(),
+                        &mut next_next_instruction.data.as_slice(),
                     )
                     .map_err(|e| {
                         IngesterError::ParserError(format!(
@@ -85,7 +73,6 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         tx.signature,
                         slot,
                         public_transaction_event,
-                        changelogs,
                     )?;
                     is_compression_transaction = true;
                     state_updates.push(state_update);
@@ -118,7 +105,7 @@ fn parse_account_data(
     tree: Pubkey,
     leaf_index: u32,
     slot: u64,
-    seq: Option<u64>,
+    seq: u64,
 ) -> Account {
     let CompressedAccount {
         owner,
@@ -142,7 +129,7 @@ fn parse_account_data(
         slot_created: UnsignedInteger(slot),
         leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
-        seq: seq.map(|s| UnsignedInteger(s)),
+        seq: UnsignedInteger(seq),
     }
 }
 
@@ -150,67 +137,47 @@ fn parse_public_transaction_event(
     tx: Signature,
     slot: u64,
     transaction_event: PublicTransactionEvent,
-    changelogs: Changelogs,
 ) -> Result<StateUpdate, IngesterError> {
     let PublicTransactionEvent {
         input_compressed_account_hashes,
         output_compressed_account_hashes,
         output_compressed_accounts,
+        pubkey_array,
+        sequence_numbers,
         ..
     } = transaction_event;
 
     let mut state_update = StateUpdate::new();
 
+    let mut tree_to_seq_number = sequence_numbers
+        .iter()
+        .map(|seq| (seq.pubkey, seq.seq))
+        .collect::<std::collections::HashMap<_, _>>();
+
     for hash in input_compressed_account_hashes {
         state_update.in_accounts.insert(hash.into());
     }
-    let path_updates = extract_path_updates(changelogs);
 
-    if output_compressed_accounts.len() != path_updates.len() {
-        return Err(IngesterError::MalformedEvent {
-            msg: format!(
-                "Number of path updates did not match the number of output accounts (txn: {})",
-                tx,
-            ),
-        });
-    }
-
-    for (((out_account, path), hash), leaf_index) in output_compressed_accounts
+    for ((out_account, hash), leaf_index) in output_compressed_accounts
         .into_iter()
-        .zip(path_updates.iter())
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
+        let tree = pubkey_array[out_account.merkle_tree_index as usize];
+        let seq = tree_to_seq_number
+            .get_mut(&tree)
+            .ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
+
         let enriched_account = parse_account_data(
-            out_account,
+            out_account.compressed_account,
             hash,
-            path.tree.into(),
+            tree,
             *leaf_index,
             slot,
-            Some(path.seq),
+            *seq,
         );
+        *seq += 1;
         state_update.out_accounts.push(enriched_account);
-    }
-
-    for ((path_index, path), leaf_index) in path_updates
-        .into_iter()
-        .enumerate()
-        .zip(transaction_event.output_leaf_indices)
-    {
-        for (i, node) in path.path.iter().enumerate() {
-            state_update.path_nodes.insert(
-                (path.tree, node.index),
-                EnrichedPathNode {
-                    node: node.clone(),
-                    slot,
-                    tree: path.tree,
-                    seq: path.seq + path_index as u64,
-                    level: i,
-                    tree_depth: path.path.len(),
-                    leaf_index: if i == 0 { Some(leaf_index) } else { None },
-                },
-            );
-        }
     }
 
     state_update
@@ -238,27 +205,4 @@ fn parse_public_transaction_event(
         );
 
     Ok(state_update)
-}
-
-fn extract_path_updates(changelogs: Changelogs) -> Vec<PathUpdate> {
-    changelogs
-        .changelogs
-        .iter()
-        .flat_map(|cl| match cl {
-            ChangelogEvent::V1(cl) => {
-                let tree_id = cl.id;
-                cl.paths.iter().map(move |p| PathUpdate {
-                    tree: tree_id,
-                    path: p
-                        .iter()
-                        .map(|node| PathNode {
-                            node: node.node,
-                            index: node.index,
-                        })
-                        .collect(),
-                    seq: cl.seq,
-                })
-            }
-        })
-        .collect::<Vec<_>>()
 }

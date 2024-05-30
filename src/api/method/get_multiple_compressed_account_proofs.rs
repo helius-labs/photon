@@ -5,6 +5,7 @@ use crate::{
 };
 use itertools::Itertools;
 
+use log::info;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
     EntityTrait, QueryFilter, TransactionTrait,
@@ -63,6 +64,7 @@ pub async fn get_multiple_compressed_account_proofs_helper(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    info!("Getting proofs for {:?} hashes", hashes);
     let leaf_nodes = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
@@ -72,10 +74,20 @@ pub async fn get_multiple_compressed_account_proofs_helper(
         .all(conn)
         .await?;
 
+    info!(
+        "Found {:?} leaf nodes",
+        leaf_nodes
+            .iter()
+            .map(|x| SerializablePubkey::try_from(x.hash.clone()).unwrap())
+            .collect::<Vec<SerializablePubkey>>()
+    );
+
     if leaf_nodes.len() != hashes.len() {
-        return Err(PhotonApiError::RecordNotFound(
-            "Leaf nodes not found for some hashes".to_string(),
-        ));
+        return Err(PhotonApiError::RecordNotFound(format!(
+            "Leaf nodes not found for hashes. Got {} hashes. Expected {}.",
+            leaf_nodes.len(),
+            hashes.len()
+        )));
     }
     let leaf_hashes_to_model = leaf_nodes
         .iter()
@@ -198,7 +210,6 @@ where
         })
         .dedup()
         .collect::<Vec<(Vec<u8>, i64)>>();
-
 
     let mut condition = Condition::any();
     for (tree, node) in all_required_node_indices.clone() {

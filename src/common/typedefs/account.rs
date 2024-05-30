@@ -17,7 +17,7 @@ pub struct Account {
     pub lamports: UnsignedInteger,
     pub tree: SerializablePubkey,
     pub leaf_index: UnsignedInteger,
-    pub seq: Option<UnsignedInteger>,
+    pub seq: UnsignedInteger,
     pub slot_created: UnsignedInteger,
 }
 

@@ -6,7 +6,7 @@ use sea_orm_migration::{
 use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
 
 use super::model::table::{
-    AccountTransactions, Blocks, OwnerBalances, TokenOwnerBalances, Transactions,
+    AccountTransactions, Blocks, IndexedTrees, OwnerBalances, TokenOwnerBalances, Transactions,
 };
 
 #[derive(DeriveMigrationName)]
@@ -95,7 +95,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Accounts::Owner).binary().not_null())
                     .col(ColumnDef::new(Accounts::Tree).binary().not_null())
                     .col(ColumnDef::new(Accounts::LeafIndex).big_integer().not_null())
-                    .col(ColumnDef::new(Accounts::Seq).big_integer())
+                    .col(ColumnDef::new(Accounts::Seq).big_integer().not_null())
                     .col(
                         ColumnDef::new(Accounts::SlotCreated)
                             .big_integer()
@@ -194,6 +194,43 @@ impl MigrationTrait for Migration {
                             .col(TokenOwnerBalances::Owner)
                             .col(TokenOwnerBalances::Mint),
                     )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(IndexedTrees::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(IndexedTrees::Index).big_integer().not_null())
+                    .col(ColumnDef::new(IndexedTrees::Value).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(IndexedTrees::NextIndex)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(IndexedTrees::NextValue)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name("pk_indexed_trees")
+                            .col(IndexedTrees::Index),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("indexed_trees_value_idx")
+                    .table(IndexedTrees::Table)
+                    .col(IndexedTrees::Value)
+                    .unique()
                     .to_owned(),
             )
             .await?;
@@ -449,6 +486,17 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(AccountTransactions::Table).to_owned())
             .await?;
 
+        manager
+            .drop_table(Table::drop().table(OwnerBalances::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(TokenOwnerBalances::Table).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(IndexedTrees::Table).to_owned())
+            .await?;
         Ok(())
     }
 }

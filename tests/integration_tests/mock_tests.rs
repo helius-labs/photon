@@ -84,7 +84,7 @@ async fn test_persist_state_update_basic(
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
-        seq: Some(UnsignedInteger(0)),
+        seq: UnsignedInteger(0),
         slot_created: UnsignedInteger(0),
     };
 
@@ -174,7 +174,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(1000),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(10),
-            seq: Some(UnsignedInteger(1)),
+            seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
         },
         Account {
@@ -189,7 +189,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(1030),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(11),
-            seq: Some(UnsignedInteger(2)),
+            seq: UnsignedInteger(2),
             slot_created: UnsignedInteger(0),
         },
         Account {
@@ -204,7 +204,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(10020),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(13),
-            seq: Some(UnsignedInteger(3)),
+            seq: UnsignedInteger(3),
             slot_created: UnsignedInteger(1),
         },
         Account {
@@ -219,7 +219,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(10100),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(23),
-            seq: Some(UnsignedInteger(1)),
+            seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
         },
     ];
@@ -392,6 +392,7 @@ async fn test_persist_token_data(
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            seq: Set(0),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();

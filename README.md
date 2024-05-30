@@ -51,7 +51,7 @@ To run tests, install and run Postgres and SQLlite locally. For MacOS users, we 
 Homebrew to run local Postgres: https://wiki.postgresql.org/wiki/Homebrew.
 
 Then export environment variables to configure your RPC and your test Postgres url. For SQLlite testing,
-we always use an in-memory SQLlite database, so there is no need to configure a test url.
+we always use an in-memory ScargQLlite database, so there is no need to configure a test url.
 
 ```bash
 export MAINNET_RPC_URL=https://api.devnet.solana.com
