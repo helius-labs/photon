@@ -106,6 +106,7 @@ async fn test_e2e_mint_and_transfer(
             .get_multiple_compressed_account_proofs(hash_list.clone())
             .await
             .unwrap();
+
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
 
         let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();

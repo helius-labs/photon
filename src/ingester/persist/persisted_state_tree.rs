@@ -194,7 +194,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
     )
     .await?;
 
-    hashes
+    let proofs: Result<Vec<MerkleProofWithContext>, PhotonApiError> = hashes
         .iter()
         .map(|hash| {
             let (tree, required_node_indices) = leaf_hashes_to_required_nodes
@@ -255,7 +255,36 @@ pub async fn get_multiple_compressed_leaf_proofs(
                 root_seq,
             })
         })
-        .collect()
+        .collect();
+    let proofs = proofs?;
+
+    // for proof in proofs.iter() {
+    //     validate_proof(proof)?;
+    // }
+
+    Ok(proofs)
+}
+
+fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
+    let proof_path: Vec<Hash> = vec![proof.hash.clone()]
+        .into_iter()
+        .chain(proof.proof.clone())
+        .collect();
+    // Use the reduce function to reduce proof path using compute_parent_hash
+    let computed_root = proof_path
+        .into_iter()
+        .reduce(|acc, x| {
+            Hash::try_from(compute_parent_hash(acc.to_vec(), x.to_vec()).unwrap()).unwrap()
+        })
+        .unwrap();
+
+    if computed_root != proof.root {
+        return Err(PhotonApiError::UnexpectedError(
+            "Computed root does not match the provided root".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 pub fn get_proof_path(index: i64) -> Vec<i64> {

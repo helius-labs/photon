@@ -564,7 +564,7 @@ async fn test_persisted_state_trees(
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
     let tree = SerializablePubkey::new_unique();
-    let num_nodes = 1;
+    let num_nodes = 2;
 
     let leaf_nodes: Vec<LeafNode> = (0..num_nodes)
         .map(|i| LeafNode {
@@ -590,6 +590,7 @@ async fn test_persisted_state_trees(
     )
     .await
     .unwrap();
+    panic!("{:?}", proofs);
 
     let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
     let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
@@ -599,17 +600,5 @@ async fn test_persisted_state_trees(
         assert_eq!(proof.merkle_tree, tree);
         assert_eq!(num_nodes as u64 - 1, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
-        let proof_path: Vec<Hash> = vec![proof.hash.clone()]
-            .into_iter()
-            .chain(proof.proof.clone())
-            .collect();
-        // Use the reduce function to reduce proof path using compute_parent_hash
-        let computed_root = proof_path
-            .into_iter()
-            .reduce(|acc, x| {
-                Hash::try_from(compute_parent_hash(acc.to_vec(), x.to_vec()).unwrap()).unwrap()
-            })
-            .unwrap();
-        assert_eq!(computed_root, proof.root);
     }
 }

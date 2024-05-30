@@ -33,9 +33,10 @@ expression: proofs
         "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
-        "2pcWr6NZA2K3jvW4x1dNZuRQXUx8yKjcJWSv3cS6Fvbx"
+        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
+        "3sP8PaRbzVuDcoKczeDUEf5ie3mBwasJMssubfpHYivS"
       ],
-      "root": "KHUW7Futb4rkBv9WyPe8oh95BGMHLavLUdpivoY2ybG",
+      "root": "3k6oku6HB3F7nrY2vsQKXCBtvG7j68LJzw3jB2Wm57Cu",
       "leafIndex": 6,
       "hash": "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
@@ -67,9 +68,10 @@ expression: proofs
         "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
-        "2pcWr6NZA2K3jvW4x1dNZuRQXUx8yKjcJWSv3cS6Fvbx"
+        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
+        "3sP8PaRbzVuDcoKczeDUEf5ie3mBwasJMssubfpHYivS"
       ],
-      "root": "KHUW7Futb4rkBv9WyPe8oh95BGMHLavLUdpivoY2ybG",
+      "root": "3k6oku6HB3F7nrY2vsQKXCBtvG7j68LJzw3jB2Wm57Cu",
       "leafIndex": 3,
       "hash": "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
