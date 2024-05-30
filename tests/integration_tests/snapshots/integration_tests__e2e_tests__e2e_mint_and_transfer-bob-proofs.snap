@@ -1,0 +1,79 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: proofs
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": [
+    {
+      "proof": [
+        "W5VPCs9Qd6VfXn8e3PteewnfPQ789vH6B3CBQcAdHHu",
+        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
+        "3gy8iKnGEdFUAR4n7v1vwx4T5X21hg2iVxF8FK4en2B8",
+        "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
+        "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
+        "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
+        "46JM2e72mdEAxkSeXc65b3aLWkAQpX6NF7mdyuXQKguu",
+        "WKLyYL7wpK5zVsWoMU2rcUiMwRWp9PowG83GHHH1dqn",
+        "4CztDUcRvGkTyFoVEXXcBwd5UwqJcJJWpdL8FFERrqkU",
+        "yjDkqNqZtBwpG7iUwT3hqKNKZAP9CcBDyBBuGPNk2jQ",
+        "2r8qWibedWpM7QkW6QvDDUEQAHT9isX629UKcUxbY8BT",
+        "38Aoz1ZUAnRqSCxdQuEkLhzYMRi1Tu1rSBy1UymA8yfK",
+        "3zBeAgo5EwPrgsXRLUV6DhQrsUUhwbmQXPnZkudhsnSD",
+        "2Q5cDvZW6hTxFFDTHhAf129PH4z8EZLYA1meeZpPW76F",
+        "2gnsMw1zhpqGeAakoQLarCXVUaeEGDHm5uma1Jznx7qD",
+        "3MXZLrn3tnLMWJznkMombRHkgkfsiBTPru2wjHDd3kLh",
+        "3rrDm8iED4sDyonpLs9J3TDoTP8U4jsvXCmoupoCvvKc",
+        "48YJtP1G5pKWu7Jy1NRagdj29dwxVXFsySrBVw1nALhX",
+        "22tjwuiv6VgeMDs8qXpkZ7cY5rcgrFrG5knp7swZ1wQ2",
+        "2dS4UCZ6RJvwPBaWmcz1L7ips34xnbNMfK9D8UHdFJfT",
+        "3EdF4zvu7uwW7xYdnaKUPzqDY5Msq9FfWn6HgEnRTkDB",
+        "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
+        "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
+        "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
+        "2pcWr6NZA2K3jvW4x1dNZuRQXUx8yKjcJWSv3cS6Fvbx"
+      ],
+      "root": "KHUW7Futb4rkBv9WyPe8oh95BGMHLavLUdpivoY2ybG",
+      "leafIndex": 6,
+      "hash": "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
+      "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+      "rootSeq": 7
+    },
+    {
+      "proof": [
+        "2GcLLSm4yrbHSiy2ZS7y9ZLGVKqnrSA4XBfvn1hVJ4gm",
+        "vHUSKGoUAM6KNPSrM9qCEL7mwiNhANPyxSb4UBtqcVt",
+        "Jp2s86o8QjFtntAx4Mv7u696r4XuWZU8BnzQygYDKut",
+        "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
+        "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
+        "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
+        "46JM2e72mdEAxkSeXc65b3aLWkAQpX6NF7mdyuXQKguu",
+        "WKLyYL7wpK5zVsWoMU2rcUiMwRWp9PowG83GHHH1dqn",
+        "4CztDUcRvGkTyFoVEXXcBwd5UwqJcJJWpdL8FFERrqkU",
+        "yjDkqNqZtBwpG7iUwT3hqKNKZAP9CcBDyBBuGPNk2jQ",
+        "2r8qWibedWpM7QkW6QvDDUEQAHT9isX629UKcUxbY8BT",
+        "38Aoz1ZUAnRqSCxdQuEkLhzYMRi1Tu1rSBy1UymA8yfK",
+        "3zBeAgo5EwPrgsXRLUV6DhQrsUUhwbmQXPnZkudhsnSD",
+        "2Q5cDvZW6hTxFFDTHhAf129PH4z8EZLYA1meeZpPW76F",
+        "2gnsMw1zhpqGeAakoQLarCXVUaeEGDHm5uma1Jznx7qD",
+        "3MXZLrn3tnLMWJznkMombRHkgkfsiBTPru2wjHDd3kLh",
+        "3rrDm8iED4sDyonpLs9J3TDoTP8U4jsvXCmoupoCvvKc",
+        "48YJtP1G5pKWu7Jy1NRagdj29dwxVXFsySrBVw1nALhX",
+        "22tjwuiv6VgeMDs8qXpkZ7cY5rcgrFrG5knp7swZ1wQ2",
+        "2dS4UCZ6RJvwPBaWmcz1L7ips34xnbNMfK9D8UHdFJfT",
+        "3EdF4zvu7uwW7xYdnaKUPzqDY5Msq9FfWn6HgEnRTkDB",
+        "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
+        "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
+        "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
+        "2pcWr6NZA2K3jvW4x1dNZuRQXUx8yKjcJWSv3cS6Fvbx"
+      ],
+      "root": "KHUW7Futb4rkBv9WyPe8oh95BGMHLavLUdpivoY2ybG",
+      "leafIndex": 3,
+      "hash": "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z",
+      "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+      "rootSeq": 7
+    }
+  ]
+}
