@@ -590,7 +590,6 @@ async fn test_persisted_state_trees(
     )
     .await
     .unwrap();
-    panic!("{:?}", proofs);
 
     let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
     let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();

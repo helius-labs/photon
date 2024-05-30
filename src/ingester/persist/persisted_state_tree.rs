@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
+use log::info;
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
@@ -25,6 +26,12 @@ pub struct LeafNode {
     pub leaf_index: u32,
     pub hash: Hash,
     pub seq: u32,
+}
+
+impl LeafNode {
+    fn node_index(&self, tree_height: u32) -> i64 {
+        2_i64.pow(tree_height) - self.leaf_index as i64 - 1
+    }
 }
 
 impl From<Account> for LeafNode {
@@ -62,7 +69,7 @@ pub async fn persist_leaf_nodes(
 
     let leaf_locations = leaf_nodes
         .iter()
-        .map(|node| (node.tree.to_bytes_vec(), node.leaf_index as i64))
+        .map(|node| (node.tree.to_bytes_vec(), node.node_index(tree_height)))
         .collect::<Vec<_>>();
 
     let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
@@ -75,7 +82,8 @@ pub async fn persist_leaf_nodes(
     let mut models_to_updates = HashMap::new();
 
     for leaf_node in leaf_nodes.clone() {
-        let node_idx = 2_i64.pow(tree_height - 1) - leaf_node.leaf_index as i64;
+        let node_idx = leaf_node.node_index(tree_height);
+        info!("Node idx {}", node_idx);
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
 
@@ -92,18 +100,28 @@ pub async fn persist_leaf_nodes(
 
         for (child_level, node_index) in get_node_direct_ancestors(node_idx).iter().enumerate() {
             let left_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2))
+                .get(&(tree.to_bytes_vec(), node_index * 2 + 1))
                 .map(Clone::clone)
                 .unwrap_or(ZERO_BYTES[child_level].to_vec());
 
             let right_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2 + 1))
+                .get(&(tree.to_bytes_vec(), node_index * 2))
                 .map(Clone::clone)
                 .unwrap_or(ZERO_BYTES[child_level].to_vec());
 
             let level = child_level + 1;
 
-            let hash = compute_parent_hash(left_child, right_child)?;
+            let hash = compute_parent_hash(left_child.clone(), right_child.clone())?;
+
+            let left_child_hash = Hash::try_from(left_child.clone()).map_err(|_| {
+                IngesterError::DatabaseError("Failed to convert hash to bytes".to_string())
+            })?;
+            let right_child_hash = Hash::try_from(right_child.clone()).map_err(|_| {
+                IngesterError::DatabaseError("Failed to convert hash to bytes".to_string())
+            })?;
+            info!("Left child hash: {:?}", left_child_hash);
+            info!("Right child hash: {:?}", right_child_hash);
+            info!("Parent hash: {:?}", Hash::try_from(hash.clone()).unwrap());
 
             let model = state_trees::ActiveModel {
                 tree: Set(tree.to_bytes_vec()),
@@ -258,9 +276,9 @@ pub async fn get_multiple_compressed_leaf_proofs(
         .collect();
     let proofs = proofs?;
 
-    // for proof in proofs.iter() {
-    //     validate_proof(proof)?;
-    // }
+    for proof in proofs.iter() {
+        validate_proof(proof)?;
+    }
 
     Ok(proofs)
 }
@@ -279,9 +297,10 @@ fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> 
         .unwrap();
 
     if computed_root != proof.root {
-        return Err(PhotonApiError::UnexpectedError(
-            "Computed root does not match the provided root".to_string(),
-        ));
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Computed root does not match the provided root. Proof; {:?}",
+            proof
+        )));
     }
 
     Ok(())

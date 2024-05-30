@@ -9,9 +9,9 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "W5VPCs9Qd6VfXn8e3PteewnfPQ789vH6B3CBQcAdHHu",
-        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
-        "3gy8iKnGEdFUAR4n7v1vwx4T5X21hg2iVxF8FK4en2B8",
+        "11111111111111111111111111111111",
+        "39Kb9H3sMLiAHJVfbh7JdekEaoeHFNG9sosSyTdin8BG",
+        "42bzTCNxaaqTeemTh6RZmnmNt6Z6iY6KZBd9z123PqDf",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -33,10 +33,9 @@ expression: proofs
         "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
-        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
-        "3sP8PaRbzVuDcoKczeDUEf5ie3mBwasJMssubfpHYivS"
+        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP"
       ],
-      "root": "3k6oku6HB3F7nrY2vsQKXCBtvG7j68LJzw3jB2Wm57Cu",
+      "root": "2TBCgStWwsLr4tbwUZhryh7UVUp4KsmwKV7RkycVKY48",
       "leafIndex": 6,
       "hash": "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
@@ -44,9 +43,9 @@ expression: proofs
     },
     {
       "proof": [
-        "2GcLLSm4yrbHSiy2ZS7y9ZLGVKqnrSA4XBfvn1hVJ4gm",
-        "vHUSKGoUAM6KNPSrM9qCEL7mwiNhANPyxSb4UBtqcVt",
-        "Jp2s86o8QjFtntAx4Mv7u696r4XuWZU8BnzQygYDKut",
+        "3euGypyyxreb5xkrrrQvCFa4t1R1KDJBnL6YA5zWcnXw",
+        "393oQTeeY2gKZtK36aWc73PZ4x5yqJTVSjsqJZxsdjUC",
+        "2fKSomeWUQaBHckqFbpNzTTukz4LazXwDZBKtE8KK32A",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -68,10 +67,9 @@ expression: proofs
         "2jzv6Z8vEXSYRXQCFnVYvzgJ2RfyDN1QEjdHm6CBvJUg",
         "2fomPS2xUPwXxVF8hx5YtMpBHmQKSZKushUiWYsy9Eqx",
         "3Pi3nRu4fWpnW5rYDAoraX1Q2xDCRQ24Dq8TEY7gaSBn",
-        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
-        "3sP8PaRbzVuDcoKczeDUEf5ie3mBwasJMssubfpHYivS"
+        "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP"
       ],
-      "root": "3k6oku6HB3F7nrY2vsQKXCBtvG7j68LJzw3jB2Wm57Cu",
+      "root": "2TBCgStWwsLr4tbwUZhryh7UVUp4KsmwKV7RkycVKY48",
       "leafIndex": 3,
       "hash": "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
