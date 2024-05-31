@@ -9,9 +9,9 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "227BXTcxfhvpTTAUBu2H3wVaBjqLbXijmsjaSiESBWaE",
-        "3v8NvFXGHV2nhiTEeg3aBR2WCtda6JsSzF54Khzbewg7",
-        "12twwKFpfRBHu7WUmZU6s5D45fqpnbJwoCqGvCnrsk9m",
+        "V4jB1ABCHKhEpNioqRyqaTTbPLBvgi7mpr357huXu8C",
+        "eqagKt2Sa9t67nacq9SCPs5yH3VfsnUgxNY2U7kGQg9",
+        "3SddyE2hs5hzJBFfzVa9FEg61Pv6ncVZJk33BY4HNvM6",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -36,9 +36,9 @@ expression: proofs
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "root": "oBZ8HtbVEkNnC8qiciKc1CjdmjYSCWSpWTbVebsmEFN",
+      "root": "3oRqVRbtWXAU7E8FdMuX3c3Ax7dgzqTYugMmZe7tiMRg",
       "leafIndex": 2,
-      "hash": "13berapdgyicVUiET7SAn1EVXjN7SttUXssCUxhw5KKZ",
+      "hash": "2sByWJuyr82oxWtMTn2aSY3wjD6BtkgjwK2ajUfBhnEf",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 5
     },
@@ -46,7 +46,7 @@ expression: proofs
       "proof": [
         "11111111111111111111111111111111",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
-        "3q1QZK756nWxRngSmDJJaByF637AeW1xXmC3rezca4Xf",
+        "3XG4JFjZeNyizbTt1XXSQaPjXP88EpohCyJNh8Pbe32C",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -71,9 +71,9 @@ expression: proofs
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "root": "oBZ8HtbVEkNnC8qiciKc1CjdmjYSCWSpWTbVebsmEFN",
+      "root": "3oRqVRbtWXAU7E8FdMuX3c3Ax7dgzqTYugMmZe7tiMRg",
       "leafIndex": 4,
-      "hash": "3tbNrbE827fHKJAhqnRG72riqXr15PPGiaK5MWEkYN38",
+      "hash": "33vJDxqQW9uK4vjKvgWDN9L5SQ1sT23n1HDm76RvdnsC",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 5
     }

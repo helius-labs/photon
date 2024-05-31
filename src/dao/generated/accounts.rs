@@ -13,7 +13,7 @@ pub struct Model {
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
     pub leaf_index: i64,
-    pub seq: Option<i64>,
+    pub seq: i64,
     pub slot_created: i64,
     pub spent: bool,
     pub prev_spent: Option<bool>,
@@ -25,21 +25,22 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::account_transactions::Entity")]
-    AccountTransactions,
     #[sea_orm(has_many = "super::token_accounts::Entity")]
     TokenAccounts,
-}
-
-impl Related<super::account_transactions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::AccountTransactions.def()
-    }
 }
 
 impl Related<super::token_accounts::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::TokenAccounts.def()
+    }
+}
+
+impl Related<super::transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::account_transactions::Relation::Transactions.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::account_transactions::Relation::Accounts.def().rev())
     }
 }
 

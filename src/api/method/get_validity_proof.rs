@@ -1,4 +1,7 @@
-use crate::{api::error::PhotonApiError, common::typedefs::hash::Hash};
+use crate::{
+    api::error::PhotonApiError, common::typedefs::hash::Hash,
+    ingester::persist::persisted_state_tree::get_multiple_compressed_leaf_proofs,
+};
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use reqwest::Client;
@@ -7,9 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::ToSchema;
 
-use super::get_multiple_compressed_account_proofs::{
-    get_multiple_compressed_account_proofs_helper, HashList,
-};
+use super::get_multiple_compressed_account_proofs::HashList;
 
 lazy_static! {
     static ref FIELD_SIZE: BigUint = BigUint::from_str(
@@ -176,8 +177,7 @@ pub async fn get_validity_proof(
     let prover_endpoint = "http://localhost:3001"; // Change this as necessary
 
     // Get merkle proofs
-    let merkle_proofs_with_context =
-        get_multiple_compressed_account_proofs_helper(conn, hashes.0).await?;
+    let merkle_proofs_with_context = get_multiple_compressed_leaf_proofs(conn, hashes.0).await?;
 
     let mut inputs: Vec<HexInputsForProver> = Vec::new();
     for proof in merkle_proofs_with_context.clone() {
@@ -213,8 +213,8 @@ pub async fn get_validity_proof(
 
     if !res.status().is_success() {
         return Err(PhotonApiError::UnexpectedError(format!(
-            "Error fetching proof {}",
-            res.status().to_string(),
+            "Error fetching proof {:?}",
+            res.text().await,
         )));
     }
 

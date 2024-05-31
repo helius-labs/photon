@@ -1,22 +1,20 @@
-use super::{
-    error,
-    parser::state_update::{AccountTransaction, EnrichedPathNode},
-};
+use super::{error, parser::state_update::AccountTransaction};
 use crate::{
-    api::method::get_multiple_compressed_account_proofs::{get_proof_nodes, ZERO_BYTES},
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
 };
 use crate::{
-    dao::generated::{accounts, state_trees, token_accounts},
+    dao::generated::{accounts, token_accounts},
     ingester::parser::state_update::StateUpdate,
 };
+use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use log::debug;
+use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, Order,
@@ -28,8 +26,11 @@ use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::types::Decimal;
+pub mod persisted_indexed_merkle_tree;
+pub mod persisted_state_tree;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
+const TREE_HEIGHT: u32 = 27;
 // To avoid exceeding the 25k total parameter limit, we set the insert limit to 1k (as we have fewer
 // than 10 columns per table).
 pub const MAX_SQL_INSERTS: usize = 1000;
@@ -44,16 +45,14 @@ pub async fn persist_state_update(
     let StateUpdate {
         in_accounts,
         out_accounts,
-        path_nodes,
         account_transactions,
         transactions,
     } = state_update;
 
     debug!(
-        "Persisting state update with {} input accounts, {} output accounts, and {} path nodes",
+        "Persisting state update with {} input accounts, {} output accounts",
         in_accounts.len(),
-        out_accounts.len(),
-        path_nodes.len()
+        out_accounts.len()
     );
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
@@ -69,15 +68,19 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    debug!("Persisting path nodes...");
-    for chunk in path_nodes
-        .into_values()
-        .collect::<Vec<_>>()
-        .chunks_mut(MAX_SQL_INSERTS)
-    {
-        chunk.sort_by_key(|node| node.level);
-        persist_path_nodes(txn, chunk).await?;
+    debug!("Persisting state nodes...");
+    for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
+        persist_leaf_nodes(
+            txn,
+            chunk
+                .iter()
+                .map(|x| LeafNode::from(x.clone()))
+                .collect_vec(),
+            TREE_HEIGHT,
+        )
+        .await?;
     }
+
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
     debug!("Persisting transactions nodes...");
@@ -308,7 +311,7 @@ async fn append_output_accounts(
             lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
             slot_created: Set(account.slot_created.0 as i64),
-            seq: Set(account.seq.map(|s| s.0 as i64)),
+            seq: Set(account.seq.0 as i64),
             prev_spent: Set(None),
         });
 
@@ -404,111 +407,6 @@ pub fn compute_parent_hash(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, Ing
         .map(|x| x.to_vec())
 }
 
-async fn persist_path_nodes(
-    txn: &DatabaseTransaction,
-    nodes: &[EnrichedPathNode],
-) -> Result<(), IngesterError> {
-    if nodes.is_empty() {
-        return Ok(());
-    }
-    if txn.get_database_backend() == DatabaseBackend::Postgres {
-        txn.execute(Statement::from_string(
-            txn.get_database_backend(),
-            "LOCK TABLE state_trees IN EXCLUSIVE MODE;".to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            IngesterError::DatabaseError(format!("Failed to lock state_trees table: {}", e))
-        })?;
-    }
-
-    let mut leaf_nodes = nodes
-        .iter()
-        .filter(|node| node.leaf_index.is_some())
-        .collect::<Vec<_>>();
-
-    leaf_nodes.sort_by_key(|node| node.seq);
-
-    let leaf_locations = leaf_nodes
-        .iter()
-        .map(|node| (node.tree.to_vec(), node.node.index as i64))
-        .collect::<Vec<_>>();
-
-    let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
-
-    let mut node_locations_to_hashes = node_locations_to_models
-        .iter()
-        .map(|(key, value)| (key.clone(), value.hash.clone()))
-        .collect::<HashMap<_, _>>();
-
-    let mut models_to_updates = HashMap::new();
-
-    for leaf_node in leaf_nodes {
-        let tree = leaf_node.tree.to_vec();
-        let key = (tree.clone(), leaf_node.node.index as i64);
-
-        let model = state_trees::ActiveModel {
-            tree: Set(leaf_node.tree.to_vec()),
-            level: Set(leaf_node.level as i64),
-            node_idx: Set(leaf_node.node.index as i64),
-            hash: Set(leaf_node.node.node.to_vec()),
-            leaf_idx: Set(leaf_node.leaf_index.map(|x| x as i64)),
-            seq: Set(leaf_node.seq as i64),
-        };
-        models_to_updates.insert(key.clone(), model);
-        node_locations_to_hashes.insert(key, leaf_node.node.node.to_vec());
-
-        for (child_level, node_index) in get_node_direct_ancestors(leaf_node.node.index as i64)
-            .iter()
-            .enumerate()
-        {
-            let left_child = node_locations_to_hashes
-                .get(&(tree.clone(), node_index * 2))
-                .map(Clone::clone)
-                .unwrap_or(ZERO_BYTES[child_level].to_vec());
-
-            let right_child = node_locations_to_hashes
-                .get(&(tree.clone(), node_index * 2 + 1))
-                .map(Clone::clone)
-                .unwrap_or(ZERO_BYTES[child_level].to_vec());
-
-            let level = child_level + 1;
-
-            let hash = compute_parent_hash(left_child, right_child)?;
-
-            let model = state_trees::ActiveModel {
-                tree: Set(tree.clone()),
-                level: Set(level as i64),
-                node_idx: Set(*node_index),
-                hash: Set(hash.clone()),
-                leaf_idx: Set(None),
-                seq: Set(leaf_node.seq as i64),
-            };
-
-            let key = (tree.clone(), *node_index);
-            models_to_updates.insert(key.clone(), model);
-            node_locations_to_hashes.insert(key, hash);
-        }
-    }
-
-    // We first build the query and then execute it because SeaORM has a bug where it always throws
-    // an error if we do not insert a record in an insert statement. However, in this case, it's
-    // expected not to insert anything if the key already exists.
-    let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
-        .on_conflict(
-            OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
-                .update_columns([state_trees::Column::Hash, state_trees::Column::Seq])
-                .to_owned(),
-        )
-        .build(txn.get_database_backend());
-    query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
-    txn.execute(query).await.map_err(|e| {
-        IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
-    })?;
-
-    Ok(())
-}
-
 async fn persist_transactions(
     txn: &DatabaseTransaction,
     transactions: &[Transaction],
@@ -583,7 +481,12 @@ async fn persist_account_transactions(
                 .to_owned(),
             )
             .build(txn.get_database_backend());
-        txn.execute(query).await?;
+        txn.execute(query).await.map_err(|e| {
+            IngesterError::DatabaseError(format!(
+                "Failed to persist account transactions: {:?}. Error {}",
+                account_transactions, e
+            ))
+        })?;
     }
 
     Ok(())

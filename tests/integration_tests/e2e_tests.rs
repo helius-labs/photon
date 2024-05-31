@@ -48,18 +48,18 @@ async fn test_e2e_mint_and_transfer(
     .await;
 
     let bob_pubkey =
-        SerializablePubkey::try_from("6hct2FBjZeQZ7Sscip1Xep3b94jCh7FvtaKqpfhne1Ak").unwrap();
+        SerializablePubkey::try_from("FZjt2HLk9cgbmFDkhZ3G2XwQ7WjKWrJdVxcoaoxfBPZw").unwrap();
     let charles_pubkey =
-        SerializablePubkey::try_from("GF94vdJvzB28bSSEy7utrYkisNFuZR3ispD97W7Pd6LS").unwrap();
+        SerializablePubkey::try_from("HFge98G1SxGGk66JSt2uJZrAiTEftMbhDcNQcLbkFxGV").unwrap();
 
     let mint_tx =
-        "67P7sjss5EV1eTzeRSFEejwohTGYvtxgrReAURrEnQJ1JiKzofFt7HdQX8zzyDqymxuggeK31DQRCDLxffc2fHwr";
+        "6qytR34uYwpa4kb52WAwsGwKaEQsZgPkeWnAoVX5xMq2q5mvsbZWyica6ypLSPqTZ1NYHqfTzGrdbTEUvH8FyDN";
     let transfer_tx =
-        "2FrvajC55EwHptaGyuBTjBUm4XkE2c5KHo6AVez2qy8jXbH1m7gRUXaEVh9NJjBkpugU6QPHweQHkdiq6NP2eu2f";
+        "ZcKpgqWMJWuUCVha28UPTjydkDCRdTVmnb4sHE1AQU45juetmT6BcuPVmPg4ecepqMBEyu3UpGxg9n4N4ryAe9x";
     let transfer_txn2: &str =
-        "62LLe2o1pSdcmos5NH2A1L7LAXU6FnRRHRJ224ZcN1kT5bWuiEYf3DgyS2DxytSm7RkDN6f24n1XCZJudZKQT6MC";
+        "4baKPsjwU4zR3yskhrfM63LwiiYpaKtbq2r3GzpvK9ATb4rANhWFfRdn26UiH7kzYmAtUWFmmMzpKLSHwMiSP3Tx";
     let transfer_txn3 =
-        "3H2R6UT3Pw9ejNmYTphb27jNoRdXmuLXjjxDaSs87uyuq25YJZtLQgACG9ANsvzfZN1s9d6UPZMabAYYsMoZ6GsG";
+        "kFTMfQ23PCrhfrFgoyyLC961DTAQ3kmUzx82i7kxW8dgEjPmk5Uv4qLeiyiHdVBmX881FXsrNTKriGdJ4yifPUF";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
@@ -106,6 +106,7 @@ async fn test_e2e_mint_and_transfer(
             .get_multiple_compressed_account_proofs(hash_list.clone())
             .await
             .unwrap();
+
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
 
         let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
@@ -235,17 +236,17 @@ async fn test_lamport_transfers(
     .await;
 
     let compress_tx =
-        "5Mi1rJzJskdDqnyXS1k8rw91Gm9qsnFuAEmF5G2f21PFXGuoDHpdV4iLjvo9VjDp2kWBBxFnugLAdioyeHRcz5JA";
+        "4hyshcVVLqy7AtnB2CdLixvHTEwHARNwZ69gqd2ij7u6bmPvK9nbR4CeYTCLDyXZJ8DPmH6GmZ26MpqiLSxkorEz";
     let transfer_tx1 =
-        "2jLuZajWysScmEeuW7egrnDLK5m15dxECAvFGVqy9B8LNxsQES4Qn2MRykjXrf1SKU9sg9cyUzsCYPcd9GdjqND2";
+        "4fNZoVnaJ5DYjJGjFLkaUtoeyeNV4CTVeyTzAT8GsxLu3J29pS6AUR6QphaDszLoFFMZXLGqmWhN5ox5iiqtjqSW";
     let transfer_tx2 =
-        "3DGUfF1qnMcXE8er6U6Yaqh83punr2FBK2oW2v6MVpdPRVzPF6K67Z298LiPeech4kBb677HFnYpxqSX3y8PmqtU";
+        "5gJtG7XNSuNWAKbMnUj8xaJgSDDVy7AdduHNXxxMXSNrPFPZSkwnseMBhPGrQNBfwE9vZ2VNVhXfDcqbt1WMXvJe";
 
     let payer_pubkey = SerializablePubkey(
-        Pubkey::try_from("xJVLBBTaxGx9FXW56R3xvhasYck3jpsBhyRJmW52X5z").unwrap(),
+        Pubkey::try_from("8RF3tGXpNbr9wL4bk24tA9PNFYWwiJu3Ski1wvfCtHcD").unwrap(),
     );
     let receiver_pubkey = SerializablePubkey(
-        Pubkey::try_from("2EnRYUeRy6AXWNhpQrcwb39LeWknBJ2F8q3ofnuti6fN").unwrap(),
+        Pubkey::try_from("FddySpRL343GYYxTujvrHMhnaQ1EdbkHkHb8UA2kCvU9").unwrap(),
     );
     let txs = [compress_tx, transfer_tx1, transfer_tx2];
     let number_of_indexes = [1, 2];
@@ -311,7 +312,16 @@ async fn test_lamport_transfers(
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
-            let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+            let mut validity_proof =
+                setup
+                    .api
+                    .get_validity_proof(hash_list.clone())
+                    .await
+                    .expect(&format!(
+                        "Failed to get validity proof for owner with hash list len: {} {}",
+                        owner_name,
+                        hash_list.0.len()
+                    ));
             // The Gnark prover has some randomness.
             validity_proof.compressed_proof = CompressedProof::default();
 

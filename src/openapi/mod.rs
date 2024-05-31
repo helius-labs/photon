@@ -3,7 +3,6 @@ use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
-use crate::api::method::get_multiple_compressed_account_proofs::MerkleProofWithContext;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
 use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
@@ -27,6 +26,7 @@ use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use dirs;
 use utoipa::openapi::Response;
 

@@ -9,9 +9,9 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "jjuSLSk7xc3ZgGPTBP7f8WNxBTNuuQq2gXyVKA5SGaD",
-        "aAKaWNXzbhf4QbTvkyKDHzDTbd299gBRAKhj8VRQZBX",
-        "2eck6mpTqieXuWfavJc3Z9xCy4evGgiFpUGHPXui9YUV",
+        "11111111111111111111111111111111",
+        "2MNXrESWrxVm4Lk3KLQztTQDnadEbqekNcBNVKHKFDFA",
+        "2xf8ByjKkarUQhJoHT3Wy8Q2knbrqiU8XUQCVX6ncL6B",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -36,17 +36,17 @@ expression: proofs
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "root": "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE",
-      "leafIndex": 3,
-      "hash": "2kQ8YtyQwKVJkwepnWEKGJLTNp89VcVGFj2VpxaSAfot",
+      "root": "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
+      "leafIndex": 6,
+      "hash": "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 7
     },
     {
       "proof": [
-        "11111111111111111111111111111111",
-        "2hE9M7ue6TS5Kcj2EQtQWZpZ8Lmi7YdBXrLQSWoCSbVb",
-        "3n5a2GDVaL6AkdFJEnxqXbsuiXE2UKaGd2P778WgTepm",
+        "3euGypyyxreb5xkrrrQvCFa4t1R1KDJBnL6YA5zWcnXw",
+        "3qrqBWtar52S9rni3cBvLEqnKsDERsG77JEoe4BguP2B",
+        "4A29z9NsDiZARQkmSvSDQgchqXGvC3j8riG8Nn6U97iE",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -71,9 +71,9 @@ expression: proofs
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "root": "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE",
-      "leafIndex": 6,
-      "hash": "2uSnD5swaYewEshv4YJdQJpQauciUqCAzMeeFmAQZ5Kk",
+      "root": "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
+      "leafIndex": 3,
+      "hash": "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 7
     }

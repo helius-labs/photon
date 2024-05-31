@@ -9,20 +9,20 @@ expression: validity_proof
     "c": []
   },
   "roots": [
-    "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE",
-    "HscaujxE2kLS7pAYL3pNziJEsQmMVkYhNqj8hNBommE"
+    "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
+    "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD"
   ],
   "rootIndices": [
     7,
     7
   ],
   "leafIndices": [
-    3,
-    6
+    6,
+    3
   ],
   "leaves": [
-    "2kQ8YtyQwKVJkwepnWEKGJLTNp89VcVGFj2VpxaSAfot",
-    "2uSnD5swaYewEshv4YJdQJpQauciUqCAzMeeFmAQZ5Kk"
+    "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
+    "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z"
   ],
   "merkleTrees": [
     "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",

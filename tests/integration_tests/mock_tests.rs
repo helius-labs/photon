@@ -5,13 +5,16 @@ use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
-use photon_indexer::api::method::get_multiple_compressed_account_proofs::ZERO_BYTES;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
+use photon_indexer::ingester::persist::persisted_state_tree::{
+    get_multiple_compressed_leaf_proofs, ZERO_BYTES,
+};
+use sea_orm::TransactionTrait;
 
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -19,6 +22,7 @@ use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::Serializ
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
+use photon_indexer::ingester::persist::persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use photon_indexer::ingester::persist::{
     compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
 };
@@ -27,7 +31,7 @@ use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
 
 use photon_indexer::common::typedefs::account::AccountData;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
@@ -84,7 +88,7 @@ async fn test_persist_state_update_basic(
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
-        seq: Some(UnsignedInteger(0)),
+        seq: UnsignedInteger(0),
         slot_created: UnsignedInteger(0),
     };
 
@@ -174,7 +178,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(1000),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(10),
-            seq: Some(UnsignedInteger(1)),
+            seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
         },
         Account {
@@ -189,7 +193,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(1030),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(11),
-            seq: Some(UnsignedInteger(2)),
+            seq: UnsignedInteger(2),
             slot_created: UnsignedInteger(0),
         },
         Account {
@@ -204,7 +208,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(10020),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(13),
-            seq: Some(UnsignedInteger(3)),
+            seq: UnsignedInteger(3),
             slot_created: UnsignedInteger(1),
         },
         Account {
@@ -219,7 +223,7 @@ async fn test_multiple_accounts(
             lamports: UnsignedInteger(10100),
             tree: SerializablePubkey::new_unique(),
             leaf_index: UnsignedInteger(23),
-            seq: Some(UnsignedInteger(1)),
+            seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
         },
     ];
@@ -392,6 +396,7 @@ async fn test_persist_token_data(
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            seq: Set(0),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();
@@ -547,4 +552,52 @@ async fn test_compute_parent_hash() {
     let parent = ZERO_BYTES[1];
     let computed_parent = compute_parent_hash(child.to_vec(), child.to_vec()).unwrap();
     assert_eq!(computed_parent, parent.to_vec());
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_persisted_state_trees(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+    let tree = SerializablePubkey::new_unique();
+    let num_nodes = 5;
+
+    let leaf_nodes: Vec<LeafNode> = (0..num_nodes)
+        .map(|i| LeafNode {
+            hash: Hash::new_unique(),
+            leaf_index: i,
+            tree: tree.clone(),
+            seq: i,
+        })
+        .collect();
+    let txn = setup.db_conn.as_ref().begin().await.unwrap();
+    let tree_height = 5;
+    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+        .await
+        .unwrap();
+    txn.commit().await.unwrap();
+
+    let proofs = get_multiple_compressed_leaf_proofs(
+        &setup.db_conn,
+        leaf_nodes
+            .iter()
+            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+            .collect(),
+    )
+    .await
+    .unwrap();
+
+    let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
+    let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
+    assert_eq!(proof_hashes, leaf_hashes);
+
+    for proof in proofs {
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1, proof.root_seq);
+        assert_eq!(tree_height - 1, proof.proof.len() as u32);
+    }
 }

@@ -2,11 +2,12 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::ingester::persist::persisted_state_tree::{
+    get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
+};
+
 use super::{
     super::error::PhotonApiError,
-    get_multiple_compressed_account_proofs::{
-        get_multiple_compressed_account_proofs_helper, MerkleProofWithContext,
-    },
     utils::{Context, HashRequest},
 };
 
@@ -24,7 +25,7 @@ pub async fn get_compressed_account_proof(
     let context = Context::extract(conn).await?;
     let hash = request.hash;
 
-    get_multiple_compressed_account_proofs_helper(conn, vec![hash])
+    get_multiple_compressed_leaf_proofs(conn, vec![hash])
         .await?
         .into_iter()
         .next()
