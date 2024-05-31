@@ -95,6 +95,7 @@ components:
       - lamports
       - tree
       - leafIndex
+      - seq
       - slotCreated
       properties:
         address:
@@ -164,6 +165,58 @@ components:
       description: A base 64 encoded string.
       default: SGVsbG8sIFdvcmxkIQ==
       example: SGVsbG8sIFdvcmxkIQ==
+    CompressedProof:
+      type: object
+      required:
+      - a
+      - b
+      - c
+      properties:
+        a:
+          type: string
+          format: binary
+        b:
+          type: string
+          format: binary
+        c:
+          type: string
+          format: binary
+    CompressedProofWithContext:
+      type: object
+      required:
+      - compressedProof
+      - roots
+      - rootIndices
+      - leafIndices
+      - leaves
+      - merkleTrees
+      properties:
+        compressedProof:
+          $ref: '#/components/schemas/CompressedProof'
+        leafIndices:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 0
+        leaves:
+          type: array
+          items:
+            type: string
+        merkleTrees:
+          type: array
+          items:
+            type: string
+        rootIndices:
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 0
+        roots:
+          type: array
+          items:
+            type: string
     Context:
       type: object
       required:
@@ -176,7 +229,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
+      example: 1111111DspJWUYDimq3AsTmnRfCX1iB99FBkVff83
     Limit:
       type: integer
       format: int64
@@ -185,6 +238,7 @@ components:
       type: object
       required:
       - proof
+      - root
       - leafIndex
       - hash
       - merkleTree
@@ -202,6 +256,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Hash'
+        root:
+          $ref: '#/components/schemas/Hash'
         rootSeq:
           type: integer
           format: int64
@@ -234,8 +290,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
-      example: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
+      default: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh
+      example: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

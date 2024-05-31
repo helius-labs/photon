@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getCompressedTokenAccountsByOwner
+    summary: getValidityProof
     post:
       requestBody:
         content:
@@ -36,27 +36,11 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedTokenAccountsByOwner
+                  - getValidityProof
                 params:
-                  type: object
-                  required:
-                  - owner
-                  properties:
-                    cursor:
-                      allOf:
-                      - $ref: '#/components/schemas/Base58String'
-                      nullable: true
-                    limit:
-                      allOf:
-                      - $ref: '#/components/schemas/Limit'
-                      nullable: true
-                    mint:
-                      allOf:
-                      - $ref: '#/components/schemas/SerializablePubkey'
-                      nullable: true
-                    owner:
-                      $ref: '#/components/schemas/SerializablePubkey'
-                  additionalProperties: false
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Hash'
         required: true
       responses:
         '200':
@@ -66,13 +50,39 @@ paths:
               schema:
                 type: object
                 required:
-                - context
-                - value
+                - compressedProof
+                - roots
+                - rootIndices
+                - leafIndices
+                - leaves
+                - merkleTrees
                 properties:
-                  context:
-                    $ref: '#/components/schemas/Context'
-                  value:
-                    $ref: '#/components/schemas/TokenAccountList'
+                  compressedProof:
+                    $ref: '#/components/schemas/CompressedProof'
+                  leafIndices:
+                    type: array
+                    items:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                  leaves:
+                    type: array
+                    items:
+                      type: string
+                  merkleTrees:
+                    type: array
+                    items:
+                      type: string
+                  rootIndices:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                  roots:
+                    type: array
+                    items:
+                      type: string
         '429':
           description: Exceeded rate limit.
           content:
@@ -235,7 +245,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111115q4EpJaTXAZWpCg3J2zppWGSZ46KXozzo9
+      example: 111111152P2r5yt6odmBLPsFCLBrFisJ3aS7LqLAT
     Limit:
       type: integer
       format: int64
@@ -296,8 +306,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
-      example: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
+      default: 11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7
+      example: 11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

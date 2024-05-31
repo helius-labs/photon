@@ -87,6 +87,7 @@ components:
       - lamports
       - tree
       - leafIndex
+      - seq
       - slotCreated
       properties:
         address:
@@ -156,6 +157,58 @@ components:
       description: A base 64 encoded string.
       default: SGVsbG8sIFdvcmxkIQ==
       example: SGVsbG8sIFdvcmxkIQ==
+    CompressedProof:
+      type: object
+      required:
+      - a
+      - b
+      - c
+      properties:
+        a:
+          type: string
+          format: binary
+        b:
+          type: string
+          format: binary
+        c:
+          type: string
+          format: binary
+    CompressedProofWithContext:
+      type: object
+      required:
+      - compressedProof
+      - roots
+      - rootIndices
+      - leafIndices
+      - leaves
+      - merkleTrees
+      properties:
+        compressedProof:
+          $ref: '#/components/schemas/CompressedProof'
+        leafIndices:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 0
+        leaves:
+          type: array
+          items:
+            type: string
+        merkleTrees:
+          type: array
+          items:
+            type: string
+        rootIndices:
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 0
+        roots:
+          type: array
+          items:
+            type: string
     Context:
       type: object
       required:
@@ -177,6 +230,7 @@ components:
       type: object
       required:
       - proof
+      - root
       - leafIndex
       - hash
       - merkleTree
@@ -194,6 +248,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Hash'
+        root:
+          $ref: '#/components/schemas/Hash'
         rootSeq:
           type: integer
           format: int64
