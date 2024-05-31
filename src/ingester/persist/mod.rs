@@ -30,7 +30,7 @@ pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE");
-const TREE_HEIGHT: u32 = 26;
+const TREE_HEIGHT: u32 = 27;
 // To avoid exceeding the 25k total parameter limit, we set the insert limit to 1k (as we have fewer
 // than 10 columns per table).
 pub const MAX_SQL_INSERTS: usize = 1000;

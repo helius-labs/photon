@@ -9,8 +9,8 @@ expression: proofs
   "value": [
     {
       "proof": [
-        "11111111111111111111111111111111",
-        "2MNXrESWrxVm4Lk3KLQztTQDnadEbqekNcBNVKHKFDFA",
+        "2GcLLSm4yrbHSiy2ZS7y9ZLGVKqnrSA4XBfvn1hVJ4gm",
+        "28Mq7NczCByduJMs55xTQVc45o1rTB1GbJMuDRgekar1",
         "2xf8ByjKkarUQhJoHT3Wy8Q2knbrqiU8XUQCVX6ncL6B",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
@@ -37,16 +37,16 @@ expression: proofs
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
       "root": "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
-      "leafIndex": 6,
-      "hash": "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
+      "leafIndex": 5,
+      "hash": "W5VPCs9Qd6VfXn8e3PteewnfPQ789vH6B3CBQcAdHHu",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 7
     },
     {
       "proof": [
-        "3euGypyyxreb5xkrrrQvCFa4t1R1KDJBnL6YA5zWcnXw",
-        "3qrqBWtar52S9rni3cBvLEqnKsDERsG77JEoe4BguP2B",
-        "4A29z9NsDiZARQkmSvSDQgchqXGvC3j8riG8Nn6U97iE",
+        "W5VPCs9Qd6VfXn8e3PteewnfPQ789vH6B3CBQcAdHHu",
+        "28Mq7NczCByduJMs55xTQVc45o1rTB1GbJMuDRgekar1",
+        "2xf8ByjKkarUQhJoHT3Wy8Q2knbrqiU8XUQCVX6ncL6B",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -72,8 +72,8 @@ expression: proofs
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
       "root": "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
-      "leafIndex": 3,
-      "hash": "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z",
+      "leafIndex": 4,
+      "hash": "2GcLLSm4yrbHSiy2ZS7y9ZLGVKqnrSA4XBfvn1hVJ4gm",
       "merkleTree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
       "rootSeq": 7
     }

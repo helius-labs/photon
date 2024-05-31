@@ -1,0 +1,18 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: token_balances
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "token_balances": [
+      {
+        "mint": "ASSUedcjSyZyqs9D7BZdePMr56zNtjUmE2V5HM1Ho5Xf",
+        "balance": 105
+      }
+    ],
+    "cursor": null
+  }
+}

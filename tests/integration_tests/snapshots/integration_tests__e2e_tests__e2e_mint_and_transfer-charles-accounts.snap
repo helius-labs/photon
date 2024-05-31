@@ -1,0 +1,66 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: accounts
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "account": {
+          "hash": "W5VPCs9Qd6VfXn8e3PteewnfPQ789vH6B3CBQcAdHHu",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "jD2CWJ99CL7RKrlw2Y4IM0P4FWhuw+Nfj2f+Qp7hzLLxffGR0KESOMNpQoy1dzflbx2+horEsYhUMaZvVVzgnrcCAAAAAAAAAAAAAAAAAAAAAAA=",
+            "dataHash": "2D6yABZVDE3LBhrHcyo7KnWJELHoMWnpqjoMchUHSpZA"
+          },
+          "owner": "9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 5,
+          "seq": 6,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "ASSUedcjSyZyqs9D7BZdePMr56zNtjUmE2V5HM1Ho5Xf",
+          "owner": "HFge98G1SxGGk66JSt2uJZrAiTEftMbhDcNQcLbkFxGV",
+          "amount": 695,
+          "delegate": null,
+          "state": "initialized",
+          "isNative": null,
+          "delegatedAmount": 0
+        }
+      },
+      {
+        "account": {
+          "hash": "2GcLLSm4yrbHSiy2ZS7y9ZLGVKqnrSA4XBfvn1hVJ4gm",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "jD2CWJ99CL7RKrlw2Y4IM0P4FWhuw+Nfj2f+Qp7hzLLxffGR0KESOMNpQoy1dzflbx2+horEsYhUMaZvVVzgnsgAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "dataHash": "bA22G2RKX8QbU1JmqxeZT7MHBTRXpPUzWzmjxjTFQSp"
+          },
+          "owner": "9sixVEthz2kMSKfeApZXHwuboT6DZuT6crAYJTciUCqE",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 4,
+          "seq": 5,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "ASSUedcjSyZyqs9D7BZdePMr56zNtjUmE2V5HM1Ho5Xf",
+          "owner": "HFge98G1SxGGk66JSt2uJZrAiTEftMbhDcNQcLbkFxGV",
+          "amount": 200,
+          "delegate": null,
+          "state": "initialized",
+          "isNative": null,
+          "delegatedAmount": 0
+        }
+      }
+    ],
+    "cursor": null
+  }
+}

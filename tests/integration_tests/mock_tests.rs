@@ -564,7 +564,7 @@ async fn test_persisted_state_trees(
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
     let tree = SerializablePubkey::new_unique();
-    let num_nodes = 2;
+    let num_nodes = 5;
 
     let leaf_nodes: Vec<LeafNode> = (0..num_nodes)
         .map(|i| LeafNode {
@@ -575,7 +575,7 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    let tree_height = 2;
+    let tree_height = 5;
     persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
         .await
         .unwrap();

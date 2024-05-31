@@ -1,0 +1,36 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: accounts
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "hash": "2sByWJuyr82oxWtMTn2aSY3wjD6BtkgjwK2ajUfBhnEf",
+        "address": null,
+        "data": null,
+        "owner": "FddySpRL343GYYxTujvrHMhnaQ1EdbkHkHb8UA2kCvU9",
+        "lamports": 1000,
+        "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+        "leafIndex": 2,
+        "seq": 3,
+        "slotCreated": 0
+      },
+      {
+        "hash": "33vJDxqQW9uK4vjKvgWDN9L5SQ1sT23n1HDm76RvdnsC",
+        "address": null,
+        "data": null,
+        "owner": "FddySpRL343GYYxTujvrHMhnaQ1EdbkHkHb8UA2kCvU9",
+        "lamports": 1000,
+        "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+        "leafIndex": 4,
+        "seq": 5,
+        "slotCreated": 0
+      }
+    ],
+    "cursor": null
+  }
+}

@@ -30,8 +30,12 @@ pub struct LeafNode {
 
 impl LeafNode {
     fn node_index(&self, tree_height: u32) -> i64 {
-        2_i64.pow(tree_height) - self.leaf_index as i64 - 1
+        leaf_idnex_to_node_index(self.leaf_index, tree_height)
     }
+}
+
+fn leaf_idnex_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
+    2_i64.pow(tree_height - 1) + leaf_index as i64
 }
 
 impl From<Account> for LeafNode {
@@ -83,7 +87,6 @@ pub async fn persist_leaf_nodes(
 
     for leaf_node in leaf_nodes.clone() {
         let node_idx = leaf_node.node_index(tree_height);
-        info!("Node idx {}", node_idx);
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
 
@@ -100,28 +103,18 @@ pub async fn persist_leaf_nodes(
 
         for (child_level, node_index) in get_node_direct_ancestors(node_idx).iter().enumerate() {
             let left_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2 + 1))
+                .get(&(tree.to_bytes_vec(), node_index * 2))
                 .map(Clone::clone)
                 .unwrap_or(ZERO_BYTES[child_level].to_vec());
 
             let right_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2))
+                .get(&(tree.to_bytes_vec(), node_index * 2 + 1))
                 .map(Clone::clone)
                 .unwrap_or(ZERO_BYTES[child_level].to_vec());
 
             let level = child_level + 1;
 
             let hash = compute_parent_hash(left_child.clone(), right_child.clone())?;
-
-            let left_child_hash = Hash::try_from(left_child.clone()).map_err(|_| {
-                IngesterError::DatabaseError("Failed to convert hash to bytes".to_string())
-            })?;
-            let right_child_hash = Hash::try_from(right_child.clone()).map_err(|_| {
-                IngesterError::DatabaseError("Failed to convert hash to bytes".to_string())
-            })?;
-            info!("Left child hash: {:?}", left_child_hash);
-            info!("Right child hash: {:?}", right_child_hash);
-            info!("Parent hash: {:?}", Hash::try_from(hash.clone()).unwrap());
 
             let model = state_trees::ActiveModel {
                 tree: Set(tree.to_bytes_vec()),
@@ -284,19 +277,34 @@ pub async fn get_multiple_compressed_leaf_proofs(
 }
 
 fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
-    let proof_path: Vec<Hash> = vec![proof.hash.clone()]
-        .into_iter()
-        .chain(proof.proof.clone())
-        .collect();
-    // Use the reduce function to reduce proof path using compute_parent_hash
-    let computed_root = proof_path
-        .into_iter()
-        .reduce(|acc, x| {
-            Hash::try_from(compute_parent_hash(acc.to_vec(), x.to_vec()).unwrap()).unwrap()
-        })
-        .unwrap();
+    let leaf_index = proof.leaf_index;
+    let tree_height = (proof.proof.len() + 1) as u32;
+    let node_index = leaf_idnex_to_node_index(leaf_index, tree_height);
+    let mut computed_root = proof.hash.to_vec();
 
-    if computed_root != proof.root {
+    for (idx, node) in proof.proof.iter().enumerate() {
+        let is_left = (node_index >> idx) & 1 == 0;
+        computed_root = compute_parent_hash(
+            if is_left {
+                computed_root.clone()
+            } else {
+                node.to_vec()
+            },
+            if is_left {
+                node.to_vec()
+            } else {
+                computed_root.clone()
+            },
+        )
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!(
+                "Failed to compute parent hash for proof: {}",
+                e
+            ))
+        })?;
+    }
+
+    if computed_root != proof.root.to_vec() {
         return Err(PhotonApiError::UnexpectedError(format!(
             "Computed root does not match the provided root. Proof; {:?}",
             proof

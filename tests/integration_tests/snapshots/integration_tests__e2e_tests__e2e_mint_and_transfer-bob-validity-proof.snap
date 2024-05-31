@@ -1,0 +1,31 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+expression: validity_proof
+---
+{
+  "compressedProof": {
+    "a": [],
+    "b": [],
+    "c": []
+  },
+  "roots": [
+    "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD",
+    "2RpEaUx4k6akcTTtfSVoZh1fpaK98qZKJiv9fbzTqFyD"
+  ],
+  "rootIndices": [
+    7,
+    7
+  ],
+  "leafIndices": [
+    6,
+    3
+  ],
+  "leaves": [
+    "3q2GuQgDYsGHjkcVUzUscKbdjuHF8E5U72Dh2Hw3MD1D",
+    "4FBKomzWnfjETr1wpjZXodkdTJrqAd3WZZbqGUvjAt2z"
+  ],
+  "merkleTrees": [
+    "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+    "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W"
+  ]
+}

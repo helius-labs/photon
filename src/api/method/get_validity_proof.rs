@@ -213,8 +213,8 @@ pub async fn get_validity_proof(
 
     if !res.status().is_success() {
         return Err(PhotonApiError::UnexpectedError(format!(
-            "Error fetching proof {}",
-            res.status().to_string(),
+            "Error fetching proof {:?}",
+            res.text().await,
         )));
     }
 
