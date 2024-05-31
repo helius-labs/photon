@@ -1,17 +1,12 @@
-use std::collections::HashMap;
 
 use crate::{
-    common::typedefs::serializable_pubkey::SerializablePubkey,
-    dao::generated::state_trees,
     ingester::persist::persisted_state_tree::{
         get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
     },
 };
-use itertools::Itertools;
 
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
-    EntityTrait, QueryFilter, TransactionTrait,
+    DatabaseConnection,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

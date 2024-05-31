@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use log::info;
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
