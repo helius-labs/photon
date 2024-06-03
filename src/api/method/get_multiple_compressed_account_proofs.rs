@@ -1,13 +1,8 @@
-
-use crate::{
-    ingester::persist::persisted_state_tree::{
-        get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
-    },
+use crate::ingester::persist::persisted_state_tree::{
+    get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
 };
 
-use sea_orm::{
-    DatabaseConnection,
-};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

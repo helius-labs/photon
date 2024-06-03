@@ -116,6 +116,7 @@ async fn setup_temporary_sqlite_database_pool(max_connections: u32) -> SqlitePoo
     if path.exists() {
         std::fs::remove_file(&path).unwrap();
     }
+    info!("Creating temporary SQLite database at: {:?}", path);
     File::create(&path).unwrap();
     let db_path = format!("sqlite:////{}", path.to_str().unwrap());
     setup_sqlite_pool(&db_path, max_connections).await

@@ -79,7 +79,7 @@ impl MigrationTrait for Migration {
         // We only need to index the hash values for leaf nodes (Account identifier).
         execute_sql(
             manager,
-            "CREATE UNIQUE INDEX state_trees_hash_idx ON state_trees (hash) WHERE level = 0;",
+            "CREATE INDEX state_trees_hash_idx ON state_trees (hash) WHERE level = 0;",
         )
         .await?;
 
@@ -203,22 +203,24 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(IndexedTrees::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(IndexedTrees::Index).big_integer().not_null())
-                    .col(ColumnDef::new(IndexedTrees::Value).big_integer().not_null())
+                    .col(ColumnDef::new(IndexedTrees::Tree).binary().not_null())
+                    .col(
+                        ColumnDef::new(IndexedTrees::LeafIndex)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(IndexedTrees::Value).binary().not_null())
                     .col(
                         ColumnDef::new(IndexedTrees::NextIndex)
                             .big_integer()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(IndexedTrees::NextValue)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(IndexedTrees::NextValue).binary().not_null())
                     .primary_key(
                         Index::create()
                             .name("pk_indexed_trees")
-                            .col(IndexedTrees::Index),
+                            .col(IndexedTrees::Tree)
+                            .col(IndexedTrees::LeafIndex),
                     )
                     .to_owned(),
             )

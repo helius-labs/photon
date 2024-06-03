@@ -10,7 +10,11 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
+use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_range_proof;
+
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
+use photon_indexer::dao::generated::indexed_trees;
+use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use photon_indexer::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, ZERO_BYTES,
 };
@@ -600,4 +604,49 @@ async fn test_persisted_state_trees(
         assert_eq!(num_nodes as u64 - 1, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_indexed_merkle_trees(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+    let tree = SerializablePubkey::new_unique();
+    let num_nodes = 5;
+
+    let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+        .await
+        .unwrap();
+
+    let values = (0..num_nodes).map(|i| vec![i * 2 + 1]).collect();
+    let tree_height = 5;
+
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+        .await
+        .unwrap();
+
+    txn.commit().await.unwrap();
+
+    let (model, _) = get_range_proof(
+        setup.db_conn.as_ref(),
+        tree.to_bytes_vec(),
+        tree_height,
+        vec![4],
+    )
+    .await
+    .unwrap();
+
+    let expected_model = indexed_trees::Model {
+        tree: tree.to_bytes_vec(),
+        leaf_index: 2,
+        value: vec![3],
+        next_index: 3,
+        next_value: vec![5],
+    };
+
+    assert_eq!(model, expected_model);
 }

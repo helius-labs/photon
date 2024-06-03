@@ -44,11 +44,12 @@ pub async fn persist_state_update(
     }
     let StateUpdate {
         in_accounts,
-        out_accounts,
+        mut out_accounts,
         account_transactions,
         transactions,
     } = state_update;
 
+    out_accounts.sort_by(|a, b| a.seq.cmp(&b.seq));
     debug!(
         "Persisting state update with {} input accounts, {} output accounts",
         in_accounts.len(),
