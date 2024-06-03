@@ -6,10 +6,11 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "indexed_trees")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub index: i64,
-    pub value: i64,
+    pub tree: Vec<u8>,
+    pub leaf_index: i64,
+    pub value: Vec<u8>,
     pub next_index: i64,
-    pub next_value: i64,
+    pub next_value: Vec<u8>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

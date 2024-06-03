@@ -3,3 +3,4 @@ test-ledger/
 # Added by cargo
 
 /target
+/.cargo

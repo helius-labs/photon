@@ -81,7 +81,8 @@ pub enum TokenOwnerBalances {
 #[derive(Copy, Clone, Iden)]
 pub enum IndexedTrees {
     Table,
-    Index,
+    Tree,
+    LeafIndex,
     Value,
     NextIndex,
     NextValue,
