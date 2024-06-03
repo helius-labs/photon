@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use ark_bn254::Fr;
 use light_poseidon::Poseidon;
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    DatabaseTransaction, EntityTrait, QueryFilter, Set, Statement, TransactionTrait,
+    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    DatabaseTransaction, EntityTrait, Set, Statement, TransactionTrait,
 };
 
 use crate::{
@@ -16,7 +16,6 @@ use crate::{
 use light_poseidon::PoseidonBytesHasher;
 
 use super::{
-    compute_parent_hash,
     persisted_state_tree::{
         get_multiple_compressed_leaf_proofs_from_full_leaf_info, persist_leaf_nodes, LeafNode,
         MerkleProofWithContext,
