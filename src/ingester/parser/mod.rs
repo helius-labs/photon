@@ -1,6 +1,6 @@
 use borsh::BorshDeserialize;
 use byteorder::{ByteOrder, LittleEndian};
-use log::{debug, info};
+use log::{debug};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::common::typedefs::{

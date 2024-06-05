@@ -13,7 +13,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
-use log::{debug, info};
+use log::{debug};
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
     sea_query::{Expr, OnConflict},

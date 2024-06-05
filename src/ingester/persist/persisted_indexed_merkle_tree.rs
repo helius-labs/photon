@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 
 use ark_bn254::Fr;
 use light_poseidon::Poseidon;
-use log::info;
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, EntityTrait, Set, Statement, TransactionTrait,
