@@ -19,7 +19,7 @@ use crate::{
 
 use super::{compute_parent_hash, get_node_direct_ancestors};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LeafNode {
     pub tree: SerializablePubkey,
     pub leaf_index: u32,
@@ -140,7 +140,7 @@ pub async fn persist_leaf_nodes(
                 .to_owned(),
         )
         .build(txn.get_database_backend());
-    query.sql = format!("{} WHERE excluded.seq > state_trees.seq", query.sql);
+    query.sql = format!("{} WHERE excluded.seq >= state_trees.seq", query.sql);
     txn.execute(query).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
     })?;

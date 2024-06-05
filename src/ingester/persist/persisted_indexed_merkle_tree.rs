@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap};
 use ark_bn254::Fr;
 use light_poseidon::Poseidon;
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    DatabaseTransaction, EntityTrait, QueryFilter, Set, Statement, TransactionTrait,
+    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    DatabaseTransaction, EntityTrait, Set, Statement, TransactionTrait,
 };
 
 use crate::{
@@ -15,12 +15,9 @@ use crate::{
 };
 use light_poseidon::PoseidonBytesHasher;
 
-use super::{
-    compute_parent_hash,
-    persisted_state_tree::{
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info, persist_leaf_nodes, LeafNode,
-        MerkleProofWithContext,
-    },
+use super::persisted_state_tree::{
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info, persist_leaf_nodes, LeafNode,
+    MerkleProofWithContext,
 };
 
 fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
@@ -106,11 +103,10 @@ pub async fn multi_append(
         txn.get_database_backend(),
         // TODO: Use parametrized queries instead
         format!(
-            "SELECT leaf_index FROM indexed_trees WHERE tree = {} ORDER BY leaf_index LIMIT 1",
+            "SELECT leaf_index FROM indexed_trees WHERE tree = {} ORDER BY leaf_index DESC LIMIT 1",
             format_bytes(tree.clone(), txn.get_database_backend())
         ),
     );
-    // Get the max index from the database
     let max_index = txn.query_one(index_stmt).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to execute max index query: {}", e))
     })?;
@@ -192,7 +188,7 @@ pub async fn multi_append(
             IngesterError::DatabaseError(format!("Failed to insert indexed tree elements: {}", e))
         })?;
 
-    let leaf_nodes: Result<Vec<LeafNode>, IngesterError> = elements_to_update
+    let leaf_nodes = elements_to_update
         .values()
         .map(|x| {
             Ok(LeafNode {
@@ -200,14 +196,13 @@ pub async fn multi_append(
                     IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
                 })?,
                 leaf_index: x.leaf_index as u32,
-                // TODO: Fix proof
                 hash: compute_range_node_hash(x)?,
                 seq: 0,
             })
         })
-        .collect();
+        .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
-    persist_leaf_nodes(txn, leaf_nodes?, tree_height).await?;
+    persist_leaf_nodes(txn, leaf_nodes, tree_height).await?;
 
     Ok(())
 }
