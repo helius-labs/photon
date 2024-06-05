@@ -1,6 +1,6 @@
 use borsh::BorshDeserialize;
 use byteorder::{ByteOrder, LittleEndian};
-use log::debug;
+use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::common::typedefs::{
@@ -24,7 +24,7 @@ pub mod state_update;
 use solana_program::pubkey;
 
 const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
-    pubkey!("5QPEJ5zDsVou9FQS3KCauKswM3VwBEBu4dpL9xTqkWwN");
+    pubkey!("CbjvJc1SNx1aav8tU49dJGHu8EUdzQJSMtkjDmV8miqK");
 const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
@@ -48,7 +48,6 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 // if the instruction emits a noop event. If it doesn't then we want avoid indexing
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
-                    && instruction.accounts.contains(&NOOP_PROGRAM_ID)
                     && next_instruction.program_id == SYSTEM_PROGRAM
                     && next_next_instruction.program_id == NOOP_PROGRAM_ID
                 {

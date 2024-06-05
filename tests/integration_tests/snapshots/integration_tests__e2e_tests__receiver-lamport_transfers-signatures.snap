@@ -9,12 +9,12 @@ expression: signatures
   "value": {
     "items": [
       {
-        "signature": "5gJtG7XNSuNWAKbMnUj8xaJgSDDVy7AdduHNXxxMXSNrPFPZSkwnseMBhPGrQNBfwE9vZ2VNVhXfDcqbt1WMXvJe",
+        "signature": "kNXkK3aXPDurmMfPbcfPNwNEWbtqdmFLcE8ZrH3oV7tbHBdH3xzUYso7icJZ4sT7MNjemsH8MdK9WW5CTHaUM59",
         "slot": 0,
         "blockTime": 0
       },
       {
-        "signature": "4fNZoVnaJ5DYjJGjFLkaUtoeyeNV4CTVeyTzAT8GsxLu3J29pS6AUR6QphaDszLoFFMZXLGqmWhN5ox5iiqtjqSW",
+        "signature": "akFrcAJwhAeK6AyrMvtcMXF13Cd451NLmCmGteL3WbZnzCrW25GUr7Ku5thfwCT28M8TJbRa5p854gVr1cVvDgN",
         "slot": 0,
         "blockTime": 0
       }

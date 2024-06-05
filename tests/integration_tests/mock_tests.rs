@@ -13,12 +13,12 @@ use photon_indexer::api::method::utils::{
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_range_proof;
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::dao::generated::indexed_trees;
+use photon_indexer::dao::generated::{indexed_trees, state_trees};
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use photon_indexer::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, ZERO_BYTES,
 };
-use sea_orm::TransactionTrait;
+use sea_orm::{QueryFilter, TransactionTrait};
 
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -41,6 +41,7 @@ use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use photon_indexer::api::method::utils::Limit;
+use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
 
@@ -604,6 +605,83 @@ async fn test_persisted_state_trees(
         assert_eq!(num_nodes as u64 - 1, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
+
+    // Repeat in order to test updates
+
+    let leaf_nodes: Vec<LeafNode> = (0..num_nodes)
+        .map(|i| LeafNode {
+            hash: Hash::new_unique(),
+            leaf_index: i,
+            tree: tree.clone(),
+            seq: i + num_nodes,
+        })
+        .collect();
+    let txn = setup.db_conn.as_ref().begin().await.unwrap();
+    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+        .await
+        .unwrap();
+    txn.commit().await.unwrap();
+
+    let proofs = get_multiple_compressed_leaf_proofs(
+        &setup.db_conn,
+        leaf_nodes
+            .iter()
+            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+            .collect(),
+    )
+    .await
+    .unwrap();
+
+    let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
+    let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
+    assert_eq!(proof_hashes, leaf_hashes);
+
+    for proof in proofs {
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.root_seq);
+        assert_eq!(tree_height - 1, proof.proof.len() as u32);
+    }
+}
+
+async fn verify_tree(db_conn: &sea_orm::DatabaseConnection, tree: SerializablePubkey) {
+    let models = state_trees::Entity::find()
+        .filter(state_trees::Column::Tree.eq(tree.to_bytes_vec()))
+        .all(db_conn)
+        .await
+        .unwrap();
+
+    let node_to_model = models
+        .iter()
+        .map(|x| (x.node_idx, x.clone()))
+        .collect::<HashMap<i64, state_trees::Model>>();
+
+    for model in node_to_model.values() {
+        if model.level > 0 {
+            let node_index = model.node_idx;
+            let child_level = model.level - 1;
+            let left_child = node_to_model
+                .get(&(node_index * 2))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let right_child = node_to_model
+                .get(&(node_index * 2 + 1))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let node_hash_pretty = Hash::try_from(model.hash.clone()).unwrap();
+            let left_child_pretty = Hash::try_from(left_child.clone()).unwrap();
+            let right_child_pretty = Hash::try_from(right_child.clone()).unwrap();
+
+            let parent_hash = compute_parent_hash(left_child, right_child).unwrap();
+
+            assert_eq!(
+                model.hash, parent_hash,
+                "Unexpected parent hash. Level {}. Hash: {}, Left: {}, Right: {}",
+                model.level, node_hash_pretty, left_child_pretty, right_child_pretty
+            );
+        }
+    }
 }
 
 #[named]
@@ -616,14 +694,14 @@ async fn test_indexed_merkle_trees(
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
     let tree = SerializablePubkey::new_unique();
-    let num_nodes = 5;
+    let num_nodes = 2;
 
     let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
         .await
         .unwrap();
 
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
-    let tree_height = 5;
+    let tree_height = 4;
 
     multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
         .await
@@ -635,17 +713,17 @@ async fn test_indexed_merkle_trees(
         setup.db_conn.as_ref(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![7],
+        vec![3],
     )
     .await
     .unwrap();
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 2,
-        value: vec![5],
-        next_index: 3,
-        next_value: vec![9],
+        leaf_index: 1,
+        value: vec![1],
+        next_index: 2,
+        next_value: vec![5],
     };
 
     assert_eq!(model, expected_model);
@@ -654,7 +732,7 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = vec![vec![6]];
+    let values = vec![vec![3]];
 
     multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
         .await
@@ -662,21 +740,23 @@ async fn test_indexed_merkle_trees(
 
     txn.commit().await.unwrap();
 
+    verify_tree(setup.db_conn.as_ref(), tree).await;
+
     let (model, _) = get_range_proof(
         setup.db_conn.as_ref(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![7],
+        vec![4],
     )
     .await
     .unwrap();
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 6,
-        value: vec![6],
-        next_index: 3,
-        next_value: vec![9],
+        leaf_index: 3,
+        value: vec![3],
+        next_index: 2,
+        next_value: vec![5],
     };
 
     assert_eq!(model, expected_model);

@@ -48,18 +48,18 @@ async fn test_e2e_mint_and_transfer(
     .await;
 
     let bob_pubkey =
-        SerializablePubkey::try_from("FZjt2HLk9cgbmFDkhZ3G2XwQ7WjKWrJdVxcoaoxfBPZw").unwrap();
+        SerializablePubkey::try_from("7Z1siJsXDpSgwyXsErgdrhbLNHGuqoivfjbycnUyxWX7").unwrap();
     let charles_pubkey =
-        SerializablePubkey::try_from("HFge98G1SxGGk66JSt2uJZrAiTEftMbhDcNQcLbkFxGV").unwrap();
+        SerializablePubkey::try_from("AByXwz518ntDjhTaMr6Z65pgde3gy7t4tZ6htdPGkjhh").unwrap();
 
     let mint_tx =
-        "6qytR34uYwpa4kb52WAwsGwKaEQsZgPkeWnAoVX5xMq2q5mvsbZWyica6ypLSPqTZ1NYHqfTzGrdbTEUvH8FyDN";
+        "5jGUVMbUx2qxRF5u94f5KNmds8if3mHraKg36Xx9NqBQ6azCST3EwzXmj5xXcN2xiTMRg7oNXqUD4ygXybsDfRAn";
     let transfer_tx =
-        "ZcKpgqWMJWuUCVha28UPTjydkDCRdTVmnb4sHE1AQU45juetmT6BcuPVmPg4ecepqMBEyu3UpGxg9n4N4ryAe9x";
+        "27pxT3ndnCXhbUXdT2k6riDw7Y22xnRjVRmUHseXpFi7mTziNiEegxFAmgNBoYPKtQrx7N66tCCcGwFKt4RniqXA";
     let transfer_txn2: &str =
-        "4baKPsjwU4zR3yskhrfM63LwiiYpaKtbq2r3GzpvK9ATb4rANhWFfRdn26UiH7kzYmAtUWFmmMzpKLSHwMiSP3Tx";
+        "G6ZcxS2HkHh521JjHXvxkpuYC2qu2fa3cdGZvKF9NVAM3oPEBZ8tNa4ghVXVo9uc4UzWPwXGAFrGqg8TdeYoTPW";
     let transfer_txn3 =
-        "kFTMfQ23PCrhfrFgoyyLC961DTAQ3kmUzx82i7kxW8dgEjPmk5Uv4qLeiyiHdVBmX881FXsrNTKriGdJ4yifPUF";
+        "61nLwpJcf143PhYz9AVqeUv9ePNWNW9TAWkrDoMynhSAh3TPsmprMW2cDhjJakrZa8APmNPFLYsrx5CEgZdVgYpm";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
@@ -236,17 +236,17 @@ async fn test_lamport_transfers(
     .await;
 
     let compress_tx =
-        "4hyshcVVLqy7AtnB2CdLixvHTEwHARNwZ69gqd2ij7u6bmPvK9nbR4CeYTCLDyXZJ8DPmH6GmZ26MpqiLSxkorEz";
+        "4dqYnWSm8qKxCyeADsc1eqQBSQQ7BneXbeNxmw8P6Fu5TVv26Roud4UwtvBfy4bV7NLFe1NK97ytqwPqwyGRGVT3";
     let transfer_tx1 =
-        "4fNZoVnaJ5DYjJGjFLkaUtoeyeNV4CTVeyTzAT8GsxLu3J29pS6AUR6QphaDszLoFFMZXLGqmWhN5ox5iiqtjqSW";
+        "kNXkK3aXPDurmMfPbcfPNwNEWbtqdmFLcE8ZrH3oV7tbHBdH3xzUYso7icJZ4sT7MNjemsH8MdK9WW5CTHaUM59";
     let transfer_tx2 =
-        "5gJtG7XNSuNWAKbMnUj8xaJgSDDVy7AdduHNXxxMXSNrPFPZSkwnseMBhPGrQNBfwE9vZ2VNVhXfDcqbt1WMXvJe";
+        "akFrcAJwhAeK6AyrMvtcMXF13Cd451NLmCmGteL3WbZnzCrW25GUr7Ku5thfwCT28M8TJbRa5p854gVr1cVvDgN";
 
     let payer_pubkey = SerializablePubkey(
-        Pubkey::try_from("8RF3tGXpNbr9wL4bk24tA9PNFYWwiJu3Ski1wvfCtHcD").unwrap(),
+        Pubkey::try_from("G2TkKakizZKiAgkMkwWNZzvxdhMZSVDggmysaVuckjmB").unwrap(),
     );
     let receiver_pubkey = SerializablePubkey(
-        Pubkey::try_from("FddySpRL343GYYxTujvrHMhnaQ1EdbkHkHb8UA2kCvU9").unwrap(),
+        Pubkey::try_from("4Y9xHaihpNo3H8tM9CAkBj6sCKS8mdirWArNGomXWS7m").unwrap(),
     );
     let txs = [compress_tx, transfer_tx1, transfer_tx2];
     let number_of_indexes = [1, 2];
@@ -312,16 +312,15 @@ async fn test_lamport_transfers(
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
-            let mut validity_proof =
-                setup
-                    .api
-                    .get_validity_proof(hash_list.clone())
-                    .await
-                    .expect(&format!(
-                        "Failed to get validity proof for owner with hash list len: {} {}",
-                        owner_name,
-                        hash_list.0.len()
-                    ));
+            let mut validity_proof = setup
+                .api
+                .get_validity_proof(hash_list.clone())
+                .await
+                .expect(&format!(
+                    "Failed to get validity proof for owner with hash list len: {} {}",
+                    owner_name,
+                    hash_list.0.len()
+                ));
             // The Gnark prover has some randomness.
             validity_proof.compressed_proof = CompressedProof::default();
 
