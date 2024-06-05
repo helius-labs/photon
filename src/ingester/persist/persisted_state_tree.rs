@@ -19,7 +19,7 @@ use crate::{
 
 use super::{compute_parent_hash, get_node_direct_ancestors};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LeafNode {
     pub tree: SerializablePubkey,
     pub leaf_index: u32,

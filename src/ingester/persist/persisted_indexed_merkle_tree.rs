@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use ark_bn254::Fr;
 use light_poseidon::Poseidon;
+use log::info;
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, EntityTrait, Set, Statement, TransactionTrait,
@@ -15,11 +16,9 @@ use crate::{
 };
 use light_poseidon::PoseidonBytesHasher;
 
-use super::{
-    persisted_state_tree::{
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info, persist_leaf_nodes, LeafNode,
-        MerkleProofWithContext,
-    },
+use super::persisted_state_tree::{
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info, persist_leaf_nodes, LeafNode,
+    MerkleProofWithContext,
 };
 
 fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
@@ -205,6 +204,7 @@ pub async fn multi_append(
             })
         })
         .collect();
+    info!("Persisting leaf nodes: {:?}", leaf_nodes);
 
     persist_leaf_nodes(txn, leaf_nodes?, tree_height).await?;
 

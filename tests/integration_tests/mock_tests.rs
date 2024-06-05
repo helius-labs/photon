@@ -622,7 +622,7 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = (0..num_nodes).map(|i| vec![i * 2 + 1]).collect();
+    let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
     let tree_height = 5;
 
     multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
@@ -635,7 +635,7 @@ async fn test_indexed_merkle_trees(
         setup.db_conn.as_ref(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![4],
+        vec![7],
     )
     .await
     .unwrap();
@@ -643,9 +643,40 @@ async fn test_indexed_merkle_trees(
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
         leaf_index: 2,
-        value: vec![3],
+        value: vec![5],
         next_index: 3,
-        next_value: vec![5],
+        next_value: vec![9],
+    };
+
+    assert_eq!(model, expected_model);
+
+    let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+        .await
+        .unwrap();
+
+    let values = vec![vec![6]];
+
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+        .await
+        .unwrap();
+
+    txn.commit().await.unwrap();
+
+    let (model, _) = get_range_proof(
+        setup.db_conn.as_ref(),
+        tree.to_bytes_vec(),
+        tree_height,
+        vec![7],
+    )
+    .await
+    .unwrap();
+
+    let expected_model = indexed_trees::Model {
+        tree: tree.to_bytes_vec(),
+        leaf_index: 6,
+        value: vec![6],
+        next_index: 3,
+        next_value: vec![9],
     };
 
     assert_eq!(model, expected_model);
