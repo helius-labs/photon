@@ -1,6 +1,7 @@
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
+use sqlx::types::Decimal;
 
 use super::super::error::PhotonApiError;
 use super::utils::{parse_decimal, AccountBalanceResponse, AccountDataTable, LamportModel};
@@ -20,10 +21,11 @@ pub async fn get_compressed_balance(
         .into_model::<LamportModel>()
         .one(conn)
         .await?
-        .ok_or(id.not_found_error())?;
+        .map(|x| x.lamports)
+        .unwrap_or(Decimal::from(0));
 
     Ok(AccountBalanceResponse {
-        value: UnsignedInteger(parse_decimal(balance.lamports)?),
+        value: UnsignedInteger(parse_decimal(balance)?),
         context,
     })
 }

@@ -1,8 +1,8 @@
-use crate::common::typedefs::account::Account;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::TokenData;
 use crate::ingester::parser::parse_transaction;
 use crate::ingester::persist::parse_token_data;
+use crate::{common::typedefs::account::Account, dao::generated::accounts::Model};
 
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -146,6 +146,13 @@ pub async fn get_transaction_helper(
         true,
     )
     .await?
+    .into_iter()
+    .map(|x| {
+        x.ok_or(PhotonApiError::RecordNotFound(
+            "Account not found".to_string(),
+        ))
+    })
+    .collect::<Result<Vec<Model>, PhotonApiError>>()?
     .into_iter()
     .map(parse_account_model)
     .collect::<Result<Vec<Account>, PhotonApiError>>()?;

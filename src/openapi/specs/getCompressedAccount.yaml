@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.19.0
+  version: 0.21.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -66,7 +66,6 @@ paths:
                 type: object
                 required:
                 - context
-                - value
                 properties:
                   context:
                     $ref: '#/components/schemas/Context'
@@ -144,7 +143,9 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/Account'
+            allOf:
+            - $ref: '#/components/schemas/Account'
+            nullable: true
       additionalProperties: false
     AccountState:
       type: string
