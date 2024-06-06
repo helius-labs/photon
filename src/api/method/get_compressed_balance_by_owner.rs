@@ -34,12 +34,6 @@ pub async fn get_compressed_balance_by_owner(
         .collect::<Result<Vec<u64>, PhotonApiError>>()?;
 
     let total_balance = balances.iter().sum::<u64>();
-    if total_balance == 0 {
-        return Err(PhotonApiError::RecordNotFound(format!(
-            "No balance found for owner: {}",
-            owner
-        )));
-    }
 
     Ok(AccountBalanceResponse {
         value: UnsignedInteger(total_balance),

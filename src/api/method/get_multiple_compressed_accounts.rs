@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{common::typedefs::account::Account, dao::generated::accounts};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -46,7 +48,7 @@ impl GetMultipleCompressedAccountsRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountList {
-    pub items: Vec<Account>,
+    pub items: Vec<Option<Account>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
@@ -60,7 +62,7 @@ pub async fn fetch_accounts_from_hashes(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
     spent: bool,
-) -> Result<Vec<accounts::Model>, PhotonApiError> {
+) -> Result<Vec<Option<accounts::Model>>, PhotonApiError> {
     let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
 
     let accounts = accounts::Entity::find()
@@ -73,40 +75,22 @@ pub async fn fetch_accounts_from_hashes(
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
-    let found_hashes: Vec<Vec<u8>> = accounts
-        .iter()
-        .map(|account| account.hash.clone())
-        .collect();
-
-    let not_found_hashes: Vec<Vec<u8>> = raw_hashes
+    let hash_to_account: HashMap<Vec<u8>, accounts::Model> = accounts
         .into_iter()
-        .filter(|hash| !found_hashes.contains(hash))
+        .map(|account| (account.hash.clone(), account))
         .collect();
 
-    let mut formatted_not_found_hashes: Vec<Hash> = Vec::new();
-    for hash in not_found_hashes {
-        formatted_not_found_hashes.push(
-            Hash::try_from(hash)
-                .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid hash: {}", e)))?,
-        );
-    }
-
-    if !formatted_not_found_hashes.is_empty() {
-        return Err(PhotonApiError::RecordNotFound(format!(
-            "Some accounts were not found: {:?}",
-            formatted_not_found_hashes
-        )));
-    }
-
-    Ok(accounts)
+    Ok(raw_hashes
+        .into_iter()
+        .map(|hash| hash_to_account.get(&hash).cloned())
+        .collect())
 }
 
 async fn fetch_account_from_addresses(
     conn: &DatabaseConnection,
     addresses: Vec<SerializablePubkey>,
-) -> Result<Vec<accounts::Model>, PhotonApiError> {
+) -> Result<Vec<Option<accounts::Model>>, PhotonApiError> {
     let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
-
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::Address
@@ -116,33 +100,14 @@ async fn fetch_account_from_addresses(
         .all(conn)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-    let found_addresses: Vec<Vec<u8>> = accounts
-        .iter()
-        .filter_map(|account| account.address.clone())
-        .collect();
-
-    let not_found_addresses: Vec<Vec<u8>> = raw_addresses
+    let address_to_account: HashMap<Option<Vec<u8>>, accounts::Model> = accounts
         .into_iter()
-        .filter(|addr| !found_addresses.contains(addr))
+        .map(|account| (account.address.clone(), account))
         .collect();
-
-    let mut formatted_not_found_addresses: Vec<SerializablePubkey> = Vec::new();
-    for addr in not_found_addresses {
-        formatted_not_found_addresses.push(
-            SerializablePubkey::try_from(addr)
-                .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid address: {}", e)))?,
-        );
-    }
-
-    if !formatted_not_found_addresses.is_empty() {
-        return Err(PhotonApiError::RecordNotFound(format!(
-            "Some accounts were not found: {:?}",
-            formatted_not_found_addresses
-        )));
-    }
-
-    Ok(accounts)
+    Ok(raw_addresses
+        .into_iter()
+        .map(|addr| address_to_account.get(&Some(addr)).cloned())
+        .collect())
 }
 
 pub async fn get_multiple_compressed_accounts(
@@ -180,8 +145,8 @@ pub async fn get_multiple_compressed_accounts(
         value: AccountList {
             items: accounts
                 .into_iter()
-                .map(parse_account_model)
-                .collect::<Result<Vec<Account>, PhotonApiError>>()?,
+                .map(|x| x.map(parse_account_model).transpose())
+                .collect::<Result<Vec<_>, _>>()?,
         },
     })
 }

@@ -1,7 +1,6 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
-use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
@@ -114,7 +113,7 @@ async fn test_persist_state_update_basic(
         .unwrap()
         .value;
 
-    assert_eq!(res, account);
+    assert_eq!(res, Some(account.clone()));
 
     let res = setup
         .api
@@ -125,21 +124,16 @@ async fn test_persist_state_update_basic(
 
     assert_eq!(res, account.lamports);
 
-    // Assert that we get an error if we input a non-existent account.
-    // TODO: Test spent accounts
-    let err = setup
+    let null_value = setup
         .api
         .get_compressed_account(CompressedAccountRequest {
             hash: Some(Hash::from(Pubkey::new_unique().to_bytes())),
             address: None,
         })
         .await
-        .unwrap_err();
+        .unwrap();
 
-    match err {
-        PhotonApiError::RecordNotFound(_) => {}
-        _ => panic!("Expected NotFound error"),
-    }
+    assert_eq!(null_value.value, None);
 }
 
 #[named]
@@ -300,7 +294,7 @@ async fn test_multiple_accounts(
     }
 
     let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
-    let mut res = setup
+    let res = setup
         .api
         .get_multiple_compressed_accounts(GetMultipleCompressedAccountsRequest {
             addresses: None,
@@ -315,7 +309,10 @@ async fn test_multiple_accounts(
         .unwrap()
         .value;
 
-    assert_account_response_list_matches_input(&mut res.items, &mut accounts_of_interest);
+    assert_account_response_list_matches_input(
+        &mut res.items.iter().map(|x| x.clone().unwrap()).collect(),
+        &mut accounts_of_interest,
+    );
 }
 
 #[named]

@@ -3,6 +3,7 @@ use crate::dao::generated::token_accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
 
+use sqlx::types::Decimal;
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
@@ -37,11 +38,12 @@ pub async fn get_compressed_token_account_balance(
         .into_model::<BalanceModel>()
         .one(conn)
         .await?
-        .ok_or(id.not_found_error())?;
+        .map(|x| x.amount)
+        .unwrap_or(Decimal::from(0));
 
     Ok(GetCompressedTokenAccountBalanceResponse {
         value: TokenAccountBalance {
-            amount: UnsignedInteger(parse_decimal(balance.amount)?),
+            amount: UnsignedInteger(parse_decimal(balance)?),
         },
         context,
     })

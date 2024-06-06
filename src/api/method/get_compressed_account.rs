@@ -12,7 +12,7 @@ use super::utils::{parse_account_model, AccountDataTable, CompressedAccountReque
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 pub struct AccountResponse {
     pub context: Context,
-    pub value: Account,
+    pub value: Option<Account>,
 }
 
 pub async fn get_compressed_account(
@@ -21,13 +21,12 @@ pub async fn get_compressed_account(
 ) -> Result<AccountResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let id = request.parse_id()?;
-    let account = parse_account_model(
-        accounts::Entity::find()
-            .filter(id.filter(AccountDataTable::Accounts))
-            .one(conn)
-            .await?
-            .ok_or(id.not_found_error())?,
-    )?;
+    let account_model = accounts::Entity::find()
+        .filter(id.filter(AccountDataTable::Accounts))
+        .one(conn)
+        .await?;
+
+    let account = account_model.map(parse_account_model).transpose()?;
 
     Ok(AccountResponse {
         value: { account },

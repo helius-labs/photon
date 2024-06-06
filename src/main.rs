@@ -187,9 +187,9 @@ async fn main() {
         Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
         None => {
             if is_localnet {
-                20
+                200
             } else {
-                5
+                20
             }
         }
     };
