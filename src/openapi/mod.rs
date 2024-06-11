@@ -5,6 +5,7 @@ use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
 
+use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
 use crate::api::method::get_validity_proof::CompressedProof;
 use crate::api::method::get_validity_proof::CompressedProofWithContext;
@@ -82,7 +83,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     UnixTimestamp,
     UnsignedInteger,
     CompressedProof,
-    CompressedProofWithContext
+    CompressedProofWithContext,
+    MerkleContextWithNewAddressProof
 )))]
 struct ApiDoc;
 

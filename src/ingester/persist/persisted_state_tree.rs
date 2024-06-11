@@ -163,6 +163,11 @@ pub async fn get_multiple_compressed_leaf_proofs(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    if hashes.is_empty() {
+        return Err(PhotonApiError::ValidationError(
+            "No hashes provided".to_string(),
+        ));
+    }
     let leaf_nodes_with_node_index = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
@@ -281,7 +286,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     Ok(proofs)
 }
 
-fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
+pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
     let leaf_index = proof.leaf_index;
     let tree_height = (proof.proof.len() + 1) as u32;
     let node_index = leaf_index_to_node_index(leaf_index, tree_height);

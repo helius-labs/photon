@@ -233,11 +233,50 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 11111117SQekjmcMtR25wEPPiL6m1Mb5586NkLL4X
+      example: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
     Limit:
       type: integer
       format: int64
       minimum: 0
+    MerkleContextWithNewAddressProof:
+      type: object
+      required:
+      - root
+      - address
+      - lower_range_address
+      - higher_range_address
+      - leaf_index
+      - proof
+      - merkle_tree
+      - root_seq
+      - low_element_leaf_index
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        higher_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        leaf_index:
+          type: integer
+          format: int32
+          minimum: 0
+        low_element_leaf_index:
+          type: integer
+          format: int32
+          minimum: 0
+        lower_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        merkle_tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        proof:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        root:
+          $ref: '#/components/schemas/Hash'
+        root_seq:
+          type: integer
+          format: int64
+          minimum: 0
     MerkleProofWithContext:
       type: object
       required:
@@ -294,8 +333,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
-      example: 11111117353mdUKehx9GW6JNHznGt5oSZs9fWkVkB
+      default: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
+      example: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

@@ -240,6 +240,45 @@ components:
       type: integer
       format: int64
       minimum: 0
+    MerkleContextWithNewAddressProof:
+      type: object
+      required:
+      - root
+      - address
+      - lower_range_address
+      - higher_range_address
+      - leaf_index
+      - proof
+      - merkle_tree
+      - root_seq
+      - low_element_leaf_index
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        higher_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        leaf_index:
+          type: integer
+          format: int32
+          minimum: 0
+        low_element_leaf_index:
+          type: integer
+          format: int32
+          minimum: 0
+        lower_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        merkle_tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        proof:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        root:
+          $ref: '#/components/schemas/Hash'
+        root_seq:
+          type: integer
+          format: int64
+          minimum: 0
     MerkleProofWithContext:
       type: object
       required:

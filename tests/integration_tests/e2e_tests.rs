@@ -11,6 +11,9 @@ use insta::assert_json_snapshot;
 use photon_indexer::api::method::utils::{
     GetCompressedTokenAccountsByOwner, GetLatestSignaturesRequest,
 };
+use photon_indexer::api::method::{
+    get_multiple_compressed_account_proofs::HashList, get_validity_proof::GetValidityProofRequest,
+};
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -109,7 +112,14 @@ async fn test_e2e_mint_and_transfer(
 
         assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
 
-        let mut validity_proof = setup.api.get_validity_proof(hash_list).await.unwrap();
+        let mut validity_proof = setup
+            .api
+            .get_validity_proof(GetValidityProofRequest {
+                hashes: hash_list.0.clone(),
+                new_addresses: vec![],
+            })
+            .await
+            .unwrap();
         // The Gnark prover has some randomness.
         validity_proof.compressed_proof = CompressedProof::default();
 
@@ -223,8 +233,6 @@ async fn test_e2e_mint_and_transfer(
 async fn test_lamport_transfers(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
-
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -314,7 +322,10 @@ async fn test_lamport_transfers(
 
             let mut validity_proof = setup
                 .api
-                .get_validity_proof(hash_list.clone())
+                .get_validity_proof(GetValidityProofRequest {
+                    hashes: hash_list.0.clone(),
+                    new_addresses: vec![],
+                })
                 .await
                 .expect(&format!(
                     "Failed to get validity proof for owner with hash list len: {} {}",
