@@ -199,6 +199,24 @@ pub async fn get_multiple_compressed_leaf_proofs(
             hashes.len()
         )));
     }
+    let hash_to_leaf_node_with_node_index = leaf_nodes_with_node_index
+        .iter()
+        .map(|(leaf_node, node_index)| (leaf_node.hash.clone(), (leaf_node.clone(), *node_index)))
+        .collect::<HashMap<Hash, (LeafNode, i64)>>();
+
+    let leaf_nodes_with_node_index = hashes
+        .into_iter()
+        .map(|hash| {
+            hash_to_leaf_node_with_node_index
+                .get(&hash)
+                .ok_or(PhotonApiError::RecordNotFound(format!(
+                    "Leaf node not found for hash: {}",
+                    hash
+                )))
+                .map(Clone::clone)
+        })
+        .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
+
     get_multiple_compressed_leaf_proofs_from_full_leaf_info(conn, leaf_nodes_with_node_index).await
 }
 
