@@ -1,0 +1,26 @@
+---
+source: tests/integration_tests/mock_tests.rs
+expression: validity_proof
+---
+{
+  "compressedProof": {
+    "a": [],
+    "b": [],
+    "c": []
+  },
+  "roots": [
+    "zXtjM7Dk6M4vaEgiw3em5Z42jk61urhKUFkPQgoPASQ"
+  ],
+  "rootIndices": [
+    3
+  ],
+  "leafIndices": [
+    1
+  ],
+  "leaves": [
+    "4wBqpZM9xaSheiS9fQ9vUrSKwM9BRxJeiPXdqE2Woks"
+  ],
+  "merkleTrees": [
+    "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn"
+  ]
+}
