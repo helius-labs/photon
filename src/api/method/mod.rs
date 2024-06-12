@@ -17,6 +17,7 @@ pub mod get_latest_compression_signatures;
 pub mod get_latest_non_voting_signatures;
 pub mod get_multiple_compressed_account_proofs;
 pub mod get_multiple_compressed_accounts;
+pub mod get_multiple_new_address_proofs;
 pub mod get_transaction_with_compression_info;
 pub mod get_validity_proof;
 pub mod utils;

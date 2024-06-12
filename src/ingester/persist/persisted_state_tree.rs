@@ -163,6 +163,11 @@ pub async fn get_multiple_compressed_leaf_proofs(
     conn: &DatabaseConnection,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    if hashes.is_empty() {
+        return Err(PhotonApiError::ValidationError(
+            "No hashes provided".to_string(),
+        ));
+    }
     let leaf_nodes_with_node_index = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
@@ -194,6 +199,24 @@ pub async fn get_multiple_compressed_leaf_proofs(
             hashes.len()
         )));
     }
+    let hash_to_leaf_node_with_node_index = leaf_nodes_with_node_index
+        .iter()
+        .map(|(leaf_node, node_index)| (leaf_node.hash.clone(), (leaf_node.clone(), *node_index)))
+        .collect::<HashMap<Hash, (LeafNode, i64)>>();
+
+    let leaf_nodes_with_node_index = hashes
+        .into_iter()
+        .map(|hash| {
+            hash_to_leaf_node_with_node_index
+                .get(&hash)
+                .ok_or(PhotonApiError::RecordNotFound(format!(
+                    "Leaf node not found for hash: {}",
+                    hash
+                )))
+                .map(Clone::clone)
+        })
+        .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
+
     get_multiple_compressed_leaf_proofs_from_full_leaf_info(conn, leaf_nodes_with_node_index).await
 }
 
@@ -281,7 +304,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     Ok(proofs)
 }
 
-fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
+pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
     let leaf_index = proof.leaf_index;
     let tree_height = (proof.proof.len() + 1) as u32;
     let node_index = leaf_index_to_node_index(leaf_index, tree_height);

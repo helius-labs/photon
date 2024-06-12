@@ -29,10 +29,15 @@ use super::method::get_compression_signatures_for_token_owner::{
 };
 use super::method::get_latest_compression_signatures::get_latest_compression_signatures;
 use super::method::get_latest_non_voting_signatures::get_latest_non_voting_signatures;
+use super::method::get_multiple_new_address_proofs::{
+    get_multiple_new_address_proofs, AddressList, GetMultipleNewAddressProofsResponse,
+};
 use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
-use super::method::get_validity_proof::{get_validity_proof, CompressedProofWithContext};
+use super::method::get_validity_proof::{
+    get_validity_proof, CompressedProofWithContext, GetValidityProofRequest,
+};
 use super::method::utils::GetLatestSignaturesRequest;
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
 use super::{
@@ -148,6 +153,13 @@ impl PhotonApi {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_multiple_new_address_proofs(
+        &self,
+        request: AddressList,
+    ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
+        get_multiple_new_address_proofs(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
         request: GetCompressedTokenAccountsByOwner,
@@ -254,7 +266,7 @@ impl PhotonApi {
 
     pub async fn get_validity_proof(
         &self,
-        request: HashList,
+        request: GetValidityProofRequest,
     ) -> Result<CompressedProofWithContext, PhotonApiError> {
         get_validity_proof(self.db_conn.as_ref(), request).await
     }
@@ -291,8 +303,13 @@ impl PhotonApi {
                 response: GetMultipleCompressedAccountProofsResponse::schema().1,
             },
             OpenApiSpec {
+                name: "getMultipleNewAddressProofs".to_string(),
+                request: Some(AddressList::schema().1),
+                response: GetMultipleNewAddressProofsResponse::schema().1,
+            },
+            OpenApiSpec {
                 name: "getValidityProof".to_string(),
-                request: Some(HashList::schema().1),
+                request: Some(GetValidityProofRequest::schema().1),
                 response: CompressedProofWithContext::schema().1,
             },
             OpenApiSpec {

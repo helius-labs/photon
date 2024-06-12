@@ -5,11 +5,14 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressed
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
+use photon_indexer::api::method::get_validity_proof::{
+    get_validity_proof, GetValidityProofRequest,
+};
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
-use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_range_proof;
+use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::dao::generated::{indexed_trees, state_trees};
@@ -706,7 +709,7 @@ async fn test_indexed_merkle_trees(
 
     txn.commit().await.unwrap();
 
-    let (model, _) = get_range_proof(
+    let (model, _) = get_exclusion_range_with_proof(
         setup.db_conn.as_ref(),
         tree.to_bytes_vec(),
         tree_height,
@@ -717,9 +720,9 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 1,
+        leaf_index: 2,
         value: vec![1],
-        next_index: 2,
+        next_index: 3,
         next_value: vec![5],
     };
 
@@ -739,7 +742,7 @@ async fn test_indexed_merkle_trees(
 
     verify_tree(setup.db_conn.as_ref(), tree).await;
 
-    let (model, _) = get_range_proof(
+    let (model, _) = get_exclusion_range_with_proof(
         setup.db_conn.as_ref(),
         tree.to_bytes_vec(),
         tree_height,
@@ -750,11 +753,102 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 3,
+        leaf_index: 4,
         value: vec![3],
-        next_index: 2,
+        next_index: 3,
         next_value: vec![5],
     };
 
     assert_eq!(model, expected_model);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_get_multiple_new_address_proofs(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_new_address_proofs::{
+        get_multiple_new_address_proofs, AddressList,
+    };
+
+    let name = trim_test_name(function_name!());
+    let setup = setup(name.clone(), db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let addresses = vec![
+        SerializablePubkey::try_from("Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W").unwrap(),
+        SerializablePubkey::try_from("sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd").unwrap(),
+    ];
+    let proof = get_multiple_new_address_proofs(&setup.db_conn, AddressList(addresses.clone()))
+        .await
+        .unwrap();
+    insta::assert_json_snapshot!(name, proof);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_get_multiple_new_address_proofs_interop(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::{
+        get_multiple_new_address_proofs::{get_multiple_new_address_proofs, AddressList},
+        get_validity_proof::CompressedProof,
+    };
+
+    let name = trim_test_name(function_name!());
+    let setup = setup(name.clone(), db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let addresses = vec![SerializablePubkey::try_from(vec![
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42, 42, 42, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26, 27, 28, 29, 30, 31, 32,
+    ])
+    .unwrap()];
+    let proof = get_multiple_new_address_proofs(&setup.db_conn, AddressList(addresses.clone()))
+        .await
+        .unwrap();
+    insta::assert_json_snapshot!(name.clone(), proof);
+    let mut validity_proof = get_validity_proof(
+        &setup.db_conn,
+        GetValidityProofRequest {
+            new_addresses: addresses,
+            hashes: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    // The Gnark prover has some randomness.
+    validity_proof.compressed_proof = CompressedProof::default();
+
+    insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
 }

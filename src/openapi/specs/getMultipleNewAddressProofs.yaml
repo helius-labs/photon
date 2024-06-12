@@ -9,7 +9,7 @@ servers:
 - url: http://127.0.0.1
 paths:
   /:
-    summary: getLatestCompressionSignatures
+    summary: getMultipleNewAddressProofs
     post:
       requestBody:
         content:
@@ -36,17 +36,11 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getLatestCompressionSignatures
+                  - getMultipleNewAddressProofs
                 params:
-                  type: object
-                  properties:
-                    cursor:
-                      type: string
-                      nullable: true
-                    limit:
-                      allOf:
-                      - $ref: '#/components/schemas/Limit'
-                      nullable: true
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SerializablePubkey'
         required: true
       responses:
         '200':
@@ -62,7 +56,9 @@ paths:
                   context:
                     $ref: '#/components/schemas/Context'
                   value:
-                    $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MerkleContextWithNewAddressProof'
         '429':
           description: Exceeded rate limit.
           content:
@@ -227,7 +223,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111H6X8PLvXQDY3iLaTynKkQ1tUBBJjSNLKeo
+      example: 111111152P2r5yt6odmBLPsFCLBrFisJ3aS7LqLAT
     Limit:
       type: integer
       format: int64
@@ -327,8 +323,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111GhBXQEdEh35AtuSNxMzRutcgYg3nj8kVLT
-      example: 1111111GhBXQEdEh35AtuSNxMzRutcgYg3nj8kVLT
+      default: 11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7
+      example: 11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

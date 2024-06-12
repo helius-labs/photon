@@ -1,6 +1,9 @@
 use crate::{
-    api::error::PhotonApiError, common::typedefs::hash::Hash,
-    ingester::persist::persisted_state_tree::get_multiple_compressed_leaf_proofs,
+    api::error::PhotonApiError,
+    common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
+    ingester::persist::persisted_state_tree::{
+        get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
+    },
 };
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
@@ -10,10 +13,12 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::ToSchema;
 
-use super::get_multiple_compressed_account_proofs::HashList;
+use super::get_multiple_new_address_proofs::{
+    get_multiple_new_address_proofs_helper, MerkleContextWithNewAddressProof,
+};
 
 lazy_static! {
-    static ref FIELD_SIZE: BigUint = BigUint::from_str(
+    pub static ref FIELD_SIZE: BigUint = BigUint::from_str(
         "21888242871839275222246405745257275088548364400416034343698204186575808495616"
     )
     .unwrap();
@@ -21,7 +26,7 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HexInputsForProver {
+struct InclusionHexInputsForProver {
     root: String,
     path_index: u32,
     path_elements: Vec<String>,
@@ -30,9 +35,73 @@ struct HexInputsForProver {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct NonInclusionHexInputsForProver {
+    root: String,
+    value: String,
+    path_index: u32,
+    path_elements: Vec<String>,
+    leaf_lower_range_value: String,
+    leaf_higher_range_value: String,
+    leaf_index: u32,
+}
+
+fn convert_non_inclusion_merkle_proof_to_hex(
+    non_inclusion_merkle_proof_inputs: Vec<MerkleContextWithNewAddressProof>,
+) -> Vec<NonInclusionHexInputsForProver> {
+    let mut inputs: Vec<NonInclusionHexInputsForProver> = Vec::new();
+    for i in 0..non_inclusion_merkle_proof_inputs.len() {
+        let input = NonInclusionHexInputsForProver {
+            root: hash_to_hex(&non_inclusion_merkle_proof_inputs[i].root),
+            value: pubkey_to_hex(&non_inclusion_merkle_proof_inputs[i].address),
+            path_index: non_inclusion_merkle_proof_inputs[i].low_element_leaf_index,
+            path_elements: non_inclusion_merkle_proof_inputs[i]
+                .proof
+                .iter()
+                .map(|x| hash_to_hex(x))
+                .collect(),
+            leaf_index: non_inclusion_merkle_proof_inputs[i].leaf_index,
+            leaf_lower_range_value: pubkey_to_hex(
+                &non_inclusion_merkle_proof_inputs[i].lower_range_address,
+            ),
+            leaf_higher_range_value: pubkey_to_hex(
+                &non_inclusion_merkle_proof_inputs[i].higher_range_address,
+            ),
+        };
+        inputs.push(input);
+    }
+    inputs
+}
+
+fn convert_inclusion_proofs_to_hex(
+    inclusion_proof_inputs: Vec<MerkleProofWithContext>,
+) -> Vec<InclusionHexInputsForProver> {
+    let mut inputs: Vec<InclusionHexInputsForProver> = Vec::new();
+    for i in 0..inclusion_proof_inputs.len() {
+        let input = InclusionHexInputsForProver {
+            root: hash_to_hex(&inclusion_proof_inputs[i].root),
+            path_index: inclusion_proof_inputs[i].leaf_index,
+            path_elements: inclusion_proof_inputs[i]
+                .proof
+                .iter()
+                .map(|x| hash_to_hex(x))
+                .collect(),
+            leaf: hash_to_hex(&inclusion_proof_inputs[i].hash),
+        };
+        inputs.push(input);
+    }
+    inputs
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HexBatchInputsForProver {
-    #[serde(rename = "input-compressed-accounts")]
-    input_compressed_accounts: Vec<HexInputsForProver>,
+    #[serde(
+        rename = "input-compressed-accounts",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    input_compressed_accounts: Vec<InclusionHexInputsForProver>,
+    #[serde(rename = "new-addresses", skip_serializing_if = "Vec::is_empty")]
+    new_addresses: Vec<NonInclusionHexInputsForProver>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -48,6 +117,12 @@ pub struct CompressedProofWithContext {
 
 fn hash_to_hex(hash: &Hash) -> String {
     let bytes = hash.to_vec();
+    let hex = hex::encode(bytes);
+    format!("0x{}", hex)
+}
+
+fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
+    let bytes = pubkey.to_bytes_vec();
     let hex = hex::encode(bytes);
     format!("0x{}", hex)
 }
@@ -124,12 +199,11 @@ fn y_element_is_positive_g2(y_element1: &BigUint, y_element2: &BigUint) -> bool 
     }
 }
 
-fn add_bitmask_to_byte(byte: u8, is_positive: bool) -> u8 {
-    if is_positive {
-        byte | 0x80
-    } else {
-        byte & 0x7F
+fn add_bitmask_to_byte(mut byte: u8, y_is_positive: bool) -> u8 {
+    if !y_is_positive {
+        byte |= 1 << 7;
     }
+    byte
 }
 
 fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
@@ -164,34 +238,41 @@ fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct GetValidityProofRequest {
+    pub hashes: Vec<Hash>,
+    #[serde(rename = "newAddresses")]
+    pub new_addresses: Vec<SerializablePubkey>,
+}
+
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
-    hashes: HashList,
+    request: GetValidityProofRequest,
 ) -> Result<CompressedProofWithContext, PhotonApiError> {
-    if hashes.0.is_empty() {
+    if request.hashes.is_empty() && request.new_addresses.is_empty() {
         return Err(PhotonApiError::UnexpectedError(
-            "No hashes provided for proof generation".to_string(),
+            "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
     let client = Client::new();
-    let prover_endpoint = "http://localhost:3001"; // Change this as necessary
+    let prover_endpoint = "http://localhost:3001";
 
-    // Get merkle proofs
-    let merkle_proofs_with_context = get_multiple_compressed_leaf_proofs(conn, hashes.0).await?;
-
-    let mut inputs: Vec<HexInputsForProver> = Vec::new();
-    for proof in merkle_proofs_with_context.clone() {
-        let input = HexInputsForProver {
-            root: hash_to_hex(&proof.root),
-            path_index: proof.leaf_index,
-            path_elements: proof.proof.iter().map(|x| hash_to_hex(x)).collect(),
-            leaf: hash_to_hex(&proof.hash),
-        };
-        inputs.push(input);
-    }
+    let account_proofs = match !request.hashes.is_empty() {
+        true => get_multiple_compressed_leaf_proofs(conn, request.hashes).await?,
+        false => {
+            vec![]
+        }
+    };
+    let new_address_proofs = match !request.new_addresses.is_empty() {
+        true => get_multiple_new_address_proofs_helper(conn, request.new_addresses).await?,
+        false => {
+            vec![]
+        }
+    };
 
     let batch_inputs = HexBatchInputsForProver {
-        input_compressed_accounts: inputs,
+        input_compressed_accounts: convert_inclusion_proofs_to_hex(account_proofs.clone()),
+        new_addresses: convert_non_inclusion_merkle_proof_to_hex(new_address_proofs.clone()),
     };
 
     let inclusion_proof_url = format!("{}/prove", prover_endpoint);
@@ -234,25 +315,42 @@ pub async fn get_validity_proof(
 
     Ok(CompressedProofWithContext {
         compressed_proof,
-        roots: merkle_proofs_with_context
+        roots: account_proofs
             .iter()
             .map(|x| x.root.clone().to_string())
+            .chain(
+                new_address_proofs
+                    .iter()
+                    .map(|x| x.root.clone().to_string()),
+            )
             .collect(),
-        root_indices: merkle_proofs_with_context
+        root_indices: account_proofs
             .iter()
             .map(|x| x.root_seq)
+            .chain(new_address_proofs.iter().map(|x| x.root_seq))
             .collect(),
-        leaf_indices: merkle_proofs_with_context
+        leaf_indices: account_proofs
             .iter()
             .map(|x| x.leaf_index)
+            .chain(new_address_proofs.iter().map(|x| x.leaf_index))
             .collect(),
-        leaves: merkle_proofs_with_context
+        leaves: account_proofs
             .iter()
             .map(|x| x.hash.clone().to_string())
+            .chain(
+                new_address_proofs
+                    .iter()
+                    .map(|x| x.address.clone().to_string()),
+            )
             .collect(),
-        merkle_trees: merkle_proofs_with_context
+        merkle_trees: account_proofs
             .iter()
             .map(|x| x.merkle_tree.clone().to_string())
+            .chain(
+                new_address_proofs
+                    .iter()
+                    .map(|x| x.merkle_tree.clone().to_string()),
+            )
             .collect(),
     })
 }
