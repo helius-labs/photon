@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.19.0
+  version: 0.23.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -89,7 +89,6 @@ paths:
                     type: object
                     required:
                     - context
-                    - value
                     properties:
                       context:
                         $ref: '#/components/schemas/Context'
@@ -2219,6 +2218,116 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getMultipleNewAddressProofs:
+    summary: getMultipleNewAddressProofs
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getMultipleNewAddressProofs
+                params:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SerializablePubkey'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MerkleContextWithNewAddressProof'
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getTransactionWithCompressionInfo:
     summary: getTransactionWithCompressionInfo
     post:
@@ -2371,9 +2480,19 @@ paths:
                   enum:
                   - getValidityProof
                 params:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Hash'
+                  type: object
+                  required:
+                  - hashes
+                  - newAddresses
+                  properties:
+                    hashes:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Hash'
+                    newAddresses:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/SerializablePubkey'
         required: true
       responses:
         '200':
@@ -2485,6 +2604,7 @@ components:
       - lamports
       - tree
       - leafIndex
+      - seq
       - slotCreated
       properties:
         address:
@@ -2528,7 +2648,9 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/Account'
+            allOf:
+            - $ref: '#/components/schemas/Account'
+            nullable: true
       additionalProperties: false
     AccountState:
       type: string
@@ -2624,6 +2746,45 @@ components:
       type: integer
       format: uint64
       minimum: 0
+    MerkleContextWithNewAddressProof:
+      type: object
+      required:
+      - root
+      - address
+      - lower_range_address
+      - higher_range_address
+      - leaf_index
+      - proof
+      - merkle_tree
+      - root_seq
+      - low_element_leaf_index
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        higher_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        leaf_index:
+          type: integer
+          format: uint32
+          minimum: 0
+        low_element_leaf_index:
+          type: integer
+          format: uint32
+          minimum: 0
+        lower_range_address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        merkle_tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        proof:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        root:
+          $ref: '#/components/schemas/Hash'
+        root_seq:
+          type: integer
+          format: uint64
+          minimum: 0
     MerkleProofWithContext:
       type: object
       required:
