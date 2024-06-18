@@ -10,6 +10,7 @@ use super::utils::{parse_account_model, AccountDataTable, CompressedAccountReque
 
 // We do not use generics to simply documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountResponse {
     pub context: Context,
     pub value: Option<Account>,

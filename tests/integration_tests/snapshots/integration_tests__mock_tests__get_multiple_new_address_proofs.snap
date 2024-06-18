@@ -10,9 +10,9 @@ expression: proof
     {
       "root": "zXtjM7Dk6M4vaEgiw3em5Z42jk61urhKUFkPQgoPASQ",
       "address": "Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W",
-      "lower_range_address": "11111111111111111111111111111111",
-      "higher_range_address": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
-      "leaf_index": 1,
+      "lowerRangeAddress": "11111111111111111111111111111111",
+      "higherRangeAddress": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
+      "leafIndex": 1,
       "proof": [
         "3yZcNMU39fQRoeYJqMhPF2LKEeeSzi5DkF8Nkn2Eeqwm",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
@@ -41,16 +41,16 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkle_tree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
-      "root_seq": 3,
-      "low_element_leaf_index": 0
+      "merkleTree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
+      "rootSeq": 3,
+      "lowElementLeafIndex": 0
     },
     {
       "root": "zXtjM7Dk6M4vaEgiw3em5Z42jk61urhKUFkPQgoPASQ",
       "address": "sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd",
-      "lower_range_address": "11111111111111111111111111111111",
-      "higher_range_address": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
-      "leaf_index": 1,
+      "lowerRangeAddress": "11111111111111111111111111111111",
+      "higherRangeAddress": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
+      "leafIndex": 1,
       "proof": [
         "3yZcNMU39fQRoeYJqMhPF2LKEeeSzi5DkF8Nkn2Eeqwm",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
@@ -79,9 +79,9 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkle_tree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
-      "root_seq": 3,
-      "low_element_leaf_index": 0
+      "merkleTree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
+      "rootSeq": 3,
+      "lowElementLeafIndex": 0
     }
   ]
 }

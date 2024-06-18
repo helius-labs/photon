@@ -25,12 +25,14 @@ pub struct TokenBalanceList {
 
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenBalancesResponse {
     pub context: Context,
     pub value: TokenBalanceList,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenBalancesByOwnerRequest {
     pub owner: SerializablePubkey,
     pub mint: Option<SerializablePubkey>,

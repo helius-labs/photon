@@ -31,26 +31,33 @@ const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
 
 // We do not use generics to simply documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetTransactionRequest {
     pub signature: SerializableSignature,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct CompressionInfo {
-    pub closed_accounts: Vec<AccountWithOptionalTokenData>,
-    pub opened_accounts: Vec<AccountWithOptionalTokenData>,
+    pub closedAccounts: Vec<AccountWithOptionalTokenData>,
+    pub openedAccounts: Vec<AccountWithOptionalTokenData>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct AccountWithOptionalTokenData {
     pub account: Account,
-    pub optional_token_data: Option<TokenData>,
+    pub optionalTokenData: Option<TokenData>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct GetTransactionResponse {
     pub transaction: EncodedConfirmedTransactionWithStatusMeta,
-    pub compression_info: CompressionInfo,
+    pub compressionInfo: CompressionInfo,
 }
 
 impl<'__s> ToSchema<'__s> for GetTransactionResponse {
@@ -87,7 +94,7 @@ fn parse_optional_token_data(
 ) -> Result<AccountWithOptionalTokenData, PhotonApiError> {
     let hash = account.hash.clone();
     Ok(AccountWithOptionalTokenData {
-        optional_token_data: parse_token_data(&account).map_err(|e| {
+        optionalTokenData: parse_token_data(&account).map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to parse token data for account {}: {}",
                 hash, e
@@ -159,9 +166,9 @@ pub async fn get_transaction_helper(
 
     Ok(GetTransactionResponse {
         transaction: txn,
-        compression_info: CompressionInfo {
-            closed_accounts: parse_optional_token_data_for_multiple_accounts(closed_accounts)?,
-            opened_accounts: parse_optional_token_data_for_multiple_accounts(
+        compressionInfo: CompressionInfo {
+            closedAccounts: parse_optional_token_data_for_multiple_accounts(closed_accounts)?,
+            openedAccounts: parse_optional_token_data_for_multiple_accounts(
                 status_update.out_accounts,
             )?,
         },

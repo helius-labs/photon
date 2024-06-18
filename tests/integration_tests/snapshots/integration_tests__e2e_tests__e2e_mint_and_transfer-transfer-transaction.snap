@@ -160,8 +160,8 @@ expression: parsed_transaction
     "version": 0,
     "blockTime": 1717594775
   },
-  "compression_info": {
-    "closed_accounts": [
+  "compressionInfo": {
+    "closedAccounts": [
       {
         "account": {
           "hash": "sKXVGdDgbogNTGsoa1eWGcE4u7M7PbdoTYBD6L739yB",
@@ -178,7 +178,7 @@ expression: parsed_transaction
           "seq": 1,
           "slotCreated": 0
         },
-        "optional_token_data": {
+        "optionalTokenData": {
           "mint": "FsLvdEqi6xTaxSDZ6mzCRhWGRN6W7c7n8E4SmPix6YM4",
           "owner": "7Z1siJsXDpSgwyXsErgdrhbLNHGuqoivfjbycnUyxWX7",
           "amount": 1000,
@@ -189,7 +189,7 @@ expression: parsed_transaction
         }
       }
     ],
-    "opened_accounts": [
+    "openedAccounts": [
       {
         "account": {
           "hash": "3E79jMkJGfK5dvJ5uFCVZUUYQt62N23UUQjtLqL6Xup8",
@@ -206,7 +206,7 @@ expression: parsed_transaction
           "seq": 2,
           "slotCreated": 53
         },
-        "optional_token_data": {
+        "optionalTokenData": {
           "mint": "FsLvdEqi6xTaxSDZ6mzCRhWGRN6W7c7n8E4SmPix6YM4",
           "owner": "7Z1siJsXDpSgwyXsErgdrhbLNHGuqoivfjbycnUyxWX7",
           "amount": 300,
@@ -232,7 +232,7 @@ expression: parsed_transaction
           "seq": 3,
           "slotCreated": 53
         },
-        "optional_token_data": {
+        "optionalTokenData": {
           "mint": "FsLvdEqi6xTaxSDZ6mzCRhWGRN6W7c7n8E4SmPix6YM4",
           "owner": "AByXwz518ntDjhTaMr6Z65pgde3gy7t4tZ6htdPGkjhh",
           "amount": 700,

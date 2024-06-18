@@ -19,6 +19,7 @@ pub struct TokenAccountBalance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 // We do not use generics to simplify documentation generation.
 pub struct GetCompressedTokenAccountBalanceResponse {
     pub context: Context,

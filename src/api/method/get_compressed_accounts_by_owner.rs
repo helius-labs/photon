@@ -34,6 +34,7 @@ pub struct PaginatedAccountList {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountsByOwnerResponse {
     pub context: Context,
     pub value: PaginatedAccountList,

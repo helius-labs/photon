@@ -15,16 +15,18 @@ const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("C83cpRN6oaafjNgMQJvaYgAz592EP5wunK
 use super::utils::Context;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct MerkleContextWithNewAddressProof {
     pub root: Hash,
     pub address: SerializablePubkey,
-    pub lower_range_address: SerializablePubkey,
-    pub higher_range_address: SerializablePubkey,
-    pub leaf_index: u32,
+    pub lowerRangeAddress: SerializablePubkey,
+    pub higherRangeAddress: SerializablePubkey,
+    pub leafIndex: u32,
     pub proof: Vec<Hash>,
-    pub merkle_tree: SerializablePubkey,
-    pub root_seq: u64,
-    pub low_element_leaf_index: u32,
+    pub merkleTree: SerializablePubkey,
+    pub rootSeq: u64,
+    pub lowElementLeafIndex: u32,
 }
 
 // We do not use generics to simplify documentation generation.
@@ -56,13 +58,13 @@ pub async fn get_multiple_new_address_proofs_helper(
         let new_address_proof = MerkleContextWithNewAddressProof {
             root: proof.root,
             address,
-            lower_range_address: SerializablePubkey::try_from(model.value)?,
-            higher_range_address: SerializablePubkey::try_from(model.next_value)?,
-            leaf_index: model.next_index as u32,
+            lowerRangeAddress: SerializablePubkey::try_from(model.value)?,
+            higherRangeAddress: SerializablePubkey::try_from(model.next_value)?,
+            leafIndex: model.next_index as u32,
             proof: proof.proof,
-            low_element_leaf_index: model.leaf_index as u32,
-            merkle_tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
-            root_seq: proof.root_seq as u64,
+            lowElementLeafIndex: model.leaf_index as u32,
+            merkleTree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            rootSeq: proof.rootSeq as u64,
         };
         new_address_proofs.push(new_address_proof);
     }

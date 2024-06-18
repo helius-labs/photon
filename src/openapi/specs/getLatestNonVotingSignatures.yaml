@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.21.0
+  version: 0.24.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -47,6 +47,7 @@ paths:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
                       nullable: true
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -63,6 +64,7 @@ paths:
                     $ref: '#/components/schemas/Context'
                   value:
                     $ref: '#/components/schemas/SignatureInfoList'
+                additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -151,8 +153,9 @@ components:
       properties:
         account:
           $ref: '#/components/schemas/Account'
-        optional_token_data:
+        optionalTokenData:
           $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
     Base58String:
       type: string
       description: A base 58 encoded string.
@@ -237,29 +240,29 @@ components:
       required:
       - root
       - address
-      - lower_range_address
-      - higher_range_address
-      - leaf_index
+      - lowerRangeAddress
+      - higherRangeAddress
+      - leafIndex
       - proof
-      - merkle_tree
-      - root_seq
-      - low_element_leaf_index
+      - merkleTree
+      - rootSeq
+      - lowElementLeafIndex
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
-        higher_range_address:
+        higherRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        leaf_index:
+        leafIndex:
           type: integer
           format: int32
           minimum: 0
-        low_element_leaf_index:
+        lowElementLeafIndex:
           type: integer
           format: int32
           minimum: 0
-        lower_range_address:
+        lowerRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        merkle_tree:
+        merkleTree:
           $ref: '#/components/schemas/SerializablePubkey'
         proof:
           type: array
@@ -267,10 +270,11 @@ components:
             $ref: '#/components/schemas/Hash'
         root:
           $ref: '#/components/schemas/Hash'
-        root_seq:
+        rootSeq:
           type: integer
           format: int64
           minimum: 0
+      additionalProperties: false
     MerkleProofWithContext:
       type: object
       required:
