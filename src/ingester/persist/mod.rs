@@ -1,5 +1,6 @@
 use super::{error, parser::state_update::AccountTransaction};
 use crate::{
+    api::method::get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT,
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
@@ -14,6 +15,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use log::debug;
+use persisted_indexed_merkle_tree::multi_append_fully_specified;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
@@ -44,12 +46,13 @@ pub async fn persist_state_update(
     }
     let StateUpdate {
         in_accounts,
-        mut out_accounts,
+        out_accounts,
         account_transactions,
         transactions,
+        leaf_nullifications,
+        indexed_merkle_tree_updates,
     } = state_update;
 
-    out_accounts.sort_by(|a, b| a.seq.cmp(&b.seq));
     debug!(
         "Persisting state update with {} input accounts, {} output accounts",
         in_accounts.len(),
@@ -69,8 +72,19 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
+    let mut leaf_nodes: Vec<LeafNode> = out_accounts
+        .iter()
+        .map(|account| LeafNode::from(account.clone()))
+        .chain(
+            leaf_nullifications
+                .iter()
+                .map(|leaf_nullification| LeafNode::from(leaf_nullification.clone())),
+        )
+        .collect();
+
+    leaf_nodes.sort_by_key(|x| x.seq);
     debug!("Persisting state nodes...");
-    for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
+    for chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
         persist_leaf_nodes(
             txn,
             chunk
@@ -94,6 +108,9 @@ pub async fn persist_state_update(
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
+
+    debug!("Persisting index tree updates...");
+    multi_append_fully_specified(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
 
     Ok(())
 }

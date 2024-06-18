@@ -1,11 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
 use crate::common::typedefs::account::Account;
 
 use crate::common::typedefs::hash::Hash;
+
+use super::indexer_events::RawIndexedElement;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct PathNode {
@@ -43,6 +46,21 @@ pub struct AccountTransaction {
     pub signature: Signature,
 }
 
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+pub struct LeafNullification {
+    pub tree: Pubkey,
+    pub leaf_index: u64,
+    pub seq: u64,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct IndexedTreeLeafUpdate {
+    pub tree: Pubkey,
+    pub leaf: RawIndexedElement,
+    pub hash: [u8; 32],
+    pub seq: u64,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistance.
 pub struct StateUpdate {
@@ -50,6 +68,8 @@ pub struct StateUpdate {
     pub out_accounts: Vec<Account>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
+    pub leaf_nullifications: HashSet<LeafNullification>,
+    pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 }
 
 impl StateUpdate {
@@ -66,6 +86,20 @@ impl StateUpdate {
                 .account_transactions
                 .extend(update.account_transactions);
             merged.transactions.extend(update.transactions);
+            merged
+                .leaf_nullifications
+                .extend(update.leaf_nullifications);
+
+            for (key, value) in update.indexed_merkle_tree_updates {
+                // Insert only if the seq is higher.
+                if let Some(existing) = merged.indexed_merkle_tree_updates.get_mut(&key) {
+                    if value.seq > existing.seq {
+                        *existing = value;
+                    }
+                } else {
+                    merged.indexed_merkle_tree_updates.insert(key, value);
+                }
+            }
         }
         merged
     }

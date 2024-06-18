@@ -724,6 +724,7 @@ async fn test_indexed_merkle_trees(
         value: vec![1],
         next_index: 3,
         next_value: vec![5],
+        seq: 0,
     };
 
     assert_eq!(model, expected_model);
@@ -757,6 +758,7 @@ async fn test_indexed_merkle_trees(
         value: vec![3],
         next_index: 3,
         next_value: vec![5],
+        seq: 0,
     };
 
     assert_eq!(model, expected_model);

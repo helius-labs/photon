@@ -11,6 +11,7 @@ pub struct Model {
     pub value: Vec<u8>,
     pub next_index: i64,
     pub next_value: Vec<u8>,
+    pub seq: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

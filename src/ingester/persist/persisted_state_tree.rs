@@ -14,7 +14,7 @@ use crate::{
     api::error::PhotonApiError,
     common::typedefs::{account::Account, hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::state_trees,
-    ingester::error::IngesterError,
+    ingester::{error::IngesterError, parser::state_update::LeafNullification},
 };
 
 use super::{compute_parent_hash, get_node_direct_ancestors};
@@ -44,6 +44,17 @@ impl From<Account> for LeafNode {
             leaf_index: account.leaf_index.0 as u32,
             hash: account.hash,
             seq: account.seq.0 as u32,
+        }
+    }
+}
+
+impl From<LeafNullification> for LeafNode {
+    fn from(leaf_nullification: LeafNullification) -> Self {
+        Self {
+            tree: SerializablePubkey::from(leaf_nullification.tree),
+            leaf_index: leaf_nullification.leaf_index as u32,
+            hash: Hash::from(ZERO_BYTES[0]),
+            seq: leaf_nullification.seq as u32,
         }
     }
 }
