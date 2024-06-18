@@ -12,7 +12,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-// We do not use generics to simplify documentation generation.
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountProofResponse {
     pub context: Context,
     pub value: MerkleProofWithContext,

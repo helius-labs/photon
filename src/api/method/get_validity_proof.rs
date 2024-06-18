@@ -53,18 +53,18 @@ fn convert_non_inclusion_merkle_proof_to_hex(
         let input = NonInclusionHexInputsForProver {
             root: hash_to_hex(&non_inclusion_merkle_proof_inputs[i].root),
             value: pubkey_to_hex(&non_inclusion_merkle_proof_inputs[i].address),
-            path_index: non_inclusion_merkle_proof_inputs[i].low_element_leaf_index,
+            path_index: non_inclusion_merkle_proof_inputs[i].lowElementLeafIndex,
             path_elements: non_inclusion_merkle_proof_inputs[i]
                 .proof
                 .iter()
                 .map(|x| hash_to_hex(x))
                 .collect(),
-            leaf_index: non_inclusion_merkle_proof_inputs[i].leaf_index,
+            leaf_index: non_inclusion_merkle_proof_inputs[i].leafIndex,
             leaf_lower_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].lower_range_address,
+                &non_inclusion_merkle_proof_inputs[i].lowerRangeAddress,
             ),
             leaf_higher_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].higher_range_address,
+                &non_inclusion_merkle_proof_inputs[i].higherRangeAddress,
             ),
         };
         inputs.push(input);
@@ -79,7 +79,7 @@ fn convert_inclusion_proofs_to_hex(
     for i in 0..inclusion_proof_inputs.len() {
         let input = InclusionHexInputsForProver {
             root: hash_to_hex(&inclusion_proof_inputs[i].root),
-            path_index: inclusion_proof_inputs[i].leaf_index,
+            path_index: inclusion_proof_inputs[i].leafIndex,
             path_elements: inclusion_proof_inputs[i]
                 .proof
                 .iter()
@@ -106,13 +106,14 @@ struct HexBatchInputsForProver {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct CompressedProofWithContext {
-    pub compressed_proof: CompressedProof,
+    pub compressedProof: CompressedProof,
     roots: Vec<String>,
-    root_indices: Vec<u64>,
-    leaf_indices: Vec<u32>,
+    rootIndices: Vec<u64>,
+    leafIndices: Vec<u32>,
     leaves: Vec<String>,
-    merkle_trees: Vec<String>,
+    merkleTrees: Vec<String>,
 }
 
 fn hash_to_hex(hash: &Hash) -> String {
@@ -239,17 +240,18 @@ fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct GetValidityProofRequest {
     pub hashes: Vec<Hash>,
-    #[serde(rename = "newAddresses")]
-    pub new_addresses: Vec<SerializablePubkey>,
+    pub newAddresses: Vec<SerializablePubkey>,
 }
 
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     request: GetValidityProofRequest,
 ) -> Result<CompressedProofWithContext, PhotonApiError> {
-    if request.hashes.is_empty() && request.new_addresses.is_empty() {
+    if request.hashes.is_empty() && request.newAddresses.is_empty() {
         return Err(PhotonApiError::UnexpectedError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
@@ -263,8 +265,8 @@ pub async fn get_validity_proof(
             vec![]
         }
     };
-    let new_address_proofs = match !request.new_addresses.is_empty() {
-        true => get_multiple_new_address_proofs_helper(conn, request.new_addresses).await?,
+    let new_address_proofs = match !request.newAddresses.is_empty() {
+        true => get_multiple_new_address_proofs_helper(conn, request.newAddresses).await?,
         false => {
             vec![]
         }
@@ -311,10 +313,12 @@ pub async fn get_validity_proof(
     })?;
 
     let proof = proof_from_json_struct(proof);
-    let compressed_proof = negate_and_compress_proof(proof);
+    // Allow non-snake case
+    #[allow(non_snake_case)]
+    let compressedProof = negate_and_compress_proof(proof);
 
     Ok(CompressedProofWithContext {
-        compressed_proof,
+        compressedProof,
         roots: account_proofs
             .iter()
             .map(|x| x.root.clone().to_string())
@@ -324,15 +328,15 @@ pub async fn get_validity_proof(
                     .map(|x| x.root.clone().to_string()),
             )
             .collect(),
-        root_indices: account_proofs
+        rootIndices: account_proofs
             .iter()
-            .map(|x| x.root_seq)
-            .chain(new_address_proofs.iter().map(|x| x.root_seq))
+            .map(|x| x.rootSeq)
+            .chain(new_address_proofs.iter().map(|x| x.rootSeq))
             .collect(),
-        leaf_indices: account_proofs
+        leafIndices: account_proofs
             .iter()
-            .map(|x| x.leaf_index)
-            .chain(new_address_proofs.iter().map(|x| x.leaf_index))
+            .map(|x| x.leafIndex)
+            .chain(new_address_proofs.iter().map(|x| x.leafIndex))
             .collect(),
         leaves: account_proofs
             .iter()
@@ -343,13 +347,13 @@ pub async fn get_validity_proof(
                     .map(|x| x.address.clone().to_string()),
             )
             .collect(),
-        merkle_trees: account_proofs
+        merkleTrees: account_proofs
             .iter()
-            .map(|x| x.merkle_tree.clone().to_string())
+            .map(|x| x.merkleTree.clone().to_string())
             .chain(
                 new_address_proofs
                     .iter()
-                    .map(|x| x.merkle_tree.clone().to_string()),
+                    .map(|x| x.merkleTree.clone().to_string()),
             )
             .collect(),
     })

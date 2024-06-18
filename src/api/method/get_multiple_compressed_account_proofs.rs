@@ -14,6 +14,7 @@ use crate::common::typedefs::hash::Hash;
 
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountProofsResponse {
     pub context: Context,
     pub value: Vec<MerkleProofWithContext>,

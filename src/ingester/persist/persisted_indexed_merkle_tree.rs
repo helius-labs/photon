@@ -106,13 +106,13 @@ pub async fn get_exclusion_range_with_proof(
             root: Hash::try_from(root).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
             })?,
-            leaf_index: 0,
+            leafIndex: 0,
             hash: zeroeth_element_hash,
-            merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
+            merkleTree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
             })?,
             // HACK: Fixed value while not supporting forester.
-            root_seq: 3,
+            rootSeq: 3,
         };
         validate_proof(&merkle_proof)?;
         return Ok((zeroeth_element, merkle_proof));

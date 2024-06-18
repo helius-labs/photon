@@ -161,13 +161,14 @@ pub async fn persist_leaf_nodes(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct MerkleProofWithContext {
     pub proof: Vec<Hash>,
     pub root: Hash,
-    pub leaf_index: u32,
+    pub leafIndex: u32,
     pub hash: Hash,
-    pub merkle_tree: SerializablePubkey,
-    pub root_seq: u64,
+    pub merkleTree: SerializablePubkey,
+    pub rootSeq: u64,
 }
 
 pub async fn get_multiple_compressed_leaf_proofs(
@@ -299,10 +300,10 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             Ok(MerkleProofWithContext {
                 proof,
                 root,
-                leaf_index: leaf_node.leaf_index,
+                leafIndex: leaf_node.leaf_index,
                 hash: leaf_node.hash.clone(),
-                merkle_tree: leaf_node.tree,
-                root_seq,
+                merkleTree: leaf_node.tree,
+                rootSeq: root_seq,
             })
         })
         .collect();
@@ -316,7 +317,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
 }
 
 pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
-    let leaf_index = proof.leaf_index;
+    let leaf_index = proof.leafIndex;
     let tree_height = (proof.proof.len() + 1) as u32;
     let node_index = leaf_index_to_node_index(leaf_index, tree_height);
     let mut computed_root = proof.hash.to_vec();

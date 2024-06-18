@@ -175,9 +175,9 @@ expression: parsed_transaction
     "version": 0,
     "blockTime": 1717594775
   },
-  "compression_info": {
-    "closed_accounts": [],
-    "opened_accounts": [
+  "compressionInfo": {
+    "closedAccounts": [],
+    "openedAccounts": [
       {
         "account": {
           "hash": "sKXVGdDgbogNTGsoa1eWGcE4u7M7PbdoTYBD6L739yB",
@@ -194,7 +194,7 @@ expression: parsed_transaction
           "seq": 1,
           "slotCreated": 52
         },
-        "optional_token_data": {
+        "optionalTokenData": {
           "mint": "FsLvdEqi6xTaxSDZ6mzCRhWGRN6W7c7n8E4SmPix6YM4",
           "owner": "7Z1siJsXDpSgwyXsErgdrhbLNHGuqoivfjbycnUyxWX7",
           "amount": 1000,

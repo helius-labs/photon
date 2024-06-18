@@ -10,9 +10,9 @@ expression: proof
     {
       "root": "fKe7tXaX9QxzxNuZi8ytrZA4766dwxeqq8q6R3GHgHS",
       "address": "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
-      "lower_range_address": "11111111111111111111111111111111",
-      "higher_range_address": "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU",
-      "leaf_index": 2,
+      "lowerRangeAddress": "11111111111111111111111111111111",
+      "higherRangeAddress": "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU",
+      "leafIndex": 2,
       "proof": [
         "3yZcNMU39fQRoeYJqMhPF2LKEeeSzi5DkF8Nkn2Eeqwm",
         "3NSmDbNhhgymcVqrKTWPHGN2UbVLgQcMZJh13b5YWhxQ",
@@ -41,9 +41,9 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkle_tree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
-      "root_seq": 5,
-      "low_element_leaf_index": 0
+      "merkleTree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
+      "rootSeq": 5,
+      "lowElementLeafIndex": 0
     }
   ]
 }

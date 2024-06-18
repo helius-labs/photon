@@ -117,12 +117,12 @@ async fn test_e2e_mint_and_transfer(
             .api
             .get_validity_proof(GetValidityProofRequest {
                 hashes: hash_list.0.clone(),
-                new_addresses: vec![],
+                newAddresses: vec![],
             })
             .await
             .unwrap();
         // The Gnark prover has some randomness.
-        validity_proof.compressed_proof = CompressedProof::default();
+        validity_proof.compressedProof = CompressedProof::default();
 
         assert_json_snapshot!(
             format!("{}-{}-validity-proof", name.clone(), person),
@@ -325,7 +325,7 @@ async fn test_lamport_transfers(
                 .api
                 .get_validity_proof(GetValidityProofRequest {
                     hashes: hash_list.0.clone(),
-                    new_addresses: vec![],
+                    newAddresses: vec![],
                 })
                 .await
                 .expect(&format!(
@@ -334,7 +334,7 @@ async fn test_lamport_transfers(
                     hash_list.0.len()
                 ));
             // The Gnark prover has some randomness.
-            validity_proof.compressed_proof = CompressedProof::default();
+            validity_proof.compressedProof = CompressedProof::default();
 
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), owner_name),
@@ -605,6 +605,6 @@ async fn test_address_with_nullifiers(
         .get_multiple_new_address_proofs(address_list)
         .await
         .unwrap();
-    
+
     assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
 }

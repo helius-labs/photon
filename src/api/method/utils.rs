@@ -158,12 +158,13 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
         slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: UnsignedInteger(account.seq as u64)
+        seq: UnsignedInteger(account.seq as u64),
     })
 }
 
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAccountListResponse {
     pub context: Context,
     pub value: TokenAccountList,
@@ -674,12 +675,14 @@ fn parse_signature_info(model: SignatureInfoModel) -> Result<SignatureInfo, Phot
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetPaginatedSignaturesResponse {
     pub context: Context,
     pub value: PaginatedSignatureInfoList,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 // We do not use generics to simplify documentation generation.
 pub struct AccountBalanceResponse {
     pub context: Context,
@@ -687,6 +690,7 @@ pub struct AccountBalanceResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetLatestSignaturesRequest {
     pub limit: Option<Limit>,
     pub cursor: Option<String>,
@@ -694,6 +698,7 @@ pub struct GetLatestSignaturesRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 // We do not use generics to simplify documentation generation.
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetNonPaginatedSignaturesResponse {
     pub context: Context,
     pub value: SignatureInfoList,

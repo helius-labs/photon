@@ -601,8 +601,8 @@ async fn test_persisted_state_trees(
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkle_tree, tree);
-        assert_eq!(num_nodes as u64 - 1, proof.root_seq);
+        assert_eq!(proof.merkleTree, tree);
+        assert_eq!(num_nodes as u64 - 1, proof.rootSeq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 
@@ -637,8 +637,8 @@ async fn test_persisted_state_trees(
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkle_tree, tree);
-        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.root_seq);
+        assert_eq!(proof.merkleTree, tree);
+        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.rootSeq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 }
@@ -843,14 +843,14 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof = get_validity_proof(
         &setup.db_conn,
         GetValidityProofRequest {
-            new_addresses: addresses,
+            newAddresses: addresses,
             hashes: vec![],
         },
     )
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof.compressed_proof = CompressedProof::default();
+    validity_proof.compressedProof = CompressedProof::default();
 
     insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
 }

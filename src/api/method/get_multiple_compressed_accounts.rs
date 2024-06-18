@@ -53,6 +53,7 @@ pub struct AccountList {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 // We do not use generics in order to simplify documentation generation
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountsResponse {
     pub context: Context,
     pub value: AccountList,
