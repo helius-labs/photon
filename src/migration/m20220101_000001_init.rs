@@ -216,6 +216,7 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(IndexedTrees::NextValue).binary().not_null())
+                    .col(ColumnDef::new(IndexedTrees::Seq).big_integer().not_null())
                     .primary_key(
                         Index::create()
                             .name("pk_indexed_trees")

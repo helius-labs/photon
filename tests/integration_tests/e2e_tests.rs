@@ -1,5 +1,6 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -480,4 +481,130 @@ async fn test_get_latest_non_voting_signatures(
         .await
         .unwrap();
     assert_eq!(all_nonvoting_transactions.value.items.len(), 46);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_nullifier_queue(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let user_pubkey = "5SHZSriNACrYm32eXQFXythrkBM8sWxoFmsBS5hkZ76k";
+
+    let compress_tx =
+        "3z5aGksRbQCFvNvutWcz1qAnC1fzTAsa6Mz6NpbveKZfVcAuQ1xE1vkoFYoJLwEjRbgv5CwLrDPEP1KmVTpJ9skD";
+    let transfer_tx =
+        "wRPnjQc4ydZJWNVQ1ws9fSWCyPNJaYgVWmbJch64HgbbjPey1B5mPRQzqMF46dqphtjoyeuzL9pWKj9kvwGX1kr";
+    let nullifier_transaction =
+        "9LWs9tHoLNPpEVhJojECoDtVEHkmtNJ2VTb2fAEjE6Jqk51pJ5icqgneajXZ128F6isYyrAunu3FxMfvT8AMYt7";
+
+    let txs = [compress_tx, transfer_tx, nullifier_transaction];
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    for tx in txs {
+        index_transaction(&setup, tx).await;
+    }
+
+    let accounts = setup
+        .api
+        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+            owner: SerializablePubkey::try_from(user_pubkey).unwrap(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_json_snapshot!(format!("{}-accounts", name.clone()), accounts);
+    let hash_list = HashList(
+        accounts
+            .value
+            .items
+            .iter()
+            .map(|x| x.hash.clone())
+            .collect(),
+    );
+    let proofs = setup
+        .api
+        .get_multiple_compressed_account_proofs(hash_list.clone())
+        .await
+        .unwrap();
+    assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_address_with_nullifiers(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let address_2 = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
+
+    let compress_tx =
+        "3TEXdBWMdMt676EdSHfPKoP2tVWrenpQpQYuD4Cziufm6LMQ5ABsPSYix77ox9U6Vc1CtcgUSciZhsxpKCFHw9JT";
+    let address_tree_signature =
+        "5n531J7yLGAykHPtX12E4sXPr6GMzvZJFmxyJd9z9ZpS965nGmBCM3nthRJ3LpXSVsgc4Rxgr55tLPo5w6dpW18y";
+
+    let txs = [compress_tx, address_tree_signature];
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    for tx in txs {
+        index_transaction(&setup, tx).await;
+    }
+
+    let address_list = AddressList(vec![SerializablePubkey::try_from(address_2).unwrap()]);
+
+    let proof = setup
+        .api
+        .get_multiple_new_address_proofs(address_list)
+        .await
+        .unwrap();
+    
+    assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
 }

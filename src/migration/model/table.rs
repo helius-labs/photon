@@ -86,4 +86,5 @@ pub enum IndexedTrees {
     Value,
     NextIndex,
     NextValue,
+    Seq,
 }
