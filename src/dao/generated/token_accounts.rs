@@ -17,8 +17,6 @@ pub struct Model {
     pub amount: Decimal,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))", nullable)]
     pub is_native: Option<Decimal>,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
-    pub delegated_amount: Decimal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

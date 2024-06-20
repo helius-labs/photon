@@ -299,9 +299,6 @@ pub async fn fetch_token_accounts(
                         .delegate
                         .map(SerializablePubkey::try_from)
                         .transpose()?,
-                    delegated_amount: UnsignedInteger(parse_decimal(
-                        token_account.delegated_amount,
-                    )?),
                     is_native: token_account
                         .is_native
                         .map(|x| {

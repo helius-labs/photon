@@ -380,7 +380,6 @@ pub async fn persist_token_accounts(
                 amount: Set(Decimal::from(token_data.amount.0)),
                 delegate: Set(token_data.delegate.map(|d| d.to_bytes_vec())),
                 state: Set(token_data.state as i32),
-                delegated_amount: Set(Decimal::from(token_data.delegated_amount.0)),
                 is_native: Set(token_data.is_native.map(|x| Decimal::from(x.0))),
                 spent: Set(false),
                 prev_spent: Set(None),
