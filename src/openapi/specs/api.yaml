@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.23.0
+  version: 0.26.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -94,6 +94,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/Account'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -205,6 +206,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/MerkleProofWithContext'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -325,6 +327,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedAccountList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -448,6 +451,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/UnsignedInteger'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -559,6 +563,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/UnsignedInteger'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -682,6 +687,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/TokenAccountBalance'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -806,6 +812,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/TokenAccountList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -930,6 +937,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/TokenAccountList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1014,6 +1022,7 @@ paths:
                       nullable: true
                     owner:
                       $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1053,6 +1062,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/TokenBalanceList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1164,6 +1174,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/SignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1243,6 +1254,7 @@ paths:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
                       nullable: true
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1282,6 +1294,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1361,6 +1374,7 @@ paths:
                       nullable: true
                     owner:
                       $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1400,6 +1414,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1479,6 +1494,7 @@ paths:
                       nullable: true
                     owner:
                       $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1518,6 +1534,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1790,6 +1807,7 @@ paths:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
                       nullable: true
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1829,6 +1847,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedSignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -1904,6 +1923,7 @@ paths:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
                       nullable: true
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -1943,6 +1963,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/SignatureInfoList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -2053,6 +2074,7 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/MerkleProofWithContext'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -2182,6 +2204,7 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/AccountList'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -2364,6 +2387,7 @@ paths:
                   properties:
                     signature:
                       $ref: '#/components/schemas/SerializableSignature'
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -2400,17 +2424,18 @@ paths:
                       compression_info:
                         type: object
                         required:
-                        - closed_accounts
-                        - opened_accounts
+                        - closedAccounts
+                        - openedAccounts
                         properties:
-                          closed_accounts:
+                          closedAccounts:
                             type: array
                             items:
                               $ref: '#/components/schemas/AccountWithOptionalTokenData'
-                          opened_accounts:
+                          openedAccounts:
                             type: array
                             items:
                               $ref: '#/components/schemas/AccountWithOptionalTokenData'
+                        additionalProperties: false
                       transaction:
                         type: object
                         description: An encoded confirmed transaction with status meta
@@ -2493,6 +2518,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
         required: true
       responses:
         '200':
@@ -2664,8 +2690,9 @@ components:
       properties:
         account:
           $ref: '#/components/schemas/Account'
-        optional_token_data:
+        optionalTokenData:
           $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
     Base58String:
       type: string
       description: A base 58 encoded string.
@@ -2751,29 +2778,29 @@ components:
       required:
       - root
       - address
-      - lower_range_address
-      - higher_range_address
-      - leaf_index
+      - lowerRangeAddress
+      - higherRangeAddress
+      - leafIndex
       - proof
-      - merkle_tree
-      - root_seq
-      - low_element_leaf_index
+      - merkleTree
+      - rootSeq
+      - lowElementLeafIndex
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
-        higher_range_address:
+        higherRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        leaf_index:
+        leafIndex:
           type: integer
           format: uint32
           minimum: 0
-        low_element_leaf_index:
+        lowElementLeafIndex:
           type: integer
           format: uint32
           minimum: 0
-        lower_range_address:
+        lowerRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        merkle_tree:
+        merkleTree:
           $ref: '#/components/schemas/SerializablePubkey'
         proof:
           type: array
@@ -2781,10 +2808,11 @@ components:
             $ref: '#/components/schemas/Hash'
         root:
           $ref: '#/components/schemas/Hash'
-        root_seq:
+        rootSeq:
           type: integer
           format: uint64
           minimum: 0
+      additionalProperties: false
     MerkleProofWithContext:
       type: object
       required:
@@ -2929,14 +2957,11 @@ components:
       - owner
       - amount
       - state
-      - delegatedAmount
       properties:
         amount:
           $ref: '#/components/schemas/UnsignedInteger'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
-        delegatedAmount:
-          $ref: '#/components/schemas/UnsignedInteger'
         isNative:
           $ref: '#/components/schemas/UnsignedInteger'
         mint:
