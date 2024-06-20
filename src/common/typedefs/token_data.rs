@@ -48,9 +48,4 @@ pub struct TokenData {
     /// used by the Processor to ensure that wrapped SOL accounts do not
     /// drop below this threshold.
     pub is_native: Option<UnsignedInteger>,
-    /// The amount delegated
-    pub delegated_amount: UnsignedInteger, // TODO: make instruction data optional
-                                           // TODO: validate that we don't need close authority
-                                           // /// Optional authority to close the account.
-                                           // pub close_authority: Option<Pubkey>,
 }

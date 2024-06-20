@@ -52,18 +52,18 @@ async fn test_e2e_mint_and_transfer(
     .await;
 
     let bob_pubkey =
-        SerializablePubkey::try_from("7Z1siJsXDpSgwyXsErgdrhbLNHGuqoivfjbycnUyxWX7").unwrap();
+        SerializablePubkey::try_from("3nXnqdxiQQBBuFfCZMcpHuUcaYqSiSVWr33mmJ3dyCwk").unwrap();
     let charles_pubkey =
-        SerializablePubkey::try_from("AByXwz518ntDjhTaMr6Z65pgde3gy7t4tZ6htdPGkjhh").unwrap();
+        SerializablePubkey::try_from("2vNpRS9qaZuYdFmdeyogid5pDXJDbucZLzJeFwaHymAB").unwrap();
 
     let mint_tx =
-        "5jGUVMbUx2qxRF5u94f5KNmds8if3mHraKg36Xx9NqBQ6azCST3EwzXmj5xXcN2xiTMRg7oNXqUD4ygXybsDfRAn";
+        "3JeUPwyeXzf8FQ59C2j2uHkWunykPncoDj9AvkjmESkbWbkHWbCc4tfD4SpCVL4vCNcpEjvdkHSFNYfBrqdDxiDx";
     let transfer_tx =
-        "27pxT3ndnCXhbUXdT2k6riDw7Y22xnRjVRmUHseXpFi7mTziNiEegxFAmgNBoYPKtQrx7N66tCCcGwFKt4RniqXA";
+        "4enuRCWyq1aXXGxBDYFN4ad5PzHpp6XE8mfJkBipT8SSRgMQyEWhfiJWtwcLYnqxjdesFQL15GkMMjDN3pbH5t2A";
     let transfer_txn2: &str =
-        "G6ZcxS2HkHh521JjHXvxkpuYC2qu2fa3cdGZvKF9NVAM3oPEBZ8tNa4ghVXVo9uc4UzWPwXGAFrGqg8TdeYoTPW";
+        "SzCjq8kMxAnvBW9pL74mJWDZFAv9jEvJeYZkWBGZyMVr3ow4NgfRZtk9J5a7VXbk1VxFWdBJj8saptpX4LZuHA5";
     let transfer_txn3 =
-        "61nLwpJcf143PhYz9AVqeUv9ePNWNW9TAWkrDoMynhSAh3TPsmprMW2cDhjJakrZa8APmNPFLYsrx5CEgZdVgYpm";
+        "Mu8x9eh2ByH3ui6wq5UNCNnm9rgxygoD57WvhRYshubLBkT5eJCu2uVB4rMHU9zZxFhC2qL1d791ZTeejq87Ae8";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
