@@ -355,7 +355,6 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(1),
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(UnsignedInteger(1)),
     };
 
     let token_data2 = TokenData {
@@ -364,7 +363,6 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(2),
         delegate: Some(delegate2),
         state: AccountState::initialized,
-        is_native: None,
     };
 
     let token_data3 = TokenData {
@@ -373,7 +371,6 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(3),
         delegate: Some(delegate1),
         state: AccountState::frozen,
-        is_native: Some(UnsignedInteger(1000)),
     };
     let all_token_data = vec![token_data1, token_data2, token_data3];
 
@@ -829,7 +826,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     .unwrap();
 
     let addresses = vec![SerializablePubkey::try_from(vec![
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42, 42, 42, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42, 42, 42, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
         26, 27, 28, 29, 30, 31, 32,
     ])
     .unwrap()];

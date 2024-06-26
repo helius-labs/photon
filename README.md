@@ -49,7 +49,7 @@ photon --db-url=$DATABASE_URL
 
 To run tests, install and run Postgres and SQLlite locally. For MacOS users, we recommend using
 Homebrew to run local Postgres: https://wiki.postgresql.org/wiki/Homebrew.
-
+c
 Then export environment variables to configure your RPC and your test Postgres url. For SQLlite testing,
 we always use an in-memory SQLlite database, so there is no need to configure a test url.
 

@@ -10,12 +10,12 @@ expression: accounts
     "items": [
       {
         "account": {
-          "hash": "28wJuAbi54EHkLi7km2yWR5m5bDjYAd4mZpvM7Q6ce8s",
+          "hash": "2uSjtTXvYYb544CrvmDsTJ98M8qdw8SFmZ5muEHnZET9",
           "address": null,
           "data": {
             "discriminator": 2,
-            "data": "mPfFaIduvOirY3RMtXeXQWWVc88Z9/F1XC0wBqesWSAciCOZI3rf+MYT8yXlZwKfiggkD1wr8l4hVc93JcLXJLcCAAAAAAAAAAAA",
-            "dataHash": "32koXnTc1x1rAGh9hPZ3DSbFogxBQaeDB1utTfApK3PF"
+            "data": "mZ+QWZx25QI8+mR2PO/K59UvYAZyEm5LTp8RQyc3TghvA4wFBYfy+S6vuRGYhZoKRfM2I0qyJs/Bx0oqjwUjgLcCAAAAAAAAAAA=",
+            "dataHash": "3j3Jh9Y9YRVGBT54pHS4wHo9BFwtDqWKNBEUDSQxhKGd"
           },
           "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
           "lamports": 0,
@@ -25,22 +25,21 @@ expression: accounts
           "slotCreated": 0
         },
         "tokenData": {
-          "mint": "BJ86ojfyha7r9EhDBxs43uSdxjdePz3dWfU1sU2oYeSj",
-          "owner": "2vNpRS9qaZuYdFmdeyogid5pDXJDbucZLzJeFwaHymAB",
+          "mint": "BLgVpQXRRmUGBMztr3M8mRkrNEtjBGbnrTrfBPLv2QJT",
+          "owner": "8UMPheZvcShkq7DwPpJN5NusYDKTwfx9FVTyZXnVLSaj",
           "amount": 695,
           "delegate": null,
-          "state": "initialized",
-          "isNative": null
+          "state": "initialized"
         }
       },
       {
         "account": {
-          "hash": "3kyJbEwFnwwHtiEZYeP8hLZnjGC1M1ndHkCaGvpSMwkL",
+          "hash": "3a6Rs5JJ66YWEHuYm4KQuhbHAFnUszWiL8kgzV4MHFZW",
           "address": null,
           "data": {
             "discriminator": 2,
-            "data": "mPfFaIduvOirY3RMtXeXQWWVc88Z9/F1XC0wBqesWSAciCOZI3rf+MYT8yXlZwKfiggkD1wr8l4hVc93JcLXJMgAAAAAAAAAAAAA",
-            "dataHash": "6ATyB11C9drF8Ld9SHjypyP34b3X3H9k4eQRUH6ydAe"
+            "data": "mZ+QWZx25QI8+mR2PO/K59UvYAZyEm5LTp8RQyc3TghvA4wFBYfy+S6vuRGYhZoKRfM2I0qyJs/Bx0oqjwUjgMgAAAAAAAAAAAA=",
+            "dataHash": "3yVUqfTXdEbx45RFgswxpKBEwqBtKK8qRUcs7XEvYVbm"
           },
           "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
           "lamports": 0,
@@ -50,12 +49,11 @@ expression: accounts
           "slotCreated": 0
         },
         "tokenData": {
-          "mint": "BJ86ojfyha7r9EhDBxs43uSdxjdePz3dWfU1sU2oYeSj",
-          "owner": "2vNpRS9qaZuYdFmdeyogid5pDXJDbucZLzJeFwaHymAB",
+          "mint": "BLgVpQXRRmUGBMztr3M8mRkrNEtjBGbnrTrfBPLv2QJT",
+          "owner": "8UMPheZvcShkq7DwPpJN5NusYDKTwfx9FVTyZXnVLSaj",
           "amount": 200,
           "delegate": null,
-          "state": "initialized",
-          "isNative": null
+          "state": "initialized"
         }
       }
     ],

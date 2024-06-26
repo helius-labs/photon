@@ -42,7 +42,7 @@ struct NonInclusionHexInputsForProver {
     path_elements: Vec<String>,
     leaf_lower_range_value: String,
     leaf_higher_range_value: String,
-    leaf_index: u32,
+    next_index: u32,
 }
 
 fn convert_non_inclusion_merkle_proof_to_hex(
@@ -59,7 +59,7 @@ fn convert_non_inclusion_merkle_proof_to_hex(
                 .iter()
                 .map(|x| hash_to_hex(x))
                 .collect(),
-            leaf_index: non_inclusion_merkle_proof_inputs[i].leafIndex,
+            next_index: non_inclusion_merkle_proof_inputs[i].leafIndex,
             leaf_lower_range_value: pubkey_to_hex(
                 &non_inclusion_merkle_proof_inputs[i].lowerRangeAddress,
             ),

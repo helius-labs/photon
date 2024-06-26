@@ -325,7 +325,6 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
         assert_eq!(account.token_data.owner, tlv.owner.into());
         assert_eq!(account.token_data.amount, tlv.amount);
         assert_eq!(account.token_data.delegate, tlv.delegate.map(Into::into));
-        assert_eq!(account.token_data.is_native, tlv.is_native);
     }
 }
 pub fn assert_account_response_list_matches_input(

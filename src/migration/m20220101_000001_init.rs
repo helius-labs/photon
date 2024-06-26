@@ -260,12 +260,6 @@ impl MigrationTrait for Migration {
 
                 execute_sql(
                     manager,
-                    "ALTER TABLE token_accounts ADD COLUMN is_native bigint2;",
-                )
-                .await?;
-
-                execute_sql(
-                    manager,
                     "ALTER TABLE owner_balances ADD COLUMN lamports bigint2 NOT NULL;",
                 )
                 .await?;
@@ -289,11 +283,6 @@ impl MigrationTrait for Migration {
                 execute_sql(
                     manager,
                     "ALTER TABLE token_accounts ADD COLUMN amount REAL;",
-                )
-                .await?;
-                execute_sql(
-                    manager,
-                    "ALTER TABLE token_accounts ADD COLUMN is_native REAL;",
                 )
                 .await?;
 

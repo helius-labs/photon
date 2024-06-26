@@ -10,37 +10,12 @@ expression: accounts
     "items": [
       {
         "account": {
-          "hash": "26FEoLQ2nW736yXrKhPgTccnnEMogKA7XpaARLwK4a8Z",
+          "hash": "JsiSYnfKzmaxKvU8vhqsM6PiuPEFVVVwAsNcPUtDo64",
           "address": null,
           "data": {
             "discriminator": 2,
-            "data": "mPfFaIduvOirY3RMtXeXQWWVc88Z9/F1XC0wBqesWSApYVMyW7bfIGTZyxDSp2Oafzqj5mojZDzaWP/V2CCPcwUAAAAAAAAAAAAA",
-            "dataHash": "2SpuyyEYZjcqMrEQ7SYRicMXRfyMBLDbmAGVZvSMPFBE"
-          },
-          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
-          "lamports": 0,
-          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-          "leafIndex": 6,
-          "seq": 7,
-          "slotCreated": 0
-        },
-        "tokenData": {
-          "mint": "BJ86ojfyha7r9EhDBxs43uSdxjdePz3dWfU1sU2oYeSj",
-          "owner": "3nXnqdxiQQBBuFfCZMcpHuUcaYqSiSVWr33mmJ3dyCwk",
-          "amount": 5,
-          "delegate": null,
-          "state": "initialized",
-          "isNative": null
-        }
-      },
-      {
-        "account": {
-          "hash": "44Qv4BgzziuHPN3PWaY1RjG6r3Js3ewXuTkWF6DxCpQz",
-          "address": null,
-          "data": {
-            "discriminator": 2,
-            "data": "mPfFaIduvOirY3RMtXeXQWWVc88Z9/F1XC0wBqesWSApYVMyW7bfIGTZyxDSp2Oafzqj5mojZDzaWP/V2CCPc2QAAAAAAAAAAAAA",
-            "dataHash": "2pBbg1nDKCCG7GE1JUgASMYVp6y7AgZPmNoFKfCzoL5H"
+            "data": "mZ+QWZx25QI8+mR2PO/K59UvYAZyEm5LTp8RQyc3Tgizn5x1igWDRQ8GV4TnasAbxo+GF63laN1NEE4fJJzOXWQAAAAAAAAAAAA=",
+            "dataHash": "39M1yYviEYm5FLVKZepwkKgsqMWRU6emaRzXBRV2fRUw"
           },
           "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
           "lamports": 0,
@@ -50,12 +25,35 @@ expression: accounts
           "slotCreated": 0
         },
         "tokenData": {
-          "mint": "BJ86ojfyha7r9EhDBxs43uSdxjdePz3dWfU1sU2oYeSj",
-          "owner": "3nXnqdxiQQBBuFfCZMcpHuUcaYqSiSVWr33mmJ3dyCwk",
+          "mint": "BLgVpQXRRmUGBMztr3M8mRkrNEtjBGbnrTrfBPLv2QJT",
+          "owner": "D6B941apqSHVU5TV2n7JevkpAVQ4sdhiT6g1fNoEMfYG",
           "amount": 100,
           "delegate": null,
-          "state": "initialized",
-          "isNative": null
+          "state": "initialized"
+        }
+      },
+      {
+        "account": {
+          "hash": "2hXgiYUBfsVEreTuq8PKumwE1dUkkeACw4HVf9ZZoi1H",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "mZ+QWZx25QI8+mR2PO/K59UvYAZyEm5LTp8RQyc3Tgizn5x1igWDRQ8GV4TnasAbxo+GF63laN1NEE4fJJzOXQUAAAAAAAAAAAA=",
+            "dataHash": "2bsXN5efScCLjuTBbZVLhfYN9j93iyxRmKt5xy37vX59"
+          },
+          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 6,
+          "seq": 7,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "BLgVpQXRRmUGBMztr3M8mRkrNEtjBGbnrTrfBPLv2QJT",
+          "owner": "D6B941apqSHVU5TV2n7JevkpAVQ4sdhiT6g1fNoEMfYG",
+          "amount": 5,
+          "delegate": null,
+          "state": "initialized"
         }
       }
     ],
