@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.26.0
+  version: 0.28.0
 servers:
 - url: http://127.0.0.1
 paths:
@@ -2780,7 +2780,7 @@ components:
       - address
       - lowerRangeAddress
       - higherRangeAddress
-      - leafIndex
+      - nextIndex
       - proof
       - merkleTree
       - rootSeq
@@ -2790,10 +2790,6 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         higherRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        leafIndex:
-          type: integer
-          format: uint32
-          minimum: 0
         lowElementLeafIndex:
           type: integer
           format: uint32
@@ -2802,6 +2798,10 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         merkleTree:
           $ref: '#/components/schemas/SerializablePubkey'
+        nextIndex:
+          type: integer
+          format: uint32
+          minimum: 0
         proof:
           type: array
           items:
@@ -2962,8 +2962,6 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
-        isNative:
-          $ref: '#/components/schemas/UnsignedInteger'
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
         owner:
