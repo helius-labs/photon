@@ -59,7 +59,7 @@ fn convert_non_inclusion_merkle_proof_to_hex(
                 .iter()
                 .map(|x| hash_to_hex(x))
                 .collect(),
-            next_index: non_inclusion_merkle_proof_inputs[i].leafIndex,
+            next_index: non_inclusion_merkle_proof_inputs[i].nextIndex,
             leaf_lower_range_value: pubkey_to_hex(
                 &non_inclusion_merkle_proof_inputs[i].lowerRangeAddress,
             ),
@@ -336,7 +336,7 @@ pub async fn get_validity_proof(
         leafIndices: account_proofs
             .iter()
             .map(|x| x.leafIndex)
-            .chain(new_address_proofs.iter().map(|x| x.leafIndex))
+            .chain(new_address_proofs.iter().map(|x| x.lowElementLeafIndex))
             .collect(),
         leaves: account_proofs
             .iter()
