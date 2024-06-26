@@ -8,13 +8,13 @@ expression: proof
   },
   "value": [
     {
-      "root": "zXtjM7Dk6M4vaEgiw3em5Z42jk61urhKUFkPQgoPASQ",
+      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
       "address": "Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W",
       "lowerRangeAddress": "11111111111111111111111111111111",
-      "higherRangeAddress": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
+      "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
       "leafIndex": 1,
       "proof": [
-        "3yZcNMU39fQRoeYJqMhPF2LKEeeSzi5DkF8Nkn2Eeqwm",
+        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
@@ -46,13 +46,13 @@ expression: proof
       "lowElementLeafIndex": 0
     },
     {
-      "root": "zXtjM7Dk6M4vaEgiw3em5Z42jk61urhKUFkPQgoPASQ",
+      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
       "address": "sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd",
       "lowerRangeAddress": "11111111111111111111111111111111",
-      "higherRangeAddress": "4FuHJLn7MdczzCdz9EwDTzDsFSBCwxsSDTTf8G6b2Ej1",
+      "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
       "leafIndex": 1,
       "proof": [
-        "3yZcNMU39fQRoeYJqMhPF2LKEeeSzi5DkF8Nkn2Eeqwm",
+        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",

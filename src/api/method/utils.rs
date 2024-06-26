@@ -223,7 +223,6 @@ pub struct EnrichedTokenAccountModel {
     pub amount: Decimal,
     pub delegate: Option<Vec<u8>>,
     pub frozen: bool,
-    pub is_native: Option<Decimal>,
     pub delegated_amount: Decimal,
     pub spent: bool,
     pub slot_updated: i64,
@@ -298,14 +297,6 @@ pub async fn fetch_token_accounts(
                     delegate: token_account
                         .delegate
                         .map(SerializablePubkey::try_from)
-                        .transpose()?,
-                    is_native: token_account
-                        .is_native
-                        .map(|x| {
-                            Ok::<UnsignedInteger, PhotonApiError>(UnsignedInteger(parse_decimal(
-                                x,
-                            )?))
-                        })
                         .transpose()?,
                     state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(

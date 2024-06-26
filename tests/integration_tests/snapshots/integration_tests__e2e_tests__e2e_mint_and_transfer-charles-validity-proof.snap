@@ -9,8 +9,8 @@ expression: validity_proof
     "c": []
   },
   "roots": [
-    "2cvmJ3SpPyBHp1HApVescUg8VfKVbjip52frvpdAX7B2",
-    "2cvmJ3SpPyBHp1HApVescUg8VfKVbjip52frvpdAX7B2"
+    "jQKhAHpGbSTJLimk3bGSX7KLi7CsX6nkosS9YeCFfVs",
+    "jQKhAHpGbSTJLimk3bGSX7KLi7CsX6nkosS9YeCFfVs"
   ],
   "rootIndices": [
     7,
@@ -21,8 +21,8 @@ expression: validity_proof
     4
   ],
   "leaves": [
-    "28wJuAbi54EHkLi7km2yWR5m5bDjYAd4mZpvM7Q6ce8s",
-    "3kyJbEwFnwwHtiEZYeP8hLZnjGC1M1ndHkCaGvpSMwkL"
+    "2uSjtTXvYYb544CrvmDsTJ98M8qdw8SFmZ5muEHnZET9",
+    "3a6Rs5JJ66YWEHuYm4KQuhbHAFnUszWiL8kgzV4MHFZW"
   ],
   "merkleTrees": [
     "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",

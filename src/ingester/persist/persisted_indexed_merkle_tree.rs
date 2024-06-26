@@ -1,8 +1,12 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    str::FromStr,
+};
 
 use ark_bn254::Fr;
 use itertools::Itertools;
 use light_poseidon::Poseidon;
+use num_bigint::BigUint;
 use sea_orm::{
     sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, EntityTrait, QueryTrait, Set, Statement, TransactionTrait,
@@ -10,7 +14,7 @@ use sea_orm::{
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    api::{error::PhotonApiError, method::get_validity_proof::FIELD_SIZE},
+    api::error::PhotonApiError,
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::indexed_trees,
     ingester::{
@@ -18,6 +22,7 @@ use crate::{
         parser::{indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate},
     },
 };
+use lazy_static::lazy_static;
 use light_poseidon::PoseidonBytesHasher;
 
 use super::{
@@ -28,6 +33,13 @@ use super::{
     },
     MAX_SQL_INSERTS,
 };
+
+lazy_static! {
+    pub static ref HIGHEST_ADDRESS_PLUS_ONE: BigUint = BigUint::from_str(
+        "452312848583266388373324160190187140051835877600158453279131187530910662655"
+    )
+    .unwrap();
+}
 
 fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
     let mut poseidon = Poseidon::<Fr>::new_circom(3).unwrap();
@@ -47,7 +59,10 @@ fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
         leaf_index: 0,
         value: vec![0; 32],
         next_index: 1,
-        next_value: FIELD_SIZE.to_bytes_be(),
+        next_value: vec![0]
+            .into_iter()
+            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be().into_iter())
+            .collect(),
         seq: 0,
     }
 }
@@ -56,7 +71,10 @@ fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
     indexed_trees::Model {
         tree,
         leaf_index: 1,
-        value: FIELD_SIZE.to_bytes_be(),
+        value: vec![0]
+            .into_iter()
+            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be().into_iter())
+            .collect(),
         next_index: 0,
         next_value: vec![0; 32],
         seq: 0,
@@ -177,15 +195,16 @@ pub async fn multi_append_fully_specified(
                             })?
                             .0,
                         leaf: RawIndexedElement {
-                            value: leaf.value.try_into().map_err(|_e| {
+                            value: leaf.value.clone().try_into().map_err(|_e| {
                                 IngesterError::ParserError(format!(
-                                    "Failed to convert value to array",
+                                    "Failed to convert value to array {:?}",
+                                    leaf.value
                                 ))
                             })?,
                             next_index: leaf.next_index as usize,
                             next_value: leaf.next_value.try_into().map_err(|_e| {
                                 IngesterError::ParserError(format!(
-                                    "Failed to convert value to array",
+                                    "Failed to convert next value to array",
                                 ))
                             })?,
                             index: leaf.leaf_index as usize,
