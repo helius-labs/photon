@@ -12,7 +12,7 @@ expression: proof
       "address": "Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
-      "leafIndex": 1,
+      "nextIndex": 1,
       "proof": [
         "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
@@ -50,7 +50,7 @@ expression: proof
       "address": "sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
-      "leafIndex": 1,
+      "nextIndex": 1,
       "proof": [
         "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",

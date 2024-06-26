@@ -12,7 +12,7 @@ expression: proof
       "address": "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU",
-      "leafIndex": 2,
+      "nextIndex": 2,
       "proof": [
         "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3NSmDbNhhgymcVqrKTWPHGN2UbVLgQcMZJh13b5YWhxQ",
