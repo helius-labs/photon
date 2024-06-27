@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
     sea_query::{Expr, OnConflict},
     ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement,
-    TransactionTrait,
+    TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -87,10 +87,9 @@ pub async fn persist_leaf_nodes(
         .collect::<Vec<_>>();
 
     let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
-
-    let mut node_locations_to_hashes = node_locations_to_models
+    let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
-        .map(|(key, value)| (key.clone(), value.hash.clone()))
+        .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))
         .collect::<HashMap<_, _>>();
 
     let mut models_to_updates = HashMap::new();
@@ -109,36 +108,55 @@ pub async fn persist_leaf_nodes(
             seq: Set(leaf_node.seq as i64),
         };
         models_to_updates.insert(key.clone(), model);
-        node_locations_to_hashes.insert(key, leaf_node.hash.to_vec());
+        node_locations_to_hashes_and_seq
+            .insert(key, (leaf_node.hash.to_vec(), leaf_node.seq as i64));
+    }
 
-        for (child_level, node_index) in get_node_direct_ancestors(node_idx).iter().enumerate() {
-            let left_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2))
-                .map(Clone::clone)
-                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+    let all_ancestors = leaf_nodes
+        .iter()
+        .flat_map(|leaf_node| {
+            get_node_direct_ancestors(leaf_node.node_index(tree_height))
+                .iter()
+                .enumerate()
+                .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
+                .collect::<Vec<(Vec<u8>, i64, usize)>>()
+        })
+        .sorted_by(|a, b| {
+            // Need to sort elements before dedup
+            a.0.cmp(&b.0) // Sort by tree
+                .then_with(|| a.1.cmp(&b.1)) // Then by node index
+        }) // Need to sort elements before dedup
+        .dedup()
+        .collect::<Vec<(Vec<u8>, i64, usize)>>();
 
-            let right_child = node_locations_to_hashes
-                .get(&(tree.to_bytes_vec(), node_index * 2 + 1))
-                .map(Clone::clone)
-                .unwrap_or(ZERO_BYTES[child_level].to_vec());
+    for (tree, node_index, child_level) in all_ancestors.into_iter().rev() {
+        let (left_child_hash, left_child_seq) = node_locations_to_hashes_and_seq
+            .get(&(tree.clone(), node_index * 2))
+            .map(Clone::clone)
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
-            let level = child_level + 1;
+        let (right_child_hash, right_child_seq) = node_locations_to_hashes_and_seq
+            .get(&(tree.clone(), node_index * 2 + 1))
+            .map(Clone::clone)
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
-            let hash = compute_parent_hash(left_child.clone(), right_child.clone())?;
+        let level = child_level + 1;
 
-            let model = state_trees::ActiveModel {
-                tree: Set(tree.to_bytes_vec()),
-                level: Set(level as i64),
-                node_idx: Set(*node_index),
-                hash: Set(hash.clone()),
-                leaf_idx: Set(None),
-                seq: Set(leaf_node.seq as i64),
-            };
+        let hash = compute_parent_hash(left_child_hash.clone(), right_child_hash.clone())?;
 
-            let key = (tree.to_bytes_vec(), *node_index);
-            models_to_updates.insert(key.clone(), model);
-            node_locations_to_hashes.insert(key, hash);
-        }
+        let seq = max(left_child_seq, right_child_seq) as i64;
+        let model = state_trees::ActiveModel {
+            tree: Set(tree.clone()),
+            level: Set(level as i64),
+            node_idx: Set(node_index),
+            hash: Set(hash.clone()),
+            leaf_idx: Set(None),
+            seq: Set(seq),
+        };
+
+        let key = (tree.clone(), node_index);
+        models_to_updates.insert(key.clone(), model);
+        node_locations_to_hashes_and_seq.insert(key, (hash, seq));
     }
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
@@ -155,7 +173,6 @@ pub async fn persist_leaf_nodes(
     txn.execute(query).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
     })?;
-
     Ok(())
 }
 
@@ -384,23 +401,59 @@ where
                 .map(move |&idx| (tree.clone(), idx))
                 .collect::<Vec<(Vec<u8>, i64)>>()
         })
+        .sorted_by(|a, b| {
+            // Need to sort elements before dedup
+            a.0.cmp(&b.0) // Sort by tree
+                .then_with(|| a.1.cmp(&b.1)) // Then by node index
+        })
         .dedup()
         .collect::<Vec<(Vec<u8>, i64)>>();
 
-    let mut condition = Condition::any();
-    for (tree, node) in all_required_node_indices.clone() {
-        let node_condition = Condition::all()
-            .add(Expr::col(state_trees::Column::Tree).eq(tree))
-            .add(Expr::col(state_trees::Column::NodeIdx).eq(node));
+    let proof_nodes = match txn_or_conn.get_database_backend() {
+        DatabaseBackend::Sqlite => {
+            let mut condition = Condition::any();
+            for (tree, node) in all_required_node_indices.clone() {
+                let node_condition = Condition::all()
+                    .add(Expr::col(state_trees::Column::Tree).eq(tree))
+                    .add(Expr::col(state_trees::Column::NodeIdx).eq(node));
 
-        // Add this condition to the overall condition with an OR
-        condition = condition.add(node_condition);
-    }
+                // Add this condition to the overall condition with an OR
+                condition = condition.add(node_condition);
+            }
 
-    let proof_nodes = state_trees::Entity::find()
-        .filter(condition)
-        .all(txn_or_conn)
-        .await?;
+            state_trees::Entity::find()
+                .filter(condition)
+                .all(txn_or_conn)
+                .await?
+        }
+        DatabaseBackend::Postgres => {
+            let mut params = Vec::new();
+            let mut placeholders = Vec::new();
+
+            for (index, (tree, node_idx)) in all_required_node_indices.into_iter().enumerate() {
+                let param_index = index * 2; // each pair contributes two parameters
+                params.push(Value::from(tree));
+                params.push(Value::from(node_idx));
+                placeholders.push(format!("(${}, ${})", param_index + 1, param_index + 2));
+            }
+            let placeholder_str = placeholders.join(", ");
+            let sql = format!(
+                "WITH vals(tree, node_idx) AS (VALUES {}) SELECT st.* FROM state_trees st JOIN vals v ON st.tree = v.tree AND st.node_idx = v.node_idx",
+                placeholder_str
+            );
+
+            // Execute the query with parameters
+            state_trees::Entity::find()
+                .from_raw_sql(Statement::from_sql_and_values(
+                    txn_or_conn.get_database_backend(),
+                    &sql,
+                    params,
+                ))
+                .all(txn_or_conn)
+                .await?
+        }
+        _ => unimplemented!("Unsupported database backend"),
+    };
 
     Ok(proof_nodes
         .iter()
