@@ -341,7 +341,6 @@ async fn append_output_accounts(
     }
 
     if !out_accounts.is_empty() {
-        let start_time = std::time::Instant::now();
         let query = accounts::Entity::insert_many(account_models)
             .on_conflict(
                 OnConflict::column(accounts::Column::Hash)
@@ -356,7 +355,6 @@ async fn append_output_accounts(
             ModificationType::Append,
         )
         .await?;
-        println!("Time to insert accounts: {:?}", start_time.elapsed());
 
         if !token_accounts.is_empty() {
             debug!("Persisting {} token accounts...", token_accounts.len());

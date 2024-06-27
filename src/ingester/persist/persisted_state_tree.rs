@@ -67,9 +67,7 @@ pub async fn persist_leaf_nodes(
     if leaf_nodes.is_empty() {
         return Ok(());
     }
-    let full_start = std::time::Instant::now();
 
-    let locking_time = std::time::Instant::now();
     if txn.get_database_backend() == DatabaseBackend::Postgres {
         txn.execute(Statement::from_string(
             txn.get_database_backend(),
@@ -80,28 +78,15 @@ pub async fn persist_leaf_nodes(
             IngesterError::DatabaseError(format!("Failed to lock state_trees table: {}", e))
         })?;
     }
-    println!("Locking time: {:?}", locking_time.elapsed());
 
     leaf_nodes.sort_by_key(|node| node.seq);
-
-    let prune_time = std::time::Instant::now();
 
     let leaf_locations = leaf_nodes
         .iter()
         .map(|node| (node.tree.to_bytes_vec(), node.node_index(tree_height)))
         .collect::<Vec<_>>();
 
-    let time_get_proof_nodes = std::time::Instant::now();
-
     let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
-
-    println!(
-        "Time taken to get proof nodes: {:?}",
-        time_get_proof_nodes.elapsed()
-    );
-
-    let time_taken_to_compute_new_proof_nodes = std::time::Instant::now();
-
     let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))
@@ -130,7 +115,7 @@ pub async fn persist_leaf_nodes(
     let all_ancestors = leaf_nodes
         .iter()
         .flat_map(|leaf_node| {
-            get_proof_path(leaf_node.node_index(tree_height))
+            get_node_direct_ancestors(leaf_node.node_index(tree_height))
                 .iter()
                 .enumerate()
                 .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
@@ -174,12 +159,6 @@ pub async fn persist_leaf_nodes(
         node_locations_to_hashes_and_seq.insert(key, (hash, seq));
     }
 
-    println!(
-        "Time taken to compute new proof nodes: {:?}",
-        time_taken_to_compute_new_proof_nodes.elapsed()
-    );
-    println!("Prune time: {:?}", prune_time.elapsed());
-
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
@@ -191,12 +170,9 @@ pub async fn persist_leaf_nodes(
         )
         .build(txn.get_database_backend());
     query.sql = format!("{} WHERE excluded.seq >= state_trees.seq", query.sql);
-    let start_time = std::time::Instant::now();
     txn.execute(query).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
     })?;
-    println!("Time taken: {:?}", start_time.elapsed());
-    println!("Full time taken: {:?}", full_start.elapsed());
     Ok(())
 }
 
@@ -433,8 +409,6 @@ where
         .dedup()
         .collect::<Vec<(Vec<u8>, i64)>>();
 
-    let proof_nodes_query_start: std::time::Instant = std::time::Instant::now();
-
     let proof_nodes = match txn_or_conn.get_database_backend() {
         DatabaseBackend::Sqlite => {
             let mut condition = Condition::any();
@@ -480,11 +454,6 @@ where
         }
         _ => unimplemented!("Unsupported database backend"),
     };
-
-    println!(
-        "Time taken to get proof nodes query: {:?}",
-        proof_nodes_query_start.elapsed()
-    );
 
     Ok(proof_nodes
         .iter()
