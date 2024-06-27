@@ -136,7 +136,11 @@ pub async fn persist_leaf_nodes(
                 .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
                 .collect::<Vec<(Vec<u8>, i64, usize)>>()
         })
-        .sorted() // Need to sort elements before dedup
+        .sorted_by(|a, b| {
+            // Need to sort elements before dedup
+            a.0.cmp(&b.0) // Sort by tree
+                .then_with(|| a.1.cmp(&b.1)) // Then by node index
+        }) // Need to sort elements before dedup
         .dedup()
         .collect::<Vec<(Vec<u8>, i64, usize)>>();
 
@@ -421,7 +425,11 @@ where
                 .map(move |&idx| (tree.clone(), idx))
                 .collect::<Vec<(Vec<u8>, i64)>>()
         })
-        .sorted() // Need to sort elements before dedup
+        .sorted_by(|a, b| {
+            // Need to sort elements before dedup
+            a.0.cmp(&b.0) // Sort by tree
+                .then_with(|| a.1.cmp(&b.1)) // Then by node index
+        })
         .dedup()
         .collect::<Vec<(Vec<u8>, i64)>>();
 
