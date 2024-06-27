@@ -32,6 +32,7 @@ use photon_indexer::ingester::persist::persisted_state_tree::{persist_leaf_nodes
 use photon_indexer::ingester::persist::{
     compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
 };
+
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::{EntityTrait, Set};
 use serial_test::serial;
@@ -847,4 +848,59 @@ async fn test_get_multiple_new_address_proofs_interop(
     validity_proof.compressedProof = CompressedProof::default();
 
     insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+#[ignore]
+async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBackend) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name.clone(), db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut state_update = StateUpdate::default();
+
+    let tree = SerializablePubkey::new_unique();
+
+    fn generate_mock_account(leaf_index: u64, tree: SerializablePubkey) -> Account {
+        Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: UnsignedInteger(1),
+                data: Base64String(vec![1; 500]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: SerializablePubkey::new_unique(),
+            lamports: UnsignedInteger(1000),
+            tree: tree.clone(),
+            leaf_index: UnsignedInteger(leaf_index),
+            seq: UnsignedInteger(0),
+            slot_created: UnsignedInteger(0),
+        }
+    }
+
+    for i in 0..100000 {
+        state_update
+            .out_accounts
+            .push(generate_mock_account(i, tree.clone()));
+    }
+    persist_state_update_using_connection(setup.db_conn.as_ref(), state_update)
+        .await
+        .unwrap();
 }
