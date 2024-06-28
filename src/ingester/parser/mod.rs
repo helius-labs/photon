@@ -60,23 +60,25 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         );
                         logged_transaction = true;
                     }
-
-                    let public_transaction_event = PublicTransactionEvent::deserialize(
-                        &mut next_next_instruction.data.as_slice(),
-                    )
-                    .map_err(|e| {
-                        IngesterError::ParserError(format!(
-                            "Failed to deserialize PublicTransactionEvent: {}",
-                            e
-                        ))
-                    })?;
-                    let state_update = parse_public_transaction_event(
-                        tx.signature,
-                        slot,
-                        public_transaction_event,
-                    )?;
                     is_compression_transaction = true;
-                    state_updates.push(state_update);
+
+                    if tx.success {
+                        let public_transaction_event = PublicTransactionEvent::deserialize(
+                            &mut next_next_instruction.data.as_slice(),
+                        )
+                        .map_err(|e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to deserialize PublicTransactionEvent: {}",
+                                e
+                            ))
+                        })?;
+                        let state_update = parse_public_transaction_event(
+                            tx.signature,
+                            slot,
+                            public_transaction_event,
+                        )?;
+                        state_updates.push(state_update);
+                    }
                 }
             }
             if ordered_intructions.len() - index > 1 {
@@ -84,34 +86,36 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && next_instruction.program_id == NOOP_PROGRAM_ID
                 {
-                    let merkle_tree_event =
-                        MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
-                            .map_err(|e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to deserialize NullifierEvent: {}",
-                                    e
-                                ))
-                            })?;
-
-                    let state_update = match merkle_tree_event {
-                        MerkleTreeEvent::V2(nullifier_event) => {
-                            parse_nullifier_event(tx.signature, slot, nullifier_event)?
-                        }
-                        MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                            parse_indexed_merkle_tree_update(
-                                tx.signature,
-                                slot,
-                                indexed_merkle_tree_event,
-                            )?
-                        }
-                        _ => {
-                            return Err(IngesterError::ParserError(
-                                "Expected nullifier event or merkle tree update".to_string(),
-                            ))
-                        }
-                    };
                     is_compression_transaction = true;
-                    state_updates.push(state_update);
+                    if tx.success {
+                        let merkle_tree_event =
+                            MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
+                                .map_err(|e| {
+                                    IngesterError::ParserError(format!(
+                                        "Failed to deserialize NullifierEvent: {}",
+                                        e
+                                    ))
+                                })?;
+
+                        let state_update = match merkle_tree_event {
+                            MerkleTreeEvent::V2(nullifier_event) => {
+                                parse_nullifier_event(tx.signature, slot, nullifier_event)?
+                            }
+                            MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
+                                parse_indexed_merkle_tree_update(
+                                    tx.signature,
+                                    slot,
+                                    indexed_merkle_tree_event,
+                                )?
+                            }
+                            _ => {
+                                return Err(IngesterError::ParserError(
+                                    "Expected nullifier event or merkle tree update".to_string(),
+                                ))
+                            }
+                        };
+                        state_updates.push(state_update);
+                    }
                 }
             }
         }

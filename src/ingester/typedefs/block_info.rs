@@ -31,6 +31,7 @@ pub struct InstructionGroup {
 pub struct TransactionInfo {
     pub instruction_groups: Vec<InstructionGroup>,
     pub signature: Signature,
+    pub success: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -100,12 +101,15 @@ fn _parse_transaction(
     let versioned_transaction: VersionedTransaction = transaction.decode().ok_or(
         IngesterError::ParserError("Transaction cannot be decoded".to_string()),
     )?;
+    let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
 
     let signature = versioned_transaction.signatures[0];
+    let success = meta.status.is_ok();
     let instruction_groups = parse_instruction_groups(versioned_transaction, meta)?;
     Ok(TransactionInfo {
         instruction_groups,
         signature,
+        success,
     })
 }
 
@@ -158,17 +162,19 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
             IngesterError::ParserError("Transaction cannot be decoded".to_string()),
         )?;
         let signature = versioned_transaction.signatures[0];
-
+        let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
+        let success = meta.status.is_ok();
         Ok(TransactionInfo {
-            instruction_groups: parse_instruction_groups(versioned_transaction, meta)?,
+            instruction_groups: parse_instruction_groups(versioned_transaction, meta.clone())?,
             signature,
+            success,
         })
     }
 }
 
 pub fn parse_instruction_groups(
     versioned_transaction: VersionedTransaction,
-    meta: Option<UiTransactionStatusMeta>,
+    meta: UiTransactionStatusMeta,
 ) -> Result<Vec<InstructionGroup>, IngesterError> {
     let mut accounts = Vec::from(versioned_transaction.message.static_account_keys());
     if versioned_transaction
@@ -176,17 +182,15 @@ pub fn parse_instruction_groups(
         .address_table_lookups()
         .is_some()
     {
-        if let Some(meta) = &meta {
-            if let OptionSerializer::Some(loaded_addresses) = meta.loaded_addresses.clone() {
-                for address in loaded_addresses
-                    .writable
-                    .iter()
-                    .chain(loaded_addresses.readonly.iter())
-                {
-                    let pubkey = Pubkey::from_str(address)
-                        .map_err(|e| IngesterError::ParserError(e.to_string()))?;
-                    accounts.push(pubkey);
-                }
+        if let OptionSerializer::Some(loaded_addresses) = meta.loaded_addresses.clone() {
+            for address in loaded_addresses
+                .writable
+                .iter()
+                .chain(loaded_addresses.readonly.iter())
+            {
+                let pubkey = Pubkey::from_str(address)
+                    .map_err(|e| IngesterError::ParserError(e.to_string()))?;
+                accounts.push(pubkey);
             }
         }
     }
@@ -217,7 +221,6 @@ pub fn parse_instruction_groups(
         .collect();
 
     // Parse inner instructions and place them into the correct instruction group
-    let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
     if let OptionSerializer::Some(inner_instructions_vec) = meta.inner_instructions.as_ref() {
         for inner_instructions in inner_instructions_vec.iter() {
             let index = inner_instructions.index;
