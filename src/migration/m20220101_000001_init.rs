@@ -111,10 +111,10 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name("accounts_address_idx")
+                    .name("accounts_address_spent_idx")
                     .table(Accounts::Table)
                     .col(Accounts::Address)
-                    .unique()
+                    .col(Accounts::Seq)
                     .to_owned(),
             )
             .await?;
