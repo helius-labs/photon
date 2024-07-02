@@ -1,24 +1,29 @@
-use std::{env, path::Path, str::FromStr, sync::Mutex};
+use std::{collections::HashMap, env, path::Path, str::FromStr, sync::Mutex};
 
 use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
         relative_project_path,
-        typedefs::{account::Account, token_data::TokenData},
+        typedefs::{
+            account::Account, hash::Hash, serializable_pubkey::SerializablePubkey,
+            token_data::TokenData,
+        },
     },
+    dao::generated::state_trees,
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
-        persist::persist_state_update,
+        persist::{compute_parent_hash, persist_state_update, persisted_state_tree::ZERO_BYTES},
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
 };
+use sea_orm::ColumnTrait;
 
 use once_cell::sync::Lazy;
 use photon_indexer::migration::{Migrator, MigratorTrait};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
-    SqlxSqliteConnector, Statement, TransactionTrait,
+    ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, ExecResult, QueryFilter,
+    SqlxPostgresConnector, SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
 pub use rstest::rstest;
@@ -91,6 +96,7 @@ pub enum Network {
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
     Localnet,
+    ZkTesnet,
 }
 
 #[derive(Clone, Copy)]
@@ -131,6 +137,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
+        Network::ZkTesnet => "https://zk-testnet.helius.dev:8899".to_string(),
     };
     let client = Arc::new(RpcClient::new(rpc_url.to_string()));
     let api = PhotonApi::new(db_conn.clone(), client.clone());
@@ -371,4 +378,45 @@ pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
+}
+
+pub async fn verify_tree(db_conn: &sea_orm::DatabaseConnection, tree: SerializablePubkey) {
+    let models = state_trees::Entity::find()
+        .filter(state_trees::Column::Tree.eq(tree.to_bytes_vec()))
+        .all(db_conn)
+        .await
+        .unwrap();
+
+    let node_to_model = models
+        .iter()
+        .map(|x| (x.node_idx, x.clone()))
+        .collect::<HashMap<i64, state_trees::Model>>();
+
+    for model in node_to_model.values() {
+        if model.level > 0 {
+            let node_index = model.node_idx;
+            let child_level = model.level - 1;
+            let left_child = node_to_model
+                .get(&(node_index * 2))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let right_child = node_to_model
+                .get(&(node_index * 2 + 1))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let node_hash_pretty = Hash::try_from(model.hash.clone()).unwrap();
+            let left_child_pretty = Hash::try_from(left_child.clone()).unwrap();
+            let right_child_pretty = Hash::try_from(right_child.clone()).unwrap();
+
+            let parent_hash = compute_parent_hash(left_child, right_child).unwrap();
+
+            assert_eq!(
+                model.hash, parent_hash,
+                "Unexpected parent hash. Level {}. Hash: {}, Left: {}, Right: {}",
+                model.level, node_hash_pretty, left_child_pretty, right_child_pretty
+            );
+        }
+    }
 }
