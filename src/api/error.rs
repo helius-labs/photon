@@ -1,6 +1,7 @@
 use crate::common::typedefs::hash::ParseHashError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use log::error;
 use solana_sdk::pubkey::ParsePubkeyError;
 use thiserror::Error;
 
@@ -29,7 +30,12 @@ impl From<PhotonApiError> for RpcError {
             | PhotonApiError::InvalidPubkey { .. }
             | PhotonApiError::RecordNotFound(_)
             | PhotonApiError::StaleSlot(_) => invalid_request(val),
-            PhotonApiError::DatabaseError(_) | PhotonApiError::UnexpectedError(_) => {
+            PhotonApiError::DatabaseError(e) => {
+                error!("Internal server database error: {}", e);
+                internal_server_error()
+            }
+            PhotonApiError::UnexpectedError(e) => {
+                error!("Internal server error: {}", e);
                 internal_server_error()
             }
         }
