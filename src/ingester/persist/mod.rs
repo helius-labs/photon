@@ -97,7 +97,7 @@ pub async fn persist_state_update(
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
-    debug!("Persisting transactions nodes...");
+    debug!("Persisting transaction metadatas...");
     for chunk in transactions_vec.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }

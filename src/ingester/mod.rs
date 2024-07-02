@@ -14,7 +14,6 @@ use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
 
-
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
 use self::persist::MAX_SQL_INSERTS;
@@ -102,7 +101,14 @@ pub async fn index_block_batch_with_infinite_retries(
         match index_block_batch(db, &block_batch).await {
             Ok(()) => return,
             Err(e) => {
-                log::error!("Failed to index block: {}", e);
+                let start_block = block_batch.first().unwrap().metadata.slot;
+                let end_block = block_batch.last().unwrap().metadata.slot;
+                log::error!(
+                    "Failed to index block batch {}-{}. Got error {}",
+                    start_block,
+                    end_block,
+                    e
+                );
                 sleep(Duration::from_secs(1));
             }
         }

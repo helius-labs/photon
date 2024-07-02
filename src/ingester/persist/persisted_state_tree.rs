@@ -2,8 +2,8 @@ use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
-    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    sea_query::{OnConflict},
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement,
     TransactionTrait, Value,
 };
@@ -409,51 +409,29 @@ where
         .dedup()
         .collect::<Vec<(Vec<u8>, i64)>>();
 
-    let proof_nodes = match txn_or_conn.get_database_backend() {
-        DatabaseBackend::Sqlite => {
-            let mut condition = Condition::any();
-            for (tree, node) in all_required_node_indices.clone() {
-                let node_condition = Condition::all()
-                    .add(Expr::col(state_trees::Column::Tree).eq(tree))
-                    .add(Expr::col(state_trees::Column::NodeIdx).eq(node));
+    let mut params = Vec::new();
+    let mut placeholders = Vec::new();
 
-                // Add this condition to the overall condition with an OR
-                condition = condition.add(node_condition);
-            }
+    for (index, (tree, node_idx)) in all_required_node_indices.into_iter().enumerate() {
+        let param_index = index * 2; // each pair contributes two parameters
+        params.push(Value::from(tree));
+        params.push(Value::from(node_idx));
+        placeholders.push(format!("(${}, ${})", param_index + 1, param_index + 2));
+    }
+    let placeholder_str = placeholders.join(", ");
+    let sql = format!(
+            "WITH vals(tree, node_idx) AS (VALUES {}) SELECT st.* FROM state_trees st JOIN vals v ON st.tree = v.tree AND st.node_idx = v.node_idx",
+            placeholder_str
+        );
 
-            state_trees::Entity::find()
-                .filter(condition)
-                .all(txn_or_conn)
-                .await?
-        }
-        DatabaseBackend::Postgres => {
-            let mut params = Vec::new();
-            let mut placeholders = Vec::new();
-
-            for (index, (tree, node_idx)) in all_required_node_indices.into_iter().enumerate() {
-                let param_index = index * 2; // each pair contributes two parameters
-                params.push(Value::from(tree));
-                params.push(Value::from(node_idx));
-                placeholders.push(format!("(${}, ${})", param_index + 1, param_index + 2));
-            }
-            let placeholder_str = placeholders.join(", ");
-            let sql = format!(
-                "WITH vals(tree, node_idx) AS (VALUES {}) SELECT st.* FROM state_trees st JOIN vals v ON st.tree = v.tree AND st.node_idx = v.node_idx",
-                placeholder_str
-            );
-
-            // Execute the query with parameters
-            state_trees::Entity::find()
-                .from_raw_sql(Statement::from_sql_and_values(
-                    txn_or_conn.get_database_backend(),
-                    &sql,
-                    params,
-                ))
-                .all(txn_or_conn)
-                .await?
-        }
-        _ => unimplemented!("Unsupported database backend"),
-    };
+    let proof_nodes = state_trees::Entity::find()
+        .from_raw_sql(Statement::from_sql_and_values(
+            txn_or_conn.get_database_backend(),
+            &sql,
+            params,
+        ))
+        .all(txn_or_conn)
+        .await?;
 
     Ok(proof_nodes
         .iter()
