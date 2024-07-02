@@ -2,8 +2,7 @@ use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::{OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement,
     TransactionTrait, Value,
 };
@@ -64,6 +63,7 @@ pub async fn persist_leaf_nodes(
     mut leaf_nodes: Vec<LeafNode>,
     tree_height: u32,
 ) -> Result<(), IngesterError> {
+    println!("Persisting leaf nodes: {:#?}", leaf_nodes);
     if leaf_nodes.is_empty() {
         return Ok(());
     }
@@ -107,9 +107,17 @@ pub async fn persist_leaf_nodes(
             leaf_idx: Set(Some(leaf_node.leaf_index as i64)),
             seq: Set(leaf_node.seq as i64),
         };
-        models_to_updates.insert(key.clone(), model);
-        node_locations_to_hashes_and_seq
-            .insert(key, (leaf_node.hash.to_vec(), leaf_node.seq as i64));
+
+        let existing_seq = node_locations_to_hashes_and_seq
+            .get(&key)
+            .map(|x| x.1)
+            .unwrap_or(0);
+
+        if leaf_node.seq >= existing_seq as u32 {
+            models_to_updates.insert(key.clone(), model);
+            node_locations_to_hashes_and_seq
+                .insert(key, (leaf_node.hash.to_vec(), leaf_node.seq as i64));
+        }
     }
 
     let all_ancestors = leaf_nodes

@@ -15,12 +15,12 @@ use photon_indexer::api::method::utils::{
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::dao::generated::{indexed_trees, state_trees};
+use photon_indexer::dao::generated::indexed_trees;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use photon_indexer::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, ZERO_BYTES,
 };
-use sea_orm::{QueryFilter, TransactionTrait};
+use sea_orm::TransactionTrait;
 
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -44,7 +44,6 @@ use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use photon_indexer::api::method::utils::Limit;
-use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
 
@@ -638,47 +637,6 @@ async fn test_persisted_state_trees(
     }
 }
 
-async fn verify_tree(db_conn: &sea_orm::DatabaseConnection, tree: SerializablePubkey) {
-    let models = state_trees::Entity::find()
-        .filter(state_trees::Column::Tree.eq(tree.to_bytes_vec()))
-        .all(db_conn)
-        .await
-        .unwrap();
-
-    let node_to_model = models
-        .iter()
-        .map(|x| (x.node_idx, x.clone()))
-        .collect::<HashMap<i64, state_trees::Model>>();
-
-    for model in node_to_model.values() {
-        if model.level > 0 {
-            let node_index = model.node_idx;
-            let child_level = model.level - 1;
-            let left_child = node_to_model
-                .get(&(node_index * 2))
-                .map(|x| x.hash.clone())
-                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
-
-            let right_child = node_to_model
-                .get(&(node_index * 2 + 1))
-                .map(|x| x.hash.clone())
-                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
-
-            let node_hash_pretty = Hash::try_from(model.hash.clone()).unwrap();
-            let left_child_pretty = Hash::try_from(left_child.clone()).unwrap();
-            let right_child_pretty = Hash::try_from(right_child.clone()).unwrap();
-
-            let parent_hash = compute_parent_hash(left_child, right_child).unwrap();
-
-            assert_eq!(
-                model.hash, parent_hash,
-                "Unexpected parent hash. Level {}. Hash: {}, Left: {}, Right: {}",
-                model.level, node_hash_pretty, left_child_pretty, right_child_pretty
-            );
-        }
-    }
-}
-
 #[named]
 #[rstest]
 #[tokio::test]
@@ -903,4 +861,95 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
     persist_state_update_using_connection(setup.db_conn.as_ref(), state_update)
         .await
         .unwrap();
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_new_address_proofs::{
+        get_multiple_new_address_proofs, AddressList,
+    };
+
+    let name = trim_test_name(function_name!());
+
+    let setup = setup(name, db_backend).await;
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let tree =
+        SerializablePubkey::try_from("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn").unwrap();
+
+    let leaf_nodes_1 = vec![
+        LeafNode {
+            tree,
+            leaf_index: 0,
+            hash: Hash::try_from("34yinGSAmWKeXw61zZzd8hbE1ySB1pDmgiHzJhRtVwJY").unwrap(),
+            seq: 4,
+        },
+        LeafNode {
+            tree,
+            leaf_index: 1,
+            hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
+            seq: 0,
+        },
+        LeafNode {
+            tree,
+            leaf_index: 2,
+            hash: Hash::try_from("TTSZiUJsGTcU7sXqYtw53yFY5Ag7DmHXR4GzEjVk7J7").unwrap(),
+            seq: 5,
+        },
+    ];
+    let leaf_nodes_2 = vec![
+        LeafNode {
+            tree,
+            leaf_index: 0,
+            hash: Hash::try_from("3hH3oNVj2bafrqqXLnZjLjkuDaoxKhyyvmxaSs939hws").unwrap(),
+            seq: 0,
+        },
+        LeafNode {
+            tree,
+            leaf_index: 1,
+            hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
+            seq: 0,
+        },
+        LeafNode {
+            tree,
+            leaf_index: 2,
+            hash: Hash::try_from("25D2cs6h29NZgmDepVqc7bLLSWcNJnMvGoxeTpyZjF3u").unwrap(),
+            seq: 10,
+        },
+    ];
+    let leaf_node_chunks = vec![leaf_nodes_1, leaf_nodes_2];
+
+    let tree_height = 3;
+    for chunk in leaf_node_chunks {
+        let txn = setup.db_conn.as_ref().begin().await.unwrap();
+        persist_leaf_nodes(&txn, chunk.clone(), tree_height)
+            .await
+            .unwrap();
+        txn.commit().await.unwrap();
+
+        let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
+
+        let address_list = AddressList(vec![SerializablePubkey::try_from(proof_address).unwrap()]);
+
+        verify_tree(setup.db_conn.as_ref(), tree.clone()).await;
+        get_multiple_new_address_proofs(&setup.db_conn, address_list)
+            .await
+            .unwrap();
+    }
 }

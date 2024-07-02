@@ -10,7 +10,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
 
 pub const ADDRESS_TREE_HEIGHT: u32 = 27;
-const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn");
+pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn");
 
 use super::utils::Context;
 

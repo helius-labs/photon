@@ -608,3 +608,68 @@ async fn test_address_with_nullifiers(
 
     assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
 }
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_indexing_bug(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use photon_indexer::api::method::get_multiple_new_address_proofs::ADDRESS_TREE_ADDRESS;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::ZkTesnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let tx1 =
+        "5wXw7jheUt9zWQKmhyhS8DaopKGjaFTda47FrBQXVhqyeDfwGVD8hfeJcpVyPzEmmb45FJtLxo2xydKPJFAtJ1j6";
+
+    let tx2 =
+        "5UEYDJUmBZKxNfGTBrnVCZVbjGPA2XLw3ezTQg88zVCJePTbXXpu7s9ncpA7HwfGFxqCNz14HkQqEZwfVtbW3SLK";
+    let tx3 =
+        "Y9FZwudKniSE8ycCbMzTkmU8bzQHRSyv6v67FFbY37yxhrU1Jsyd2RE1XKnf9wrPXCYQ1682bVTdKTLA9125rc6";
+    let tx4 =
+        "53HtJ3XiztjuKAJtY2cX8pRavaw7MGnwsvihcNtXDiSfrAghhj8YhSMwgzRbkPftYY7cQGDcm8W1PA8D2fr4H3wo";
+
+    let txs = [tx1, tx2, tx3, tx4];
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let tree = SerializablePubkey::from(ADDRESS_TREE_ADDRESS);
+
+    for tx in txs {
+        index_transaction(&setup, tx).await;
+        verify_tree(setup.db_conn.as_ref(), tree.clone()).await;
+    }
+
+    let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
+
+    let address_list = AddressList(vec![SerializablePubkey::try_from(proof_address).unwrap()]);
+
+    let proof = setup
+        .api
+        .get_multiple_new_address_proofs(address_list)
+        .await
+        .unwrap();
+
+    assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
+}
