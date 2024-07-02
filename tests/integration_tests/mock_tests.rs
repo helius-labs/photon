@@ -867,7 +867,7 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_persisted_state_trees_bug(
+async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::get_multiple_new_address_proofs::{

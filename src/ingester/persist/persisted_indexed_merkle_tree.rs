@@ -179,10 +179,7 @@ pub async fn multi_append_fully_specified(
 ) -> Result<(), IngesterError> {
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
     for tree in trees {
-        for leaf in [
-            get_zeroeth_exclusion_range(tree.to_bytes().to_vec()),
-            get_top_element(tree.to_bytes().to_vec()),
-        ] {
+        for leaf in [get_top_element(tree.to_bytes().to_vec())] {
             let leaf_update = indexed_leaf_updates.get(&(tree, leaf.leaf_index as u64));
             if !leaf_update.is_some() {
                 indexed_leaf_updates.insert(
