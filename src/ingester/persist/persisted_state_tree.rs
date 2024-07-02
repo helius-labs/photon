@@ -63,7 +63,6 @@ pub async fn persist_leaf_nodes(
     mut leaf_nodes: Vec<LeafNode>,
     tree_height: u32,
 ) -> Result<(), IngesterError> {
-    println!("Persisting leaf nodes: {:#?}", leaf_nodes);
     if leaf_nodes.is_empty() {
         return Ok(());
     }
