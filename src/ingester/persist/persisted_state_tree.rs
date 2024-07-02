@@ -2,8 +2,8 @@ use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
-    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    sea_query::{OnConflict},
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement,
     TransactionTrait, Value,
 };
