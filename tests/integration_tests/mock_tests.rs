@@ -15,12 +15,12 @@ use photon_indexer::api::method::utils::{
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::dao::generated::{indexed_trees, state_trees};
+use photon_indexer::dao::generated::indexed_trees;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use photon_indexer::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, ZERO_BYTES,
 };
-use sea_orm::{QueryFilter, TransactionTrait};
+use sea_orm::TransactionTrait;
 
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -44,7 +44,6 @@ use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use photon_indexer::api::method::utils::Limit;
-use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
 
