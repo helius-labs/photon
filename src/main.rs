@@ -71,7 +71,7 @@ struct Args {
 
     /// Max number of blocks to fetch concurrently. Generally, this should be set to be as high
     /// as possible without reaching RPC rate limits.
-    #[arg(long)]
+    #[arg(short, long)]
     max_concurrent_block_fetches: Option<usize>,
 }
 

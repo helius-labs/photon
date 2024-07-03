@@ -24,6 +24,8 @@ lazy_static! {
     .unwrap();
 }
 
+pub const STATE_TREE_QUEUE_SIZE: u64 = 2400;
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InclusionHexInputsForProver {
@@ -332,6 +334,7 @@ pub async fn get_validity_proof(
             .iter()
             .map(|x| x.rootSeq)
             .chain(new_address_proofs.iter().map(|x| x.rootSeq))
+            .map(|x| x % STATE_TREE_QUEUE_SIZE)
             .collect(),
         leafIndices: account_proofs
             .iter()
