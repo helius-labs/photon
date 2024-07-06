@@ -4,4 +4,4 @@ FROM rust:1.77
 COPY . .
 
 # Build the project
-RUN cargo build
+RUN cargo build --release
