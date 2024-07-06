@@ -99,9 +99,9 @@ impl<'__s> ToSchema<'__s> for Context {
 }
 
 #[derive(FromQueryResult)]
-struct ContextModel {
+pub struct ContextModel {
     // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
-    slot: i64,
+    pub slot: i64,
 }
 
 impl Context {

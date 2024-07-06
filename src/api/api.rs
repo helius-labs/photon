@@ -79,11 +79,13 @@ pub struct PhotonApiConfig {
     pub max_conn: i32,
     pub timeout_seconds: i32,
     pub rpc_url: String,
+    pub prover_url: String,
 }
 
 pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
+    prover_url: String,
 }
 
 impl PhotonApi {
@@ -92,6 +94,7 @@ impl PhotonApi {
             db_url,
             max_conn,
             timeout_seconds,
+            prover_url,
             ..
         } = config;
         let db_conn = init_pool(&db_url, max_conn, timeout_seconds).await?;
@@ -99,13 +102,19 @@ impl PhotonApi {
         Ok(Self {
             db_conn: Arc::new(db_conn),
             rpc_client,
+            prover_url,
         })
     }
 
-    pub fn new(db_conn: Arc<DatabaseConnection>, rpc_client: Arc<RpcClient>) -> Self {
+    pub fn new(
+        db_conn: Arc<DatabaseConnection>,
+        rpc_client: Arc<RpcClient>,
+        prover_url: String,
+    ) -> Self {
         Self {
             db_conn,
             rpc_client,
+            prover_url,
         }
     }
 }
@@ -268,7 +277,7 @@ impl PhotonApi {
         &self,
         request: GetValidityProofRequest,
     ) -> Result<CompressedProofWithContext, PhotonApiError> {
-        get_validity_proof(self.db_conn.as_ref(), request).await
+        get_validity_proof(self.db_conn.as_ref(), &self.prover_url, request).await
     }
 
     pub async fn get_latest_compression_signatures(

@@ -795,6 +795,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     insta::assert_json_snapshot!(name.clone(), proof);
     let mut validity_proof = get_validity_proof(
         &setup.db_conn,
+        &setup.prover_url,
         GetValidityProofRequest {
             newAddresses: addresses,
             hashes: vec![],
