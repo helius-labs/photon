@@ -251,6 +251,7 @@ pub struct GetValidityProofRequest {
 
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
+    prover_url: &str,
     request: GetValidityProofRequest,
 ) -> Result<CompressedProofWithContext, PhotonApiError> {
     if request.hashes.is_empty() && request.newAddresses.is_empty() {
@@ -259,7 +260,6 @@ pub async fn get_validity_proof(
         ));
     }
     let client = Client::new();
-    let prover_endpoint = "http://localhost:3001";
 
     let account_proofs = match !request.hashes.is_empty() {
         true => get_multiple_compressed_leaf_proofs(conn, request.hashes).await?,
@@ -279,7 +279,7 @@ pub async fn get_validity_proof(
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(new_address_proofs.clone()),
     };
 
-    let inclusion_proof_url = format!("{}/prove", prover_endpoint);
+    let inclusion_proof_url = format!("{}/prove", prover_url);
     let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
             "Got an error while serializing the request {}",

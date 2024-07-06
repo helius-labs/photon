@@ -56,8 +56,8 @@ struct Args {
     #[arg(short, long)]
     db_url: Option<String>,
 
-    /// The start slot to begin indexing from. Defaults to the current slot for testnet/mainnet/devnet
-    /// and 0 for localnet.
+    /// The start slot to begin indexing from. Defaults to the last indexed slot in the database plus
+    /// one.  
     #[arg(short, long)]
     start_slot: Option<u64>,
 
@@ -73,6 +73,18 @@ struct Args {
     /// as possible without reaching RPC rate limits.
     #[arg(short, long)]
     max_concurrent_block_fetches: Option<usize>,
+
+    /// Light Prover url to use for verifying proofs
+    #[arg(long, default_value = "http://127.0.0.1:3001")]
+    prover_url: String,
+
+    /// Disable indexing
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    disable_indexing: bool,
+
+    /// Disable API
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    disable_api: bool,
 }
 
 pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
@@ -87,10 +99,11 @@ pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
 async fn start_api_server(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
+    prover_url: String,
     indexer: Option<Arc<Mutex<Indexer>>>,
     api_port: u16,
 ) -> ServerHandle {
-    let api = PhotonApi::new(db, rpc_client);
+    let api = PhotonApi::new(db, rpc_client, prover_url);
     api::rpc_server::run_server(api, api_port, indexer)
         .await
         .unwrap()
@@ -202,30 +215,51 @@ async fn main() {
     )
     .await;
     let indexer = Arc::new(Mutex::new(indexer));
-    let indexer_handle = continously_run_indexer(indexer.clone()).await;
+
+    let indexer_handle = match args.disable_indexing {
+        true => {
+            info!("Indexing is disabled");
+            None
+        }
+        false => Some(tokio::task::spawn(continously_run_indexer(indexer.clone()))),
+    };
 
     info!("Starting API server with port {}...", args.port);
-    let api_handler = start_api_server(
-        db_conn,
-        rpc_client,
-        if is_localnet { Some(indexer) } else { None },
-        args.port,
-    )
-    .await;
+    let api_handler = if args.disable_api {
+        None
+    } else {
+        Some(
+            start_api_server(
+                db_conn.clone(),
+                rpc_client.clone(),
+                args.prover_url,
+                Some(indexer.clone()),
+                args.port,
+            )
+            .await,
+        )
+    };
+
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
-            info!("Shutting down indexer...");
-            indexer_handle.abort();
-            indexer_handle
-                .await
-                .expect_err("Indexer should have been aborted");
-            info!("Shutting down API server...");
-            api_handler.stop().unwrap();
+            if let Some(indexer_handle) = indexer_handle {
+                info!("Shutting down indexer...");
+                indexer_handle.abort();
+                indexer_handle
+                    .await
+                    .expect_err("Indexer should have been aborted");
+            }
+            if let Some(api_handler) = &api_handler {
+                info!("Shutting down API server...");
+                api_handler.stop().unwrap();
+            }
         }
         Err(err) => {
             error!("Unable to listen for shutdown signal: {}", err);
         }
     }
     // We need to wait for the API server to stop to ensure that all clean up is done
-    tokio::spawn(api_handler.stopped());
+    if let Some(api_handler) = api_handler {
+        tokio::spawn(api_handler.stopped());
+    }
 }

@@ -1,11 +1,14 @@
 use std::{ops::Deref, sync::Arc, thread::sleep, time::Duration};
 
 use log::info;
-use sea_orm::DatabaseConnection;
+use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::Mutex;
 
-use crate::ingester::fetchers::poller::{fetch_current_slot_with_infinite_retry, Options};
+use crate::{
+    dao::generated::blocks,
+    ingester::fetchers::poller::{fetch_current_slot_with_infinite_retry, Options},
+};
 
 use super::{fetchers::poller::TransactionPoller, index_block_batch_with_infinite_retries};
 
@@ -19,6 +22,37 @@ pub struct BackfillInfo {
     pub num_blocks_to_index: usize,
 }
 
+#[derive(FromQueryResult)]
+pub struct OptionalContextModel {
+    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
+    pub slot: Option<i64>,
+}
+
+pub async fn fetch_last_indexed_slot_with_infinite_retry(
+    db_conn: &DatabaseConnection,
+) -> Option<i64> {
+    loop {
+        let context = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
+            .into_model::<OptionalContextModel>()
+            .one(db_conn)
+            .await;
+
+        match context {
+            Ok(context) => {
+                return context
+                    .expect("Always expected maximum query to return a result")
+                    .slot
+            }
+            Err(e) => {
+                log::error!("Failed to fetch current slot from datab: {}", e);
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
 impl Indexer {
     pub async fn new(
         db: Arc<DatabaseConnection>,
@@ -28,12 +62,13 @@ impl Indexer {
         max_batch_size: usize,
     ) -> Self {
         let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
-        let start_slot = match (start_slot, is_localnet) {
-            (Some(start_slot), _) => start_slot,
-            // Start indexing from the first slot for localnet.
-            (None, true) => 0,
-            (None, false) => current_slot,
-        };
+
+        let start_slot = start_slot.unwrap_or(
+            (fetch_last_indexed_slot_with_infinite_retry(db.as_ref())
+                .await
+                .unwrap_or(-1)
+                + 1) as u64,
+        );
         let poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
         let number_of_blocks_to_backfill = current_slot - start_slot;
         info!(

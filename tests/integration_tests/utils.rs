@@ -85,6 +85,7 @@ pub struct TestSetup {
     pub api: PhotonApi,
     pub name: String,
     pub client: Arc<RpcClient>,
+    pub prover_url: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -140,12 +141,14 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         Network::ZkTesnet => "https://zk-testnet.helius.dev:8899".to_string(),
     };
     let client = Arc::new(RpcClient::new(rpc_url.to_string()));
-    let api = PhotonApi::new(db_conn.clone(), client.clone());
+    let prover_url = "http://127.0.0.1:3001".to_string();
+    let api = PhotonApi::new(db_conn.clone(), client.clone(), prover_url.clone());
     TestSetup {
         name,
         db_conn,
         api,
         client,
+        prover_url,
     }
 }
 
