@@ -206,22 +206,27 @@ async fn main() {
             }
         }
     };
-    let indexer = Indexer::new(
-        db_conn.clone(),
-        rpc_client.clone(),
-        is_localnet,
-        args.start_slot,
-        max_concurrent_block_fetches,
-    )
-    .await;
-    let indexer = Arc::new(Mutex::new(indexer));
+    let mut indexer = None;
 
     let indexer_handle = match args.disable_indexing {
         true => {
             info!("Indexing is disabled");
             None
         }
-        false => Some(tokio::task::spawn(continously_run_indexer(indexer.clone()))),
+        false => {
+            let indexer_instance = Indexer::new(
+                db_conn.clone(),
+                rpc_client.clone(),
+                is_localnet,
+                args.start_slot,
+                max_concurrent_block_fetches,
+            )
+            .await;
+            indexer = Some(Arc::new(Mutex::new(indexer_instance)));
+            Some(tokio::task::spawn(continously_run_indexer(
+                indexer.clone().unwrap(),
+            )))
+        }
     };
 
     info!("Starting API server with port {}...", args.port);
@@ -233,7 +238,7 @@ async fn main() {
                 db_conn.clone(),
                 rpc_client.clone(),
                 args.prover_url,
-                Some(indexer.clone()),
+                indexer,
                 args.port,
             )
             .await,
