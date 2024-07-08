@@ -93,9 +93,6 @@ impl Indexer {
             "Backfilling historical blocks. Current number of blocks to backfill: {}",
             number_of_blocks_to_backfill
         );
-        if number_of_blocks_to_backfill > 10_000 {
-            info!("Backfilling a large number of blocks. This may take a while.");
-        }
         let mut indexer = Self {
             db,
             poller,
@@ -145,7 +142,7 @@ pub async fn continously_run_indexer(indexer: Arc<Mutex<Indexer>>) -> tokio::tas
     tokio::spawn(async move {
         loop {
             indexer.deref().lock().await.index_latest_blocks(None).await;
-            sleep(Duration::from_millis(20));
+            sleep(Duration::from_millis(100));
         }
     })
 }
