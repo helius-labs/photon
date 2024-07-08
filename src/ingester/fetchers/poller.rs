@@ -1,11 +1,16 @@
 use std::{cmp::min, sync::Arc, thread::sleep, time::Duration};
 
 use futures::{stream, StreamExt};
-use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
+use solana_client::{
+    nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
+};
+
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo};
+
+const SKIPPED_BLOCK_ERROR: i64 = -32007;
 
 pub struct TransactionPoller {
     client: Arc<RpcClient>,
@@ -28,7 +33,7 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
     }
 }
 
-pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> BlockInfo {
+pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> Option<BlockInfo> {
     loop {
         match client
             .get_block_with_config(
@@ -44,10 +49,22 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> B
             .await
         {
             // Panic if RPC does not return blocks in the expected format
-            Ok(block) => return parse_ui_confirmed_blocked(block, slot).unwrap(),
+            Ok(block) => return Some(parse_ui_confirmed_blocked(block, slot).unwrap()),
             Err(e) => {
-                log::error!("Failed to fetch block: {}", e);
-                sleep(Duration::from_secs(1));
+                if let solana_client::client_error::ClientErrorKind::RpcError(
+                    RpcError::RpcResponseError {
+                        code: SKIPPED_BLOCK_ERROR,
+                        ..
+                    },
+                ) = e.kind
+                {
+                    log::warn!("Block skipped: {}", slot);
+                    return None;
+                }
+                // Use requests to fetch the block if the RPC call fails
+
+                log::error!("Failed to fetch block: {}. {}", slot, e.to_string());
+                sleep(Duration::from_secs(5));
             }
         }
     }
@@ -72,6 +89,7 @@ impl TransactionPoller {
                 async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
             })
             .buffer_unordered(max_batch_size)
+            .filter_map(|block| async move { block })
             .collect()
             .await;
 
