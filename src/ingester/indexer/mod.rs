@@ -53,11 +53,22 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
     }
 }
 
+async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
+    loop {
+        match rpc_client.get_genesis_hash().await {
+            Ok(genesis_hash) => return genesis_hash.to_string(),
+            Err(e) => {
+                log::error!("Failed to fetch genesis hash: {}", e);
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
 impl Indexer {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         rpc_client: Arc<RpcClient>,
-        is_localnet: bool,
         start_slot: Option<u64>,
         max_batch_size: usize,
     ) -> Self {
@@ -66,7 +77,14 @@ impl Indexer {
         let start_slot = start_slot.unwrap_or(
             (fetch_last_indexed_slot_with_infinite_retry(db.as_ref())
                 .await
-                .unwrap_or(-1)
+                .unwrap_or({
+                    let genesis_hash =
+                        get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+                    match genesis_hash.as_str() {
+                        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132,
+                        _ => 0,
+                    }
+                })
                 + 1) as u64,
         );
         let poller = TransactionPoller::new(rpc_client, Options { start_slot }).await;
@@ -75,8 +93,8 @@ impl Indexer {
             "Backfilling historical blocks. Current number of blocks to backfill: {}",
             number_of_blocks_to_backfill
         );
-        if number_of_blocks_to_backfill > 10_000 && is_localnet {
-            info!("Backfilling a large number of blocks. This may take a while. Considering restarting local validator or specifying a start slot.");
+        if number_of_blocks_to_backfill > 10_000 {
+            info!("Backfilling a large number of blocks. This may take a while.");
         }
         let mut indexer = Self {
             db,
