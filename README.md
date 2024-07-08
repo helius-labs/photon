@@ -4,8 +4,13 @@ Solana indexer for general compression
 
 ## Installation
 
-To install the photon indexer run:
+First install dependencies (Ubuntu):
 
+```bash
+apt install -y build-essential pkg-config libssl-dev
+```
+
+Then run:
 ```bash
 cargo install photon-indexer
 ```
