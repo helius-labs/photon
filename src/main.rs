@@ -194,40 +194,14 @@ async fn main() {
     ));
 
     let is_localnet = args.rpc_url.contains("127.0.0.1");
-<<<<<<< Updated upstream
-    // For localnet we can safely use a large batch size to speed up indexing.
-    let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
-        Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
-        None => {
-            if is_localnet {
-                200
-            } else {
-                20
-            }
-        }
-    };
-    let indexer = Indexer::new(
-        db_conn.clone(),
-        rpc_client.clone(),
-        is_localnet,
-        args.start_slot,
-        max_concurrent_block_fetches,
-    )
-    .await;
-    let indexer = Arc::new(Mutex::new(indexer));
-=======
 
     let mut indexer = None;
->>>>>>> Stashed changes
 
     let indexer_handle = match args.disable_indexing {
         true => {
             info!("Indexing is disabled");
             None
         }
-<<<<<<< Updated upstream
-        false => Some(tokio::task::spawn(continously_run_indexer(indexer.clone()))),
-=======
         false => {
             info!("Starting indexer...");
             // For localnet we can safely use a large batch size to speed up indexing.
@@ -253,7 +227,6 @@ async fn main() {
                 indexer.clone().unwrap(),
             )))
         }
->>>>>>> Stashed changes
     };
 
     info!("Starting API server with port {}...", args.port);
@@ -265,7 +238,7 @@ async fn main() {
                 db_conn.clone(),
                 rpc_client.clone(),
                 args.prover_url,
-                Some(indexer.clone()),
+                indexer,
                 args.port,
             )
             .await,
