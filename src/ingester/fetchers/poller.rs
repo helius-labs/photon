@@ -61,8 +61,6 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> O
                     log::warn!("Block skipped: {}", slot);
                     return None;
                 }
-                // Use requests to fetch the block if the RPC call fails
-
                 log::error!("Failed to fetch block: {}. {}", slot, e.to_string());
                 sleep(Duration::from_secs(5));
             }
