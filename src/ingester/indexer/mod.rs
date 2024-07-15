@@ -81,7 +81,7 @@ impl Indexer {
                     let genesis_hash =
                         get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
                     match genesis_hash.as_str() {
-                        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132,
+                        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 311897745,
                         _ => 0,
                     }
                 })
