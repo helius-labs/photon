@@ -1,9 +1,8 @@
-use std::{ops::Deref, sync::Arc, thread::sleep, time::Duration};
+use std::{sync::Arc, thread::sleep, time::Duration};
 
 use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::sync::Mutex;
 
 use crate::{
     dao::generated::blocks,
@@ -138,10 +137,10 @@ impl Indexer {
     }
 }
 
-pub async fn continously_run_indexer(indexer: Arc<Mutex<Indexer>>) -> tokio::task::JoinHandle<()> {
+pub async fn continously_run_indexer(mut indexer: Indexer) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            indexer.deref().lock().await.index_latest_blocks(None).await;
+            indexer.index_latest_blocks(None).await;
             sleep(Duration::from_millis(100));
         }
     })
