@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fs::File;
+use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
@@ -175,6 +176,19 @@ async fn setup_database_connection(
     })
 }
 
+async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
+    loop {
+        match rpc_client.get_genesis_hash().await {
+            Ok(genesis_hash) => return genesis_hash.to_string(),
+            Err(e) => {
+                log::error!("Failed to fetch genesis hash: {}", e);
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -211,6 +225,18 @@ async fn main() {
                     }
                 }
             };
+            let start_slot = async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
+    loop {
+        match rpc_client.get_genesis_hash().await {
+            Ok(genesis_hash) => return genesis_hash.to_string(),
+            Err(e) => {
+                log::error!("Failed to fetch genesis hash: {}", e);
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
 
             let indexer_instance = Indexer::new(
                 db_conn.clone(),
