@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fs::File;
-use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
@@ -8,7 +7,9 @@ use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
 
-use photon_indexer::ingester::indexer::{continously_run_indexer, Indexer};
+use photon_indexer::ingester::indexer::{
+    continously_index_new_blocks, fetch_last_indexed_slot_with_infinite_retry,
+};
 use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
@@ -188,7 +189,6 @@ async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String 
     }
 }
 
-
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -225,28 +225,24 @@ async fn main() {
                     }
                 }
             };
-            let start_slot = async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
-    loop {
-        match rpc_client.get_genesis_hash().await {
-            Ok(genesis_hash) => return genesis_hash.to_string(),
-            Err(e) => {
-                log::error!("Failed to fetch genesis hash: {}", e);
-                sleep(Duration::from_secs(5));
-            }
-        }
-    }
-}
+            let mut start_slot = args.start_slot.unwrap_or(
+                (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                    .await
+                    .unwrap_or({
+                        let genesis_hash =
+                            get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+                        match genesis_hash.as_str() {
+                            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132,
+                            _ => 0,
+                        }
+                    })
+                    + 1) as u64,
+            );
 
-
-            let indexer_instance = Indexer::new(
-                db_conn.clone(),
-                rpc_client.clone(),
-                args.start_slot,
-                max_concurrent_block_fetches,
-            )
-            .await;
-            Some(tokio::task::spawn(continously_run_indexer(
+            Some(tokio::task::spawn(continously_index_new_blocks(
                 indexer_instance,
+                rpc_client.clone(),
+                start_slot,
             )))
         }
     };
