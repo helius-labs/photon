@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use hyper::Method;
 use jsonrpsee::{
@@ -6,18 +6,11 @@ use jsonrpsee::{
     RpcModule,
 };
 use log::debug;
-use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
-
-use crate::ingester::indexer::Indexer;
 
 use super::api::PhotonApi;
 
-pub async fn run_server(
-    api: PhotonApi,
-    port: u16,
-    indexer: Option<Arc<Mutex<Indexer>>>,
-) -> Result<ServerHandle, anyhow::Error> {
+pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors = CorsLayer::new()
         .allow_methods([Method::POST, Method::GET])
@@ -31,43 +24,29 @@ pub async fn run_server(
         .set_middleware(middleware)
         .build(addr)
         .await?;
-    let rpc_module = build_rpc_module(ApiAndIndexer { api, indexer })?;
+    let rpc_module = build_rpc_module(api)?;
     server.start(rpc_module).map_err(|e| anyhow::anyhow!(e))
 }
 
-struct ApiAndIndexer {
-    api: PhotonApi,
-    indexer: Option<Arc<Mutex<Indexer>>>,
-}
-
-async fn conditionally_index_latest_blocks(indexer: &Option<Arc<Mutex<Indexer>>>) {
-    if let Some(indexer) = indexer {
-        indexer.lock().await.index_latest_blocks(None).await;
-    }
-}
-
-fn build_rpc_module(
-    api_and_indexer: ApiAndIndexer,
-) -> Result<RpcModule<ApiAndIndexer>, anyhow::Error> {
+fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, anyhow::Error> {
     let mut module = RpcModule::new(api_and_indexer);
 
     module.register_async_method("liveness", |_rpc_params, rpc_context| async move {
         debug!("Checking Liveness");
-        let ApiAndIndexer { api, .. } = rpc_context.as_ref();
+        let api = rpc_context.as_ref();
         api.liveness().await.map_err(Into::into)
     })?;
 
     module.register_async_method("readiness", |_rpc_params, rpc_context| async move {
         debug!("Checking Readiness");
-        let ApiAndIndexer { api, .. } = rpc_context.as_ref();
+        let api = rpc_context.as_ref();
         api.readiness().await.map_err(Into::into)
     })?;
 
     module.register_async_method(
         "getCompressedAccount",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_account(payload)
                 .await
@@ -78,8 +57,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedAccountProof",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_account_proof(payload)
                 .await
@@ -90,8 +68,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getMultipleCompressedAccountProofs",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_multiple_compressed_account_proofs(payload)
                 .await
@@ -102,8 +79,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedTokenAccountsByOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_token_accounts_by_owner(payload)
                 .await
@@ -114,8 +90,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedTokenAccountsByDelegate",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_token_accounts_by_delegate(payload)
                 .await
@@ -126,8 +101,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedBalanceByOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_balance_by_owner(payload)
                 .await
@@ -138,8 +112,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedTokenBalancesByOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_token_balances_by_owner(payload)
                 .await
@@ -150,8 +123,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedTokenAccountBalance",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_token_account_balance(payload)
                 .await
@@ -162,8 +134,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressedBalance",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_balance(payload)
                 .await
@@ -173,23 +144,21 @@ fn build_rpc_module(
 
     module.register_async_method("getIndexerHealth", |_rpc_params, rpc_context| async move {
         rpc_context
-            .api
+            .as_ref()
             .get_indexer_health()
             .await
             .map_err(Into::into)
     })?;
 
     module.register_async_method("getIndexerSlot", |_rpc_params, rpc_context| async move {
-        let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-        conditionally_index_latest_blocks(indexer).await;
+        let api = rpc_context.as_ref();
         api.get_indexer_slot().await.map_err(Into::into)
     })?;
 
     module.register_async_method(
         "getCompressedAccountsByOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_accounts_by_owner(payload)
                 .await
@@ -200,8 +169,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getMultipleCompressedAccounts",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_multiple_compressed_accounts(payload)
                 .await
@@ -212,8 +180,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressionSignaturesForAccount",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compression_signatures_for_account(payload)
                 .await
@@ -224,8 +191,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressionSignaturesForAddress",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compression_signatures_for_address(payload)
                 .await
@@ -236,8 +202,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressionSignaturesForOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compression_signatures_for_owner(payload)
                 .await
@@ -248,8 +213,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getCompressionSignaturesForTokenOwner",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compression_signatures_for_token_owner(payload)
                 .await
@@ -260,8 +224,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getTransactionWithCompressionInfo",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_transaction_with_compression_info(payload)
                 .await
@@ -269,8 +232,7 @@ fn build_rpc_module(
         },
     )?;
     module.register_async_method("getValidityProof", |rpc_params, rpc_context| async move {
-        let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-        conditionally_index_latest_blocks(indexer).await;
+        let api = rpc_context.as_ref();
         let payload = rpc_params.parse()?;
         api.get_validity_proof(payload).await.map_err(Into::into)
     })?;
@@ -278,8 +240,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getLatestCompressionSignatures",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_latest_compression_signatures(payload)
                 .await
@@ -290,8 +251,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getLatestNonVotingSignatures",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_latest_non_voting_signatures(payload)
                 .await
@@ -302,8 +262,7 @@ fn build_rpc_module(
     module.register_async_method(
         "getMultipleNewAddressProofs",
         |rpc_params, rpc_context| async move {
-            let ApiAndIndexer { api, indexer } = rpc_context.as_ref();
-            conditionally_index_latest_blocks(indexer).await;
+            let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_multiple_new_address_proofs(payload)
                 .await

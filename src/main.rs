@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fs::File;
+use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
@@ -22,7 +23,6 @@ use sqlx::{
 use std::env;
 use std::env::temp_dir;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Parser, Debug, Clone, ValueEnum)]
 enum LoggingFormat {
@@ -100,13 +100,10 @@ async fn start_api_server(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     prover_url: String,
-    indexer: Option<Arc<Mutex<Indexer>>>,
     api_port: u16,
 ) -> ServerHandle {
     let api = PhotonApi::new(db, rpc_client, prover_url);
-    api::rpc_server::run_server(api, api_port, indexer)
-        .await
-        .unwrap()
+    api::rpc_server::run_server(api, api_port).await.unwrap()
 }
 
 fn setup_logging(logging_format: LoggingFormat) {
@@ -188,14 +185,13 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
-    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+    let rpc_client = Arc::new(RpcClient::new_with_timeout_and_commitment(
         args.rpc_url.clone(),
+        Duration::from_secs(10),
         CommitmentConfig::confirmed(),
     ));
 
-    let is_localnet = args.rpc_url.contains("127.0.0.1");
-
-    let mut indexer = None;
+    let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
 
     let indexer_handle = match args.disable_indexing {
         true => {
@@ -208,13 +204,14 @@ async fn main() {
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
                 Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
                 None => {
-                    if is_localnet {
+                    if is_rpc_node_local {
                         200
                     } else {
                         20
                     }
                 }
             };
+
             let indexer_instance = Indexer::new(
                 db_conn.clone(),
                 rpc_client.clone(),
@@ -222,9 +219,8 @@ async fn main() {
                 max_concurrent_block_fetches,
             )
             .await;
-            indexer = Some(Arc::new(Mutex::new(indexer_instance)));
             Some(tokio::task::spawn(continously_run_indexer(
-                indexer.clone().unwrap(),
+                indexer_instance,
             )))
         }
     };
@@ -238,7 +234,6 @@ async fn main() {
                 db_conn.clone(),
                 rpc_client.clone(),
                 args.prover_url,
-                indexer,
                 args.port,
             )
             .await,
