@@ -1,13 +1,16 @@
+use std::pin::Pin;
+use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use async_stream::stream;
 use cadence_macros::statsd_count;
-use futures::executor::block_on;
+use futures::future::{select, Either};
 use futures::sink::SinkExt;
-use futures::{Stream, StreamExt};
+use futures::{pin_mut, Stream, StreamExt};
+use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-use solana_sdk::address_lookup_table::instruction;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::sleep;
@@ -22,18 +25,79 @@ use yellowstone_grpc_proto::geyser::{
 use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
 use crate::common::typedefs::hash::Hash;
+use crate::ingester::fetchers::poller::get_poller_block_stream;
 use crate::ingester::typedefs::block_info::{
-    parse_instruction_groups, BlockInfo, BlockMetadata, Instruction, InstructionGroup,
-    TransactionInfo,
+    BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
 
-const BLOCKHASH_VALID_SLOTS: u64 = 150;
-const BLOCKHASH_MAX_TTL_SECONDS: u64 = 300;
+pub fn get_grpc_stream_with_rpc_fallback(
+    endpoint: String,
+    rpc_client: Arc<RpcClient>,
+    mut last_indexed_slot: u64,
+    max_concurrent_block_fetches: usize,
+) -> impl Stream<Item = BlockInfo> {
+    stream! {
+        let grpc_stream = get_grpc_block_stream(endpoint, None);
+        pin_mut!(grpc_stream);
+        let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = BlockInfo> + Send>>> = None;
+        // Await either the gRPC stream or the RPC block fetching
+        loop {
+            match rpc_poll_stream.as_mut() {
+                Some(rpc_poll_stream_value) => {
+                    match select(grpc_stream.next(), rpc_poll_stream_value.next()).await {
+                        Either::Left((Some(grpc_block), _)) => {
+
+                            if grpc_block.metadata.parent_slot == last_indexed_slot {
+                                last_indexed_slot = grpc_block.metadata.slot;
+                                yield grpc_block;
+                                rpc_poll_stream = None;
+                            }
+                        }
+                        Either::Left((None, _)) => {
+                            panic!("gRPC stream ended unexpectedly");
+                        }
+                        Either::Right((Some(rpc_block), _)) => {
+                            if rpc_block.metadata.parent_slot == last_indexed_slot {
+                                last_indexed_slot = rpc_block.metadata.slot;
+                                yield rpc_block;
+                            }
+                        }
+                        Either::Right((None, _)) => {
+                            rpc_poll_stream = None;
+                            info!("Switching back to gRPC block fetching");
+                        }
+                    }
+                }
+                None => {
+                    let block = grpc_stream.next().await.unwrap();
+                    if block.metadata.slot == 0 {
+                        continue;
+                    }
+                    if block.metadata.parent_slot == last_indexed_slot {
+                        last_indexed_slot = block.metadata.slot;
+                        yield block;
+                    } else {
+                        info!("Switching to RPC block fetching");
+                        rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                            rpc_client.clone(),
+                            last_indexed_slot,
+                            max_concurrent_block_fetches,
+                            Some(block.metadata.slot),
+                        )));
+
+                    }
+
+                }
+            }
+
+
+        }
+    }
+}
 
 fn get_grpc_block_stream(
     endpoint: String,
     auth_header: Option<String>,
-    // Stream of BlockInfo
 ) -> impl Stream<Item = BlockInfo> {
     stream! {
         loop {
