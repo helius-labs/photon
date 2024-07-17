@@ -18,7 +18,9 @@ use photon_indexer::migration::{
 };
 
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
@@ -196,6 +198,23 @@ async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String 
     }
 }
 
+async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u64 {
+    rpc_client
+        .get_block_with_config(
+            slot,
+            RpcBlockConfig {
+                encoding: Some(UiTransactionEncoding::Base64),
+                transaction_details: Some(TransactionDetails::None),
+                rewards: None,
+                commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(0),
+            },
+        )
+        .await
+        .unwrap()
+        .parent_slot
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -232,21 +251,24 @@ async fn main() {
                     }
                 }
             };
-            let last_indexed_slot = args.start_slot.unwrap_or(
-                (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
-                    .await
-                    .unwrap_or({
-                        let genesis_hash =
-                            get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
-                        match genesis_hash.as_str() {
-                            // Devnet
-                            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132,
-                            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074,
-                            _ => 0,
-                        }
-                    })
-                    + 1) as u64,
-            );
+
+            let last_indexed_slot = match args.start_slot {
+                Some(start_slot) => fetch_block_parent_slot(rpc_client.clone(), start_slot).await,
+                None => {
+                    (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                        .await
+                        .unwrap_or({
+                            let genesis_hash =
+                                get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+                            match genesis_hash.as_str() {
+                                // Devnet
+                                "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132 - 1,
+                                "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074 - 1,
+                                _ => 0,
+                            }
+                        })) as u64
+                }
+            };
 
             let block_stream_config = BlockStreamConfig {
                 rpc_client: rpc_client.clone(),
