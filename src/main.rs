@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fs::File;
+use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
@@ -7,7 +8,10 @@ use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
 
-use photon_indexer::ingester::indexer::{continously_run_indexer, Indexer};
+use photon_indexer::ingester::fetchers::BlockStreamConfig;
+use photon_indexer::ingester::indexer::{
+    continously_index_new_blocks, fetch_last_indexed_slot_with_infinite_retry,
+};
 use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
@@ -77,6 +81,11 @@ struct Args {
     /// Light Prover url to use for verifying proofs
     #[arg(long, default_value = "http://127.0.0.1:3001")]
     prover_url: String,
+
+    #[arg(short, long, default_value = None)]
+    /// Yellowstone gRPC URL. If it's inputed, then the indexer will use gRPC to fetch new blocks
+    /// instead of polling. It will still use RPC to fetch blocks if
+    grpc_url: Option<String>,
 
     /// Disable indexing
     #[arg(long, action = clap::ArgAction::SetTrue)]
@@ -175,6 +184,18 @@ async fn setup_database_connection(
     })
 }
 
+async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
+    loop {
+        match rpc_client.get_genesis_hash().await {
+            Ok(genesis_hash) => return genesis_hash.to_string(),
+            Err(e) => {
+                log::error!("Failed to fetch genesis hash: {}", e);
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -211,16 +232,33 @@ async fn main() {
                     }
                 }
             };
+            let last_indexed_slot = args.start_slot.unwrap_or(
+                (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                    .await
+                    .unwrap_or({
+                        let genesis_hash =
+                            get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+                        match genesis_hash.as_str() {
+                            // Devnet
+                            "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132,
+                            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074,
+                            _ => 0,
+                        }
+                    })
+                    + 1) as u64,
+            );
 
-            let indexer_instance = Indexer::new(
-                db_conn.clone(),
-                rpc_client.clone(),
-                args.start_slot,
+            let block_stream_config = BlockStreamConfig {
+                rpc_client: rpc_client.clone(),
                 max_concurrent_block_fetches,
-            )
-            .await;
-            Some(tokio::task::spawn(continously_run_indexer(
-                indexer_instance,
+                last_indexed_slot,
+                geyser_url: args.grpc_url,
+            };
+
+            Some(tokio::task::spawn(continously_index_new_blocks(
+                block_stream_config,
+                rpc_client.clone(),
+                last_indexed_slot,
             )))
         }
     };

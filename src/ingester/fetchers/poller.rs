@@ -1,6 +1,8 @@
-use std::{cmp::min, sync::Arc, thread::sleep, time::Duration};
+use std::{sync::Arc, thread::sleep, time::Duration};
 
-use futures::{stream, StreamExt};
+use async_stream::stream;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
@@ -12,13 +14,55 @@ use crate::ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInf
 
 const SKIPPED_BLOCK_ERROR: i64 = -32007;
 
-pub struct TransactionPoller {
+pub fn get_poller_block_stream(
     client: Arc<RpcClient>,
-    next_slot: u64,
-}
+    last_indexed_slot: u64,
+    max_concurrent_block_fetches: usize,
+    end_block_slot: Option<u64>,
+) -> impl futures::Stream<Item = BlockInfo> {
+    stream! {
+        let mut current_slot_to_fetch = match last_indexed_slot {
+            0 => 0,
+            last_indexed_slot => last_indexed_slot + 1
+        };
+        let polls_forever = end_block_slot.is_none();
+        let mut end_block_slot = end_block_slot.unwrap_or(fetch_current_slot_with_infinite_retry(client.as_ref()).await);
 
-pub struct Options {
-    pub start_slot: u64,
+        loop {
+            if current_slot_to_fetch > end_block_slot  && !polls_forever {
+                break;
+            }
+
+            while current_slot_to_fetch > end_block_slot {
+                end_block_slot = fetch_current_slot_with_infinite_retry(client.as_ref()).await;
+                if end_block_slot <= current_slot_to_fetch {
+                    sleep(Duration::from_millis(10));
+                }
+            }
+
+            let mut block_fetching_futures_batch = vec![];
+            while block_fetching_futures_batch.len() < max_concurrent_block_fetches && current_slot_to_fetch <= end_block_slot  {
+                let client = client.clone();
+                block_fetching_futures_batch.push(fetch_block_with_infinite_retry_using_arc(
+                    client.clone(),
+                    current_slot_to_fetch,
+                ));
+                current_slot_to_fetch += 1;
+            }
+            // Promise all the block fetching futures
+            let blocks_to_yield = block_fetching_futures_batch
+                .into_iter()
+                .collect::<FuturesUnordered<_>>()
+                .collect::<Vec<_>>()
+                .await;
+            let mut blocks_to_yield: Vec<_>  = blocks_to_yield.into_iter().filter_map(|block| block).collect();
+            blocks_to_yield.sort_by_key(|block| block.metadata.slot);
+            for block in blocks_to_yield.drain(..) {
+                yield block;
+            }
+
+        }
+    }
 }
 
 pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
@@ -48,8 +92,9 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> O
             )
             .await
         {
-            // Panic if RPC does not return blocks in the expected format
-            Ok(block) => return Some(parse_ui_confirmed_blocked(block, slot).unwrap()),
+            Ok(block) => {
+                return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
+            }
             Err(e) => {
                 if let solana_client::client_error::ClientErrorKind::RpcError(
                     RpcError::RpcResponseError {
@@ -58,42 +103,17 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> O
                     },
                 ) = e.kind
                 {
-                    log::warn!("Block skipped: {}", slot);
                     return None;
                 }
-                log::error!("Failed to fetch block: {}. {}", slot, e.to_string());
-                sleep(Duration::from_secs(5));
+                log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
             }
         }
     }
 }
 
-impl TransactionPoller {
-    pub async fn new(client: Arc<RpcClient>, options: Options) -> Self {
-        Self {
-            client,
-            next_slot: options.start_slot,
-        }
-    }
-
-    pub async fn fetch_new_block_batch(&mut self, max_batch_size: usize) -> Vec<BlockInfo> {
-        let current_slot = fetch_current_slot_with_infinite_retry(self.client.as_ref()).await;
-        let new_next_slot = min(current_slot + 1, self.next_slot + max_batch_size as u64);
-        let slots: Vec<_> = ((self.next_slot)..(new_next_slot)).collect();
-
-        let mut blocks: Vec<BlockInfo> = stream::iter(slots)
-            .map(|slot| {
-                let client = self.client.clone();
-                async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
-            })
-            .buffer_unordered(max_batch_size)
-            .filter_map(|block| async move { block })
-            .collect()
-            .await;
-
-        blocks.sort_by(|a, b| a.metadata.slot.cmp(&b.metadata.slot));
-
-        self.next_slot = new_next_slot;
-        blocks
-    }
+fn fetch_block_with_infinite_retry_using_arc(
+    client: Arc<RpcClient>,
+    slot: u64,
+) -> impl futures::Future<Output = Option<BlockInfo>> {
+    async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
 }
