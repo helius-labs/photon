@@ -257,6 +257,7 @@ async fn main() {
 
             Some(tokio::task::spawn(continously_index_new_blocks(
                 block_stream_config,
+                db_conn.clone(),
                 rpc_client.clone(),
                 last_indexed_slot,
             )))

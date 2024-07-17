@@ -7,7 +7,11 @@ use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult,
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
-    dao::generated::blocks, ingester::fetchers::poller::fetch_current_slot_with_infinite_retry,
+    dao::generated::blocks,
+    ingester::{
+        fetchers::poller::fetch_current_slot_with_infinite_retry,
+        index_block_batch_with_infinite_retries,
+    },
 };
 
 use super::fetchers::BlockStreamConfig;
@@ -47,6 +51,7 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
 
 pub async fn continously_index_new_blocks(
     block_stream_config: BlockStreamConfig,
+    db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
 ) -> tokio::task::JoinHandle<()> {
@@ -66,6 +71,7 @@ pub async fn continously_index_new_blocks(
         loop {
             let block = block_stream.next().await.unwrap();
             let slot_indexed = block.metadata.slot;
+            index_block_batch_with_infinite_retries(db.as_ref(), vec![block]).await;
 
             if !finished_backfill {
                 let blocks_indexed = slot_indexed - last_indexed_slot_at_start;
