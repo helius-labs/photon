@@ -26,6 +26,9 @@ photon
 # Against devnet
 photon --rpc-url=https://api.devnet.solana.com
 
+# Streaming new blocks using gRPC instead of polling
+photon --rpc-url=https://api.devnet.solana.com --grpc-url=<grpc_url>
+
 # Using your local Postgres database instead of the default temporary SQL database
 photon --db-url=postgres://postgres@localhost/postgres
 
