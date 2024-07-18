@@ -1,8 +1,11 @@
 use std::fmt;
 use std::fs::File;
+use std::net::UdpSocket;
 use std::thread::sleep;
 use std::time::Duration;
 
+use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
+use cadence_macros::set_global_default;
 use clap::{Parser, ValueEnum};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
@@ -96,6 +99,11 @@ struct Args {
     /// Disable API
     #[arg(long, action = clap::ArgAction::SetTrue)]
     disable_api: bool,
+
+    /// Metrics URI in the format `host:port`
+    /// If provided, metrics will be sent to the specified statsd server.
+    #[arg(long, default_value = None)]
+    metrics_uri: Option<String>,
 }
 
 pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
@@ -124,6 +132,27 @@ fn setup_logging(logging_format: LoggingFormat) {
     match logging_format {
         LoggingFormat::Standard => subscriber.init(),
         LoggingFormat::Json => subscriber.json().init(),
+    }
+}
+
+pub fn setup_metrics(metrics_uri: Option<String>) {
+    if let Some(metrics_uri) = metrics_uri {
+        let env = env::var("ENV").unwrap_or("dev".to_string());
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        socket.set_nonblocking(true).unwrap();
+        let (host, port) = {
+            let mut iter = metrics_uri.split(":");
+            (iter.next().unwrap(), iter.next().unwrap())
+        };
+        let port = port.parse::<u16>().unwrap();
+        let udp_sink = BufferedUdpMetricSink::from((host, port), socket).unwrap();
+        let queuing_sink = QueuingMetricSink::from(udp_sink);
+        let builder = StatsdClient::builder("photon", queuing_sink);
+        let client = builder
+            .with_tag("env", env)
+            .with_tag("version", env!("CARGO_PKG_VERSION"))
+            .build();
+        set_global_default(client);
     }
 }
 
@@ -219,6 +248,7 @@ async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u64 {
 async fn main() {
     let args = Args::parse();
     setup_logging(args.logging_format);
+    setup_metrics(args.metrics_uri);
 
     let db_conn = setup_database_connection(args.db_url.clone(), args.max_db_conn).await;
     if args.db_url.is_none() {
