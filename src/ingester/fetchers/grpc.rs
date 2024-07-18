@@ -29,6 +29,7 @@ use crate::ingester::fetchers::poller::get_poller_block_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
+use crate::metric;
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
@@ -109,7 +110,10 @@ fn get_grpc_block_stream(
                     build_geyser_client(endpoint.clone(), auth_header.clone()).await;
                 if let Err(e) = grpc_client {
                     error!("Error connecting to gRPC, waiting one second then retrying connect: {}", e);
-                    statsd_count!("grpc_connect_error", 1);
+                    metric! {
+                        statsd_count!("grpc_connect_error", 1);
+
+                    }
                     sleep(Duration::from_secs(1)).await;
                     continue;
                 }
@@ -119,7 +123,9 @@ fn get_grpc_block_stream(
                     .await;
                 if let Err(e) = subscription {
                     error!("Error subscribing to gRPC stream, waiting one second then retrying connect: {}", e);
-                    statsd_count!("grpc_subscribe_error", 1);
+                    metric! {
+                        statsd_count!("grpc_subscribe_error", 1);
+                    }
                     sleep(Duration::from_secs(1)).await;
                     continue;
                 }
@@ -137,7 +143,9 @@ fn get_grpc_block_stream(
                             let ping = grpc_tx.send(ping()).await;
                             if let Err(e) = ping {
                                 error!("Error sending ping: {}", e);
-                                statsd_count!("grpc_ping_error", 1);
+                                metric! {
+                                    statsd_count!("grpc_ping_error", 1);
+                                }
                                 break;
                             }
                         }
@@ -150,7 +158,9 @@ fn get_grpc_block_stream(
                         error!(
                             "error in block subscribe, resubscribing in 1 second: {error:?}"
                         );
-                        statsd_count!("grpc_resubscribe", 1);
+                        metric! {
+                            statsd_count!("grpc_resubscribe", 1);
+                        }
                         break;
                     }
                 }
