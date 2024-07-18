@@ -100,10 +100,10 @@ struct Args {
     #[arg(long, action = clap::ArgAction::SetTrue)]
     disable_api: bool,
 
-    /// Metrics URI in the format `host:port`
+    /// Metrics endpoint in the format `host:port`
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
-    metrics_uri: Option<String>,
+    metrics_endpoint: Option<String>,
 }
 
 pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
@@ -135,13 +135,13 @@ fn setup_logging(logging_format: LoggingFormat) {
     }
 }
 
-pub fn setup_metrics(metrics_uri: Option<String>) {
-    if let Some(metrics_uri) = metrics_uri {
+pub fn setup_metrics(metrics_endpoint: Option<String>) {
+    if let Some(metrics_endpoint) = metrics_endpoint {
         let env = env::var("ENV").unwrap_or("dev".to_string());
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         socket.set_nonblocking(true).unwrap();
         let (host, port) = {
-            let mut iter = metrics_uri.split(":");
+            let mut iter = metrics_endpoint.split(":");
             (iter.next().unwrap(), iter.next().unwrap())
         };
         let port = port.parse::<u16>().unwrap();
@@ -248,7 +248,7 @@ async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u64 {
 async fn main() {
     let args = Args::parse();
     setup_logging(args.logging_format);
-    setup_metrics(args.metrics_uri);
+    setup_metrics(args.metrics_endpoint);
 
     let db_conn = setup_database_connection(args.db_url.clone(), args.max_db_conn).await;
     if args.db_url.is_none() {
