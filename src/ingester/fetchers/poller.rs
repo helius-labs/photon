@@ -12,7 +12,8 @@ use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo};
 
-const SKIPPED_BLOCK_ERROR: i64 = -32007;
+const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
+const FAILED_BLOCK_LOGGING_FREQUENCY: u64 = 100;
 
 pub fn get_poller_block_stream(
     client: Arc<RpcClient>,
@@ -78,6 +79,7 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
 }
 
 pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> Option<BlockInfo> {
+    let mut attempt_counter = 0;
     loop {
         match client
             .get_block_with_config(
@@ -97,15 +99,18 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> O
             }
             Err(e) => {
                 if let solana_client::client_error::ClientErrorKind::RpcError(
-                    RpcError::RpcResponseError {
-                        code: SKIPPED_BLOCK_ERROR,
-                        ..
-                    },
+                    RpcError::RpcResponseError { code, .. },
                 ) = e.kind
                 {
-                    return None;
+                    if SKIPPED_BLOCK_ERRORS.contains(&code) {
+                        log::warn!("Skipped block: {}", slot);
+                        return None;
+                    }
                 }
-                log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
+                if attempt_counter % FAILED_BLOCK_LOGGING_FREQUENCY == 1 {
+                    log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
+                }
+                attempt_counter += 1;
             }
         }
     }
