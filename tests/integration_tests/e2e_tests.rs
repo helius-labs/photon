@@ -571,6 +571,7 @@ async fn test_address_with_nullifiers(
     )
     .await;
 
+    let address = "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU";
     let address_2 = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
 
     let compress_tx =
@@ -607,6 +608,17 @@ async fn test_address_with_nullifiers(
         .unwrap();
 
     assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
+
+    let transactions  = setup
+        .api
+        .get_compression_signatures_for_address(photon_indexer::api::method::get_compression_signatures_for_address::GetCompressionSignaturesForAddressRequest {
+            address: SerializablePubkey::try_from(address).unwrap(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_json_snapshot!(format!("{}-transactions", name.clone()), transactions);
 }
 
 #[named]
