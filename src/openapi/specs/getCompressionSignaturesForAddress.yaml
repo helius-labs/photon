@@ -4,9 +4,10 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.24.0
+  version: 0.35.0
 servers:
-- url: http://127.0.0.1
+- url: http://127.0.0.1:8784
+- url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
   /:
     summary: getCompressionSignaturesForAddress
@@ -246,7 +247,7 @@ components:
       - address
       - lowerRangeAddress
       - higherRangeAddress
-      - leafIndex
+      - nextIndex
       - proof
       - merkleTree
       - rootSeq
@@ -256,10 +257,6 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         higherRangeAddress:
           $ref: '#/components/schemas/SerializablePubkey'
-        leafIndex:
-          type: integer
-          format: int32
-          minimum: 0
         lowElementLeafIndex:
           type: integer
           format: int32
@@ -268,6 +265,10 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         merkleTree:
           $ref: '#/components/schemas/SerializablePubkey'
+        nextIndex:
+          type: integer
+          format: int32
+          minimum: 0
         proof:
           type: array
           items:
@@ -423,16 +424,11 @@ components:
       - owner
       - amount
       - state
-      - delegatedAmount
       properties:
         amount:
           $ref: '#/components/schemas/UnsignedInteger'
         delegate:
           $ref: '#/components/schemas/SerializablePubkey'
-        delegatedAmount:
-          $ref: '#/components/schemas/UnsignedInteger'
-        isNative:
-          $ref: '#/components/schemas/UnsignedInteger'
         mint:
           $ref: '#/components/schemas/SerializablePubkey'
         owner:
