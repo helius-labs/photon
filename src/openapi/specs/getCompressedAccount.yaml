@@ -6,8 +6,8 @@ info:
     name: Apache-2.0
   version: 0.35.0
 servers:
-- url: http://127.0.0.1:8784
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
+- url: http://127.0.0.1:8784
 paths:
   /:
     summary: getCompressedAccount
