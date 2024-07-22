@@ -7,7 +7,6 @@ info:
   version: 0.35.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
-- url: http://127.0.0.1:8784
 paths:
   /:
     summary: getCompressedTokenBalancesByOwner
