@@ -1,7 +1,11 @@
 use super::{error, parser::state_update::AccountTransaction};
 use crate::{
     api::method::get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT,
-    common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
+    common::typedefs::{
+        account::Account,
+        hash::Hash,
+        token_data::{TokenData, TokenDataLegacy},
+    },
     dao::generated::{account_transactions, transactions},
     ingester::parser::state_update::Transaction,
 };
@@ -117,10 +121,22 @@ pub async fn persist_state_update(
 pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
-            let token_data = TokenData::try_from_slice(&data.data.0).map_err(|_| {
-                IngesterError::ParserError("Failed to parse token data".to_string())
-            })?;
-            Ok(Some(token_data))
+            let data_slice = data.data.0.as_slice();
+            let token_data = TokenData::try_from_slice(data_slice);
+            match token_data {
+                Ok(token_data) => Ok(Some(token_data)),
+                Err(_) => TokenDataLegacy::try_from_slice(data_slice).map(|token_data| {
+                    Some(TokenData {
+                        mint: token_data.mint,
+                        owner: token_data.owner,
+                        amount: token_data.amount,
+                        delegate: token_data.delegate,
+                        state: token_data.state,
+                        tlv: None,
+                    })
+                }),
+            }
+            .map_err(|e| IngesterError::ParserError(format!("Failed to parse token data: {:?}", e)))
         }
         _ => Ok(None),
     }
@@ -381,6 +397,7 @@ pub async fn persist_token_accounts(
                 state: Set(token_data.state as i32),
                 spent: Set(false),
                 prev_spent: Set(None),
+                tlv: Set(token_data.tlv.map(|t| t.0)),
             },
         )
         .collect::<Vec<_>>();

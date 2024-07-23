@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::Serialize;
 use utoipa::{
     openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
@@ -6,7 +7,7 @@ use utoipa::{
 
 use serde::Serializer;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
 pub struct Base64String(pub Vec<u8>);
 
 impl Serialize for Base64String {

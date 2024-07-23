@@ -35,6 +35,7 @@ pub enum TokenAccounts {
     Mint,
     Delegate,
     State,
+    Tlv,
     Spent,
     PrevSpent,
 }
