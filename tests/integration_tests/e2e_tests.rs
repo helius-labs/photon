@@ -122,7 +122,7 @@ async fn test_e2e_mint_and_transfer_legacy_transactions(
             .await
             .unwrap();
         // The Gnark prover has some randomness.
-        validity_proof.compressedProof = CompressedProof::default();
+        validity_proof.value.compressedProof = CompressedProof::default();
 
         assert_json_snapshot!(
             format!("{}-{}-validity-proof", name.clone(), person),
@@ -326,7 +326,7 @@ async fn test_e2e_mint_and_transfer_new_transactions(
             .await
             .unwrap();
         // The Gnark prover has some randomness.
-        validity_proof.compressedProof = CompressedProof::default();
+        validity_proof.value.compressedProof = CompressedProof::default();
 
         assert_json_snapshot!(
             format!("{}-{}-validity-proof", name.clone(), person),
@@ -538,7 +538,7 @@ async fn test_lamport_transfers(
                     hash_list.0.len()
                 ));
             // The Gnark prover has some randomness.
-            validity_proof.compressedProof = CompressedProof::default();
+            validity_proof.value.compressedProof = CompressedProof::default();
 
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), owner_name),

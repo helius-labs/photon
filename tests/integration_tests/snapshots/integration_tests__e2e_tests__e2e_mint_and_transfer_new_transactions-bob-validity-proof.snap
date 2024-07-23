@@ -3,29 +3,34 @@ source: tests/integration_tests/e2e_tests.rs
 expression: validity_proof
 ---
 {
-  "compressedProof": {
-    "a": [],
-    "b": [],
-    "c": []
+  "value": {
+    "compressedProof": {
+      "a": [],
+      "b": [],
+      "c": []
+    },
+    "roots": [
+      "ZMg67iuQAyRUALR4TmAMyWGVEXV2e8yCpRSqdnR8Y1n",
+      "ZMg67iuQAyRUALR4TmAMyWGVEXV2e8yCpRSqdnR8Y1n"
+    ],
+    "rootIndices": [
+      7,
+      7
+    ],
+    "leafIndices": [
+      6,
+      3
+    ],
+    "leaves": [
+      "2WfNf8qZoMNGR4mAPX8toADTdRpcKYTX1KUUAEHMi7dJ",
+      "36ewgEJTqSu4enYGWUcxm4CYezR3kgfHBeV29WiEgKaY"
+    ],
+    "merkleTrees": [
+      "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+      "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W"
+    ]
   },
-  "roots": [
-    "ZMg67iuQAyRUALR4TmAMyWGVEXV2e8yCpRSqdnR8Y1n",
-    "ZMg67iuQAyRUALR4TmAMyWGVEXV2e8yCpRSqdnR8Y1n"
-  ],
-  "rootIndices": [
-    7,
-    7
-  ],
-  "leafIndices": [
-    6,
-    3
-  ],
-  "leaves": [
-    "2WfNf8qZoMNGR4mAPX8toADTdRpcKYTX1KUUAEHMi7dJ",
-    "36ewgEJTqSu4enYGWUcxm4CYezR3kgfHBeV29WiEgKaY"
-  ],
-  "merkleTrees": [
-    "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-    "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W"
-  ]
+  "context": {
+    "slot": 0
+  }
 }
