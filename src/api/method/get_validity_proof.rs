@@ -13,8 +13,11 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::ToSchema;
 
-use super::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, MerkleContextWithNewAddressProof,
+use super::{
+    get_multiple_new_address_proofs::{
+        get_multiple_new_address_proofs_helper, MerkleContextWithNewAddressProof,
+    },
+    utils::Context,
 };
 
 lazy_static! {
@@ -249,16 +252,24 @@ pub struct GetValidityProofRequest {
     pub newAddresses: Vec<SerializablePubkey>,
 }
 
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetValidityProofResponse {
+    pub value: CompressedProofWithContext,
+    pub context: Context,
+}
+
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     prover_url: &str,
     request: GetValidityProofRequest,
-) -> Result<CompressedProofWithContext, PhotonApiError> {
+) -> Result<GetValidityProofResponse, PhotonApiError> {
     if request.hashes.is_empty() && request.newAddresses.is_empty() {
         return Err(PhotonApiError::UnexpectedError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
+    let context = Context::extract(conn).await?;
     let client = Client::new();
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -328,7 +339,7 @@ pub async fn get_validity_proof(
     #[allow(non_snake_case)]
     let compressedProof = negate_and_compress_proof(proof);
 
-    Ok(CompressedProofWithContext {
+    let compressed_proof_with_context = CompressedProofWithContext {
         compressedProof,
         roots: account_proofs
             .iter()
@@ -368,5 +379,9 @@ pub async fn get_validity_proof(
                     .map(|x| x.merkleTree.clone().to_string()),
             )
             .collect(),
+    };
+    Ok(GetValidityProofResponse {
+        value: compressed_proof_with_context,
+        context,
     })
 }

@@ -36,7 +36,7 @@ use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
 };
 use super::method::get_validity_proof::{
-    get_validity_proof, CompressedProofWithContext, GetValidityProofRequest,
+    get_validity_proof, GetValidityProofRequest, GetValidityProofResponse,
 };
 use super::method::utils::GetLatestSignaturesRequest;
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
@@ -276,7 +276,7 @@ impl PhotonApi {
     pub async fn get_validity_proof(
         &self,
         request: GetValidityProofRequest,
-    ) -> Result<CompressedProofWithContext, PhotonApiError> {
+    ) -> Result<GetValidityProofResponse, PhotonApiError> {
         get_validity_proof(self.db_conn.as_ref(), &self.prover_url, request).await
     }
 
@@ -319,7 +319,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getValidityProof".to_string(),
                 request: Some(GetValidityProofRequest::schema().1),
-                response: CompressedProofWithContext::schema().1,
+                response: GetValidityProofResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByOwner".to_string(),
