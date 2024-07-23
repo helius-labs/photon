@@ -14,7 +14,7 @@ use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range
 
 pub const ADDRESS_TREE_HEIGHT: u32 = 27;
 pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn");
-pub const MAX_ADDRESSES: usize = 2;
+pub const MAX_ADDRESSES: usize = 20;
 
 use super::utils::Context;
 
