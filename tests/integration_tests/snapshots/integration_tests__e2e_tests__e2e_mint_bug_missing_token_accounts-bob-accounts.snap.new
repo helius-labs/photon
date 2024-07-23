@@ -1,0 +1,65 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+assertion_line: 658
+expression: accounts
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "account": {
+          "hash": "2qxesJbpG9CiEbbmCohYNi9TGcj5QFLZuZCoZuJuuhZq",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "DFu4Y6O8tf8s399QCelPHNYBu/UnUY3ECTeGonBMeWOMejOoa7mBtexwuV511IozTVGZrjnc4qMCppBrJEwY2ugDAAAAAAAAAAAA",
+            "dataHash": "4AUiSWcsZJp1iFyF8rygB96oDqwvCH5j6u1iamyFXYsy"
+          },
+          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 0,
+          "seq": 1,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "qF1bTy2rHx2nd5cKBvui3TpyU2pKGh8yJgqXwsbJFgE",
+          "owner": "ATN9ubwzymxHForDhigaoyrvmHmAjWghabsShX2uzmnq",
+          "amount": 1000,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      },
+      {
+        "account": {
+          "hash": "45VHCTnQ9a1kkWHoNxp2dQhtudghH5oQyfCwGL4PNGPQ",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "7lu5Qsr7micrfoOqpDrhnffKisdB5dB+Ht7eA0cQ/3eMejOoa7mBtexwuV511IozTVGZrjnc4qMCppBrJEwY2ugDAAAAAAAAAAAA",
+            "dataHash": "2JFjd71Y29euctfBKZo5JsoyMFPKNqQJvnL63U9a2M5E"
+          },
+          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
+          "lamports": 0,
+          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
+          "leafIndex": 3,
+          "seq": 4,
+          "slotCreated": 0
+        },
+        "tokenData": {
+          "mint": "H3T9sXX5fq8X5DfJ7FhKCZkAn6ESAWBAZmNMn3AfUUwx",
+          "owner": "ATN9ubwzymxHForDhigaoyrvmHmAjWghabsShX2uzmnq",
+          "amount": 1000,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      }
+    ],
+    "cursor": null
+  }
+}
