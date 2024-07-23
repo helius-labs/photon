@@ -88,9 +88,6 @@ pub async fn persist_state_update(
     leaf_nodes.sort_by_key(|x| x.seq);
     debug!("Persisting state nodes...");
     for chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
-        for node in chunk {
-            println!("Node: {:?}", node.seq);
-        }
         persist_leaf_nodes(
             txn,
             chunk
