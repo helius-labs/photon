@@ -584,7 +584,7 @@ async fn test_persisted_state_trees(
     txn.commit().await.unwrap();
 
     let proofs = get_multiple_compressed_leaf_proofs(
-        &setup.db_conn,
+        &setup.db_conn.begin().await.unwrap(),
         leaf_nodes
             .iter()
             .map(|x| Hash::try_from(x.hash.clone()).unwrap())
@@ -620,7 +620,7 @@ async fn test_persisted_state_trees(
     txn.commit().await.unwrap();
 
     let proofs = get_multiple_compressed_leaf_proofs(
-        &setup.db_conn,
+        &setup.db_conn.begin().await.unwrap(),
         leaf_nodes
             .iter()
             .map(|x| Hash::try_from(x.hash.clone()).unwrap())
@@ -666,7 +666,7 @@ async fn test_indexed_merkle_trees(
     txn.commit().await.unwrap();
 
     let (model, _) = get_exclusion_range_with_proof(
-        setup.db_conn.as_ref(),
+        &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
         vec![3],
@@ -700,7 +700,7 @@ async fn test_indexed_merkle_trees(
     verify_tree(setup.db_conn.as_ref(), tree).await;
 
     let (model, _) = get_exclusion_range_with_proof(
-        setup.db_conn.as_ref(),
+        &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
         vec![4],

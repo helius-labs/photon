@@ -8,7 +8,7 @@ use crate::{
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use reqwest::Client;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::ToSchema;
@@ -260,19 +260,28 @@ pub async fn get_validity_proof(
         ));
     }
     let client = Client::new();
+    let tx = conn.begin().await?;
+    if tx.get_database_backend() == DatabaseBackend::Postgres {
+        tx.execute(Statement::from_string(
+            tx.get_database_backend(),
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
+        ))
+        .await?;
+    }
 
     let account_proofs = match !request.hashes.is_empty() {
-        true => get_multiple_compressed_leaf_proofs(conn, request.hashes).await?,
+        true => get_multiple_compressed_leaf_proofs(&tx, request.hashes).await?,
         false => {
             vec![]
         }
     };
     let new_address_proofs = match !request.newAddresses.is_empty() {
-        true => get_multiple_new_address_proofs_helper(conn, request.newAddresses).await?,
+        true => get_multiple_new_address_proofs_helper(&tx, request.newAddresses).await?,
         false => {
             vec![]
         }
     };
+    tx.commit().await?;
 
     let batch_inputs = HexBatchInputsForProver {
         input_compressed_accounts: convert_inclusion_proofs_to_hex(account_proofs.clone()),
