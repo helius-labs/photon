@@ -27,7 +27,7 @@ use serial_test::serial;
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_e2e_mint_and_transfer(
+async fn test_e2e_mint_and_transfer_legacy_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use std::str::FromStr;
@@ -64,6 +64,210 @@ async fn test_e2e_mint_and_transfer(
         "5Ea6iQQZ1JYfiDq8H6qMKYdFcut1cUfd9pstCGc3BsQztTbgKA4LhsEx6XKQ1bMhKp5KMyyw5BuuooxEcpGLyHFB";
     let transfer_txn3 =
         "41rBbMrNtZveMdPXPrHJLaoEzZ9WvJdgTbvcDhLM39THw7v51FjbCdUyWYFNswr1k3pRYbKvAcYb84bft2NbWgP2";
+
+    let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    for tx in txs {
+        index_transaction(&setup, tx).await;
+    }
+    for (person, pubkey) in [
+        ("bob", bob_pubkey.clone()),
+        ("charles", charles_pubkey.clone()),
+    ] {
+        let accounts = setup
+            .api
+            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+                owner: pubkey.clone(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+        let hash_list = HashList(
+            accounts
+                .value
+                .items
+                .iter()
+                .map(|x| x.account.hash.clone())
+                .collect(),
+        );
+        let proofs = setup
+            .api
+            .get_multiple_compressed_account_proofs(hash_list.clone())
+            .await
+            .unwrap();
+
+        assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+
+        let mut validity_proof = setup
+            .api
+            .get_validity_proof(GetValidityProofRequest {
+                hashes: hash_list.0.clone(),
+                newAddresses: vec![],
+            })
+            .await
+            .unwrap();
+        // The Gnark prover has some randomness.
+        validity_proof.compressedProof = CompressedProof::default();
+
+        assert_json_snapshot!(
+            format!("{}-{}-validity-proof", name.clone(), person),
+            validity_proof
+        );
+
+        let mut cursor = None;
+        let limit = Limit::new(1).unwrap();
+        let mut signatures = Vec::new();
+        loop {
+            let res = setup
+                .api
+                .get_compression_signatures_for_token_owner(
+                    GetCompressionSignaturesForTokenOwnerRequest {
+                        owner: pubkey.clone(),
+                        cursor,
+                        limit: Some(limit.clone()),
+                    },
+                )
+                .await
+                .unwrap()
+                .value;
+            signatures.extend(res.items);
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_json_snapshot!(
+            format!("{}-{}-token-signatures", name.clone(), person),
+            signatures
+        );
+
+        let token_balances = setup
+                .api
+                .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
+                    owner: pubkey.clone(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+        assert_json_snapshot!(
+            format!("{}-{}-token-balances", name.clone(), person),
+            token_balances
+        );
+    }
+    for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
+        let txn = cached_fetch_transaction(&setup, txn_signature).await;
+        let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
+        // Test get transaction
+        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
+        assert_json_snapshot!(
+            format!("{}-{}-transaction", name.clone(), txn_name),
+            parsed_transaction
+        );
+    }
+
+    let mut cursor = None;
+    let limit = Limit::new(1).unwrap();
+    let mut signatures = Vec::new();
+    loop {
+        let res = setup
+            .api
+            .get_latest_compression_signatures(GetLatestSignaturesRequest {
+                cursor,
+                limit: Some(limit.clone()),
+            })
+            .await
+            .unwrap()
+            .value;
+        signatures.extend(res.items);
+        cursor = res.cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    let all_signatures = setup
+        .api
+        .get_latest_compression_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(signatures, all_signatures.value.items);
+
+    let all_non_voting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        all_non_voting_transactions.value.items,
+        all_signatures.value.items
+    );
+
+    assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_e2e_mint_and_transfer_new_transactions(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use std::str::FromStr;
+
+    use photon_indexer::{
+        api::method::{
+            get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
+            get_multiple_compressed_account_proofs::HashList, utils::Limit,
+        },
+        common::typedefs::serializable_signature::SerializableSignature,
+    };
+    use solana_sdk::signature::Signature;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let bob_pubkey =
+        SerializablePubkey::try_from("HGkKWL7Cfm4YAqb6wtCfC6PsAKQ1DL2uccGSyJgzVSKV").unwrap();
+    let charles_pubkey =
+        SerializablePubkey::try_from("5GkBcTAGLJ2nU7WEbaecndeV5HXzp8LicqkGf6DKKR97").unwrap();
+
+    let mint_tx =
+        "2M63FRn8tYUCDxuxo4fJLkwQfu7FQp5RecNVPK42TMdAbq45BiWjuz1P9nNy6uRrcMpXph63eAUW71GzQE1HmEGs";
+    let transfer_tx =
+        "5MqYh45rQf1x8D1EpeiWh4XXM7WBeDsE3MCpqvstTaCMQVBXuk3wMiUoQGY9Y2t83oGhBKoFG8zWUFoHpEB77C1g";
+    let transfer_txn2: &str =
+        "3xB9XfSrNHov4FDtgQdJMZtKvbDcqvhkpyXN72ZurXvRTKbGXpw4XbUGAnbtCuNiHixf7qoSDQskTcXdA6n412yW";
+    let transfer_txn3 =
+        "P3NmVFAosVot31wa7oyJ3e4s4zFPeUwGnm6HhFmPukjXQ14xUQvrxJSuEy2VS8gutuejoRFzPPoga3ZeBRxDJFa";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
