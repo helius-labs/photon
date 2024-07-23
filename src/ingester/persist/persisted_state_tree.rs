@@ -2,9 +2,8 @@ use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement,
-    TransactionTrait, Value,
+    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction,
+    DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -65,17 +64,6 @@ pub async fn persist_leaf_nodes(
 ) -> Result<(), IngesterError> {
     if leaf_nodes.is_empty() {
         return Ok(());
-    }
-
-    if txn.get_database_backend() == DatabaseBackend::Postgres {
-        txn.execute(Statement::from_string(
-            txn.get_database_backend(),
-            "LOCK TABLE state_trees IN EXCLUSIVE MODE;".to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            IngesterError::DatabaseError(format!("Failed to lock state_trees table: {}", e))
-        })?;
     }
 
     leaf_nodes.sort_by_key(|node| node.seq);
@@ -196,7 +184,7 @@ pub struct MerkleProofWithContext {
 }
 
 pub async fn get_multiple_compressed_leaf_proofs(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
     if hashes.is_empty() {
@@ -210,7 +198,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                 .is_in(hashes.iter().map(|x| x.to_vec()).collect::<Vec<Vec<u8>>>())
                 .and(state_trees::Column::Level.eq(0)),
         )
-        .all(conn)
+        .all(txn)
         .await?
         .into_iter()
         .map(|x| {
@@ -253,11 +241,11 @@ pub async fn get_multiple_compressed_leaf_proofs(
         })
         .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
 
-    get_multiple_compressed_leaf_proofs_from_full_leaf_info(conn, leaf_nodes_with_node_index).await
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
 }
 
 pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     leaf_nodes_with_node_index: Vec<(LeafNode, i64)>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
     let leaf_locations_to_required_nodes = leaf_nodes_with_node_index
@@ -272,7 +260,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
         .collect::<HashMap<(Vec<u8>, i64), Vec<i64>>>();
 
     let node_to_model = get_proof_nodes(
-        conn,
+        txn,
         leaf_nodes_with_node_index
             .iter()
             .map(|(node, node_index)| (node.tree.to_bytes_vec(), *node_index))

@@ -8,7 +8,7 @@ use itertools::Itertools;
 use light_poseidon::Poseidon;
 use num_bigint::BigUint;
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    sea_query::OnConflict, ConnectionTrait, DatabaseBackend,
     DatabaseTransaction, EntityTrait, QueryTrait, Set, Statement, TransactionTrait,
 };
 use solana_sdk::pubkey::Pubkey;
@@ -82,12 +82,12 @@ fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
 }
 
 pub async fn get_exclusion_range_with_proof(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     tree: Vec<u8>,
     tree_height: u32,
     value: Vec<u8>,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
-    let btree = query_next_smallest_elements(conn, vec![value.clone()], tree.clone())
+    let btree = query_next_smallest_elements(txn, vec![value.clone()], tree.clone())
         .await
         .map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
@@ -156,11 +156,8 @@ pub async fn get_exclusion_range_with_proof(
     let node_index = leaf_node.node_index(tree_height);
 
     let leaf_proofs: Vec<MerkleProofWithContext> =
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(
-            conn,
-            vec![(leaf_node, node_index)],
-        )
-        .await?;
+        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)])
+            .await?;
 
     let leaf_proof = leaf_proofs
         .into_iter()

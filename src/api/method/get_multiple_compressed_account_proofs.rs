@@ -2,7 +2,7 @@ use crate::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
 };
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -36,7 +36,16 @@ pub async fn get_multiple_compressed_account_proofs(
         )));
     }
     let context = Context::extract(conn).await?;
-    let proofs = get_multiple_compressed_leaf_proofs(conn, request).await?;
+    let tx = conn.begin().await?;
+    if tx.get_database_backend() == DatabaseBackend::Postgres {
+        tx.execute(Statement::from_string(
+            tx.get_database_backend(),
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
+        ))
+        .await?;
+    }
+    let proofs = get_multiple_compressed_leaf_proofs(&tx, request).await?;
+    tx.commit().await?;
     Ok(GetMultipleCompressedAccountProofsResponse {
         value: proofs,
         context,

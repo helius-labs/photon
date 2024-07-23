@@ -1,4 +1,7 @@
-use sea_orm::DatabaseConnection;
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, Statement,
+    TransactionTrait,
+};
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
@@ -11,6 +14,7 @@ use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range
 
 pub const ADDRESS_TREE_HEIGHT: u32 = 27;
 pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn");
+pub const MAX_ADDRESSES: usize = 2;
 
 use super::utils::Context;
 
@@ -37,7 +41,7 @@ pub struct GetMultipleNewAddressProofsResponse {
 }
 
 pub async fn get_multiple_new_address_proofs_helper(
-    conn: &DatabaseConnection,
+    txn: &DatabaseTransaction,
     addresses: Vec<SerializablePubkey>,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
@@ -45,11 +49,23 @@ pub async fn get_multiple_new_address_proofs_helper(
             "No addresses provided".to_string(),
         ));
     }
+
+    if addresses.len() > MAX_ADDRESSES {
+        return Err(PhotonApiError::ValidationError(
+            format!(
+                "Too many addresses requested {}. Maximum allowed: {}",
+                addresses.len(),
+                MAX_ADDRESSES
+            )
+            .to_string(),
+        ));
+    }
+
     let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
 
     for address in addresses {
         let (model, proof) = get_exclusion_range_with_proof(
-            conn,
+            txn,
             ADDRESS_TREE_ADDRESS.to_bytes().to_vec(),
             ADDRESS_TREE_HEIGHT,
             address.to_bytes_vec(),
@@ -79,7 +95,16 @@ pub async fn get_multiple_new_address_proofs(
     addresses: AddressList,
 ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let new_address_proofs = get_multiple_new_address_proofs_helper(conn, addresses.0).await?;
+    let tx = conn.begin().await?;
+    if tx.get_database_backend() == DatabaseBackend::Postgres {
+        tx.execute(Statement::from_string(
+            tx.get_database_backend(),
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
+        ))
+        .await?;
+    }
+    let new_address_proofs = get_multiple_new_address_proofs_helper(&tx, addresses.0).await?;
+    tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {
         value: new_address_proofs,

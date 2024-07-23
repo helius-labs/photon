@@ -1,4 +1,4 @@
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -24,8 +24,15 @@ pub async fn get_compressed_account_proof(
 ) -> Result<GetCompressedAccountProofResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let hash = request.hash;
-
-    get_multiple_compressed_leaf_proofs(conn, vec![hash])
+    let tx = conn.begin().await?;
+    if tx.get_database_backend() == DatabaseBackend::Postgres {
+        tx.execute(Statement::from_string(
+            tx.get_database_backend(),
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
+        ))
+        .await?;
+    }
+    let res = get_multiple_compressed_leaf_proofs(&tx, vec![hash])
         .await?
         .into_iter()
         .next()
@@ -35,5 +42,7 @@ pub async fn get_compressed_account_proof(
         })
         .ok_or(PhotonApiError::RecordNotFound(
             "Account not found".to_string(),
-        ))
+        ));
+    tx.commit().await?;
+    res
 }
