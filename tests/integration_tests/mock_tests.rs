@@ -355,6 +355,7 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(1),
         delegate: Some(delegate1),
         state: AccountState::frozen,
+        tlv: None,
     };
 
     let token_data2 = TokenData {
@@ -363,6 +364,7 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(2),
         delegate: Some(delegate2),
         state: AccountState::initialized,
+        tlv: None,
     };
 
     let token_data3 = TokenData {
@@ -371,6 +373,7 @@ async fn test_persist_token_data(
         amount: UnsignedInteger(3),
         delegate: Some(delegate1),
         state: AccountState::frozen,
+        tlv: None,
     };
     let all_token_data = vec![token_data1, token_data2, token_data3];
 

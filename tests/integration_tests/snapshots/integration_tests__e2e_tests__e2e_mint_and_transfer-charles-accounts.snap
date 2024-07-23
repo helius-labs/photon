@@ -29,7 +29,8 @@ expression: accounts
           "owner": "8UMPheZvcShkq7DwPpJN5NusYDKTwfx9FVTyZXnVLSaj",
           "amount": 695,
           "delegate": null,
-          "state": "initialized"
+          "state": "initialized",
+          "tlv": null
         }
       },
       {
@@ -53,7 +54,8 @@ expression: accounts
           "owner": "8UMPheZvcShkq7DwPpJN5NusYDKTwfx9FVTyZXnVLSaj",
           "amount": 200,
           "delegate": null,
-          "state": "initialized"
+          "state": "initialized",
+          "tlv": null
         }
       }
     ],

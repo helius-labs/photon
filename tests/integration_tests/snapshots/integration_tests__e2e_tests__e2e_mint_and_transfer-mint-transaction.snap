@@ -199,7 +199,8 @@ expression: parsed_transaction
           "owner": "D6B941apqSHVU5TV2n7JevkpAVQ4sdhiT6g1fNoEMfYG",
           "amount": 1000,
           "delegate": null,
-          "state": "initialized"
+          "state": "initialized",
+          "tlv": null
         }
       }
     ]

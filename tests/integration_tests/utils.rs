@@ -107,7 +107,7 @@ pub struct TestSetupOptions {
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
-    let db_conn = Arc::new(match opts.db_backend {
+    let db_conn: Arc<DatabaseConnection> = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
             let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
             if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {

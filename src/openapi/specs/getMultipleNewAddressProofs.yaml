@@ -424,6 +424,8 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         state:
           $ref: '#/components/schemas/AccountState'
+        tlv:
+          $ref: '#/components/schemas/Base64String'
     UnixTimestamp:
       type: integer
       description: An Unix timestamp (seconds)

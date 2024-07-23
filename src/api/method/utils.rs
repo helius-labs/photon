@@ -304,6 +304,7 @@ pub async fn fetch_token_accounts(
                             e
                         ))
                     })?,
+                    tlv: token_account.tlv.map(Base64String),
                 },
             })
         })

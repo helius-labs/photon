@@ -15,6 +15,7 @@ pub struct Model {
     pub prev_spent: Option<bool>,
     #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
     pub amount: Decimal,
+    pub tlv: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
