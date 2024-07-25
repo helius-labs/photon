@@ -57,6 +57,7 @@ pub enum Transactions {
     Signature,
     Slot,
     UsesCompression,
+    Error
 }
 
 #[derive(Copy, Clone, Iden)]

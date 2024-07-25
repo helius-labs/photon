@@ -237,8 +237,8 @@ fn parse_block(block: SubscribeUpdateBlock) -> BlockInfo {
 
 fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> TransactionInfo {
     let meta = transaction.meta.unwrap();
+    let error = meta.err.map(|e| bincode::deserialize(&e.err).unwrap());
     let signature = Signature::try_from(transaction.signature).unwrap();
-    let success = meta.err.is_none();
     let message = transaction.transaction.unwrap().message.unwrap();
     let outer_intructions = message.instructions;
     let mut accounts = message.account_keys;
@@ -302,6 +302,6 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
     TransactionInfo {
         instruction_groups,
         signature,
-        success,
+        error,
     }
 }

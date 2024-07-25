@@ -14,6 +14,8 @@ use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
+use crate::api::method::utils::SignatureInfoListWithError;
+use crate::api::method::utils::SignatureInfoWithError;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
 use crate::common::typedefs::account::Account;
@@ -84,7 +86,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     UnsignedInteger,
     CompressedProof,
     CompressedProofWithContext,
-    MerkleContextWithNewAddressProof
+    MerkleContextWithNewAddressProof,
+    SignatureInfoListWithError,
+    SignatureInfoWithError
 )))]
 struct ApiDoc;
 

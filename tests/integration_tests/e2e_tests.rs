@@ -35,7 +35,8 @@ async fn test_e2e_mint_and_transfer_legacy_transactions(
     use photon_indexer::{
         api::method::{
             get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-            get_multiple_compressed_account_proofs::HashList, utils::Limit,
+            get_multiple_compressed_account_proofs::HashList,
+            utils::{Limit, SignatureInfo},
         },
         common::typedefs::serializable_signature::SerializableSignature,
     };
@@ -220,7 +221,12 @@ async fn test_e2e_mint_and_transfer_legacy_transactions(
         .unwrap();
 
     assert_eq!(
-        all_non_voting_transactions.value.items,
+        all_non_voting_transactions
+            .value
+            .items
+            .into_iter()
+            .map(Into::<SignatureInfo>::into)
+            .collect::<Vec<_>>(),
         all_signatures.value.items
     );
 
@@ -239,7 +245,8 @@ async fn test_e2e_mint_and_transfer_new_transactions(
     use photon_indexer::{
         api::method::{
             get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-            get_multiple_compressed_account_proofs::HashList, utils::Limit,
+            get_multiple_compressed_account_proofs::HashList,
+            utils::{Limit, SignatureInfo},
         },
         common::typedefs::serializable_signature::SerializableSignature,
     };
@@ -424,7 +431,12 @@ async fn test_e2e_mint_and_transfer_new_transactions(
         .unwrap();
 
     assert_eq!(
-        all_non_voting_transactions.value.items,
+        all_non_voting_transactions
+            .value
+            .items
+            .into_iter()
+            .map(Into::<SignatureInfo>::into)
+            .collect::<Vec<_>>(),
         all_signatures.value.items
     );
 
@@ -685,6 +697,44 @@ async fn test_get_latest_non_voting_signatures(
         .await
         .unwrap();
     assert_eq!(all_nonvoting_transactions.value.items.len(), 46);
+    assert_json_snapshot!(
+        format!("{}-non-voting-transactions", name.clone()),
+        all_nonvoting_transactions
+    );
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_get_latest_non_voting_signatures_with_failures(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Mainnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let slot = 279620356;
+    let block = cached_fetch_block(&setup, slot).await;
+    index_block(&setup.db_conn, &block).await.unwrap();
+    let all_nonvoting_transactions = setup
+        .api
+        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_json_snapshot!(
+        format!("{}-non-voting-transactions", name.clone()),
+        all_nonvoting_transactions
+    );
 }
 
 #[named]

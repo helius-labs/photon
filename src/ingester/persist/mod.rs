@@ -449,6 +449,7 @@ async fn persist_transactions(
             signature: Set(Into::<[u8; 64]>::into(transaction.signature).to_vec()),
             slot: Set(transaction.slot as i64),
             uses_compression: Set(transaction.uses_compression),
+            error: Set(transaction.error.clone()),
         })
         .collect::<Vec<_>>();
 

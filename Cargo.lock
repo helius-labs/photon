@@ -3768,7 +3768,7 @@ dependencies = [
 
 [[package]]
 name = "photon-indexer"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "anchor-lang",
  "anyhow",
@@ -3777,6 +3777,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "base64 0.21.7",
+ "bincode",
  "borsh 0.10.3",
  "bs58 0.4.0",
  "byteorder",

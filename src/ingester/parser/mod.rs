@@ -62,7 +62,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                     }
                     is_compression_transaction = true;
 
-                    if tx.success {
+                    if tx.error.is_none() {
                         let public_transaction_event = PublicTransactionEvent::deserialize(
                             &mut next_next_instruction.data.as_slice(),
                         )
@@ -87,7 +87,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                     && next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     is_compression_transaction = true;
-                    if tx.success {
+                    if tx.error.is_none() {
                         let merkle_tree_event =
                             MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
                                 .map_err(|e| {
@@ -99,14 +99,10 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 
                         let state_update = match merkle_tree_event {
                             MerkleTreeEvent::V2(nullifier_event) => {
-                                parse_nullifier_event(tx.signature, slot, nullifier_event)?
+                                parse_nullifier_event(nullifier_event)?
                             }
                             MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                                parse_indexed_merkle_tree_update(
-                                    tx.signature,
-                                    slot,
-                                    indexed_merkle_tree_event,
-                                )?
+                                parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
                             }
                             _ => {
                                 return Err(IngesterError::ParserError(
@@ -122,11 +118,12 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     }
     let mut state_update = StateUpdate::merge_updates(state_updates);
 
-    if !is_voting_transaction(tx) {
+    if !is_voting_transaction(tx) || is_compression_transaction {
         state_update.transactions.insert(Transaction {
             signature: tx.signature,
             slot,
             uses_compression: is_compression_transaction,
+            error: tx.error.clone(),
         });
     }
 
@@ -174,8 +171,6 @@ fn parse_account_data(
 }
 
 fn parse_indexed_merkle_tree_update(
-    tx: Signature,
-    slot: u64,
     indexed_merkle_tree_event: IndexedMerkleTreeEvent,
 ) -> Result<StateUpdate, IngesterError> {
     let IndexedMerkleTreeEvent {
@@ -208,20 +203,10 @@ fn parse_indexed_merkle_tree_update(
         }
     }
 
-    state_update.transactions.insert(Transaction {
-        signature: tx,
-        slot,
-        uses_compression: true,
-    });
-
     Ok(state_update)
 }
 
-fn parse_nullifier_event(
-    tx: Signature,
-    slot: u64,
-    nullifier_event: NullifierEvent,
-) -> Result<StateUpdate, IngesterError> {
+fn parse_nullifier_event(nullifier_event: NullifierEvent) -> Result<StateUpdate, IngesterError> {
     let NullifierEvent {
         id,
         nullified_leaves_indices,
@@ -242,11 +227,6 @@ fn parse_nullifier_event(
         };
         state_update.leaf_nullifications.insert(leaf_nullification);
     }
-    state_update.transactions.insert(Transaction {
-        signature: tx,
-        slot,
-        uses_compression: true,
-    });
 
     Ok(state_update)
 }

@@ -9,6 +9,8 @@ pub struct Model {
     pub signature: Vec<u8>,
     pub slot: i64,
     pub uses_compression: bool,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub error: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
