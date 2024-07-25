@@ -1,4 +1,7 @@
-use super::utils::{GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse};
+use super::utils::{
+    GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponseWithError,
+    SignatureInfoListWithError,
+};
 use sea_orm::DatabaseConnection;
 
 use super::{
@@ -9,7 +12,7 @@ use super::{
 pub async fn get_latest_non_voting_signatures(
     conn: &DatabaseConnection,
     request: GetLatestSignaturesRequest,
-) -> Result<GetNonPaginatedSignaturesResponse, PhotonApiError> {
+) -> Result<GetNonPaginatedSignaturesResponseWithError, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
     let signatures = search_for_signatures(
@@ -22,8 +25,8 @@ pub async fn get_latest_non_voting_signatures(
     )
     .await?;
 
-    Ok(GetNonPaginatedSignaturesResponse {
-        value: super::utils::SignatureInfoList {
+    Ok(GetNonPaginatedSignaturesResponseWithError {
+        value: SignatureInfoListWithError {
             items: signatures.items,
         },
         context,

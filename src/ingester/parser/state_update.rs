@@ -38,6 +38,7 @@ pub struct Transaction {
     pub signature: Signature,
     pub slot: u64,
     pub uses_compression: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]

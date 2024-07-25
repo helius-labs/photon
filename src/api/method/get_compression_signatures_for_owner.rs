@@ -36,7 +36,7 @@ pub async fn get_compression_signatures_for_owner(
     .await?;
 
     Ok(GetPaginatedSignaturesResponse {
-        value: signatures,
+        value: signatures.into(),
         context,
     })
 }

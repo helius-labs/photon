@@ -40,7 +40,9 @@ pub async fn get_compression_signatures_for_account(
     }
 
     Ok(GetNonPaginatedSignaturesResponse {
-        value: SignatureInfoList { items: signatures },
+        value: SignatureInfoList {
+            items: signatures.into_iter().map(|s| s.into()).collect(),
+        },
         context,
     })
 }

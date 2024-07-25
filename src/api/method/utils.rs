@@ -441,11 +441,21 @@ pub struct SignatureInfo {
     pub block_time: UnixTimestamp,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SignatureInfoWithError {
+    pub signature: SerializableSignature,
+    pub slot: UnsignedInteger,
+    pub block_time: UnixTimestamp,
+    pub error: Option<String>,
+}
+
 #[derive(FromQueryResult)]
 pub struct SignatureInfoModel {
     pub signature: Vec<u8>,
     pub slot: i64,
     pub block_time: i64,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -456,9 +466,41 @@ pub struct SignatureInfoList {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct SignatureInfoListWithError {
+    pub items: Vec<SignatureInfoWithError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginatedSignatureInfoList {
     pub items: Vec<SignatureInfo>,
     pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginatedSignatureInfoListWithError {
+    pub items: Vec<SignatureInfoWithError>,
+    pub cursor: Option<String>,
+}
+
+impl From<PaginatedSignatureInfoListWithError> for PaginatedSignatureInfoList {
+    fn from(paginated: PaginatedSignatureInfoListWithError) -> Self {
+        PaginatedSignatureInfoList {
+            items: paginated.items.into_iter().map(Into::into).collect(),
+            cursor: paginated.cursor,
+        }
+    }
+}
+
+impl From<SignatureInfoWithError> for SignatureInfo {
+    fn from(signature_info: SignatureInfoWithError) -> Self {
+        SignatureInfo {
+            signature: signature_info.signature,
+            slot: signature_info.slot,
+            block_time: signature_info.block_time,
+        }
+    }
 }
 
 pub enum SignatureFilter {
@@ -561,7 +603,7 @@ fn compute_raw_sql_query_and_args(
 
             let raw_sql = format!(
                 "
-                SELECT DISTINCT transactions.signature, transactions.slot, blocks.block_time
+                SELECT DISTINCT transactions.signature, transactions.slot, transactions.error, blocks.block_time
                 FROM account_transactions
                 JOIN transactions ON account_transactions.signature = transactions.signature
                 JOIN blocks ON transactions.slot = blocks.slot
@@ -588,7 +630,7 @@ fn compute_raw_sql_query_and_args(
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 0)?;
             let raw_sql = format!(
                 "
-                SELECT transactions.signature, transactions.slot, blocks.block_time
+                SELECT transactions.signature, transactions.slot, transactions.error, blocks.block_time
                 FROM transactions
                 JOIN blocks ON transactions.slot = blocks.slot
                 {cursor_filter}
@@ -609,7 +651,7 @@ pub async fn search_for_signatures(
     only_compressed: bool,
     cursor: Option<String>,
     limit: Option<Limit>,
-) -> Result<PaginatedSignatureInfoList, PhotonApiError> {
+) -> Result<PaginatedSignatureInfoListWithError, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
     let (raw_sql, args) = compute_raw_sql_query_and_args(
         search_type,
@@ -639,7 +681,7 @@ pub async fn search_for_signatures(
         }),
     };
 
-    Ok(PaginatedSignatureInfoList {
+    Ok(PaginatedSignatureInfoListWithError {
         items: signatures,
         cursor,
     })
@@ -647,18 +689,21 @@ pub async fn search_for_signatures(
 
 pub fn parse_signatures_infos(
     signatures: Vec<SignatureInfoModel>,
-) -> Result<Vec<SignatureInfo>, PhotonApiError> {
+) -> Result<Vec<SignatureInfoWithError>, PhotonApiError> {
     signatures.into_iter().map(parse_signature_info).collect()
 }
 
-fn parse_signature_info(model: SignatureInfoModel) -> Result<SignatureInfo, PhotonApiError> {
-    Ok(SignatureInfo {
+fn parse_signature_info(
+    model: SignatureInfoModel,
+) -> Result<SignatureInfoWithError, PhotonApiError> {
+    Ok(SignatureInfoWithError {
         signature: SerializableSignature(
             Signature::try_from(model.signature)
                 .map_err(|_| PhotonApiError::UnexpectedError("Invalid signature".to_string()))?,
         ),
         slot: UnsignedInteger(model.slot as u64),
         block_time: UnixTimestamp(model.block_time as u64),
+        error: model.error,
     })
 }
 
@@ -691,4 +736,12 @@ pub struct GetLatestSignaturesRequest {
 pub struct GetNonPaginatedSignaturesResponse {
     pub context: Context,
     pub value: SignatureInfoList,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+// We do not use generics to simplify documentation generation.
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetNonPaginatedSignaturesResponseWithError {
+    pub context: Context,
+    pub value: SignatureInfoListWithError,
 }

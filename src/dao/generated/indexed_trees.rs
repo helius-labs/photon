@@ -7,6 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub tree: Vec<u8>,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub leaf_index: i64,
     pub value: Vec<u8>,
     pub next_index: i64,

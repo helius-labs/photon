@@ -38,8 +38,10 @@ use super::method::get_transaction_with_compression_info::{
 use super::method::get_validity_proof::{
     get_validity_proof, GetValidityProofRequest, GetValidityProofResponse,
 };
-use super::method::utils::GetLatestSignaturesRequest;
 use super::method::utils::{AccountBalanceResponse, GetPaginatedSignaturesResponse, HashRequest};
+use super::method::utils::{
+    GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponseWithError,
+};
 use super::{
     error::PhotonApiError,
     method::{
@@ -290,7 +292,7 @@ impl PhotonApi {
     pub async fn get_latest_non_voting_signatures(
         &self,
         request: GetLatestSignaturesRequest,
-    ) -> Result<GetNonPaginatedSignaturesResponse, PhotonApiError> {
+    ) -> Result<GetNonPaginatedSignaturesResponseWithError, PhotonApiError> {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
 
@@ -394,7 +396,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getLatestNonVotingSignatures".to_string(),
                 request: Some(GetLatestSignaturesRequest::schema().1),
-                response: GetNonPaginatedSignaturesResponse::schema().1,
+                response: GetNonPaginatedSignaturesResponseWithError::schema().1,
             },
             OpenApiSpec {
                 name: "getIndexerHealth".to_string(),

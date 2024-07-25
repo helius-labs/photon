@@ -31,7 +31,7 @@ pub struct InstructionGroup {
 pub struct TransactionInfo {
     pub instruction_groups: Vec<InstructionGroup>,
     pub signature: Signature,
-    pub success: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -104,12 +104,12 @@ fn _parse_transaction(
     let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
 
     let signature = versioned_transaction.signatures[0];
-    let success = meta.status.is_ok();
+    let error = meta.clone().err.map(|e| e.to_string());
     let instruction_groups = parse_instruction_groups(versioned_transaction, meta)?;
     Ok(TransactionInfo {
         instruction_groups,
         signature,
-        success,
+        error,
     })
 }
 
@@ -163,11 +163,11 @@ impl TryFrom<EncodedConfirmedTransactionWithStatusMeta> for TransactionInfo {
         )?;
         let signature = versioned_transaction.signatures[0];
         let meta = meta.ok_or(IngesterError::ParserError("Missing metadata".to_string()))?;
-        let success = meta.status.is_ok();
+        let error = meta.clone().err.map(|e| e.to_string());
         Ok(TransactionInfo {
             instruction_groups: parse_instruction_groups(versioned_transaction, meta.clone())?,
             signature,
-            success,
+            error,
         })
     }
 }
