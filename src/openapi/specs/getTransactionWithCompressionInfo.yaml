@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.35.0
+  version: 0.38.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
@@ -137,18 +137,6 @@ components:
         discriminator:
           $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
-    AccountList:
-      type: object
-      required:
-      - items
-      properties:
-        items:
-          type: array
-          items:
-            allOf:
-            - $ref: '#/components/schemas/Account'
-            nullable: true
-      additionalProperties: false
     AccountState:
       type: string
       enum:
@@ -164,178 +152,15 @@ components:
         optionalTokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
-    Base58String:
-      type: string
-      description: A base 58 encoded string.
-      default: 3J98t1WpEZ73CNm
-      example: 3J98t1WpEZ73CNm
     Base64String:
       type: string
       description: A base 64 encoded string.
       default: SGVsbG8sIFdvcmxkIQ==
       example: SGVsbG8sIFdvcmxkIQ==
-    CompressedProof:
-      type: object
-      required:
-      - a
-      - b
-      - c
-      properties:
-        a:
-          type: string
-          format: binary
-        b:
-          type: string
-          format: binary
-        c:
-          type: string
-          format: binary
-    CompressedProofWithContext:
-      type: object
-      required:
-      - compressedProof
-      - roots
-      - rootIndices
-      - leafIndices
-      - leaves
-      - merkleTrees
-      properties:
-        compressedProof:
-          $ref: '#/components/schemas/CompressedProof'
-        leafIndices:
-          type: array
-          items:
-            type: integer
-            format: int32
-            minimum: 0
-        leaves:
-          type: array
-          items:
-            type: string
-        merkleTrees:
-          type: array
-          items:
-            type: string
-        rootIndices:
-          type: array
-          items:
-            type: integer
-            format: int64
-            minimum: 0
-        roots:
-          type: array
-          items:
-            type: string
-    Context:
-      type: object
-      required:
-      - slot
-      properties:
-        slot:
-          type: integer
-          default: 100
-          example: 100
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
       example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
-    Limit:
-      type: integer
-      format: int64
-      minimum: 0
-    MerkleContextWithNewAddressProof:
-      type: object
-      required:
-      - root
-      - address
-      - lowerRangeAddress
-      - higherRangeAddress
-      - nextIndex
-      - proof
-      - merkleTree
-      - rootSeq
-      - lowElementLeafIndex
-      properties:
-        address:
-          $ref: '#/components/schemas/SerializablePubkey'
-        higherRangeAddress:
-          $ref: '#/components/schemas/SerializablePubkey'
-        lowElementLeafIndex:
-          type: integer
-          format: int32
-          minimum: 0
-        lowerRangeAddress:
-          $ref: '#/components/schemas/SerializablePubkey'
-        merkleTree:
-          $ref: '#/components/schemas/SerializablePubkey'
-        nextIndex:
-          type: integer
-          format: int32
-          minimum: 0
-        proof:
-          type: array
-          items:
-            $ref: '#/components/schemas/Hash'
-        root:
-          $ref: '#/components/schemas/Hash'
-        rootSeq:
-          type: integer
-          format: int64
-          minimum: 0
-      additionalProperties: false
-    MerkleProofWithContext:
-      type: object
-      required:
-      - proof
-      - root
-      - leafIndex
-      - hash
-      - merkleTree
-      - rootSeq
-      properties:
-        hash:
-          $ref: '#/components/schemas/Hash'
-        leafIndex:
-          type: integer
-          format: int32
-          minimum: 0
-        merkleTree:
-          $ref: '#/components/schemas/SerializablePubkey'
-        proof:
-          type: array
-          items:
-            $ref: '#/components/schemas/Hash'
-        root:
-          $ref: '#/components/schemas/Hash'
-        rootSeq:
-          type: integer
-          format: int64
-          minimum: 0
-      additionalProperties: false
-    PaginatedAccountList:
-      type: object
-      required:
-      - items
-      properties:
-        cursor:
-          $ref: '#/components/schemas/Hash'
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Account'
-      additionalProperties: false
-    PaginatedSignatureInfoList:
-      type: object
-      required:
-      - items
-      properties:
-        cursor:
-          type: string
-          nullable: true
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/SignatureInfo'
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
@@ -346,80 +171,6 @@ components:
       description: A Solana transaction signature.
       default: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
       example: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
-    SignatureInfo:
-      type: object
-      required:
-      - signature
-      - slot
-      - blockTime
-      properties:
-        blockTime:
-          $ref: '#/components/schemas/UnixTimestamp'
-        signature:
-          $ref: '#/components/schemas/SerializableSignature'
-        slot:
-          $ref: '#/components/schemas/UnsignedInteger'
-    SignatureInfoList:
-      type: object
-      required:
-      - items
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/SignatureInfo'
-    TokenAcccount:
-      type: object
-      required:
-      - account
-      - tokenData
-      properties:
-        account:
-          $ref: '#/components/schemas/Account'
-        tokenData:
-          $ref: '#/components/schemas/TokenData'
-      additionalProperties: false
-    TokenAccountBalance:
-      type: object
-      required:
-      - amount
-      properties:
-        amount:
-          $ref: '#/components/schemas/UnsignedInteger'
-      additionalProperties: false
-    TokenAccountList:
-      type: object
-      required:
-      - items
-      properties:
-        cursor:
-          $ref: '#/components/schemas/Base58String'
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/TokenAcccount'
-    TokenBalance:
-      type: object
-      required:
-      - mint
-      - balance
-      properties:
-        balance:
-          $ref: '#/components/schemas/UnsignedInteger'
-        mint:
-          $ref: '#/components/schemas/SerializablePubkey'
-    TokenBalanceList:
-      type: object
-      required:
-      - token_balances
-      properties:
-        cursor:
-          type: string
-          nullable: true
-        token_balances:
-          type: array
-          items:
-            $ref: '#/components/schemas/TokenBalance'
     TokenData:
       type: object
       required:
@@ -440,11 +191,6 @@ components:
           $ref: '#/components/schemas/AccountState'
         tlv:
           $ref: '#/components/schemas/Base64String'
-    UnixTimestamp:
-      type: integer
-      description: An Unix timestamp (seconds)
-      default: 1714081554
-      example: 1714081554
     UnsignedInteger:
       type: integer
       default: 100
