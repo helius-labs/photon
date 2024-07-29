@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::api::api::PhotonApi;
 use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
@@ -34,6 +36,7 @@ use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use dirs;
+use utoipa::openapi::Components;
 use utoipa::openapi::Response;
 
 use crate::common::relative_project_path;
@@ -190,20 +193,101 @@ fn fix_examples_for_allOf_references(schema: RefOr<Schema>) -> RefOr<Schema> {
     }
 }
 
+fn find_all_components(schema: RefOr<Schema>) -> HashSet<String> {
+    let mut components = HashSet::new();
+
+    match schema {
+        RefOr::T(schema) => match schema {
+            Schema::Object(object) => {
+                for (_, value) in object.properties {
+                    components.extend(find_all_components(value));
+                }
+            }
+            Schema::Array(array) => {
+                components.extend(find_all_components(*array.items));
+            }
+            Schema::AllOf(all_of) => {
+                for item in all_of.items {
+                    components.extend(find_all_components(item));
+                }
+            }
+            Schema::OneOf(one_of) => {
+                for item in one_of.items {
+                    components.extend(find_all_components(item));
+                }
+            }
+            Schema::AnyOf(any_of) => {
+                for item in any_of.items {
+                    components.extend(find_all_components(item));
+                }
+            }
+            _ => {}
+        },
+        RefOr::Ref(ref_location) => {
+            components.insert(
+                ref_location
+                    .ref_location
+                    .split('/')
+                    .last()
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+    }
+
+    components
+}
+
+fn filter_unused_components(
+    request: RefOr<Schema>,
+    response: RefOr<Schema>,
+    components: &mut Components,
+) {
+    let mut used_components = find_all_components(request);
+    used_components.extend(find_all_components(response));
+
+    let mut check_stack = used_components.clone();
+    while check_stack.len() > 0 {
+        // Pop any element from the stack
+        let current = check_stack.iter().next().unwrap().clone();
+        check_stack.remove(&current);
+        let schema = components.schemas.get(&current).unwrap().clone();
+        let child_componets = find_all_components(schema.clone());
+        for child in child_componets {
+            if !used_components.contains(&child) {
+                used_components.insert(child.clone());
+                check_stack.insert(child);
+            }
+        }
+    }
+
+    components.schemas = components
+        .schemas
+        .iter()
+        .filter(|(k, _)| used_components.contains(*k))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+}
+
 pub fn update_docs(is_test: bool) {
     let method_api_specs = PhotonApi::method_api_specs();
 
     for spec in method_api_specs {
         let mut doc = ApiDoc::openapi();
-        doc.components = doc.components.map(|components| {
-            let mut components = components.clone();
-            components.schemas = components
-                .schemas
-                .iter()
-                .map(|(k, v)| (k.clone(), fix_examples_for_allOf_references(v.clone())))
-                .collect();
-            components
-        });
+
+        let mut components = doc.components.unwrap();
+        filter_unused_components(
+            spec.request.clone().unwrap_or_default(),
+            spec.response.clone(),
+            &mut components,
+        );
+        components.schemas = components
+            .schemas
+            .iter()
+            .map(|(k, v)| (k.clone(), fix_examples_for_allOf_references(v.clone())))
+            .collect();
+
+        doc.components = Some(components);
         let content = ContentBuilder::new()
             .schema(request_schema(&spec.name, spec.request))
             .build();
@@ -231,6 +315,7 @@ pub fn update_docs(is_test: bool) {
         doc.servers = Some(vec![ServerBuilder::new()
             .url("https://devnet.helius-rpc.com?api-key=<api_key>".to_string())
             .build()]);
+
         let yaml = doc.to_yaml().unwrap();
 
         let path = match is_test {
