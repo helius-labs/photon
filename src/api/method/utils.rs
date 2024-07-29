@@ -255,9 +255,7 @@ pub async fn fetch_token_accounts(
         filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
     }
     if let Some(cursor) = options.cursor {
-        let bytes = bs58::decode(cursor.0.clone())
-            .into_vec()
-            .map_err(|_| PhotonApiError::ValidationError(format!("Invalid cursor {}", cursor.0)))?;
+        let bytes = cursor.0;
         let expected_cursor_length = 64;
         if bytes.len() != expected_cursor_length {
             return Err(PhotonApiError::ValidationError(format!(
@@ -311,24 +309,20 @@ pub async fn fetch_token_accounts(
         .collect::<Result<Vec<TokenAcccount>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|item| {
-        bs58::encode::<Vec<u8>>({
+        Base58String({
             let item = item.clone();
             let mut bytes: Vec<u8> = item.token_data.mint.into();
             let hash_bytes: Vec<u8> = item.account.hash.into();
             bytes.extend_from_slice(hash_bytes.as_slice());
             bytes
         })
-        .into_string()
     });
     if items.len() < limit as usize {
         cursor = None;
     }
 
     Ok(TokenAccountListResponse {
-        value: TokenAccountList {
-            items,
-            cursor: cursor.map(Base58String),
-        },
+        value: TokenAccountList { items, cursor },
         context,
     })
 }

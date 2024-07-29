@@ -1,7 +1,9 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
-use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_compressed_accounts_by_owner::{
+    DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
+};
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
@@ -12,6 +14,7 @@ use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
     GetCompressedTokenAccountsByOwner,
 };
+use photon_indexer::common::typedefs::bs58_string::Base58String;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -256,6 +259,7 @@ async fn test_multiple_accounts(
                     owner: SerializablePubkey::from(owner),
                     cursor: cursor.clone(),
                     limit: Some(Limit::new(1).unwrap()),
+                    ..Default::default()
                 })
                 .await
                 .unwrap()
@@ -955,5 +959,100 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
         get_multiple_new_address_proofs(&setup.db_conn, address_list)
             .await
             .unwrap();
+    }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_gpa_filters(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use log::info;
+
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let owner1 = SerializablePubkey::new_unique();
+    let mut state_update = StateUpdate::default();
+
+    let accounts = vec![Account {
+        hash: Hash::new_unique(),
+        address: Some(SerializablePubkey::new_unique()),
+        data: Some(AccountData {
+            discriminator: UnsignedInteger(0),
+            data: Base64String(vec![1, 2, 3]),
+            data_hash: Hash::new_unique(),
+        }),
+        owner: owner1,
+        lamports: UnsignedInteger(1000),
+        tree: SerializablePubkey::new_unique(),
+        leaf_index: UnsignedInteger(10),
+        seq: UnsignedInteger(1),
+        slot_created: UnsignedInteger(0),
+    }];
+    state_update.out_accounts = accounts.clone();
+    persist_state_update_using_connection(&setup.db_conn, state_update)
+        .await
+        .unwrap();
+
+    let res = setup
+        .api
+        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+            owner: SerializablePubkey::from(owner1),
+
+            dataSlice: Some(DataSlice {
+                offset: 0,
+                length: 2,
+            }),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .value;
+
+    assert!(res.items[0].data.clone().unwrap().data.0 == vec![1, 2]);
+
+    let filters_and_expected_results = vec![
+        ((vec![1, 2], 0), 1),
+        ((vec![1, 2, 3], 0), 1),
+        ((vec![2, 3], 1), 1),
+        ((vec![2, 3], 0), 0),
+    ];
+
+    for (filter, expected_count) in filters_and_expected_results {
+        info!("Filter: {:?}", filter);
+        let res = setup
+            .api
+            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                owner: SerializablePubkey::from(owner1),
+                filters: vec![FilterSelector {
+                    memcmp: Some(Memcmp {
+                        offset: filter.1,
+                        bytes: Base58String(filter.0.iter().map(|x| *x as u8).collect()),
+                    }),
+                }],
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .value;
+
+        assert_eq!(res.items.len(), expected_count);
     }
 }
