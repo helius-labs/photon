@@ -3,7 +3,7 @@ use crate::{
     dao::generated::accounts,
     ingester::persist::bytes_to_sql_format,
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, QuerySelect, Statement};
+use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
