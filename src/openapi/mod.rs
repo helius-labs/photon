@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
 use crate::api::api::PhotonApi;
+use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
+use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
+use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
@@ -91,7 +94,10 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     CompressedProofWithContext,
     MerkleContextWithNewAddressProof,
     SignatureInfoListWithError,
-    SignatureInfoWithError
+    SignatureInfoWithError,
+    DataSlice,
+    FilterSelector,
+    Memcmp
 )))]
 struct ApiDoc;
 

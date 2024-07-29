@@ -41,11 +41,20 @@ paths:
                   type: object
                   required:
                   - owner
+                  - filters
                   properties:
                     cursor:
                       allOf:
                       - $ref: '#/components/schemas/Hash'
                       nullable: true
+                    dataSlice:
+                      allOf:
+                      - $ref: '#/components/schemas/DataSlice'
+                      nullable: true
+                    filters:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FilterSelector'
                     limit:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
@@ -134,6 +143,11 @@ components:
         discriminator:
           $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
+    Base58String:
+      type: string
+      description: A base 58 encoded string.
+      default: 3J98t1WpEZ73CNm
+      example: 3J98t1WpEZ73CNm
     Base64String:
       type: string
       description: A base 64 encoded string.
@@ -148,6 +162,23 @@ components:
           type: integer
           default: 100
           example: 100
+    DataSlice:
+      type: object
+      required:
+      - offset
+      - length
+      properties:
+        length:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+    FilterSelector:
+      type: object
+      properties:
+        memcmp:
+          $ref: '#/components/schemas/Memcmp'
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
@@ -156,6 +187,17 @@ components:
       type: integer
       format: int64
       minimum: 0
+    Memcmp:
+      type: object
+      required:
+      - offset
+      - bytes
+      properties:
+        bytes:
+          $ref: '#/components/schemas/Base58String'
+        offset:
+          type: integer
+          minimum: 0
     PaginatedAccountList:
       type: object
       required:

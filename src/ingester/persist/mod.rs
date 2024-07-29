@@ -216,7 +216,7 @@ enum ModificationType {
     Spend,
 }
 
-fn bytes_to_sql_format(database_backend: DatabaseBackend, bytes: Vec<u8>) -> String {
+pub fn bytes_to_sql_format(database_backend: DatabaseBackend, bytes: Vec<u8>) -> String {
     match database_backend {
         DatabaseBackend::Postgres => bytes_to_postgres_sql_format(bytes),
         DatabaseBackend::Sqlite => bytes_to_sqlite_sql_format(bytes),
