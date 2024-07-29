@@ -1,4 +1,8 @@
-use crate::{common::typedefs::account::Account, dao::generated::accounts};
+use crate::{
+    common::typedefs::{account::Account, bs64_string::Base64String},
+    dao::generated::accounts,
+};
+use env_logger::filter::Filter;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -18,10 +22,45 @@ pub struct Options {
     pub limit: Option<Limit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Memcmp {
+    offset: usize,
+    bytes: Base64String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum FilterInstance {
+    Memcmp(Memcmp),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+struct FilterSelector {
+    memcmp: Option<Memcmp>,
+}
+
+impl FilterSelector {
+    fn into_filter_instance(self) -> FilterInstance {
+        if let Some(memcmp) = self.memcmp {
+            FilterInstance::Memcmp(memcmp)
+        } else {
+            panic!("No filter selected")
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+struct DataSlice {
+    offset: usize,
+    length: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountsByOwnerRequest {
     pub owner: SerializablePubkey,
+    pub filters: Vec<FilterSelector>,
+    #[allow(non_snake_case)]
+    pub dataSlice: Option<DataSlice>,
     pub cursor: Option<Hash>,
     pub limit: Option<Limit>,
 }
@@ -49,6 +88,8 @@ pub async fn get_compressed_accounts_by_owner(
         owner,
         cursor,
         limit,
+        filters,
+        dataSlice,
     } = request;
 
     let mut filter = accounts::Column::Owner
@@ -57,6 +98,18 @@ pub async fn get_compressed_accounts_by_owner(
 
     if let Some(cursor) = cursor {
         filter = filter.and(accounts::Column::Hash.gt::<Vec<u8>>(cursor.into()));
+    }
+
+    for filter_selector in filters {
+        match filter_selector.into_filter_instance() {
+            FilterInstance::Memcmp(memcmp) => {
+                filter = filter.and(
+                    accounts::Column::Data
+                        .slice(memcmp.offset, memcmp.bytes.len())
+                        .eq::<Vec<u8>>(memcmp.bytes.into()),
+                );
+            }
+        }
     }
     let mut query_limit = PAGE_LIMIT;
     if let Some(limit) = limit {
