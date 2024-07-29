@@ -1,14 +1,9 @@
 use crate::{
-    common::typedefs::{account::Account, bs58_string::Base58String, bs64_string::Base64String},
+    common::typedefs::{account::Account, bs58_string::Base58String},
     dao::generated::accounts,
     ingester::persist::bytes_to_sql_format,
 };
-use env_logger::filter::Filter;
-use log::info;
-use sea_orm::{
-    sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement, Value,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, QuerySelect, Statement};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
