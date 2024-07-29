@@ -34,6 +34,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use dirs;
 use utoipa::openapi::Components;
+use utoipa::openapi::Response;
 
 use crate::common::relative_project_path;
 
@@ -108,6 +109,27 @@ fn add_string_property(
 
     let string_schema = RefOr::T(Schema::Object(string_object));
     builder.property(name, string_schema)
+}
+
+fn build_error_response(description: &str) -> Response {
+    ResponseBuilder::new()
+        .description(description)
+        .content(
+            JSON_CONTENT_TYPE,
+            ContentBuilder::new()
+                .schema(Schema::Object(
+                    ObjectBuilder::new()
+                        .property(
+                            "error",
+                            RefOr::T(Schema::Object(
+                                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+                            )),
+                        )
+                        .build(),
+                ))
+                .build(),
+        )
+        .build()
 }
 
 fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
@@ -271,11 +293,11 @@ pub fn update_docs(is_test: bool) {
             "200",
             ResponseBuilder::new().content(
                 JSON_CONTENT_TYPE,
-                ContentBuilder::new()
-                    .schema(fix_examples_for_allOf_references(spec.response))
-                    .build(),
+                ContentBuilder::new().schema(fix_examples_for_allOf_references(spec.response)).build(),
             ),
-        );
+        )
+        .response("429", build_error_response("Exceeded rate limit."))
+        .response("500", build_error_response("The server encountered an unexpected condition that prevented it from fulfilling the request."));
         let operation = OperationBuilder::new()
             .request_body(Some(request_body))
             .responses(responses)
