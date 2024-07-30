@@ -16,6 +16,7 @@ use solana_sdk::signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
 use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
+use yellowstone_grpc_proto::convert_from::create_tx_error;
 use yellowstone_grpc_proto::geyser::{
     subscribe_update::UpdateOneof, CommitmentLevel, SubscribeRequest, SubscribeRequestPing,
 };
@@ -237,7 +238,9 @@ fn parse_block(block: SubscribeUpdateBlock) -> BlockInfo {
 
 fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> TransactionInfo {
     let meta = transaction.meta.unwrap();
-    let error = meta.err.map(|e| bincode::deserialize(&e.err).unwrap());
+    let error = create_tx_error(meta.err.as_ref()).unwrap();
+    let error = error.map(|e| e.to_string());
+
     let signature = Signature::try_from(transaction.signature).unwrap();
     let message = transaction.transaction.unwrap().message.unwrap();
     let outer_intructions = message.instructions;
