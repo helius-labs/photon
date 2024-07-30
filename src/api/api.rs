@@ -304,6 +304,51 @@ impl PhotonApi {
                 response: AccountResponse::schema().1,
             },
             OpenApiSpec {
+                name: "getCompressedBalance".to_string(),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
+                response: AccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountBalance".to_string(),
+                request: Some(CompressedAccountRequest::adjusted_schema()),
+                response: GetCompressedTokenAccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedBalanceByOwner".to_string(),
+                request: Some(GetCompressedBalanceByOwnerRequest::schema().1),
+                response: AccountBalanceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenBalancesByOwner".to_string(),
+                request: Some(GetCompressedTokenBalancesByOwnerRequest::schema().1),
+                response: TokenBalancesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedAccountsByOwner".to_string(),
+                request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
+                response: GetCompressedAccountsByOwnerResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleCompressedAccounts".to_string(),
+                request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
+                response: GetMultipleCompressedAccountsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountsByOwner".to_string(),
+                request: Some(GetCompressedTokenAccountsByOwner::schema().1),
+                response: TokenAccountListResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenAccountsByDelegate".to_string(),
+                request: Some(GetCompressedTokenAccountsByDelegate::schema().1),
+                response: TokenAccountListResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getTransactionWithCompressionInfo".to_string(),
+                request: Some(GetTransactionRequest::schema().1),
+                response: GetTransactionResponse::schema().1,
+            },
+            OpenApiSpec {
                 name: "getCompressedAccountProof".to_string(),
                 request: Some(HashRequest::schema().1),
                 response: GetCompressedAccountProofResponse::schema().1,
@@ -322,51 +367,6 @@ impl PhotonApi {
                 name: "getValidityProof".to_string(),
                 request: Some(GetValidityProofRequest::schema().1),
                 response: GetValidityProofResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedTokenAccountsByOwner".to_string(),
-                request: Some(GetCompressedTokenAccountsByOwner::schema().1),
-                response: TokenAccountListResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedTokenAccountsByDelegate".to_string(),
-                request: Some(GetCompressedTokenAccountsByDelegate::schema().1),
-                response: TokenAccountListResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedAccountsByOwner".to_string(),
-                request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
-                response: GetCompressedAccountsByOwnerResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getMultipleCompressedAccounts".to_string(),
-                request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
-                response: GetMultipleCompressedAccountsResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedTokenAccountBalance".to_string(),
-                request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: GetCompressedTokenAccountBalanceResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedBalance".to_string(),
-                request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: AccountBalanceResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedBalanceByOwner".to_string(),
-                request: Some(GetCompressedBalanceByOwnerRequest::schema().1),
-                response: AccountBalanceResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedTokenBalancesByOwner".to_string(),
-                request: Some(GetCompressedTokenBalancesByOwnerRequest::schema().1),
-                response: TokenBalancesResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getTransactionWithCompressionInfo".to_string(),
-                request: Some(GetTransactionRequest::schema().1),
-                response: GetTransactionResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressionSignaturesForAccount".to_string(),
