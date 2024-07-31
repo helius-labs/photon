@@ -72,6 +72,11 @@ Additionally, for tests we use `swagger-cli` to validate our OpenAPI schemas. So
 npm install -g @apidevtools/swagger-cli
 ```
 
+Finally run the Gnark prover, which is needed for integration tests:
+```bash
+docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
+```
+
 Afterwards finishing setup simply run:
 ```bash
 cargo test
