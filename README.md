@@ -77,8 +77,6 @@ Finally run the Gnark prover, which is needed for integration tests:
 docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
 ```
 
-```
-
 Afterwards finishing setup simply run:
 ```bash
 cargo test
