@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
@@ -16,31 +17,31 @@ use crate::common::typedefs::hash::Hash;
 
 use super::super::error::IngesterError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Instruction {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
     pub accounts: Vec<Pubkey>,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstructionGroup {
     pub outer_instruction: Instruction,
     pub inner_instructions: Vec<Instruction>,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub instruction_groups: Vec<InstructionGroup>,
     pub signature: Signature,
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct BlockInfo {
     pub metadata: BlockMetadata,
     pub transactions: Vec<TransactionInfo>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct BlockMetadata {
     pub slot: Slot,
     // In Solana, slots can be skipped. So there are not necessarily sequential.
