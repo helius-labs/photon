@@ -167,7 +167,7 @@ pub async fn update_snapshot_helper(
         .map(|file| file.end_slot)
         .unwrap_or(last_indexed_slot);
 
-    let (mut temp_file, mut temp_file_path) = create_temp_snapshot_file("incremental_snapshot/");
+    let (mut temp_file, temp_file_path) = create_temp_snapshot_file("incremental_snapshot/");
 
     pin_mut!(blocks);
     while let Some(block) = blocks.next().await {
