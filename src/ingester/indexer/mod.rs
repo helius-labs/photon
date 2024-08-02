@@ -1,7 +1,7 @@
 use std::{sync::Arc, thread::sleep, time::Duration};
 
 use async_std::stream::StreamExt;
-use futures::pin_mut;
+use futures::{pin_mut, Stream};
 use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-use super::fetchers::BlockStreamConfig;
+use super::typedefs::block_info::BlockInfo;
 const POST_BACKFILL_FREQUENCY: u64 = 100;
 const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
@@ -49,52 +49,48 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
     }
 }
 
-pub async fn continously_index_new_blocks(
-    block_stream_config: BlockStreamConfig,
+pub async fn index_block_stream(
+    block_stream: impl Stream<Item = BlockInfo>,
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let block_stream = block_stream_config.load_block_stream();
-        pin_mut!(block_stream);
-        let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
-        let number_of_blocks_to_backfill = current_slot - last_indexed_slot_at_start;
-        info!(
-            "Backfilling historical blocks. Current number of blocks to backfill: {}",
-            number_of_blocks_to_backfill
-        );
-        let mut last_indexed_slot = last_indexed_slot_at_start;
+) {
+    pin_mut!(block_stream);
+    let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
+    let number_of_blocks_to_backfill = current_slot - last_indexed_slot_at_start;
+    info!(
+        "Backfilling historical blocks. Current number of blocks to backfill: {}",
+        number_of_blocks_to_backfill
+    );
+    let mut last_indexed_slot = last_indexed_slot_at_start;
 
-        let mut finished_backfill = false;
+    let mut finished_backfill = false;
 
-        loop {
-            let block = block_stream.next().await.unwrap();
-            let slot_indexed = block.metadata.slot;
-            index_block_batch_with_infinite_retries(db.as_ref(), vec![block]).await;
+    while let Some(block) = block_stream.next().await {
+        let slot_indexed = block.metadata.slot;
+        index_block_batch_with_infinite_retries(db.as_ref(), vec![block]).await;
 
-            if !finished_backfill {
-                let blocks_indexed = slot_indexed - last_indexed_slot_at_start;
-                if blocks_indexed <= number_of_blocks_to_backfill {
-                    if blocks_indexed % PRE_BACKFILL_FREQUENCY as u64 == 0 {
-                        info!(
-                            "Backfilled {} / {} blocks",
-                            blocks_indexed, number_of_blocks_to_backfill
-                        );
-                    }
-                } else {
-                    finished_backfill = true;
-                    info!("Finished backfilling historical blocks!");
+        if !finished_backfill {
+            let blocks_indexed = slot_indexed - last_indexed_slot_at_start;
+            if blocks_indexed <= number_of_blocks_to_backfill {
+                if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
+                    info!(
+                        "Backfilled {} / {} blocks",
+                        blocks_indexed, number_of_blocks_to_backfill
+                    );
                 }
             } else {
-                for slot in last_indexed_slot..slot_indexed {
-                    if slot % POST_BACKFILL_FREQUENCY == 0 {
-                        info!("Indexed slot {}", slot);
-                    }
+                finished_backfill = true;
+                info!("Finished backfilling historical blocks!");
+            }
+        } else {
+            for slot in last_indexed_slot..slot_indexed {
+                if slot % POST_BACKFILL_FREQUENCY == 0 {
+                    info!("Indexed slot {}", slot);
                 }
             }
-
-            last_indexed_slot = slot_indexed;
         }
-    })
+
+        last_indexed_slot = slot_indexed;
+    }
 }

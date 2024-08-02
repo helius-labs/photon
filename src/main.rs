@@ -1,19 +1,24 @@
 use std::fmt;
 use std::fs::File;
 use std::net::UdpSocket;
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
 use clap::{Parser, ValueEnum};
+use futures::{pin_mut, stream, StreamExt};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
 
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::ingester::indexer::{
-    continously_index_new_blocks, fetch_last_indexed_slot_with_infinite_retry,
+    fetch_last_indexed_slot_with_infinite_retry, index_block_stream,
+};
+use photon_indexer::ingester::snapshotter::{
+    get_snapshot_files_with_slots, load_block_stream_from_snapshot_directory,
 };
 use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
@@ -86,6 +91,18 @@ struct Args {
     /// Light Prover url to use for verifying proofs
     #[arg(long, default_value = "http://127.0.0.1:3001")]
     prover_url: String,
+
+    /// Snasphot directory
+    #[arg(long, default_value = None)]
+    snapshot_dir: Option<String>,
+
+    /// Incremental snapshot slots
+    #[arg(long, default_value = None)]
+    incremental_snapshot_internval_slots: Option<u64>,
+
+    /// Fullsnapshot slots
+    #[arg(long, default_value = None)]
+    snapshot_interval_slots: Option<u64>,
 
     #[arg(short, long, default_value = None)]
     /// Yellowstone gRPC URL. If it's inputed, then the indexer will use gRPC to fetch new blocks
@@ -244,6 +261,46 @@ async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u64 {
         .parent_slot
 }
 
+fn continously_index_new_blocks(
+    block_stream_config: BlockStreamConfig,
+    db: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClient>,
+    last_indexed_slot: u64,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let block_stream = block_stream_config.load_block_stream();
+        index_block_stream(block_stream, db, rpc_client, last_indexed_slot).await;
+    })
+}
+
+async fn continously_run_snapshotter(
+    block_stream_config: BlockStreamConfig,
+    incremental_snapshot_interval_slots: u64,
+    full_snapshot_interval_slots: u64,
+    snapshot_dir: String,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        photon_indexer::ingester::snapshotter::update_snapshot(
+            block_stream_config,
+            incremental_snapshot_interval_slots,
+            full_snapshot_interval_slots,
+            Path::new(&snapshot_dir),
+        )
+        .await;
+    })
+}
+
+async fn get_network_start_slot(rpc_client: Arc<RpcClient>) -> u64 {
+    let genesis_hash = get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+    match genesis_hash.as_str() {
+        // Devnet
+        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132 - 1,
+        // Mainnet
+        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074 - 1,
+        _ => 0,
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -260,6 +317,57 @@ async fn main() {
         Duration::from_secs(10),
         CommitmentConfig::confirmed(),
     ));
+    let mut snapshotter_handle = None;
+
+    if let Some(snapshot_dir) = args.snapshot_dir {
+        let snapshot_dir_path = Path::new(&snapshot_dir);
+        if !get_snapshot_files_with_slots(snapshot_dir_path).is_empty() {
+            info!("Detected snapshot files. Loading snapshot...");
+            let block_stream = load_block_stream_from_snapshot_directory(snapshot_dir_path);
+            pin_mut!(block_stream);
+            let first_block = block_stream.next().await.unwrap();
+            let slot = first_block.metadata.slot;
+            let last_indexed_slot = first_block.metadata.parent_slot;
+            index_block_stream(
+                stream::iter(vec![first_block].into_iter()),
+                db_conn.clone(),
+                rpc_client.clone(),
+                last_indexed_slot,
+            )
+            .await;
+            index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
+        }
+
+        match (
+            args.incremental_snapshot_internval_slots,
+            args.snapshot_interval_slots,
+        ) {
+            (Some(incremental_snapshot_interval_slots), Some(snapshot_interval_slots)) => {
+                info!("Starting snapshotter...");
+
+                snapshotter_handle = Some(
+                    continously_run_snapshotter(
+                        BlockStreamConfig {
+                            rpc_client: rpc_client.clone(),
+                            max_concurrent_block_fetches: 1,
+                            last_indexed_slot: 0,
+                            geyser_url: args.grpc_url.clone(),
+                        },
+                        incremental_snapshot_interval_slots,
+                        snapshot_interval_slots,
+                        snapshot_dir,
+                    )
+                    .await,
+                );
+            }
+            (None, None) => {
+                info!("Snapshotting is disabled");
+            }
+            _ => {
+                panic!("Both incremental_snapshot_interval_slots and snapshot_interval_slots must be provided");
+            }
+        }
+    }
 
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
 
@@ -287,16 +395,8 @@ async fn main() {
                 None => {
                     (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
                         .await
-                        .unwrap_or({
-                            let genesis_hash =
-                                get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
-                            match genesis_hash.as_str() {
-                                // Devnet
-                                "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310276132 - 1,
-                                "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074 - 1,
-                                _ => 0,
-                            }
-                        })) as u64
+                        .unwrap_or(get_network_start_slot(rpc_client.clone()).await as i64))
+                        as u64
                 }
             };
 
@@ -307,12 +407,12 @@ async fn main() {
                 geyser_url: args.grpc_url,
             };
 
-            Some(tokio::task::spawn(continously_index_new_blocks(
+            Some(continously_index_new_blocks(
                 block_stream_config,
                 db_conn.clone(),
                 rpc_client.clone(),
                 last_indexed_slot,
-            )))
+            ))
         }
     };
 
@@ -343,6 +443,13 @@ async fn main() {
             if let Some(api_handler) = &api_handler {
                 info!("Shutting down API server...");
                 api_handler.stop().unwrap();
+            }
+            if let Some(snapshotter_handle) = snapshotter_handle {
+                info!("Shutting down snapshotter...");
+                snapshotter_handle.abort();
+                snapshotter_handle
+                    .await
+                    .expect_err("Snapshotter should have been aborted");
             }
         }
         Err(err) => {
