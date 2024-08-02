@@ -39,7 +39,7 @@ fn is_compression_transaction(tx: &TransactionInfo) -> bool {
 }
 
 fn serialize_block_to_file(block: &BlockInfo, file: &mut File) {
-    let trimmed_downblock = BlockInfo {
+    let trimmed_block = BlockInfo {
         metadata: block.metadata.clone(),
         transactions: block
             .transactions
@@ -48,7 +48,7 @@ fn serialize_block_to_file(block: &BlockInfo, file: &mut File) {
             .cloned()
             .collect(),
     };
-    let block_bytes = bincode::serialize(block).unwrap();
+    let block_bytes = bincode::serialize(&trimmed_block).unwrap();
     file.write_all(block_bytes.as_ref()).unwrap();
 }
 
@@ -82,10 +82,10 @@ fn get_snapshot_files_with_slots(snapshot_dir: &Path) -> Vec<SnapshotFileWithSlo
     snapshot_files_with_slots
 }
 
-fn create_temp_snapshot_file() -> (File, PathBuf) {
+fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     let temp_dir = temp_dir();
     // Create a subdirectory for the snapshot files
-    let temp_dir = temp_dir.join("photon-snapshot");
+    let temp_dir = temp_dir.join(dir);
     if !temp_dir.exists() {
         fs::create_dir(&temp_dir).unwrap();
     }
@@ -101,7 +101,7 @@ fn create_temp_snapshot_file() -> (File, PathBuf) {
 }
 
 async fn merge_snapshots(snapshot_dir: &Path) {
-    let (mut temp_file, temp_file_path) = create_temp_snapshot_file();
+    let (mut temp_file, temp_file_path) = create_temp_snapshot_file("fullsnaphot/");
 
     let block_stream = load_block_stream_from_snapshot_directory(snapshot_dir);
     pin_mut!(block_stream);
@@ -122,55 +122,82 @@ async fn merge_snapshots(snapshot_dir: &Path) {
         end_slot.unwrap()
     ));
     fs::rename(&temp_file_path, &snapshot_file_path).unwrap();
+    let backup_dir = temp_dir().join("backup");
+    fs::rename(snapshot_dir, &backup_dir).unwrap();
     fs::rename(temp_file_directory, snapshot_dir).unwrap();
+    fs::remove_dir_all(backup_dir).unwrap();
 }
 
-async fn continously_update_snapshot(
-    mut block_stream_config: BlockStreamConfig,
+pub async fn update_snapshot(
+    block_stream_config: BlockStreamConfig,
     incremental_snapshot_interval_slots: u64,
     full_snapshot_interval_slots: u64,
     snapshot_dir: &Path,
 ) {
+    // Convert stream to iterator
+    let block_stream = block_stream_config.load_block_stream();
+    update_snapshot_helper(
+        block_stream,
+        block_stream_config.last_indexed_slot,
+        incremental_snapshot_interval_slots,
+        full_snapshot_interval_slots,
+        snapshot_dir,
+    )
+    .await;
+}
+
+pub async fn update_snapshot_helper(
+    blocks: impl Stream<Item = BlockInfo>,
+    last_indexed_slot: u64,
+    incremental_snapshot_interval_slots: u64,
+    full_snapshot_interval_slots: u64,
+    snapshot_dir: &Path,
+) {
+    if !snapshot_dir.exists() {
+        fs::create_dir(snapshot_dir).unwrap();
+    }
     let snapshot_files = get_snapshot_files_with_slots(snapshot_dir);
 
     let mut last_full_snapshot_slot = snapshot_files
         .first()
         .map(|file| file.end_slot)
-        .unwrap_or(block_stream_config.last_indexed_slot);
+        .unwrap_or(last_indexed_slot);
     let mut last_snapshot_slot = snapshot_files
         .last()
         .map(|file| file.end_slot)
-        .unwrap_or(block_stream_config.last_indexed_slot);
+        .unwrap_or(last_indexed_slot);
 
-    let (mut temp_file, temp_file_path) = create_temp_snapshot_file();
+    let (mut temp_file, mut temp_file_path) = create_temp_snapshot_file("incremental_snapshot/");
 
-    block_stream_config.last_indexed_slot = last_snapshot_slot;
-    let block_stream = block_stream_config.load_block_stream();
-    pin_mut!(block_stream);
-
-    while let Some(block) = block_stream.next().await {
+    pin_mut!(blocks);
+    while let Some(block) = blocks.next().await {
         let slot = block.metadata.slot;
         serialize_block_to_file(&block, &mut temp_file);
 
-        let write_full_snapshot = slot - last_full_snapshot_slot >= full_snapshot_interval_slots;
-        let write_incremental_snapshot =
-            slot - last_snapshot_slot >= incremental_snapshot_interval_slots;
+        let write_full_snapshot = slot - last_full_snapshot_slot + (last_indexed_slot == 0) as u64
+            >= full_snapshot_interval_slots;
+        let write_incremental_snapshot = slot - last_snapshot_slot
+            + (last_snapshot_slot == 0) as u64
+            >= incremental_snapshot_interval_slots;
 
         if write_full_snapshot || write_incremental_snapshot {
             let snapshot_file_path =
                 snapshot_dir.join(format!("snapshot-{}-{}", last_snapshot_slot + 1, slot));
             fs::rename(&temp_file_path, &snapshot_file_path).unwrap();
+            temp_file = create_temp_snapshot_file("incremental_snapshot/").0;
             last_snapshot_slot = slot;
 
             if write_full_snapshot {
-                merge_snapshots(snapshot_dir);
+                merge_snapshots(snapshot_dir).await;
                 last_full_snapshot_slot = slot;
             }
         }
     }
 }
 
-fn load_block_stream_from_snapshot_directory(snapshot_dir: &Path) -> impl Stream<Item = BlockInfo> {
+pub fn load_block_stream_from_snapshot_directory(
+    snapshot_dir: &Path,
+) -> impl Stream<Item = BlockInfo> {
     let snapshot_files = get_snapshot_files_with_slots(snapshot_dir);
     stream! {
         for snapshot_file in snapshot_files {
@@ -181,7 +208,8 @@ fn load_block_stream_from_snapshot_directory(snapshot_dir: &Path) -> impl Stream
                 let block = bincode::deserialize_from(&mut reader);
                 match block {
                     Ok(block) => { yield block;}
-                    Err(_) => {
+                    Err(e) => {
+                        println!("Error deserializing block: {:?}", e);
                         break
                     }
                 }
