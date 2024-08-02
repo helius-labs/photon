@@ -52,13 +52,13 @@ fn serialize_block_to_file(block: &BlockInfo, file: &mut File) {
     file.write_all(block_bytes.as_ref()).unwrap();
 }
 
-struct SnapshotFileWithSlots {
+pub struct SnapshotFileWithSlots {
     file: PathBuf,
     start_slot: u64,
     end_slot: u64,
 }
 
-fn get_snapshot_files_with_slots(snapshot_dir: &Path) -> Vec<SnapshotFileWithSlots> {
+pub fn get_snapshot_files_with_slots(snapshot_dir: &Path) -> Vec<SnapshotFileWithSlots> {
     let snapshot_files = fs::read_dir(snapshot_dir)
         .unwrap()
         .map(|entry| entry.unwrap().path())
