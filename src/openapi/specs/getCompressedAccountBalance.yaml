@@ -4,12 +4,12 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.38.0
+  version: 0.39.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
   /:
-    summary: getCompressedBalance
+    summary: getCompressedAccountBalance
     post:
       requestBody:
         content:
@@ -36,7 +36,7 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getCompressedBalance
+                  - getCompressedAccountBalance
                 params:
                   type: object
                   description: Request for compressed account data
@@ -105,12 +105,12 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111Af7Udc9v3L82dQM5b4zee1Xt77Be4czzbH
+      example: 11111113R2cuenjG5nFubqX9Wzuukdin2YfGQVzu5
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111AFmseVrdL9f9oyCzZefL9tG6UbvhMPRAGw
-      example: 1111111AFmseVrdL9f9oyCzZefL9tG6UbvhMPRAGw
+      default: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
+      example: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
     UnsignedInteger:
       type: integer
       default: 100

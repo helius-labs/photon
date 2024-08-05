@@ -46,6 +46,7 @@ use super::{
     error::PhotonApiError,
     method::{
         get_compressed_account::get_compressed_account,
+        get_compressed_account_balance::get_compressed_account_balance,
         get_compressed_account_proof::{
             get_compressed_account_proof, GetCompressedAccountProofResponse,
         },
@@ -53,7 +54,6 @@ use super::{
             get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerRequest,
             GetCompressedAccountsByOwnerResponse,
         },
-        get_compressed_balance::get_compressed_balance,
         get_compressed_token_account_balance::{
             get_compressed_token_account_balance, GetCompressedTokenAccountBalanceResponse,
         },
@@ -206,11 +206,11 @@ impl PhotonApi {
         get_compressed_token_account_balance(&self.db_conn, request).await
     }
 
-    pub async fn get_compressed_balance(
+    pub async fn get_compressed_account_balance(
         &self,
         request: CompressedAccountRequest,
     ) -> Result<AccountBalanceResponse, PhotonApiError> {
-        get_compressed_balance(&self.db_conn, request).await
+        get_compressed_account_balance(&self.db_conn, request).await
     }
 
     pub async fn get_indexer_health(&self) -> Result<String, PhotonApiError> {
@@ -304,7 +304,7 @@ impl PhotonApi {
                 response: AccountResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getCompressedBalance".to_string(),
+                name: "getCompressedAccountBalance".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
                 response: AccountBalanceResponse::schema().1,
             },
