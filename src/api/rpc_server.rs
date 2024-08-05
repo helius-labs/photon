@@ -136,7 +136,18 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         |rpc_params, rpc_context| async move {
             let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
-            api.get_compressed_balance(payload)
+            api.get_compressed_account_balance(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedAccountBalance",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_account_balance(payload)
                 .await
                 .map_err(Into::into)
         },

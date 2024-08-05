@@ -123,7 +123,7 @@ async fn test_persist_state_update_basic(
 
     let res = setup
         .api
-        .get_compressed_balance(request)
+        .get_compressed_account_balance(request)
         .await
         .unwrap()
         .value;
