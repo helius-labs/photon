@@ -1,14 +1,15 @@
 use anyhow::Context;
 use async_std::stream::StreamExt;
+use async_stream::stream;
 use clap::Parser;
 use log::{error, info};
-use photon_indexer::common::{
-    setup_logging, LoggingFormat,
+use photon_indexer::common::{setup_logging, LoggingFormat};
+use photon_indexer::snapshot::{
+    create_snapshot_from_byte_stream, load_block_stream_from_snapshot_directory,
 };
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::Path;
-
+use std::path::{Path, PathBuf};
 
 /// Photon Loader: a utility to load snapshots from a snapshot server
 #[derive(Parser, Debug)]
@@ -53,45 +54,18 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
 
-    // File path for the snapshot
-    let snapshot_file_path = Path::new(&args.snapshot_dir).join("snapshot.dat");
-
-    // Open the file for writing
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&snapshot_file_path)
-        .context("Failed to open snapshot file")
-        .unwrap();
-
     // Stream the response body to the file
     let mut stream = response.bytes_stream();
 
-    // Skip snapshot version byte
-    stream.next().await;
-
-    // Process the byte stream
-    while let Some(chunk) = stream.next().await {
-        match chunk {
-            Ok(bytes) => {
-                // Write the chunk to the file
-                if let Err(e) = file.write_all(&bytes) {
-                    error!("Error writing to file: {:?}", e);
-                    return Err(anyhow::anyhow!("Failed to write to file"));
-                }
-            }
-            Err(e) => {
-                error!("Error receiving chunk: {:?}", e);
-                return Err(anyhow::anyhow!("Failed to receive data chunk"));
+    let byte_stream = stream! {
+        while let Some(bytes) = stream.next().await {
+            for byte in bytes.unwrap() {
+                yield Ok(byte);
             }
         }
-    }
-
-    info!(
-        "Snapshot downloaded successfully to {:?}",
-        snapshot_file_path
-    );
+    };
+    let snapshot_dir = PathBuf::new().join(&args.snapshot_dir);
+    create_snapshot_from_byte_stream(byte_stream, &snapshot_dir).await?;
 
     Ok(())
 }

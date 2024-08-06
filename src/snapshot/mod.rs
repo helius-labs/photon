@@ -1,6 +1,6 @@
 use std::{
     env::temp_dir,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{BufReader, Read, Write},
     path::{Path, PathBuf},
 };
@@ -9,6 +9,7 @@ use anyhow::{anyhow, Context, Result};
 use async_std::stream::StreamExt;
 use async_stream::stream;
 use futures::{pin_mut, Stream};
+use log::{error, info};
 
 pub use crate::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
@@ -204,16 +205,30 @@ pub async fn update_snapshot_helper(
 
 /// Loads a stream of bytes from snapshot files in the given directory.
 pub fn load_byte_stream_from_snapshot_directory(
-    snapshot_dir: String,
+    snapshot_dir: &PathBuf,
 ) -> impl Stream<Item = Result<u8>> {
     // Create an asynchronous stream of bytes from the snapshot files
+    let snapshot_dir = snapshot_dir.clone();
     stream! {
-        let snapshot_dir = Path::new(&snapshot_dir);
         let snapshot_files =
-        get_snapshot_files_with_slots(snapshot_dir).context("Failed to retrieve snapshot files")?;
+        get_snapshot_files_with_slots(&snapshot_dir).context("Failed to retrieve snapshot files")?;
+
+        if snapshot_files.is_empty() {
+            yield Err(anyhow!("No snapshot files found"));
+        }
 
         // Yield the snapshot version byte
         yield Ok(SNAPSHOT_VERSION);
+
+        let start_slot = snapshot_files.first().map(|file| file.start_slot).unwrap();
+        let end_slot = snapshot_files.last().map(|file| file.end_slot).unwrap();
+
+        for byte in start_slot.to_le_bytes().iter() {
+            yield Ok(*byte);
+        }
+        for byte in end_slot.to_le_bytes().iter() {
+            yield Ok(*byte);
+        }
 
         // Iterate over each snapshot file
         for snapshot_file in snapshot_files {
@@ -261,4 +276,84 @@ pub fn load_block_stream_from_snapshot_directory(
             }
         }
     }
+}
+
+pub async fn create_snapshot_from_byte_stream(
+    byte_stream: impl Stream<Item = Result<u8>>,
+    snapshot_dir: &PathBuf,
+) -> Result<()> {
+    pin_mut!(byte_stream);
+
+    // Skip snapshot version byte
+    byte_stream.next().await.unwrap().unwrap();
+
+    // The start slot is the first 8 bytes of the snapshot
+    let mut start_slot_bytes = [0u8; 8];
+    for i in 0..8 {
+        start_slot_bytes[i] = byte_stream
+            .next()
+            .await
+            .transpose()?
+            .ok_or_else(|| anyhow::anyhow!("Failed to read start slot byte {}", i))?;
+    }
+    let start_slot = u64::from_le_bytes(start_slot_bytes);
+
+    // The end slot is the next 8 bytes of the snapshot
+    let mut end_slot_bytes = [0u8; 8];
+    for i in 0..8 {
+        end_slot_bytes[i] = byte_stream
+            .next()
+            .await
+            .transpose()?
+            .ok_or_else(|| anyhow::anyhow!("Failed to read end slot byte {}", i))?;
+    }
+    let end_slot = u64::from_le_bytes(end_slot_bytes);
+    let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
+    let snapshot_file_path = Path::new(&snapshot_dir).join(snapshot_name);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&snapshot_file_path)
+        .context("Failed to open snapshot file")
+        .unwrap();
+
+    // Buffer to hold bytes
+    let mut buffer = Vec::with_capacity(8192); // 8 KB buffer
+
+    // Process the byte stream
+    while let Some(byte_result) = byte_stream.next().await {
+        match byte_result {
+            Ok(byte) => {
+                buffer.push(byte);
+
+                // Write to file if buffer is full
+                if buffer.len() >= buffer.capacity() {
+                    file.write_all(&buffer)
+                        .context("Failed to write buffer to file")?;
+                    buffer.clear();
+                }
+            }
+            Err(e) => {
+                error!("Error receiving byte: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to receive byte"));
+            }
+        }
+    }
+
+    // Write any remaining bytes in the buffer
+    if !buffer.is_empty() {
+        file.write_all(&buffer)
+            .context("Failed to write remaining buffer to file")?;
+    }
+
+    // Ensure the file is properly flushed
+    file.flush().context("Failed to flush file")?;
+
+    info!(
+        "Snapshot downloaded successfully to {:?}",
+        snapshot_file_path
+    );
+    Ok(())
 }

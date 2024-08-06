@@ -12,7 +12,7 @@ use photon_indexer::snapshot::{
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -85,7 +85,8 @@ async fn continously_run_snapshotter(
 }
 
 async fn stream_bytes(snapshot_dir: String) -> Result<Response<Body>, hyper::http::Error> {
-    let byte_stream = load_byte_stream_from_snapshot_directory(snapshot_dir);
+    let snapshot_dir = PathBuf::new().join(snapshot_dir);
+    let byte_stream = load_byte_stream_from_snapshot_directory(&snapshot_dir);
 
     // Convert byte_stream to a stream of bytes for hyper Body
     let byte_body = byte_stream.map(|result| match result {
