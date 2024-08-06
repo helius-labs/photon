@@ -1,7 +1,7 @@
 use std::{
     env::temp_dir,
     fs::{self, File},
-    io::{self, BufReader, Read, Seek, Write},
+    io::{BufReader, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -103,7 +103,7 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     if temp_file_path.exists() {
         fs::remove_file(&temp_file_path).unwrap();
     }
-    let mut temp_file = File::create(&temp_file_path).unwrap();
+    let temp_file = File::create(&temp_file_path).unwrap();
     (temp_file, temp_file_path)
 }
 

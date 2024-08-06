@@ -1,29 +1,14 @@
 use anyhow::Context;
 use async_std::stream::StreamExt;
 use clap::Parser;
-use hyper::body::Bytes;
 use log::{error, info};
 use photon_indexer::common::{
-    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
+    setup_logging, LoggingFormat,
 };
-use photon_indexer::ingester::fetchers::BlockStreamConfig;
-use photon_indexer::snapshot::{
-    get_snapshot_files_with_slots, load_byte_stream_from_snapshot_directory,
-};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::commitment_config::CommitmentConfig;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
 
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server, StatusCode};
-use std::convert::Infallible;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 
 /// Photon Loader: a utility to load snapshots from a snapshot server
 #[derive(Parser, Debug)]
