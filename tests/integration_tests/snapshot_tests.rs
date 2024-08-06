@@ -37,7 +37,8 @@ async fn test_basic_snapshotting() {
     let snapshot_dir = temp_dir.as_path().join("test-snapshots");
     if snapshot_dir.exists() {
         fs::remove_dir_all(&snapshot_dir).unwrap();
-    } else {
+    }
+    if !snapshot_dir.exists() {
         fs::create_dir(&snapshot_dir).unwrap();
     }
     update_snapshot_helper(blocks_stream, 0, 2, 4, &snapshot_dir).await;
@@ -49,7 +50,8 @@ async fn test_basic_snapshotting() {
     let snapshot_dir_v2 = temp_dir.as_path().join("test-snapshots-v2");
     if snapshot_dir_v2.exists() {
         fs::remove_dir_all(&snapshot_dir_v2).unwrap();
-    } else {
+    }
+    if !snapshot_dir_v2.exists() {
         fs::create_dir(&snapshot_dir_v2).unwrap();
     }
     create_snapshot_from_byte_stream(byte_stream, &snapshot_dir_v2)

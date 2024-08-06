@@ -1,14 +1,9 @@
-use anyhow::Context;
 use async_std::stream::StreamExt;
 use async_stream::stream;
 use clap::Parser;
-use log::{error, info};
+use log::error;
 use photon_indexer::common::{setup_logging, LoggingFormat};
-use photon_indexer::snapshot::{
-    create_snapshot_from_byte_stream, load_block_stream_from_snapshot_directory,
-};
-use std::fs::OpenOptions;
-use std::io::Write;
+use photon_indexer::snapshot::create_snapshot_from_byte_stream;
 use std::path::{Path, PathBuf};
 
 /// Photon Loader: a utility to load snapshots from a snapshot server

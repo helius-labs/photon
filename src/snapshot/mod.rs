@@ -191,6 +191,11 @@ pub async fn update_snapshot_helper(
         if write_full_snapshot || write_incremental_snapshot {
             let snapshot_file_path =
                 snapshot_dir.join(format!("snapshot-{}-{}", last_snapshot_slot + 1, slot));
+            info!(
+                "Creating incremental snapshot file {:?} for slot {}",
+                snapshot_file_path.to_str(),
+                slot
+            );
             fs::rename(&temp_file_path, &snapshot_file_path).unwrap();
             temp_file = create_temp_snapshot_file("incremental_snapshot/").0;
             last_snapshot_slot = slot;
@@ -310,6 +315,7 @@ pub async fn create_snapshot_from_byte_stream(
     let end_slot = u64::from_le_bytes(end_slot_bytes);
     let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
     let snapshot_file_path = Path::new(&snapshot_dir).join(snapshot_name);
+    println!("Creating snapshot file: {:?}", snapshot_file_path);
 
     let mut file = OpenOptions::new()
         .write(true)
