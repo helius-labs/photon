@@ -21,6 +21,10 @@ path = "src/migration/main.rs"
 name = "photon-openapi"
 path = "src/openapi/main.rs"
 
+[[bin]]
+name = "photon-snapshotter"
+path = "src/snapshotter/main.rs"
+
 [dependencies]
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"

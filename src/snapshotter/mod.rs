@@ -5,11 +5,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::anyhow;
 use async_std::stream::StreamExt;
 use async_stream::stream;
 use futures::{pin_mut, Stream};
 
-use super::{
+pub use crate::common::{
+    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
+};
+use crate::ingester::{
     fetchers::BlockStreamConfig,
     parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
     typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
@@ -53,24 +57,30 @@ fn serialize_block_to_file(block: &BlockInfo, file: &mut File) {
 }
 
 pub struct SnapshotFileWithSlots {
-    file: PathBuf,
-    start_slot: u64,
-    end_slot: u64,
+    pub file: PathBuf,
+    pub start_slot: u64,
+    pub end_slot: u64,
 }
 
-pub fn get_snapshot_files_with_slots(snapshot_dir: &Path) -> Vec<SnapshotFileWithSlots> {
-    let snapshot_files = fs::read_dir(snapshot_dir)
-        .unwrap()
+pub fn get_snapshot_files_with_slots(
+    snapshot_dir: &Path,
+) -> anyhow::Result<Vec<SnapshotFileWithSlots>> {
+    let snapshot_files = fs::read_dir(snapshot_dir)?
         .map(|entry| entry.unwrap().path())
         .collect::<Vec<_>>();
     let mut snapshot_files_with_slots = Vec::new();
 
     for file in snapshot_files {
-        let file_name = file.file_name().unwrap().to_str().unwrap();
+        // Make this return an error if file name is not in the expected format
+        let file_name = file
+            .file_name()
+            .ok_or(anyhow!("Missing file name".to_string()))?
+            .to_str()
+            .ok_or(anyhow!("Invalid file name"))?;
         let parts: Vec<&str> = file_name.split('-').collect();
         if parts.len() == 3 {
-            let start_slot = parts[1].parse::<u64>().unwrap();
-            let end_slot = parts[2].parse::<u64>().unwrap();
+            let start_slot = parts[1].parse::<u64>()?;
+            let end_slot = parts[2].parse::<u64>()?;
             snapshot_files_with_slots.push(SnapshotFileWithSlots {
                 file,
                 start_slot,
@@ -79,7 +89,7 @@ pub fn get_snapshot_files_with_slots(snapshot_dir: &Path) -> Vec<SnapshotFileWit
         }
     }
     snapshot_files_with_slots.sort_by_key(|file| file.start_slot);
-    snapshot_files_with_slots
+    Ok(snapshot_files_with_slots)
 }
 
 fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
@@ -130,8 +140,8 @@ async fn merge_snapshots(snapshot_dir: &Path) {
 
 pub async fn update_snapshot(
     block_stream_config: BlockStreamConfig,
-    incremental_snapshot_interval_slots: u64,
     full_snapshot_interval_slots: u64,
+    incremental_snapshot_interval_slots: u64,
     snapshot_dir: &Path,
 ) {
     // Convert stream to iterator
@@ -156,7 +166,7 @@ pub async fn update_snapshot_helper(
     if !snapshot_dir.exists() {
         fs::create_dir(snapshot_dir).unwrap();
     }
-    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir);
+    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir).unwrap();
 
     let mut last_full_snapshot_slot = snapshot_files
         .first()
@@ -198,7 +208,7 @@ pub async fn update_snapshot_helper(
 pub fn load_block_stream_from_snapshot_directory(
     snapshot_dir: &Path,
 ) -> impl Stream<Item = BlockInfo> {
-    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir);
+    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir).unwrap();
     stream! {
         for snapshot_file in snapshot_files {
             let file = File::open(&snapshot_file.file).unwrap();

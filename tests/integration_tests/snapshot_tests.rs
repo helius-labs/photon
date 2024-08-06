@@ -1,11 +1,11 @@
 use futures::stream;
 
-
-use photon_indexer::common::typedefs::{hash::Hash};
+use photon_indexer::common::typedefs::hash::Hash;
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-
-
+use photon_indexer::snapshotter::{
+    load_block_stream_from_snapshot_directory, update_snapshot_helper,
+};
 
 use std::vec;
 
@@ -14,9 +14,6 @@ async fn test_basic_snapshotting() {
     use std::{env::temp_dir, fs};
 
     use futures::StreamExt;
-    use photon_indexer::ingester::snapshotter::{
-        load_block_stream_from_snapshot_directory, update_snapshot_helper,
-    };
 
     let blocks: Vec<BlockInfo> = (0..10)
         .map(|i| {
