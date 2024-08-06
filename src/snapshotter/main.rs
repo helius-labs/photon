@@ -1,42 +1,17 @@
-use std::fmt;
-use std::fs::File;
-use std::net::UdpSocket;
 use std::path::Path;
-use std::thread::sleep;
 use std::time::Duration;
 
-use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
-use cadence_macros::set_global_default;
-use clap::{Parser, ValueEnum};
-use futures::{pin_mut, stream, StreamExt};
-use jsonrpsee::server::ServerHandle;
+use clap::{Parser};
 use log::{error, info};
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
 
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
-use photon_indexer::ingester::indexer::{
-    fetch_last_indexed_slot_with_infinite_retry, index_block_stream,
-};
-use photon_indexer::migration::{
-    sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
-    Migrator, MigratorTrait,
-};
-use photon_indexer::openapi::update_docs;
 
 use photon_indexer::snapshotter::get_snapshot_files_with_slots;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::CommitmentConfig;
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    PgPool, SqlitePool,
-};
-use std::env;
-use std::env::temp_dir;
 use std::sync::Arc;
 
 /// Photon: a compressed transaction Solana indexer

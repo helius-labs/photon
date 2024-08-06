@@ -1,13 +1,8 @@
-use std::fmt;
 use std::fs::File;
-use std::net::UdpSocket;
 use std::path::Path;
-use std::thread::sleep;
 use std::time::Duration;
 
-use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
-use cadence_macros::set_global_default;
-use clap::{Parser, ValueEnum};
+use clap::{Parser};
 use futures::{pin_mut, stream, StreamExt};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
@@ -30,15 +25,12 @@ use photon_indexer::snapshotter::{
 };
 
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::CommitmentConfig;
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     PgPool, SqlitePool,
 };
-use std::env;
 use std::env::temp_dir;
 use std::sync::Arc;
 
