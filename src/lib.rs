@@ -5,3 +5,4 @@ pub mod dao;
 pub mod ingester;
 pub mod migration;
 pub mod openapi;
+pub mod snapshot;

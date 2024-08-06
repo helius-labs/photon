@@ -21,6 +21,15 @@ path = "src/migration/main.rs"
 name = "photon-openapi"
 path = "src/openapi/main.rs"
 
+[[bin]]
+name = "photon-snapshot-server"
+path = "src/snapshot/server/main.rs"
+
+[[bin]]
+name = "photon-snapshot-loader"
+path = "src/snapshot/loader/main.rs"
+
+
 [dependencies]
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
@@ -80,7 +89,7 @@ hex = "0.4.3"
 num-bigint = "0.4.4"
 num-traits = "0.2.18"
 num_enum = "0.7.2"
-reqwest = "0.12.4"
+reqwest = {version = "0.12.4", features = ["stream"]}
 time = "0.3.36"
 tokio = { version = "1.23.0", features = ["full"] }
 tower = { version = "0.4.13", features = ["full"] }
