@@ -1,11 +1,11 @@
 use std::{
     env::temp_dir,
     fs::{self, File},
-    io::{self, BufReader, Seek, Write},
+    io::{self, BufReader, Read, Seek, Write},
     path::{Path, PathBuf},
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context, Result};
 use async_std::stream::StreamExt;
 use async_stream::stream;
 use futures::{pin_mut, Stream};
@@ -19,7 +19,7 @@ use crate::ingester::{
     typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
 };
 
-const SNAPSHOT_VERSION: u64 = 1;
+const SNAPSHOT_VERSION: u8 = 1;
 
 fn is_compression_instruction(instruction: &Instruction) -> bool {
     instruction.program_id == ACCOUNT_COMPRESSION_PROGRAM_ID
@@ -104,9 +104,6 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
         fs::remove_file(&temp_file_path).unwrap();
     }
     let mut temp_file = File::create(&temp_file_path).unwrap();
-    temp_file
-        .write_all(&SNAPSHOT_VERSION.to_le_bytes())
-        .unwrap();
     (temp_file, temp_file_path)
 }
 
@@ -205,6 +202,45 @@ pub async fn update_snapshot_helper(
     }
 }
 
+/// Loads a stream of bytes from snapshot files in the given directory.
+pub fn load_byte_stream_from_snapshot_directory(
+    snapshot_dir: String,
+) -> impl Stream<Item = Result<u8>> {
+    // Create an asynchronous stream of bytes from the snapshot files
+    stream! {
+        let snapshot_dir = Path::new(&snapshot_dir);
+        let snapshot_files =
+        get_snapshot_files_with_slots(snapshot_dir).context("Failed to retrieve snapshot files")?;
+
+        // Yield the snapshot version byte
+        yield Ok(SNAPSHOT_VERSION);
+
+        // Iterate over each snapshot file
+        for snapshot_file in snapshot_files {
+            // Use anyhow context to add more error information
+            let file = File::open(&snapshot_file.file)
+                .with_context(|| format!("Failed to open snapshot file: {:?}", snapshot_file.file))?;
+            let mut reader = BufReader::new(file);
+            let mut buffer = [0; 1024];
+
+            // Read bytes from the file in chunks
+            loop {
+                let n = reader.read(&mut buffer)
+                    .context("Failed to read from snapshot file")?;
+
+                if n == 0 {
+                    break; // EOF reached
+                }
+
+                // Yield each byte from the buffer
+                for &byte in &buffer[..n] {
+                    yield Ok(byte);
+                }
+            }
+        }
+    }
+}
+
 pub fn load_block_stream_from_snapshot_directory(
     snapshot_dir: &Path,
 ) -> impl Stream<Item = BlockInfo> {
@@ -213,7 +249,6 @@ pub fn load_block_stream_from_snapshot_directory(
         for snapshot_file in snapshot_files {
             let file = File::open(&snapshot_file.file).unwrap();
             let mut reader = BufReader::new(file);
-            reader.seek(io::SeekFrom::Start(8)).unwrap();
             loop {
                 let block = bincode::deserialize_from(&mut reader);
                 match block {
