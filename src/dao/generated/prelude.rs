@@ -5,6 +5,7 @@ pub use super::accounts::Entity as Accounts;
 pub use super::blocks::Entity as Blocks;
 pub use super::indexed_trees::Entity as IndexedTrees;
 pub use super::owner_balances::Entity as OwnerBalances;
+pub use super::state_tree_histories::Entity as StateTreeHistories;
 pub use super::state_trees::Entity as StateTrees;
 pub use super::token_accounts::Entity as TokenAccounts;
 pub use super::token_owner_balances::Entity as TokenOwnerBalances;

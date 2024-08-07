@@ -52,6 +52,7 @@ pub struct LeafNullification {
     pub tree: Pubkey,
     pub leaf_index: u64,
     pub seq: u64,
+    pub signature: Signature
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

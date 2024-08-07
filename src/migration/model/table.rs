@@ -57,7 +57,7 @@ pub enum Transactions {
     Signature,
     Slot,
     UsesCompression,
-    Error
+    Error,
 }
 
 #[derive(Copy, Clone, Iden)]
@@ -89,4 +89,13 @@ pub enum IndexedTrees {
     NextIndex,
     NextValue,
     Seq,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum StateTreeHistories {
+    Table,
+    Tree,
+    Seq,
+    TransactionSignature,
+    LeafIdx,
 }

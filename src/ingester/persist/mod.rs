@@ -6,7 +6,7 @@ use crate::{
         hash::Hash,
         token_data::{TokenData, TokenDataLegacy},
     },
-    dao::generated::{account_transactions, transactions},
+    dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
 };
 use crate::{
@@ -30,7 +30,7 @@ use std::collections::HashMap;
 
 use error::IngesterError;
 use solana_program::pubkey;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
@@ -75,28 +75,49 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    let mut leaf_nodes: Vec<LeafNode> = out_accounts
+    let account_to_transaction = account_transactions
         .iter()
-        .map(|account| LeafNode::from(account.clone()))
-        .chain(
-            leaf_nullifications
-                .iter()
-                .map(|leaf_nullification| LeafNode::from(leaf_nullification.clone())),
-        )
+        .map(|account_transaction| {
+            (
+                account_transaction.hash.clone(),
+                account_transaction.signature.clone(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
+        .iter()
+        .map(|account| {
+            (
+                LeafNode::from(account.clone()),
+                account_to_transaction
+                    .get(&account.hash)
+                    .map(|signature| signature.clone())
+                    // HACK: We should always have a signature for account transactions, but sometimes
+                    //       we don't generate it for mock tests.
+                    .unwrap_or(Signature::from([0; 64])),
+            )
+        })
+        .chain(leaf_nullifications.iter().map(|leaf_nullification| {
+            (
+                LeafNode::from(leaf_nullification.clone()),
+                leaf_nullification.signature.clone(),
+            )
+        }))
         .collect();
 
-    leaf_nodes.sort_by_key(|x| x.seq);
+    leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
+
     debug!("Persisting state nodes...");
-    for chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
-        persist_leaf_nodes(
-            txn,
-            chunk
-                .iter()
-                .map(|x| LeafNode::from(x.clone()))
-                .collect_vec(),
-            TREE_HEIGHT,
-        )
-        .await?;
+    for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
+        let chunk_vec = chunk.iter().map(|x| x.clone()).collect_vec();
+        persist_state_tree_history(txn, chunk_vec.clone()).await?;
+        let leaf_nodes_chunk = chunk_vec
+            .iter()
+            .map(|(leaf_node, _)| LeafNode::from(leaf_node.clone()))
+            .collect_vec();
+
+        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT).await?;
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
@@ -115,6 +136,33 @@ pub async fn persist_state_update(
     debug!("Persisting index tree updates...");
     multi_append_fully_specified(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
 
+    Ok(())
+}
+
+async fn persist_state_tree_history(
+    txn: &DatabaseTransaction,
+    chunk: Vec<(LeafNode, Signature)>,
+) -> Result<(), IngesterError> {
+    let state_tree_history = chunk
+        .into_iter()
+        .map(|(leaf_node, signature)| state_tree_histories::ActiveModel {
+            tree: Set(leaf_node.tree.to_bytes_vec()),
+            seq: Set(leaf_node.seq as i64),
+            leaf_idx: Set(leaf_node.leaf_index as i64),
+            transaction_signature: Set(Into::<[u8; 64]>::into(signature).to_vec()),
+        })
+        .collect_vec();
+    // We first build the query and then execute it because SeaORM has a bug where it always throws
+    // an error if we do not insert a record in an insert statement. However, in this case, it's
+    // expected not to insert anything if the key already exists.
+    let query = state_tree_histories::Entity::insert_many(state_tree_history)
+        .on_conflict(
+            OnConflict::columns([state_trees::Column::Tree, state_trees::Column::Seq])
+                .do_nothing()
+                .to_owned(),
+        )
+        .build(txn.get_database_backend());
+    txn.execute(query).await?;
     Ok(())
 }
 
