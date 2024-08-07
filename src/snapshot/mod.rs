@@ -3,13 +3,8 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufReader, Read, Write},
     path::{Path, PathBuf},
+    pin::{pin, Pin},
 };
-
-use anyhow::{anyhow, Context, Result};
-use async_std::stream::StreamExt;
-use async_stream::stream;
-use futures::{pin_mut, Stream};
-use log::{error, info};
 
 pub use crate::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
@@ -19,6 +14,32 @@ use crate::ingester::{
     parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
     typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
 };
+use anyhow::{anyhow, Context, Result};
+use async_std::stream::StreamExt;
+use async_stream::stream;
+use async_trait::async_trait;
+use futures::{pin_mut, Stream};
+use log::{error, info};
+
+/// Trait representing a file system adapter
+#[async_trait]
+pub trait DirectoryAdapter {
+    /// Reads the contents of a file at the given path
+    async fn read_file(&self, path: String) -> Box<dyn Stream<Item = Result<u8>> + Send + Unpin>;
+
+    /// Writes data to a file at the given path
+    async fn list_files(&self) -> Result<Vec<String>>;
+
+    /// Deletes the file at the given path
+    async fn delete_file(&self, path: String) -> Result<()>;
+
+    /// Write file to the given path
+    async fn write_file(
+        &self,
+        path: String,
+        bytes: Pin<Box<dyn Stream<Item = Result<u8>>>>,
+    ) -> bool;
+}
 
 const SNAPSHOT_VERSION: u8 = 1;
 
@@ -58,27 +79,20 @@ fn serialize_block_to_file(block: &BlockInfo, file: &mut File) {
 }
 
 pub struct SnapshotFileWithSlots {
-    pub file: PathBuf,
+    pub file: String,
     pub start_slot: u64,
     pub end_slot: u64,
 }
 
-pub fn get_snapshot_files_with_slots(
-    snapshot_dir: &Path,
+pub async fn get_snapshot_files_with_slots(
+    directory_adapter: &dyn DirectoryAdapter,
 ) -> anyhow::Result<Vec<SnapshotFileWithSlots>> {
-    let snapshot_files = fs::read_dir(snapshot_dir)?
-        .map(|entry| entry.unwrap().path())
-        .collect::<Vec<_>>();
+    let snapshot_files = directory_adapter.list_files().await?;
     let mut snapshot_files_with_slots = Vec::new();
 
     for file in snapshot_files {
         // Make this return an error if file name is not in the expected format
-        let file_name = file
-            .file_name()
-            .ok_or(anyhow!("Missing file name".to_string()))?
-            .to_str()
-            .ok_or(anyhow!("Invalid file name"))?;
-        let parts: Vec<&str> = file_name.split('-').collect();
+        let parts: Vec<&str> = file.split('-').collect();
         if parts.len() == 3 {
             let start_slot = parts[1].parse::<u64>()?;
             let end_slot = parts[2].parse::<u64>()?;
@@ -108,63 +122,41 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     (temp_file, temp_file_path)
 }
 
-async fn merge_snapshots(snapshot_dir: &Path) {
+async fn merge_snapshots(directory_adapter: &dyn DirectoryAdapter) {
     let (mut temp_file, temp_file_path) = create_temp_snapshot_file("fullsnaphot/");
 
-    let block_stream = load_block_stream_from_snapshot_directory(snapshot_dir);
-    pin_mut!(block_stream);
-    let mut start_slot = None;
-    let mut end_slot = None;
-
-    while let Some(block) = block_stream.next().await {
-        if start_slot.is_none() {
-            start_slot = Some(block.metadata.slot);
-        }
-        end_slot = Some(block.metadata.slot);
-        serialize_block_to_file(&block, &mut temp_file);
-    }
-    let temp_file_directory = temp_file_path.parent().unwrap();
-    let snapshot_file_path = temp_file_directory.join(format!(
-        "snapshot-{}-{}",
-        start_slot.unwrap(),
-        end_slot.unwrap()
-    ));
-    fs::rename(&temp_file_path, &snapshot_file_path).unwrap();
-    let backup_dir = temp_dir().join("backup");
-    fs::rename(snapshot_dir, &backup_dir).unwrap();
-    fs::rename(temp_file_directory, snapshot_dir).unwrap();
-    fs::remove_dir_all(backup_dir).unwrap();
+    let byte_stream = load_byte_stream_from_snapshot_directory(directory_adapter);
+    create_snapshot_from_byte_stream(Box::pin(byte_stream), directory_adapter);
 }
 
 pub async fn update_snapshot(
+    directory_adapter: &dyn DirectoryAdapter,
     block_stream_config: BlockStreamConfig,
     full_snapshot_interval_slots: u64,
     incremental_snapshot_interval_slots: u64,
-    snapshot_dir: &Path,
 ) {
     // Convert stream to iterator
     let block_stream = block_stream_config.load_block_stream();
     update_snapshot_helper(
+        directory_adapter,
         block_stream,
         block_stream_config.last_indexed_slot,
         incremental_snapshot_interval_slots,
         full_snapshot_interval_slots,
-        snapshot_dir,
     )
     .await;
 }
 
 pub async fn update_snapshot_helper(
+    directory_adapter: &dyn DirectoryAdapter,
     blocks: impl Stream<Item = BlockInfo>,
     last_indexed_slot: u64,
     incremental_snapshot_interval_slots: u64,
     full_snapshot_interval_slots: u64,
-    snapshot_dir: &Path,
 ) {
-    if !snapshot_dir.exists() {
-        fs::create_dir(snapshot_dir).unwrap();
-    }
-    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir).unwrap();
+    let snapshot_files = get_snapshot_files_with_slots(directory_adapter)
+        .await
+        .unwrap();
 
     let mut last_full_snapshot_slot = snapshot_files
         .first()
@@ -175,12 +167,11 @@ pub async fn update_snapshot_helper(
         .map(|file| file.end_slot)
         .unwrap_or(last_indexed_slot);
 
-    let (mut temp_file, temp_file_path) = create_temp_snapshot_file("incremental_snapshot/");
+    let mut byte_buffer = Vec::new();
 
     pin_mut!(blocks);
     while let Some(block) = blocks.next().await {
         let slot = block.metadata.slot;
-        serialize_block_to_file(&block, &mut temp_file);
 
         let write_full_snapshot = slot - last_full_snapshot_slot + (last_indexed_slot == 0) as u64
             >= full_snapshot_interval_slots;
@@ -188,35 +179,48 @@ pub async fn update_snapshot_helper(
             + (last_snapshot_slot == 0) as u64
             >= incremental_snapshot_interval_slots;
 
-        if write_full_snapshot || write_incremental_snapshot {
-            let snapshot_file_path =
-                snapshot_dir.join(format!("snapshot-{}-{}", last_snapshot_slot + 1, slot));
+        let trimmed_block = BlockInfo {
+            metadata: block.metadata.clone(),
+            transactions: block
+                .transactions
+                .iter()
+                .filter(|tx| is_compression_transaction(tx))
+                .cloned()
+                .collect(),
+        };
+        let block_bytes = bincode::serialize(&trimmed_block).unwrap();
+        byte_buffer.push(block_bytes);
+
+        if write_incremental_snapshot {
+            let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
             info!(
                 "Creating incremental snapshot file {:?} for slot {}",
-                snapshot_file_path.to_str(),
-                slot
+                snapshot_file_path, slot
             );
-            fs::rename(&temp_file_path, &snapshot_file_path).unwrap();
-            temp_file = create_temp_snapshot_file("incremental_snapshot/").0;
+            directory_adapter
+                .write_file(
+                    snapshot_file_path,
+                    Box::new(block_bytes.into_iter().map(|byte| Ok(byte)).collect()),
+                )
+                .await;
+            byte_buffer.clear();
             last_snapshot_slot = slot;
-
-            if write_full_snapshot {
-                merge_snapshots(snapshot_dir).await;
-                last_full_snapshot_slot = slot;
-            }
+        }
+        if write_full_snapshot {
+            merge_snapshots(directory_adapter).await;
+            last_full_snapshot_slot = slot;
         }
     }
 }
 
 /// Loads a stream of bytes from snapshot files in the given directory.
-pub fn load_byte_stream_from_snapshot_directory(
-    snapshot_dir: &PathBuf,
-) -> impl Stream<Item = Result<u8>> {
+pub fn load_byte_stream_from_snapshot_directory<'a>(
+    directory_adapter: &'a dyn DirectoryAdapter,
+) -> impl Stream<Item = Result<u8>> + 'a {
     // Create an asynchronous stream of bytes from the snapshot files
-    let snapshot_dir = snapshot_dir.clone();
     stream! {
         let snapshot_files =
-        get_snapshot_files_with_slots(&snapshot_dir).context("Failed to retrieve snapshot files")?;
+        get_snapshot_files_with_slots(directory_adapter).await.context("Failed to retrieve snapshot files")?;
 
         if snapshot_files.is_empty() {
             yield Err(anyhow!("No snapshot files found"));
@@ -261,10 +265,12 @@ pub fn load_byte_stream_from_snapshot_directory(
     }
 }
 
-pub fn load_block_stream_from_snapshot_directory(
-    snapshot_dir: &Path,
+pub async fn load_block_stream_from_snapshot_directory(
+    directory_adapter: &dyn DirectoryAdapter,
 ) -> impl Stream<Item = BlockInfo> {
-    let snapshot_files = get_snapshot_files_with_slots(snapshot_dir).unwrap();
+    let snapshot_files = get_snapshot_files_with_slots(directory_adapter)
+        .await
+        .unwrap();
     stream! {
         for snapshot_file in snapshot_files {
             let file = File::open(&snapshot_file.file).unwrap();
@@ -285,10 +291,9 @@ pub fn load_block_stream_from_snapshot_directory(
 
 pub async fn create_snapshot_from_byte_stream(
     byte_stream: impl Stream<Item = Result<u8>>,
-    snapshot_dir: &PathBuf,
+    directory_adapter: &dyn DirectoryAdapter,
 ) -> Result<()> {
-    pin_mut!(byte_stream);
-
+    let mut byte_stream = Box::pin(byte_stream);
     // Skip snapshot version byte
     byte_stream.next().await.unwrap().unwrap();
 
@@ -314,52 +319,11 @@ pub async fn create_snapshot_from_byte_stream(
     }
     let end_slot = u64::from_le_bytes(end_slot_bytes);
     let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
-    let snapshot_file_path = Path::new(&snapshot_dir).join(snapshot_name);
-    println!("Creating snapshot file: {:?}", snapshot_file_path);
+    println!("Creating snapshot file: {:?}", snapshot_name);
+    directory_adapter
+        .write_file(snapshot_name.clone(), byte_stream)
+        .await;
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&snapshot_file_path)
-        .context("Failed to open snapshot file")
-        .unwrap();
-
-    // Buffer to hold bytes
-    let mut buffer = Vec::with_capacity(8192); // 8 KB buffer
-
-    // Process the byte stream
-    while let Some(byte_result) = byte_stream.next().await {
-        match byte_result {
-            Ok(byte) => {
-                buffer.push(byte);
-
-                // Write to file if buffer is full
-                if buffer.len() >= buffer.capacity() {
-                    file.write_all(&buffer)
-                        .context("Failed to write buffer to file")?;
-                    buffer.clear();
-                }
-            }
-            Err(e) => {
-                error!("Error receiving byte: {:?}", e);
-                return Err(anyhow::anyhow!("Failed to receive byte"));
-            }
-        }
-    }
-
-    // Write any remaining bytes in the buffer
-    if !buffer.is_empty() {
-        file.write_all(&buffer)
-            .context("Failed to write remaining buffer to file")?;
-    }
-
-    // Ensure the file is properly flushed
-    file.flush().context("Failed to flush file")?;
-
-    info!(
-        "Snapshot downloaded successfully to {:?}",
-        snapshot_file_path
-    );
+    info!("Snapshot downloaded successfully to {:?}", snapshot_name);
     Ok(())
 }
