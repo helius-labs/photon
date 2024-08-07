@@ -13,7 +13,7 @@ use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 use tracing::error;
 use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
@@ -71,36 +71,22 @@ pub fn get_grpc_stream_with_rpc_fallback(
                     }
                 }
                 None => {
-                    match timeout(Duration::from_secs(60), grpc_stream.next()).await {
-                        Ok(Some(block)) => {
-                            if block.metadata.slot == 0 {
-                                continue;
-                            }
-                            if block.metadata.parent_slot == last_indexed_slot {
-                                last_indexed_slot = block.metadata.slot;
-                                yield block;
-                            } else {
-                                info!("Switching to RPC block fetching");
-                                rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
-                                    rpc_client.clone(),
-                                    last_indexed_slot,
-                                    max_concurrent_block_fetches,
-                                    Some(block.metadata.slot),
-                                )));
-                            }
-                        }
-                        Ok(None) => {
-                            panic!("gRPC stream ended unexpectedly");
-                        }
-                        Err(_elapsed) => {
-                            info!("No block received in 60 seconds, switching to RPC block fetching");
-                            rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
-                                rpc_client.clone(),
-                                last_indexed_slot,
-                                max_concurrent_block_fetches,
-                                None,
-                            )));
-                        }
+                    let block = grpc_stream.next().await.unwrap();
+                    if block.metadata.slot == 0 {
+                        continue;
+                    }
+                    if block.metadata.parent_slot == last_indexed_slot {
+                        last_indexed_slot = block.metadata.slot;
+                        yield block;
+                    } else {
+                        info!("Switching to RPC block fetching");
+                        rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                            rpc_client.clone(),
+                            last_indexed_slot,
+                            max_concurrent_block_fetches,
+                            Some(block.metadata.slot),
+                        )));
+
                     }
 
                 }
