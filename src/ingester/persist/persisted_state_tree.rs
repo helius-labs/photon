@@ -2,8 +2,8 @@ use std::{cmp::max, collections::HashMap};
 
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction,
-    DbErr, EntityTrait, QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
+    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
+    QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
