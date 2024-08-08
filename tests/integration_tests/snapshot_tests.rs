@@ -8,6 +8,7 @@ use photon_indexer::snapshot::{
     load_byte_stream_from_snapshot_directory, update_snapshot_helper,
 };
 
+use std::sync::Arc;
 use std::vec;
 
 #[tokio::test]
@@ -41,8 +42,16 @@ async fn test_basic_snapshotting() {
     if !snapshot_dir.exists() {
         fs::create_dir(&snapshot_dir).unwrap();
     }
-    update_snapshot_helper(blocks_stream, 0, 2, 4, &snapshot_dir).await;
-    let snapshot_blocks = load_block_stream_from_snapshot_directory(&snapshot_dir);
+    let filesystem_adapter = photon_indexer::snapshot::FileSystemDirectoryApapter {
+        snapshot_dir: snapshot_dir.clone().to_str().unwrap().to_string(),
+    };
+    let directory_adapter = Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
+        Some(filesystem_adapter),
+        None,
+    ));
+
+    update_snapshot_helper(directory_adapter, blocks_stream, 0, 2, 4).await;
+    let snapshot_blocks = load_block_stream_from_snapshot_directory(directory_adapter.as_ref());
     let snapshot_blocks: Vec<BlockInfo> = snapshot_blocks.collect().await;
     assert_eq!(snapshot_blocks, blocks);
 
