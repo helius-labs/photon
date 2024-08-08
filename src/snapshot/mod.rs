@@ -2,8 +2,8 @@ use std::{
     env::temp_dir,
     fs::{self, File, OpenOptions},
     io::{BufReader, Read, Write},
-    path::{Path, PathBuf},
-    pin::{pin, Pin},
+    path::PathBuf,
+    pin::Pin,
     sync::Arc,
 };
 
@@ -18,49 +18,59 @@ use crate::ingester::{
 use anyhow::{anyhow, Context, Result};
 use async_std::stream::StreamExt;
 use async_stream::stream;
-use async_trait::async_trait;
 use aws_sdk_s3::config::Region;
-use aws_sdk_s3::{config::Builder, primitives::ByteStream};
+use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{config::Credentials, primitives::SdkBody};
 use aws_sdk_s3::{Client, Config};
 use futures::{pin_mut, Stream};
 use hyper::{body::Bytes, Body};
-use log::{error, info};
-use std::str::FromStr;
+use log::info;
 use tokio::io::AsyncReadExt;
 
+const ONE_HUNDRED_MB: usize = 100_000_000;
+const SNAPSHOT_VERSION: u8 = 1;
+
 pub struct R2DirectoryAdapter {
-    client: Client,
-    r2_bucket: String,
-    r2_prefix: String,
+    pub client: Client,
+    pub r2_bucket: String,
+    pub r2_prefix: String,
+}
+
+pub struct R2ClientArgs {
+    pub r2_access_key_id: String,
+    pub r2_secret_access_key: String,
+    pub r2_endpoint_url: String,
+}
+
+pub fn get_r2_client(args: R2ClientArgs) -> Client {
+    let region = Region::new("us-east-1");
+    let credentials = Credentials::new(
+        args.r2_access_key_id,
+        args.r2_secret_access_key,
+        None,
+        None,
+        "test",
+    );
+    let config = Config::builder()
+        .region(region)
+        .credentials_provider(credentials)
+        .endpoint_url(args.r2_endpoint_url)
+        .build();
+    Client::from_conf(config)
+}
+
+pub async fn create_bucket_if_not_exists(client: &Client, bucket: &str) -> Result<()> {
+    let request = client.create_bucket().bucket(bucket);
+    let built = request.build().unwrap();
+
+    request
+        .send()
+        .await
+        .with_context(|| format!("Failed to create bucket: {:?}", bucket))?;
+    Ok(())
 }
 
 impl R2DirectoryAdapter {
-    pub fn new(r2_bucket: String, r2_prefix: String) -> Self {
-        let region = Region::new("auto"); // Use "auto" for R2
-
-        let credentials = Credentials::new(
-            "your-access-key-id",
-            "your-secret-access-key",
-            None,
-            None,
-            "static",
-        );
-
-        let config = Config::builder()
-            .region(region)
-            .credentials_provider(credentials)
-            .endpoint_url("https://www.example.com")
-            .build();
-
-        let client = Client::from_conf(config);
-        Self {
-            client,
-            r2_bucket,
-            r2_prefix,
-        }
-    }
-
     async fn read_file(
         arc_self: Arc<Self>,
         path: String,
@@ -178,6 +188,9 @@ impl FileSystemDirectoryApapter {
     }
 
     async fn list_files(&self) -> Result<Vec<String>> {
+        if !PathBuf::new().join(&self.snapshot_dir).exists() {
+            return Ok(Vec::new());
+        }
         let files = fs::read_dir(&self.snapshot_dir)
             .with_context(|| format!("Failed to read directory: {:?}", self.snapshot_dir))?;
         let mut file_names = Vec::new();
@@ -204,6 +217,10 @@ impl FileSystemDirectoryApapter {
             temp_file
                 .write_all(&[byte])
                 .with_context(|| "Failed to write byte to file")?;
+        }
+        // Create snapshot directory if it doesn't exist
+        if !PathBuf::new().join(&self.snapshot_dir).exists() {
+            fs::create_dir_all(&self.snapshot_dir).unwrap();
         }
         let path = format!("{}/{}", self.snapshot_dir, path);
         fs::rename(temp_path.clone(), path.clone())
@@ -270,7 +287,7 @@ impl DirectoryAdapter {
     }
 
     /// Deletes the file at the given path
-    async fn delete_file(&self, path: String) -> Result<()> {
+    pub async fn delete_file(&self, path: String) -> Result<()> {
         if let Some(filesystem_directory_adapter) = &self.filesystem_directory_adapter {
             filesystem_directory_adapter.delete_file(path).await
         } else if let Some(r2_directory_adapter) = &self.r2_directory_adapter {
@@ -296,8 +313,6 @@ impl DirectoryAdapter {
     }
 }
 
-const SNAPSHOT_VERSION: u8 = 1;
-
 fn is_compression_instruction(instruction: &Instruction) -> bool {
     instruction.program_id == ACCOUNT_COMPRESSION_PROGRAM_ID
         || instruction
@@ -319,13 +334,14 @@ fn is_compression_transaction(tx: &TransactionInfo) -> bool {
     false
 }
 
+#[derive(Debug)]
 pub struct SnapshotFileWithSlots {
     pub file: String,
     pub start_slot: u64,
     pub end_slot: u64,
 }
 
-pub async fn get_snapshot_files_with_slots(
+pub async fn get_snapshot_files_with_metadata(
     directory_adapter: &DirectoryAdapter,
 ) -> anyhow::Result<Vec<SnapshotFileWithSlots>> {
     let snapshot_files = directory_adapter.list_files().await?;
@@ -365,12 +381,19 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
 }
 
 async fn merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) {
-    let (mut temp_file, temp_file_path) = create_temp_snapshot_file("fullsnaphot/");
-
-    let byte_stream = load_byte_stream_from_snapshot_directory(directory_adapter.clone()).await;
+    let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
+        .await
+        .unwrap();
+    let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
     create_snapshot_from_byte_stream(byte_stream, directory_adapter.as_ref())
         .await
         .unwrap();
+    for snapshot_file in snapshot_files {
+        directory_adapter
+            .delete_file(snapshot_file.file)
+            .await
+            .unwrap();
+    }
 }
 
 pub async fn update_snapshot(
@@ -398,7 +421,7 @@ pub async fn update_snapshot_helper(
     incremental_snapshot_interval_slots: u64,
     full_snapshot_interval_slots: u64,
 ) {
-    let snapshot_files = get_snapshot_files_with_slots(directory_adapter.as_ref())
+    let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
         .await
         .unwrap();
 
@@ -437,10 +460,6 @@ pub async fn update_snapshot_helper(
 
         if write_incremental_snapshot {
             let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
-            info!(
-                "Creating incremental snapshot file {:?} for slot {}",
-                snapshot_file_path, slot
-            );
             let byte_buffer_clone = byte_buffer.clone();
             let byte_stream = stream! {
                 for block in byte_buffer_clone {
@@ -464,14 +483,13 @@ pub async fn update_snapshot_helper(
     }
 }
 
-pub async fn load_byte_stream_from_snapshot_directory(
+pub async fn load_byte_stream_from_directory_adapter(
     directory_adapter: Arc<DirectoryAdapter>,
 ) -> impl Stream<Item = Result<u8>> + 'static {
     // Create an asynchronous stream of bytes from the snapshot files
     stream! {
         let snapshot_files =
-            get_snapshot_files_with_slots(directory_adapter.as_ref()).await.context("Failed to retrieve snapshot files")?;
-
+            get_snapshot_files_with_metadata(directory_adapter.as_ref()).await.context("Failed to retrieve snapshot files")?;
         if snapshot_files.is_empty() {
             yield Err(anyhow!("No snapshot files found"));
         }
@@ -505,7 +523,7 @@ pub async fn load_block_stream_from_directory_adapter(
     directory_adapter: Arc<DirectoryAdapter>,
 ) -> impl Stream<Item = BlockInfo> {
     stream! {
-        let byte_stream = load_byte_stream_from_snapshot_directory(directory_adapter.clone()).await;
+        let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
         pin_mut!(byte_stream);
         // Skip the snapshot version byte
         byte_stream.next().await.unwrap().unwrap();
@@ -517,12 +535,19 @@ pub async fn load_block_stream_from_directory_adapter(
         while let Some(byte) = byte_stream.next().await {
             let byte = byte.unwrap();
             reader.push(byte);
-            if reader.len() > 2_usize.pow(20) {
+            // 100 MB
+            if reader.len() > ONE_HUNDRED_MB {
                 let block = bincode::deserialize(&reader).unwrap();
-                // 
+                let size = bincode::serialized_size(&block).unwrap() as usize;
+                reader.drain(..size);
                 yield block;
-                reader.clear();
             }
+        }
+        while !reader.is_empty() {
+            let block = bincode::deserialize(&reader).unwrap();
+            let size = bincode::serialized_size(&block).unwrap() as usize;
+            reader.drain(..size);
+            yield block;
         }
     }
 }
@@ -559,7 +584,6 @@ pub async fn create_snapshot_from_byte_stream(
     }
     let end_slot = u64::from_le_bytes(end_slot_bytes);
     let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
-    println!("Creating snapshot file: {:?}", snapshot_name);
     directory_adapter
         .write_file(snapshot_name.clone(), byte_stream)
         .await?;

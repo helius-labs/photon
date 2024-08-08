@@ -20,9 +20,7 @@ use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
-use photon_indexer::snapshot::{
-    get_snapshot_files_with_slots, load_block_stream_from_snapshot_directory,
-};
+use photon_indexer::snapshot::get_snapshot_files_with_metadata;
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
