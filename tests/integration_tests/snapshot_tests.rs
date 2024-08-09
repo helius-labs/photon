@@ -5,11 +5,11 @@ use photon_indexer::common::typedefs::hash::Hash;
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use photon_indexer::snapshot::{
-    create_bucket_if_not_exists, create_snapshot_from_byte_stream, get_r2_client,
-    get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter,
-    load_byte_stream_from_directory_adapter, update_snapshot_helper, DirectoryAdapter,
-    R2ClientArgs, R2DirectoryAdapter,
+    create_snapshot_from_byte_stream, get_r2_bucket, get_snapshot_files_with_metadata,
+    load_block_stream_from_directory_adapter, load_byte_stream_from_directory_adapter,
+    update_snapshot_helper, DirectoryAdapter, R2BucketArgs, R2DirectoryAdapter,
 };
+use s3::creds::Credentials;
 
 use std::sync::Arc;
 use std::vec;
@@ -17,11 +17,10 @@ use std::vec;
 #[tokio::test]
 async fn test_basic_snapshotting() {
     use std::env::temp_dir;
-
     use futures::StreamExt;
 
     let temp_dir = temp_dir();
-    let snapshot_dirs = vec!["test-snapshots-1", "test-snapshots-2"];
+    let snapshot_dirs = vec!["snapshots1", "snapshots2"];
     let file_system_directory_adapters = snapshot_dirs
         .iter()
         .map(|snapshot_dir| {
@@ -40,22 +39,21 @@ async fn test_basic_snapshotting() {
     let mut r2_directory_adapters = vec![];
 
     for snapshot_dir in snapshot_dirs.iter() {
-        let client = get_r2_client(R2ClientArgs {
-            r2_access_key_id: "test".to_string(),
-            r2_secret_access_key: "test".to_string(),
-            r2_endpoint_url: "http://localhost:4566".to_string(),
-        });
-        let r2_bucket = snapshot_dir.to_string();
-        // create_bucket_if_not_exists(&client, &r2_bucket)
-        //     .await
-        //     .unwrap();
+        let r2_credentials =
+            Credentials::new(Some("minioadmin"), Some("minioadmin"), None, None, None).unwrap();
+        let r2_bucket = get_r2_bucket(R2BucketArgs {
+            r2_credentials,
+            r2_endpoint_url: "http://localhost:9000".to_string(),
+            r2_bucket: snapshot_dir.to_string(),
+            create_bucket: true,
+        })
+        .await;
 
         let directory_adapter = Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
             None,
             Some(R2DirectoryAdapter {
-                client,
                 r2_bucket,
-                r2_prefix: "some_prefix/".to_string(),
+                r2_prefix: "".to_string(),
             }),
         ));
         r2_directory_adapters.push(directory_adapter);

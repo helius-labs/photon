@@ -1,73 +1,99 @@
 use std::{
     env::temp_dir,
     fs::{self, File, OpenOptions},
-    io::{BufReader, Read, Write},
+    io::{BufReader, Error, ErrorKind, Read, Write},
     path::PathBuf,
     pin::Pin,
     sync::Arc,
+    task::Poll,
 };
 
 pub use crate::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
-use crate::ingester::{
-    fetchers::BlockStreamConfig,
-    parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
-    typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
+use crate::{
+    api::method::utils::Context,
+    ingester::{
+        fetchers::BlockStreamConfig,
+        parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
+        typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
+    },
 };
-use anyhow::{anyhow, Context, Result};
-use async_std::stream::StreamExt;
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use async_stream::stream;
-use aws_sdk_s3::config::Region;
-use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::{config::Credentials, primitives::SdkBody};
-use aws_sdk_s3::{Client, Config};
-use futures::{pin_mut, Stream};
+use futures::stream::StreamExt;
+use futures::{pin_mut, stream, Stream};
 use hyper::{body::Bytes, Body};
 use log::info;
-use tokio::io::AsyncReadExt;
+use s3::region::Region;
+use s3::{bucket::Bucket, BucketConfiguration};
+use s3::{creds::Credentials, error::S3Error};
+use tokio::io::{AsyncRead, AsyncReadExt, ReadBuf};
 
 const ONE_HUNDRED_MB: usize = 100_000_000;
 const SNAPSHOT_VERSION: u8 = 1;
 
 pub struct R2DirectoryAdapter {
-    pub client: Client,
-    pub r2_bucket: String,
+    pub r2_bucket: Bucket,
     pub r2_prefix: String,
 }
 
-pub struct R2ClientArgs {
-    pub r2_access_key_id: String,
-    pub r2_secret_access_key: String,
+pub struct R2BucketArgs {
+    pub r2_credentials: Credentials,
     pub r2_endpoint_url: String,
+    pub r2_bucket: String,
+    pub create_bucket: bool,
 }
 
-pub fn get_r2_client(args: R2ClientArgs) -> Client {
-    let region = Region::new("us-east-1");
-    let credentials = Credentials::new(
-        args.r2_access_key_id,
-        args.r2_secret_access_key,
-        None,
-        None,
-        "test",
-    );
-    let config = Config::builder()
-        .region(region)
-        .credentials_provider(credentials)
-        .endpoint_url(args.r2_endpoint_url)
-        .build();
-    Client::from_conf(config)
-}
-
-pub async fn create_bucket_if_not_exists(client: &Client, bucket: &str) -> Result<()> {
-    let request = client.create_bucket().bucket(bucket);
-    let built = request.build().unwrap();
-
-    request
-        .send()
+pub async fn get_r2_bucket(args: R2BucketArgs) -> Bucket {
+    let region = Region::Custom {
+        region: "us-east-1".to_string(),
+        endpoint: args.r2_endpoint_url,
+    };
+    if args.create_bucket {
+        // Check if the bucket already exists
+        let bucket = Bucket::new(
+            args.r2_bucket.as_str(),
+            region.clone(),
+            args.r2_credentials.clone(),
+        );
+        if bucket.is_ok() {
+            return bucket.unwrap().with_path_style();
+        }
+        Bucket::create_with_path_style(
+            args.r2_bucket.as_str(),
+            region.clone(),
+            args.r2_credentials.clone(),
+            BucketConfiguration::default(),
+        )
         .await
-        .with_context(|| format!("Failed to create bucket: {:?}", bucket))?;
-    Ok(())
+        .unwrap();
+    }
+    Bucket::new(args.r2_bucket.as_str(), region, args.r2_credentials).unwrap().with_path_style()
+}
+
+struct StreamReader<S> {
+    stream: S,
+}
+
+impl<S> AsyncRead for StreamReader<S>
+where
+    S: stream::Stream<Item = Result<Vec<u8>, std::io::Error>> + Unpin,
+{
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
+        match futures::ready!(self.stream.poll_next_unpin(cx)) {
+            Some(Ok(chunk)) => {
+                buf.put_slice(&chunk);
+                Poll::Ready(Ok(()))
+            }
+            Some(Err(e)) => Poll::Ready(Err(e.into())),
+            None => Poll::Ready(Ok(())), // EOF
+        }
+    }
 }
 
 impl R2DirectoryAdapter {
@@ -78,62 +104,37 @@ impl R2DirectoryAdapter {
         stream! {
             let r2_directory_adapter = arc_self.clone();
             let path = format!("{}/{}", r2_directory_adapter.r2_prefix, path);
-            let request = r2_directory_adapter
-            .client
-            .get_object()
-            .bucket(r2_directory_adapter.r2_bucket.clone())
-            .key(path.clone());
-
-            let response = request.send().await.with_context(|| format!("Failed to read file: {:?}", path))?;
-            let body = response.body;
-            let mut stream = body.into_async_read();
-
-            let mut buf = [0; 1024];
-            loop {
-                let n = stream.read(&mut buf).await.unwrap();
-                if n == 0 {
-                    break;
-                }
-                for i in 0..n {
-                    yield Ok(buf[i]);
+            let mut result = r2_directory_adapter.r2_bucket.get_object_stream(path.clone()).await.with_context(|| format!("Failed to read file: {:?}", path))?;
+            let stream = result.bytes();
+            while let Some(byte) = stream.next().await {
+                let byte = byte.with_context(|| "Failed to read byte from file")?;
+                for byte in byte.into_iter() {
+                    yield Ok(byte);
                 }
             }
         }
     }
 
     async fn list_files(&self) -> Result<Vec<String>> {
-        let request = self
-            .client
-            .list_objects_v2()
-            .bucket(self.r2_bucket.clone())
-            .prefix(self.r2_prefix.clone());
-
-        let response = request
-            .send()
+        let results = self
+            .r2_bucket
+            .list(self.r2_prefix.clone(), None)
             .await
-            .with_context(|| "Failed to list files")?;
-        let objects = response.contents.unwrap_or_default();
+            .unwrap_or_default();
+        info!("Snapshots {:?}", results);
+
         let mut files = Vec::new();
-        for object in objects {
-            if let Some(key) = object.key {
-                files.push(key);
+        for result in results {
+            for object in result.contents {
+                files.push(object.key);
             }
         }
         Ok(files)
     }
 
     async fn delete_file(&self, path: String) -> Result<()> {
-        let path = format!("{}/{}", self.r2_prefix, path);
-        let request = self
-            .client
-            .delete_object()
-            .bucket(self.r2_bucket.clone())
-            .key(path.clone());
-
-        request
-            .send()
-            .await
-            .with_context(|| format!("Failed to delete file: {:?}", path))?;
+        let path = format!("{}{}", self.r2_prefix, path);
+        self.r2_bucket.delete_object(path).await?;
         Ok(())
     }
 
@@ -142,31 +143,22 @@ impl R2DirectoryAdapter {
         path: String,
         bytes: impl Stream<Item = Result<u8>> + std::marker::Send + 'static,
     ) -> Result<()> {
-        let path = format!("{}/{}", self.r2_prefix, path);
-        let request = self
-            .client
-            .put_object()
-            .bucket(self.r2_bucket.clone())
-            .key(path.clone());
+        let path = format!("{}{}", self.r2_prefix, path);
 
+        // Create a stream that converts `Result<u8, S3Error>` to `Result<Vec<u8>, S3Error>`
         let byte_stream = bytes.map(|result| {
-            result.map(|byte| {
-                let mut vec = Vec::new();
-                vec.push(byte);
-                Bytes::from(vec)
-            })
+            result
+                .map(|byte| vec![byte])
+                .map_err(|e| Error::new(ErrorKind::Other, e))
         });
-
-        let body = Body::wrap_stream(byte_stream);
-        let sdk_body = SdkBody::from(body);
-
-        let byte_stream = ByteStream::new(sdk_body);
-        request
-            .body(byte_stream)
-            .send()
-            .await
-            .with_context(|| format!("Failed to write file: {:?}", path))?;
-
+        pin_mut!(byte_stream);
+        let mut stream_reader = StreamReader {
+            stream: byte_stream,
+        };
+        // Stream the bytes directly to S3 without collecting them in memory
+        self.r2_bucket
+            .put_object_stream(&mut stream_reader, &path)
+            .await?;
         Ok(())
     }
 }
