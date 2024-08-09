@@ -40,19 +40,15 @@ pub struct R2DirectoryAdapter {
 
 pub struct R2BucketArgs {
     pub r2_credentials: Credentials,
-    pub r2_endpoint_url: String,
+    pub r2_region: Region,
     pub r2_bucket: String,
     pub create_bucket: bool,
 }
 
 pub async fn get_r2_bucket(args: R2BucketArgs) -> Bucket {
-    let region = Region::Custom {
-        region: "us-east-1".to_string(),
-        endpoint: args.r2_endpoint_url,
-    };
     let bucket = Bucket::new(
         args.r2_bucket.as_str(),
-        region.clone(),
+        args.r2_region.clone(),
         args.r2_credentials.clone(),
     )
     .unwrap()
@@ -63,7 +59,7 @@ pub async fn get_r2_bucket(args: R2BucketArgs) -> Bucket {
         if !bucket_exists {
             Bucket::create_with_path_style(
                 args.r2_bucket.as_str(),
-                region.clone(),
+                args.r2_region.clone(),
                 args.r2_credentials.clone(),
                 BucketConfiguration::default(),
             )
@@ -105,7 +101,6 @@ impl R2DirectoryAdapter {
     ) -> impl Stream<Item = Result<u8>> + std::marker::Send + 'static {
         stream! {
             let r2_directory_adapter = arc_self.clone();
-            let path = format!("{}/{}", r2_directory_adapter.r2_prefix, path);
             let mut result = r2_directory_adapter.r2_bucket.get_object_stream(path.clone()).await.with_context(|| format!("Failed to read file: {:?}", path))?;
             let stream = result.bytes();
             while let Some(byte) = stream.next().await {
@@ -123,7 +118,6 @@ impl R2DirectoryAdapter {
             .list(self.r2_prefix.clone(), None)
             .await
             .unwrap_or_default();
-        info!("Snapshots {:?}", results);
 
         let mut files = Vec::new();
         for result in results {
@@ -135,7 +129,6 @@ impl R2DirectoryAdapter {
     }
 
     async fn delete_file(&self, path: String) -> Result<()> {
-        let path = format!("{}{}", self.r2_prefix, path);
         self.r2_bucket.delete_object(path).await?;
         Ok(())
     }
@@ -145,7 +138,7 @@ impl R2DirectoryAdapter {
         path: String,
         bytes: impl Stream<Item = Result<u8>> + std::marker::Send + 'static,
     ) -> Result<()> {
-        let path = format!("{}{}", self.r2_prefix, path);
+        let path = format!("{}/{}", self.r2_prefix, path);
 
         // Create a stream that converts `Result<u8, S3Error>` to `Result<Vec<u8>, S3Error>`
         let byte_stream = bytes.map(|result| {
@@ -223,7 +216,9 @@ impl FileSystemDirectoryApapter {
     }
 }
 
-/// Trait representing a file system adapter
+/// Struct representing a directory adapter that can read and write files
+/// HACK: This should definitely be a trait, but we used a struct to get around some cryptic
+///       compiler errors
 pub struct DirectoryAdapter {
     filesystem_directory_adapter: Option<Arc<FileSystemDirectoryApapter>>,
     r2_directory_adapter: Option<Arc<R2DirectoryAdapter>>,
@@ -244,6 +239,40 @@ impl DirectoryAdapter {
             filesystem_directory_adapter: filesystem_directory_adapter.map(Arc::new),
             r2_directory_adapter: r2_directory_adapter.map(Arc::new),
         }
+    }
+
+    pub fn from_local_directory(snapshot_dir: String) -> Self {
+        Self::new(Some(FileSystemDirectoryApapter { snapshot_dir }), None)
+    }
+
+    pub async fn from_r2_bucket_and_prefix_and_env(r2_bucket: String, r2_prefix: String) -> Self {
+        // Get endpoint url, access key, region, and secret key from environment variables
+        let r2_credentials = Credentials::new(
+            Some(&std::env::var("R2_ACCESS_KEY").unwrap()),
+            Some(&std::env::var("R2_SECRET_KEY").unwrap()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let r2_region = Region::Custom {
+            region: std::env::var("R2_REGION").unwrap(),
+            endpoint: std::env::var("R2_ENDPOINT_URL").unwrap(),
+        };
+        let r2_bucket_args = R2BucketArgs {
+            r2_credentials,
+            r2_region,
+            r2_bucket,
+            create_bucket: true,
+        };
+        let r2_bucket = get_r2_bucket(r2_bucket_args).await;
+        Self::new(
+            None,
+            Some(R2DirectoryAdapter {
+                r2_bucket,
+                r2_prefix,
+            }),
+        )
     }
 
     /// Reads the contents of a file at the given path
@@ -433,7 +462,10 @@ pub async fn update_snapshot_helper(
     pin_mut!(blocks);
     while let Some(block) = blocks.next().await {
         let slot = block.metadata.slot;
+        println!("Snapshot files: {:?}", snapshot_files);
 
+        println!("Slot: {}", slot);
+        println!("Last Full Snapshot Slot: {}", last_full_snapshot_slot);
         let write_full_snapshot = slot - last_full_snapshot_slot + (last_indexed_slot == 0) as u64
             >= full_snapshot_interval_slots;
         let write_incremental_snapshot = slot - last_snapshot_slot

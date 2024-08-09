@@ -20,8 +20,10 @@ use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
-use photon_indexer::snapshot::get_snapshot_files_with_metadata;
 
+use photon_indexer::snapshot::{
+    get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
+};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use sqlx::{
@@ -202,26 +204,28 @@ async fn main() {
     ));
 
     if let Some(snapshot_dir) = args.snapshot_dir {
-        let snapshot_dir_path = Path::new(&snapshot_dir);
-        // if !get_snapshot_files_with_slots(snapshot_dir_path)
-        //     .unwrap()
-        //     .is_empty()
-        // {
-        //     info!("Detected snapshot files. Loading snapshot...");
-        //     let block_stream = load_block_stream_from_snapshot_directory(snapshot_dir_path);
-        //     pin_mut!(block_stream);
-        //     let first_block = block_stream.next().await.unwrap();
-        //     let slot = first_block.metadata.slot;
-        //     let last_indexed_slot = first_block.metadata.parent_slot;
-        //     index_block_stream(
-        //         stream::iter(vec![first_block].into_iter()),
-        //         db_conn.clone(),
-        //         rpc_client.clone(),
-        //         last_indexed_slot,
-        //     )
-        //     .await;
-        //     index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
-        // }
+        let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+        if !get_snapshot_files_with_metadata(&directory_adapter.clone())
+            .await
+            .unwrap()
+            .is_empty()
+        {
+            info!("Detected snapshot files. Loading snapshot...");
+            let block_stream =
+                load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
+            pin_mut!(block_stream);
+            let first_block = block_stream.next().await.unwrap();
+            let slot = first_block.metadata.slot;
+            let last_indexed_slot = first_block.metadata.parent_slot;
+            index_block_stream(
+                stream::iter(vec![first_block].into_iter()),
+                db_conn.clone(),
+                rpc_client.clone(),
+                last_indexed_slot,
+            )
+            .await;
+            index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
+        }
     }
 
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");

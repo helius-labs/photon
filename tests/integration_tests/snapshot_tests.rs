@@ -10,6 +10,7 @@ use photon_indexer::snapshot::{
     update_snapshot_helper, R2BucketArgs, R2DirectoryAdapter,
 };
 use s3::creds::Credentials;
+use s3::Region;
 
 use std::sync::Arc;
 use std::vec;
@@ -41,9 +42,13 @@ async fn test_basic_snapshotting() {
     for snapshot_dir in snapshot_dirs.iter() {
         let r2_credentials =
             Credentials::new(Some("minioadmin"), Some("minioadmin"), None, None, None).unwrap();
+        let r2_region = Region::Custom {
+            region: "us-east-1".to_string(),
+            endpoint: "http://localhost:9000".to_string(),
+        };
         let r2_bucket = get_r2_bucket(R2BucketArgs {
             r2_credentials,
-            r2_endpoint_url: "http://localhost:9000".to_string(),
+            r2_region,
             r2_bucket: snapshot_dir.to_string(),
             create_bucket: true,
         })
@@ -53,13 +58,13 @@ async fn test_basic_snapshotting() {
             None,
             Some(R2DirectoryAdapter {
                 r2_bucket,
-                r2_prefix: "".to_string(),
+                r2_prefix: "some_prefix".to_string(),
             }),
         ));
         r2_directory_adapters.push(directory_adapter);
     }
 
-    let directory_adapters = vec![file_system_directory_adapters, r2_directory_adapters];
+    let directory_adapters = vec![r2_directory_adapters, file_system_directory_adapters];
     for adapter_pair in directory_adapters {
         let directory_adapter = adapter_pair[0].clone();
         let directory_adapter_v2 = adapter_pair[1].clone();
