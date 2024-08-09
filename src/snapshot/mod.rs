@@ -24,7 +24,7 @@ use log::info;
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
-use tokio::io::{AsyncRead, AsyncReadExt, ReadBuf};
+use tokio::io::{AsyncRead, ReadBuf};
 
 const ONE_HUNDRED_MB: usize = 100_000_000;
 const SNAPSHOT_VERSION: u8 = 1;
@@ -251,15 +251,14 @@ impl DirectoryAdapter {
             None,
         )
         .unwrap();
-        let r2_region = Region::Custom {
-            region: std::env::var("R2_REGION").unwrap(),
-            endpoint: std::env::var("R2_ENDPOINT_URL").unwrap(),
+        let r2_region = Region::R2 {
+            account_id: std::env::var("R2_ACCOUNT_ID").unwrap(),
         };
         let r2_bucket_args = R2BucketArgs {
             r2_credentials,
             r2_region,
             r2_bucket,
-            create_bucket: true,
+            create_bucket: false,
         };
         let r2_bucket = get_r2_bucket(r2_bucket_args).await;
         Self::new(
@@ -403,6 +402,12 @@ async fn merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) {
     let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
         .await
         .unwrap();
+    let start_slot = snapshot_files.first().map(|file| file.start_slot).unwrap();
+    let end_slot = snapshot_files.last().map(|file| file.end_slot).unwrap();
+    info!(
+        "Merging snapshots from slot {} to slot {}",
+        start_slot, end_slot
+    );
     let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
     create_snapshot_from_byte_stream(byte_stream, directory_adapter.as_ref())
         .await
@@ -458,10 +463,6 @@ pub async fn update_snapshot_helper(
     pin_mut!(blocks);
     while let Some(block) = blocks.next().await {
         let slot = block.metadata.slot;
-        println!("Snapshot files: {:?}", snapshot_files);
-
-        println!("Slot: {}", slot);
-        println!("Last Full Snapshot Slot: {}", last_full_snapshot_slot);
         let write_full_snapshot = slot - last_full_snapshot_slot + (last_indexed_slot == 0) as u64
             >= full_snapshot_interval_slots;
         let write_incremental_snapshot = slot - last_snapshot_slot
@@ -482,6 +483,7 @@ pub async fn update_snapshot_helper(
 
         if write_incremental_snapshot {
             let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
+            info!("Writing snapshot file: {}", snapshot_file_path);
             let byte_buffer_clone = byte_buffer.clone();
             let byte_stream = stream! {
                 for block in byte_buffer_clone {

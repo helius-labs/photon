@@ -7,8 +7,7 @@ use photon_indexer::common::{
 };
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
-    get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter,
-    DirectoryAdapter,
+    get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -74,6 +73,14 @@ struct Args {
     /// Metrics endpoint in the format `host:port`
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
+
+    /// Disable snapshot generation and only serve snapshots
+    #[arg(long, default_value_t = false)]
+    disable_snapshot_generation: bool,
+
+    /// Disable api server
+    #[arg(long, default_value_t = false)]
+    disable_api: bool,
 }
 
 async fn continously_run_snapshotter(
@@ -98,7 +105,6 @@ async fn stream_bytes(
 ) -> Result<Response<Body>, hyper::http::Error> {
     let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter).await;
 
-    // Convert byte_stream to a stream of bytes for hyper Body
     let byte_body = byte_stream.map(|result| match result {
         Ok(byte) => Ok::<hyper::body::Bytes, std::io::Error>(Bytes::from(vec![byte])),
         Err(err) => {
@@ -110,14 +116,12 @@ async fn stream_bytes(
         }
     });
 
-    // Create a response with the byte stream as the body
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/octet-stream")
         .body(Body::wrap_stream(byte_body))
 }
 
-/// Handle HTTP requests and route to the appropriate handler
 async fn handle_request(
     req: Request<Body>,
     directory_adapter: Arc<DirectoryAdapter>,
@@ -144,17 +148,14 @@ async fn handle_request(
         e
     })
 }
-/// Create the server and bind it to the specified port, returning a JoinHandle
 async fn create_server(
     port: u16,
     directory_adapter: Arc<DirectoryAdapter>,
 ) -> tokio::task::JoinHandle<()> {
-    // Define the address to bind the server to
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     // Spawn the server task
     tokio::spawn(async move {
-        // Create a make_service function to handle incoming requests
         let make_svc = make_service_fn(move |_conn| {
             let layer = ServiceBuilder::new().layer(TraceLayer::new_for_http());
             let directory_adapter = directory_adapter.clone();
@@ -165,11 +166,9 @@ async fn create_server(
             }
         });
 
-        // Create the server using hyper
         let server = Server::bind(&addr).serve(make_svc);
         info!("Listening on http://{}", addr);
 
-        // Run the server and handle errors
         if let Err(e) = server.await {
             error!("Server error: {}", e);
         }
@@ -201,50 +200,60 @@ async fn main() {
             return;
         }
     };
-
-    info!("Starting snapshotter...");
-    let last_indexed_slot = match args.start_slot {
-        Some(start_slot) => fetch_block_parent_slot(rpc_client.clone(), start_slot).await,
-        None => {
-            let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
-                .await
-                .unwrap();
-            if snapshot_files.is_empty() {
-                get_network_start_slot(rpc_client.clone()).await
-            } else {
-                snapshot_files.last().unwrap().end_slot
+    let snapshotter_handle = if args.disable_snapshot_generation {
+        None
+    } else {
+        info!("Starting snapshotter...");
+        let last_indexed_slot = match args.start_slot {
+            Some(start_slot) => fetch_block_parent_slot(rpc_client.clone(), start_slot).await,
+            None => {
+                let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
+                    .await
+                    .unwrap();
+                if snapshot_files.is_empty() {
+                    get_network_start_slot(rpc_client.clone()).await
+                } else {
+                    snapshot_files.last().unwrap().end_slot
+                }
             }
-        }
+        };
+        info!("Starting from slot: {}", last_indexed_slot + 1);
+        Some(
+            continously_run_snapshotter(
+                directory_adapter.clone(),
+                BlockStreamConfig {
+                    rpc_client: rpc_client.clone(),
+                    max_concurrent_block_fetches: args.max_concurrent_block_fetches.unwrap_or(20),
+                    last_indexed_slot,
+                    geyser_url: args.grpc_url.clone(),
+                },
+                args.incremental_snapshot_interval_slots,
+                args.snapshot_interval_slots,
+            )
+            .await,
+        )
     };
-    info!("Starting from slot {}", last_indexed_slot + 1);
-
-    let snapshotter_handle = continously_run_snapshotter(
-        directory_adapter.clone(),
-        BlockStreamConfig {
-            rpc_client: rpc_client.clone(),
-            max_concurrent_block_fetches: args.max_concurrent_block_fetches.unwrap_or(20),
-            last_indexed_slot: last_indexed_slot,
-            geyser_url: args.grpc_url.clone(),
-        },
-        args.incremental_snapshot_interval_slots,
-        args.snapshot_interval_slots,
-    )
-    .await;
-
-    // Start the server on the specified port
-    let server_handle = create_server(args.port, directory_adapter).await;
+    let server_handle = if args.disable_api {
+        None
+    } else {
+        Some(create_server(args.port, directory_adapter.clone()).await)
+    };
 
     // Handle shutdown signal
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
-            snapshotter_handle.abort();
-            snapshotter_handle
-                .await
-                .expect_err("Snapshotter should have been aborted");
-            server_handle.abort();
-            server_handle
-                .await
-                .expect_err("Server should have been aborted");
+            if let Some(snapshotter_handle) = snapshotter_handle {
+                snapshotter_handle.abort();
+                snapshotter_handle
+                    .await
+                    .expect_err("Snapshotter should have been aborted");
+            }
+            if let Some(server_handle) = server_handle {
+                server_handle.abort();
+                server_handle
+                    .await
+                    .expect_err("Server should have been aborted");
+            }
         }
         Err(err) => {
             error!("Unable to listen for shutdown signal: {}", err);
