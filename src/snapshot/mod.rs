@@ -50,26 +50,28 @@ pub async fn get_r2_bucket(args: R2BucketArgs) -> Bucket {
         region: "us-east-1".to_string(),
         endpoint: args.r2_endpoint_url,
     };
+    let bucket = Bucket::new(
+        args.r2_bucket.as_str(),
+        region.clone(),
+        args.r2_credentials.clone(),
+    )
+    .unwrap()
+    .with_path_style();
     if args.create_bucket {
         // Check if the bucket already exists
-        let bucket = Bucket::new(
-            args.r2_bucket.as_str(),
-            region.clone(),
-            args.r2_credentials.clone(),
-        );
-        if bucket.is_ok() {
-            return bucket.unwrap().with_path_style();
+        let bucket_exists = bucket.exists().await.unwrap();
+        if !bucket_exists {
+            Bucket::create_with_path_style(
+                args.r2_bucket.as_str(),
+                region.clone(),
+                args.r2_credentials.clone(),
+                BucketConfiguration::default(),
+            )
+            .await
+            .unwrap();
         }
-        Bucket::create_with_path_style(
-            args.r2_bucket.as_str(),
-            region.clone(),
-            args.r2_credentials.clone(),
-            BucketConfiguration::default(),
-        )
-        .await
-        .unwrap();
     }
-    Bucket::new(args.r2_bucket.as_str(), region, args.r2_credentials).unwrap().with_path_style()
+    bucket
 }
 
 struct StreamReader<S> {

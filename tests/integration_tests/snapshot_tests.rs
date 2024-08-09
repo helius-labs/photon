@@ -7,7 +7,7 @@ use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use photon_indexer::snapshot::{
     create_snapshot_from_byte_stream, get_r2_bucket, get_snapshot_files_with_metadata,
     load_block_stream_from_directory_adapter, load_byte_stream_from_directory_adapter,
-    update_snapshot_helper, DirectoryAdapter, R2BucketArgs, R2DirectoryAdapter,
+    update_snapshot_helper, R2BucketArgs, R2DirectoryAdapter,
 };
 use s3::creds::Credentials;
 
