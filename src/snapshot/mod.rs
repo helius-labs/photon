@@ -12,7 +12,6 @@ pub use crate::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
 use crate::{
-    api::method::utils::Context,
     ingester::{
         fetchers::BlockStreamConfig,
         parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -23,11 +22,10 @@ use anyhow::{anyhow, Context as AnyhowContext, Result};
 use async_stream::stream;
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
-use hyper::{body::Bytes, Body};
 use log::info;
 use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
-use s3::{creds::Credentials, error::S3Error};
+use s3::{creds::Credentials};
 use tokio::io::{AsyncRead, AsyncReadExt, ReadBuf};
 
 const ONE_HUNDRED_MB: usize = 100_000_000;

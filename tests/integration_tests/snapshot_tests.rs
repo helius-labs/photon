@@ -1,6 +1,5 @@
 use futures::stream;
 
-use itertools::Itertools;
 use photon_indexer::common::typedefs::hash::Hash;
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};

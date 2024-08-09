@@ -7,14 +7,12 @@ use photon_indexer::common::{
 };
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
-    get_r2_bucket, get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter,
-    DirectoryAdapter, R2BucketArgs, R2DirectoryAdapter,
+    get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter,
+    DirectoryAdapter,
 };
-use s3::creds::Credentials;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
