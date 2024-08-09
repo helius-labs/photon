@@ -16,8 +16,8 @@ use std::vec;
 
 #[tokio::test]
 async fn test_basic_snapshotting() {
-    use std::env::temp_dir;
     use futures::StreamExt;
+    use std::env::temp_dir;
 
     let temp_dir = temp_dir();
     let snapshot_dirs = vec!["snapshots1", "snapshots2"];
