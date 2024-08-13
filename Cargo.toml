@@ -22,8 +22,8 @@ name = "photon-openapi"
 path = "src/openapi/main.rs"
 
 [[bin]]
-name = "photon-snapshot-server"
-path = "src/snapshot/server/main.rs"
+name = "photon-snapshotter"
+path = "src/snapshot/snapshotter/main.rs"
 
 [[bin]]
 name = "photon-snapshot-loader"
