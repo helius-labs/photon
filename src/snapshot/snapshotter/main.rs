@@ -136,7 +136,7 @@ async fn handle_request(
                     .body(Body::from("Internal Server Error"))
             }
         },
-        "/health" | "/readiness" => Response::builder()
+        "/health" | "/readiness" | "/healthz" => Response::builder()
             .status(StatusCode::OK)
             .body(Body::from("OK")),
         _ => Response::builder()
