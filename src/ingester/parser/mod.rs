@@ -99,7 +99,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 
                         let state_update = match merkle_tree_event {
                             MerkleTreeEvent::V2(nullifier_event) => {
-                                parse_nullifier_event(nullifier_event)?
+                                parse_nullifier_event(tx.signature, nullifier_event)?
                             }
                             MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
                                 parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
@@ -206,7 +206,10 @@ fn parse_indexed_merkle_tree_update(
     Ok(state_update)
 }
 
-fn parse_nullifier_event(nullifier_event: NullifierEvent) -> Result<StateUpdate, IngesterError> {
+fn parse_nullifier_event(
+    tx: Signature,
+    nullifier_event: NullifierEvent,
+) -> Result<StateUpdate, IngesterError> {
     let NullifierEvent {
         id,
         nullified_leaves_indices,
@@ -223,6 +226,7 @@ fn parse_nullifier_event(nullifier_event: NullifierEvent) -> Result<StateUpdate,
                 })?,
                 leaf_index: *leaf_index,
                 seq: seq + i as u64,
+                signature: tx,
             }
         };
         state_update.leaf_nullifications.insert(leaf_nullification);
