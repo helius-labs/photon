@@ -122,6 +122,32 @@ async fn stream_bytes(
         .body(Body::wrap_stream(byte_body))
 }
 
+async fn fetch_slot(
+    directory_adapter: Arc<DirectoryAdapter>,
+) -> Result<Response<hyper::Body>, hyper::http::Error> {
+    let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref()).await;
+
+    match snapshot_files {
+        Ok(snapshot_files) => {
+            let last_snapshot = snapshot_files.last();
+            match last_snapshot {
+                Some(snapshot) => Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::from(snapshot.end_slot.to_string())),
+                None => Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::from("No snapshots found")),
+            }
+        }
+        Err(e) => {
+            error!("Error fetching snapshot files: {:?}", e);
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Internal Server Error"))
+        }
+    }
+}
+
 async fn handle_request(
     req: Request<Body>,
     directory_adapter: Arc<DirectoryAdapter>,
@@ -139,6 +165,7 @@ async fn handle_request(
         "/health" | "/readiness" => Response::builder()
             .status(StatusCode::OK)
             .body(Body::from("OK")),
+        "/slot" => fetch_slot(directory_adapter).await,
         _ => Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("404 Not Found")),
