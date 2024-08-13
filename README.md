@@ -57,7 +57,7 @@ photon --db-url=$DATABASE_URL
 
 To run tests, install and run Postgres and SQLlite locally. For MacOS users, we recommend using
 Homebrew to run local Postgres: https://wiki.postgresql.org/wiki/Homebrew.
-c
+
 Then export environment variables to configure your RPC and your test Postgres url. For SQLlite testing,
 we always use an in-memory SQLlite database, so there is no need to configure a test url.
 
@@ -72,12 +72,18 @@ Additionally, for tests we use `swagger-cli` to validate our OpenAPI schemas. So
 npm install -g @apidevtools/swagger-cli
 ```
 
+Run minio to test snapshotting:
+```bash
+wget https://dl.min.io/server/minio/release/linux-amd64/minio
+chmod +x minio
+```
+
 Finally run the Gnark prover, which is needed for integration tests:
 ```bash
 docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
 ```
 
-Afterwards finishing setup simply run:
+After finishing setup simply run:
 ```bash
 cargo test
 ```

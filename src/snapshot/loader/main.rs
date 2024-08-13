@@ -3,8 +3,8 @@ use async_stream::stream;
 use clap::Parser;
 use log::error;
 use photon_indexer::common::{setup_logging, LoggingFormat};
-use photon_indexer::snapshot::create_snapshot_from_byte_stream;
-use std::path::{Path, PathBuf};
+use photon_indexer::snapshot::{create_snapshot_from_byte_stream, DirectoryAdapter};
+use std::path::Path;
 
 /// Photon Loader: a utility to load snapshots from a snapshot server
 #[derive(Parser, Debug)]
@@ -59,8 +59,8 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
-    let snapshot_dir = PathBuf::new().join(&args.snapshot_dir);
-    create_snapshot_from_byte_stream(byte_stream, &snapshot_dir).await?;
+    let directory_adapter = DirectoryAdapter::from_local_directory(args.snapshot_dir.clone());
+    create_snapshot_from_byte_stream(byte_stream, &directory_adapter).await?;
 
     Ok(())
 }

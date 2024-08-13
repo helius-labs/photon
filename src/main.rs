@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::path::Path;
 use std::time::Duration;
 
 use clap::Parser;
@@ -20,10 +19,10 @@ use photon_indexer::migration::{
     sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector, SqlxSqliteConnector},
     Migrator, MigratorTrait,
 };
-use photon_indexer::snapshot::{
-    get_snapshot_files_with_slots, load_block_stream_from_snapshot_directory,
-};
 
+use photon_indexer::snapshot::{
+    get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
+};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use sqlx::{
@@ -204,13 +203,15 @@ async fn main() {
     ));
 
     if let Some(snapshot_dir) = args.snapshot_dir {
-        let snapshot_dir_path = Path::new(&snapshot_dir);
-        if !get_snapshot_files_with_slots(snapshot_dir_path)
+        let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+        if !get_snapshot_files_with_metadata(&directory_adapter.clone())
+            .await
             .unwrap()
             .is_empty()
         {
             info!("Detected snapshot files. Loading snapshot...");
-            let block_stream = load_block_stream_from_snapshot_directory(snapshot_dir_path);
+            let block_stream =
+                load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
             pin_mut!(block_stream);
             let first_block = block_stream.next().await.unwrap();
             let slot = first_block.metadata.slot;
