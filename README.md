@@ -39,6 +39,34 @@ photon --start-slot=123
 photon --help
 ```
 
+### Photon Snapshots
+
+Photon supports snapshots, which enable Photon operators to load Photon more quickly. Otherwise,
+operators need to index all of the Solana blocks since the ZK Compression contract was released.
+
+Helius supports a public endpoint for loading snapshots. To load a snapshot simply run:
+```bash
+photon-snapshot-loader  -- --snapshot-dir=~/snapshot --snapshot-server-url=https://photon-devnet-snapshot.helius-rpc.com
+```
+
+Then use the snapshot to load Photon faster:
+```bash
+# Photon will disregard the snapshot if the database is more up-to-date.
+photon-indexer -- --snapshot-dir=~/snapshot --r=https://api.devnet.solana.com --db-url=postgres://postgres@localhost/postgres
+```
+
+To create snapshots you can run the Photon snapshotter:
+```bash
+photon-snapshotter -- --snapshot-dir=~/snapshot
+```
+
+You can also specify an R2 bucket for storing the snapshot files instead of a local directory:
+```bash
+# If you specify an R2 bucket, you must set the R2_ACCESS_KEY, R2_ACCOUNT_ID and R2_SECRET_KEY
+photon-snapshotter -- --r2-bucket=some-bucket --r2-prefix=prefix
+```
+
+
 ### Database Management
 
 We support both Postgres and SQLite as database backends. Photon uses a auto-configured SQLite
