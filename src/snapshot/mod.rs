@@ -18,6 +18,7 @@ use crate::ingester::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use async_stream::stream;
+use bytes::Bytes;
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
 use log::info;
@@ -26,7 +27,10 @@ use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
 use tokio::io::{AsyncRead, ReadBuf};
 
-const ONE_HUNDRED_MB: usize = 100_000_000;
+pub const ONE_HUNDRED_MB: usize = MEGABYTE * 100;
+pub const MEGABYTE: usize = 1024 * 1024;
+pub const CHUNK_SIZE: usize = 10 * 1024 * 1024;
+
 const SNAPSHOT_VERSION: u8 = 1;
 
 pub struct R2DirectoryAdapter {
@@ -72,7 +76,7 @@ struct StreamReader<S> {
 
 impl<S> AsyncRead for StreamReader<S>
 where
-    S: stream::Stream<Item = Result<Vec<u8>, std::io::Error>> + Unpin,
+    S: stream::Stream<Item = Result<Bytes, std::io::Error>> + Unpin,
 {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -94,16 +98,15 @@ impl R2DirectoryAdapter {
     async fn read_file(
         arc_self: Arc<Self>,
         path: String,
-    ) -> impl Stream<Item = Result<u8>> + std::marker::Send + 'static {
+    ) -> impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static {
         stream! {
             let r2_directory_adapter = arc_self.clone();
             let mut result = r2_directory_adapter.r2_bucket.get_object_stream(path.clone()).await.with_context(|| format!("Failed to read file: {:?}", path))?;
             let stream = result.bytes();
+
             while let Some(byte) = stream.next().await {
                 let byte = byte.with_context(|| "Failed to read byte from file")?;
-                for byte in byte.into_iter() {
-                    yield Ok(byte);
-                }
+                yield Ok(byte);
             }
         }
     }
@@ -132,17 +135,15 @@ impl R2DirectoryAdapter {
     async fn write_file(
         &self,
         path: String,
-        bytes: impl Stream<Item = Result<u8>> + std::marker::Send + 'static,
+        byte_stream: impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static,
     ) -> Result<()> {
         let path = format!("{}/{}", self.r2_prefix, path);
 
-        // Create a stream that converts `Result<u8, S3Error>` to `Result<Vec<u8>, S3Error>`
-        let byte_stream = bytes.map(|result| {
-            result
-                .map(|byte| vec![byte])
-                .map_err(|e| Error::new(ErrorKind::Other, e))
-        });
         pin_mut!(byte_stream);
+        // Create a stream that converts `Result<u8, S3Error>` to `Result<Vec<u8>, S3Error>`
+        let byte_stream =
+            byte_stream.map(|bytes| bytes.map_err(|e| Error::new(ErrorKind::Other, e)));
+
         let mut stream_reader = StreamReader {
             stream: byte_stream,
         };
@@ -159,13 +160,21 @@ pub struct FileSystemDirectoryApapter {
 }
 
 impl FileSystemDirectoryApapter {
-    async fn read_file(&self, path: String) -> impl Stream<Item = Result<u8>> {
+    async fn read_file(&self, path: String) -> impl Stream<Item = Result<Bytes>> + Send {
         let path = format!("{}/{}", self.snapshot_dir, path);
         let file = OpenOptions::new().read(true).open(path).unwrap();
-        let reader = BufReader::new(file);
+        let bytes = BufReader::new(file).bytes();
         stream! {
-            for byte in reader.bytes() {
-                yield byte.with_context(|| "Failed to read byte from file");
+            let mut byte_chunk = vec![];
+            for byte in bytes.into_iter() {
+                byte_chunk.push(byte.with_context(|| "Failed to read byte from file")?);
+                if byte_chunk.len() == CHUNK_SIZE {
+                    yield Ok(Bytes::from(byte_chunk.clone()));
+                    byte_chunk.clear();
+                }
+            }
+            if !byte_chunk.is_empty() {
+                yield Ok(Bytes::from(byte_chunk));
             }
         }
     }
@@ -192,15 +201,18 @@ impl FileSystemDirectoryApapter {
         Ok(())
     }
 
-    async fn write_file(&self, path: String, bytes: impl Stream<Item = Result<u8>>) -> Result<()> {
+    async fn write_file(
+        &self,
+        path: String,
+        bytes: impl Stream<Item = Result<Bytes>>,
+    ) -> Result<()> {
         let (mut temp_file, temp_path) = create_temp_snapshot_file(&self.snapshot_dir);
         pin_mut!(bytes);
         while let Some(byte) = bytes.next().await {
             let byte = byte?;
-            temp_file
-                .write_all(&[byte])
-                .with_context(|| "Failed to write byte to file")?;
+            temp_file.write_all(&byte).unwrap();
         }
+
         // Create snapshot directory if it doesn't exist
         if !PathBuf::new().join(&self.snapshot_dir).exists() {
             fs::create_dir_all(&self.snapshot_dir).unwrap();
@@ -271,7 +283,7 @@ impl DirectoryAdapter {
     }
 
     /// Reads the contents of a file at the given path
-    async fn read_file(&self, path: String) -> impl Stream<Item = Result<u8>> + 'static {
+    async fn read_file(&self, path: String) -> impl Stream<Item = Result<Bytes>> + 'static {
         let file_system_directory_adapter = self.filesystem_directory_adapter.clone();
         let r2_directory_adapter = self.r2_directory_adapter.clone();
         stream! {
@@ -319,7 +331,7 @@ impl DirectoryAdapter {
     async fn write_file(
         &self,
         path: String,
-        bytes: impl Stream<Item = Result<u8>> + std::marker::Send + 'static,
+        bytes: impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static,
     ) -> Result<()> {
         if let Some(filesystem_directory_adapter) = &self.filesystem_directory_adapter {
             filesystem_directory_adapter.write_file(path, bytes).await
@@ -479,18 +491,14 @@ pub async fn update_snapshot_helper(
                 .collect(),
         };
         let block_bytes = bincode::serialize(&trimmed_block).unwrap();
-        byte_buffer.push(block_bytes);
+        byte_buffer.extend(block_bytes);
 
         if write_incremental_snapshot {
             let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
             info!("Writing snapshot file: {}", snapshot_file_path);
             let byte_buffer_clone = byte_buffer.clone();
             let byte_stream = stream! {
-                for block in byte_buffer_clone {
-                    for byte in block {
-                        yield Ok(byte);
-                    }
-                }
+                yield Ok(Bytes::from(byte_buffer_clone));
             };
             directory_adapter
                 .as_ref()
@@ -509,7 +517,7 @@ pub async fn update_snapshot_helper(
 
 pub async fn load_byte_stream_from_directory_adapter(
     directory_adapter: Arc<DirectoryAdapter>,
-) -> impl Stream<Item = Result<u8>> + 'static {
+) -> impl Stream<Item = Result<Bytes>> + 'static {
     // Create an asynchronous stream of bytes from the snapshot files
     stream! {
         let snapshot_files =
@@ -519,17 +527,15 @@ pub async fn load_byte_stream_from_directory_adapter(
         }
 
         // Yield the snapshot version byte
-        yield Ok(SNAPSHOT_VERSION);
+        yield Ok(Bytes::from(vec![SNAPSHOT_VERSION]));
 
         let start_slot = snapshot_files.first().map(|file| file.start_slot).unwrap();
         let end_slot = snapshot_files.last().map(|file| file.end_slot).unwrap();
 
-        for byte in start_slot.to_le_bytes().iter() {
-            yield Ok(*byte);
-        }
-        for byte in end_slot.to_le_bytes().iter() {
-            yield Ok(*byte);
-        }
+        let start_slot = start_slot.to_le_bytes();
+        let end_slot = end_slot.to_le_bytes();
+        yield Ok(Bytes::from(start_slot.to_vec()));
+        yield Ok(Bytes::from(end_slot.to_vec()));
 
         // Iterate over each snapshot file
         for snapshot_file in snapshot_files {
@@ -550,15 +556,22 @@ pub async fn load_block_stream_from_directory_adapter(
         let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
         pin_mut!(byte_stream);
         // Skip the snapshot version byte
-        byte_stream.next().await.unwrap().unwrap();
+        let snapshot_version = byte_stream.next().await.unwrap().unwrap();
+        let snapshot_version = snapshot_version[0];
+
+
+        if snapshot_version != SNAPSHOT_VERSION {
+            panic!("Unsupported snapshot version: {}. Please upgrade Photon package", snapshot_version);
+        }
         // Skip the start slot and end slot
-        for _ in 0..16 {
+        for _ in 0..2 {
             byte_stream.next().await.unwrap().unwrap();
         }
+
         let mut reader = Vec::new();
-        while let Some(byte) = byte_stream.next().await {
-            let byte = byte.unwrap();
-            reader.push(byte);
+        while let Some(bytes) = byte_stream.next().await {
+            let bytes = bytes.unwrap();
+            reader.extend(&bytes);
             // 100 MB
             if reader.len() > ONE_HUNDRED_MB {
                 let block = bincode::deserialize(&reader).unwrap();
@@ -577,37 +590,30 @@ pub async fn load_block_stream_from_directory_adapter(
 }
 
 pub async fn create_snapshot_from_byte_stream(
-    byte_stream: impl Stream<Item = Result<u8, anyhow::Error>> + std::marker::Send + 'static,
+    byte_stream: impl Stream<Item = Result<Bytes, anyhow::Error>> + std::marker::Send + 'static,
     directory_adapter: &DirectoryAdapter,
 ) -> Result<()> {
     // Skip snapshot version byte
-    let mut byte_stream: Pin<Box<dyn Stream<Item = Result<u8, anyhow::Error>> + Send>> =
+    let mut byte_stream: Pin<Box<dyn Stream<Item = Result<Bytes, anyhow::Error>> + Send>> =
         Box::pin(byte_stream);
 
-    byte_stream.next().await.unwrap().unwrap();
+    let snapshot_bytes = byte_stream.next().await.unwrap().unwrap();
+    let snapshot_version = snapshot_bytes[0];
 
-    // The start slot is the first 8 bytes of the snapshot
-    let mut start_slot_bytes = [0u8; 8];
-    for i in 0..8 {
-        start_slot_bytes[i] = byte_stream
-            .next()
-            .await
-            .transpose()?
-            .ok_or_else(|| anyhow::anyhow!("Failed to read start slot byte {}", i))?;
+    if snapshot_version != SNAPSHOT_VERSION {
+        panic!(
+            "Unsupported snapshot version: {}. Please upgrade Photon package",
+            snapshot_version
+        );
     }
+    let start_slot_bytes = byte_stream.next().await.unwrap().unwrap();
+    let start_slot_bytes: [u8; 8] = start_slot_bytes.to_vec().try_into().unwrap();
     let start_slot = u64::from_le_bytes(start_slot_bytes);
-
-    // The end slot is the next 8 bytes of the snapshot
-    let mut end_slot_bytes = [0u8; 8];
-    for i in 0..8 {
-        end_slot_bytes[i] = byte_stream
-            .next()
-            .await
-            .transpose()?
-            .ok_or_else(|| anyhow::anyhow!("Failed to read end slot byte {}", i))?;
-    }
+    let end_slot_bytes = byte_stream.next().await.unwrap().unwrap();
+    let end_slot_bytes: [u8; 8] = end_slot_bytes.to_vec().try_into().unwrap();
     let end_slot = u64::from_le_bytes(end_slot_bytes);
     let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
+    info!("Creating snapshot: {}", snapshot_name);
     directory_adapter
         .write_file(snapshot_name.clone(), byte_stream)
         .await?;

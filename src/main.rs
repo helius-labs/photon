@@ -2,7 +2,6 @@ use std::fs::File;
 use std::time::Duration;
 
 use clap::Parser;
-use futures::{pin_mut, stream, StreamExt};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
@@ -21,7 +20,7 @@ use photon_indexer::migration::{
 };
 
 use photon_indexer::snapshot::{
-    get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
+    get_snapshot_files_with_metadata,  DirectoryAdapter,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -210,20 +209,20 @@ async fn main() {
             .is_empty()
         {
             info!("Detected snapshot files. Loading snapshot...");
-            let block_stream =
-                load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
-            pin_mut!(block_stream);
-            let first_block = block_stream.next().await.unwrap();
-            let slot = first_block.metadata.slot;
-            let last_indexed_slot = first_block.metadata.parent_slot;
-            index_block_stream(
-                stream::iter(vec![first_block].into_iter()),
-                db_conn.clone(),
-                rpc_client.clone(),
-                last_indexed_slot,
-            )
-            .await;
-            index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
+            // let block_stream =
+            //     load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
+            // pin_mut!(block_stream);
+            // let first_block = block_stream.next().await.unwrap();
+            // let slot = first_block.metadata.slot;
+            // let last_indexed_slot = first_block.metadata.parent_slot;
+            // index_block_stream(
+            //     stream::iter(vec![first_block].into_iter()),
+            //     db_conn.clone(),
+            //     rpc_client.clone(),
+            //     last_indexed_slot,
+            // )
+            // .await;
+            // index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
         }
     }
 

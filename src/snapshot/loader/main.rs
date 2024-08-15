@@ -1,6 +1,7 @@
-use async_std::stream::StreamExt;
+use anyhow::Context;
 use async_stream::stream;
 use clap::Parser;
+use futures::StreamExt;
 use log::error;
 use photon_indexer::common::{setup_logging, LoggingFormat};
 use photon_indexer::snapshot::{create_snapshot_from_byte_stream, DirectoryAdapter};
@@ -50,17 +51,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Stream the response body to the file
-    let mut stream = response.bytes_stream();
-
-    let byte_stream = stream! {
-        while let Some(bytes) = stream.next().await {
-            for byte in bytes.unwrap() {
-                yield Ok(byte);
-            }
-        }
-    };
+    let stream = response
+        .bytes_stream()
+        .map(|byte| byte.with_context(|| "Failed to read byte stream from response body"));
     let directory_adapter = DirectoryAdapter::from_local_directory(args.snapshot_dir.clone());
-    create_snapshot_from_byte_stream(byte_stream, &directory_adapter).await?;
+    create_snapshot_from_byte_stream(stream, &directory_adapter).await?;
 
     Ok(())
 }

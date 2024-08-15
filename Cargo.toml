@@ -63,6 +63,7 @@ sea-orm = { version = "0.10.6", features = [
   "with-chrono",
   "mock",
 ] }
+bytes = "1.7.1"
 sea-orm-migration = { version = "0.10.6", features = [
   "runtime-tokio-rustls",
   "sqlx-postgres",
