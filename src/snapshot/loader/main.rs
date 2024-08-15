@@ -1,3 +1,4 @@
+use anyhow::Context;
 use async_stream::stream;
 use clap::Parser;
 use futures::StreamExt;
@@ -25,8 +26,6 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let start = std::time::Instant::now();
-
     let args = Args::parse();
     setup_logging(args.logging_format);
 
@@ -52,26 +51,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Stream the response body to the file
-    let mut stream = response.bytes_stream();
-    let mut false_counter = 0;
-    while let Some(bytes) = stream.next().await {
-        for byte in bytes.unwrap() {
-            false_counter += 1;
-        }   
-    }
-
-    // let byte_stream = stream! {
-    //     while let Some(bytes) = stream.next().await {
-    //         for byte in bytes.unwrap() {
-    //             yield Ok(byte);
-    //         }
-    //     }
-    // };
-    // let bytes = byte_stream.collect::<Vec<_>>().await;
-    println!("Done streaming bytes: {:?}", false_counter);
+    let stream = response
+        .bytes_stream()
+        .map(|byte| byte.with_context(|| "Failed to read byte stream from response body"));
     let directory_adapter = DirectoryAdapter::from_local_directory(args.snapshot_dir.clone());
-    println!("Duration: {:?}", start.elapsed());
-    // create_snapshot_from_byte_stream(byte_stream, &directory_adapter).await?;
+    create_snapshot_from_byte_stream(stream, &directory_adapter).await?;
 
     Ok(())
 }

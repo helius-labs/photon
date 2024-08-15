@@ -105,30 +105,18 @@ async fn stream_bytes(
     directory_adapter: Arc<DirectoryAdapter>,
 ) -> Result<Response<Body>, hyper::http::Error> {
     let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter).await;
-    pin_mut!(byte_stream);
-    let mut bytes = vec![];
-    while let Some(byte_chunk) = byte_stream.next().await {
-        bytes.extend_from_slice(&byte_chunk.unwrap());
-    }
     info!("Finished loading byte stream");
-    // let byte_body = byte_stream.chunks(CHUNK_SIZE).map(|chunk| {
-    //     let mut bytes_vec = Vec::with_capacity(CHUNK_SIZE);
-    //     for result in chunk {
-    //         match result {
-    //             Ok(byte) => bytes_vec.push(byte),
-    //             Err(err) => {
-    //                 error!("Error reading byte: {:?}", err);
-    //                 return Err(io::Error::new(io::ErrorKind::Other, "Stream Error"));
-    //             }
-    //         }
-    //     }
-    //     Ok::<Bytes, io::Error>(Bytes::from(bytes_vec))
-    // });
+    let byte_stream = byte_stream.map(|bytes| {
+        bytes.map_err(|e| {
+            error!("Error reading byte: {:?}", e);
+            io::Error::new(io::ErrorKind::Other, "Stream Error")
+        })
+    });
 
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/octet-stream")
-        .body(Body::from(bytes))
+        .body(Body::wrap_stream(byte_stream))
 }
 
 async fn fetch_slot(
