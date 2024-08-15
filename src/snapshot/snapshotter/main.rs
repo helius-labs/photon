@@ -1,5 +1,5 @@
 use clap::Parser;
-use futures::{StreamExt};
+use futures::StreamExt;
 use log::{error, info};
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
