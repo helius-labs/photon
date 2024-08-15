@@ -1,6 +1,5 @@
 use clap::Parser;
-use futures::{pin_mut, StreamExt};
-use hyper::body::Bytes;
+use futures::{StreamExt};
 use log::{error, info};
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
@@ -8,7 +7,6 @@ use photon_indexer::common::{
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,
-    CHUNK_SIZE,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;

@@ -1,5 +1,4 @@
 use anyhow::Context;
-use async_stream::stream;
 use clap::Parser;
 use futures::StreamExt;
 use log::error;
