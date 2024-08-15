@@ -18,7 +18,7 @@ use crate::ingester::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use async_stream::stream;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes};
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
 use log::info;
@@ -72,6 +72,7 @@ pub async fn get_r2_bucket(args: R2BucketArgs) -> Bucket {
 
 struct StreamReader<S> {
     stream: S,
+    byte_buffer: Vec<u8>,
 }
 
 impl<S> AsyncRead for StreamReader<S>
@@ -83,9 +84,17 @@ where
         cx: &mut std::task::Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
+        if self.byte_buffer.len() >= buf.remaining_mut() {
+            buf.put_slice(&self.byte_buffer[..buf.remaining_mut()]);
+            self.byte_buffer.drain(..buf.remaining_mut());
+            return Poll::Ready(Ok(()));
+        }
         match futures::ready!(self.stream.poll_next_unpin(cx)) {
             Some(Ok(chunk)) => {
-                buf.put_slice(&chunk);
+                self.byte_buffer.extend_from_slice(chunk.as_ref());
+                let len = std::cmp::min(self.byte_buffer.len(), buf.remaining_mut());
+                buf.put_slice(&self.byte_buffer[..len]);
+                self.byte_buffer.drain(..len);
                 Poll::Ready(Ok(()))
             }
             Some(Err(e)) => Poll::Ready(Err(e.into())),
@@ -146,6 +155,7 @@ impl R2DirectoryAdapter {
 
         let mut stream_reader = StreamReader {
             stream: byte_stream,
+            byte_buffer: Vec::new(),
         };
         // Stream the bytes directly to S3 without collecting them in memory
         self.r2_bucket
