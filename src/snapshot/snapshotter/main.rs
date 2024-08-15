@@ -1,5 +1,5 @@
-use async_std::stream::StreamExt;
 use clap::Parser;
+use futures::{pin_mut, StreamExt};
 use hyper::body::Bytes;
 use log::{error, info};
 use photon_indexer::common::{
@@ -8,9 +8,11 @@ use photon_indexer::common::{
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,
+    CHUNK_SIZE,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +21,6 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, Server, StatusCode};
 use std::convert::Infallible;
 use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 
 /// Photon Snapshotter: a utility to create snapshots of Photon's state at regular intervals.
 #[derive(Parser, Debug)]
@@ -104,22 +105,30 @@ async fn stream_bytes(
     directory_adapter: Arc<DirectoryAdapter>,
 ) -> Result<Response<Body>, hyper::http::Error> {
     let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter).await;
-
-    let byte_body = byte_stream.map(|result| match result {
-        Ok(byte) => Ok::<hyper::body::Bytes, std::io::Error>(Bytes::from(vec![byte])),
-        Err(err) => {
-            error!("Error reading byte: {:?}", err);
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Stream Error",
-            ))
-        }
-    });
+    pin_mut!(byte_stream);
+    let mut bytes = vec![];
+    while let Some(byte_chunk) = byte_stream.next().await {
+        bytes.extend_from_slice(&byte_chunk.unwrap());
+    }
+    info!("Finished loading byte stream");
+    // let byte_body = byte_stream.chunks(CHUNK_SIZE).map(|chunk| {
+    //     let mut bytes_vec = Vec::with_capacity(CHUNK_SIZE);
+    //     for result in chunk {
+    //         match result {
+    //             Ok(byte) => bytes_vec.push(byte),
+    //             Err(err) => {
+    //                 error!("Error reading byte: {:?}", err);
+    //                 return Err(io::Error::new(io::ErrorKind::Other, "Stream Error"));
+    //             }
+    //         }
+    //     }
+    //     Ok::<Bytes, io::Error>(Bytes::from(bytes_vec))
+    // });
 
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/octet-stream")
-        .body(Body::wrap_stream(byte_body))
+        .body(Body::from(bytes))
 }
 
 async fn fetch_slot(
@@ -184,7 +193,7 @@ async fn create_server(
     // Spawn the server task
     tokio::spawn(async move {
         let make_svc = make_service_fn(move |_conn| {
-            let layer = ServiceBuilder::new().layer(TraceLayer::new_for_http());
+            let layer = ServiceBuilder::new();
             let directory_adapter = directory_adapter.clone();
             async move {
                 Ok::<_, Infallible>(layer.service(service_fn(move |req| {
