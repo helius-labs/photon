@@ -21,7 +21,6 @@ use async_stream::stream;
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
-use itertools::Itertools;
 use log::info;
 use s3::creds::Credentials;
 use s3::region::Region;

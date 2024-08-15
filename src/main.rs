@@ -2,7 +2,6 @@ use std::fs::File;
 use std::time::Duration;
 
 use clap::Parser;
-use futures::{pin_mut, stream, StreamExt};
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
