@@ -83,6 +83,15 @@ where
         cx: &mut std::task::Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
+<<<<<<< Updated upstream
+=======
+        if self.byte_buffer.len() > 0 {
+            let len = std::cmp::min(self.byte_buffer.len(), buf.remaining_mut());
+            buf.put_slice(&self.byte_buffer[..len]);
+            self.byte_buffer.drain(..len);
+            return Poll::Ready(Ok(()));
+        }
+>>>>>>> Stashed changes
         match futures::ready!(self.stream.poll_next_unpin(cx)) {
             Some(Ok(chunk)) => {
                 buf.put_slice(&chunk);
@@ -146,6 +155,11 @@ impl R2DirectoryAdapter {
 
         let mut stream_reader = StreamReader {
             stream: byte_stream,
+<<<<<<< Updated upstream
+=======
+            byte_buffer: Vec::new(),
+            total: 0,
+>>>>>>> Stashed changes
         };
         // Stream the bytes directly to S3 without collecting them in memory
         self.r2_bucket
@@ -572,7 +586,6 @@ pub async fn load_block_stream_from_directory_adapter(
         while let Some(bytes) = byte_stream.next().await {
             let bytes = bytes.unwrap();
             reader.extend(&bytes);
-            // 100 MB
             if reader.len() > ONE_HUNDRED_MB {
                 let block = bincode::deserialize(&reader).unwrap();
                 let size = bincode::serialized_size(&block).unwrap() as usize;
