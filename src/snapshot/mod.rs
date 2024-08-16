@@ -27,7 +27,6 @@ use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
 use tokio::io::{AsyncRead, ReadBuf};
 
-pub const ONE_HUNDRED_MB: usize = MEGABYTE * 100;
 pub const MEGABYTE: usize = 1024 * 1024;
 pub const CHUNK_SIZE: usize = 10 * 1024 * 1024;
 
@@ -583,8 +582,7 @@ pub async fn load_block_stream_from_directory_adapter(
         while let Some(bytes) = byte_stream.next().await {
             let bytes = bytes.unwrap();
             reader.extend(&bytes);
-            // 100 MB
-            if reader.len() > ONE_HUNDRED_MB {
+            if reader.len() > CHUNK_SIZE {
                 let block = bincode::deserialize(&reader).unwrap();
                 let size = bincode::serialized_size(&block).unwrap() as usize;
                 reader.drain(..size);
