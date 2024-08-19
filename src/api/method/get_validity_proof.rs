@@ -248,7 +248,9 @@ fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct GetValidityProofRequest {
+    #[serde(default)]
     pub hashes: Vec<Hash>,
+    #[serde(default)]
     pub newAddresses: Vec<SerializablePubkey>,
 }
 

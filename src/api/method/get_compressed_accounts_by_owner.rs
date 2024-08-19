@@ -63,9 +63,13 @@ pub struct DataSlice {
 #[allow(non_snake_case)]
 pub struct GetCompressedAccountsByOwnerRequest {
     pub owner: SerializablePubkey,
+    #[serde(default)]
     pub filters: Vec<FilterSelector>,
+    #[serde(default)]
     pub dataSlice: Option<DataSlice>,
+    #[serde(default)]
     pub cursor: Option<Hash>,
+    #[serde(default)]
     pub limit: Option<Limit>,
 }
 

@@ -20,7 +20,9 @@ use super::utils::parse_account_model;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountsRequest {
+    #[serde(default)]
     pub hashes: Option<Vec<Hash>>,
+    #[serde(default)]
     pub addresses: Option<Vec<SerializablePubkey>>,
 }
 
