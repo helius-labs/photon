@@ -81,7 +81,7 @@ pub async fn get_network_start_slot(rpc_client: Arc<RpcClient>) -> u64 {
         // Devnet
         "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310809099 - 1,
         // Mainnet
-        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 277957074 - 1,
+        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 284592713 - 1,
         _ => 0,
     }
 }
