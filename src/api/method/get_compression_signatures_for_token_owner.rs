@@ -15,7 +15,9 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressionSignaturesForTokenOwnerRequest {
     pub owner: SerializablePubkey,
+    #[serde(default)]
     pub limit: Option<Limit>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 

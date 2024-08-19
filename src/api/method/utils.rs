@@ -201,8 +201,11 @@ pub struct GetCompressedTokenAccountsByAuthorityOptions {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByOwner {
     pub owner: SerializablePubkey,
+    #[serde(default)]
     pub mint: Option<SerializablePubkey>,
+    #[serde(default)]
     pub cursor: Option<Base58String>,
+    #[serde(default)]
     pub limit: Option<Limit>,
 }
 
@@ -210,8 +213,11 @@ pub struct GetCompressedTokenAccountsByOwner {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedTokenAccountsByDelegate {
     pub delegate: SerializablePubkey,
+    #[serde(default)]
     pub mint: Option<SerializablePubkey>,
+    #[serde(default)]
     pub cursor: Option<Base58String>,
+    #[serde(default)]
     pub limit: Option<Limit>,
 }
 
@@ -330,7 +336,9 @@ pub async fn fetch_token_accounts(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CompressedAccountRequest {
+    #[serde(default)]
     pub address: Option<SerializablePubkey>,
+    #[serde(default)]
     pub hash: Option<Hash>,
 }
 
@@ -720,7 +728,9 @@ pub struct AccountBalanceResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetLatestSignaturesRequest {
+    #[serde(default)]
     pub limit: Option<Limit>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 
