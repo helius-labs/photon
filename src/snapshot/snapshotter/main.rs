@@ -226,12 +226,17 @@ async fn main() {
         None
     } else {
         info!("Starting snapshotter...");
+        let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
+            .await
+            .unwrap();
         let last_indexed_slot = match args.start_slot {
-            Some(start_slot) => fetch_block_parent_slot(rpc_client.clone(), start_slot).await,
+            Some(start_slot) => {
+                if !snapshot_files.is_empty() {
+                    panic!("Cannot specify start_slot when snapshot files are present");
+                }
+                fetch_block_parent_slot(rpc_client.clone(), start_slot).await
+            }
             None => {
-                let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
-                    .await
-                    .unwrap();
                 if snapshot_files.is_empty() {
                     get_network_start_slot(rpc_client.clone()).await
                 } else {
