@@ -25,7 +25,9 @@ use log::info;
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
+use s3_utils::multipart_upload::put_object_stream_custom;
 use tokio::io::{AsyncRead, ReadBuf};
+pub mod s3_utils;
 
 pub const MEGABYTE: usize = 1024 * 1024;
 pub const CHUNK_SIZE: usize = 10 * 1024 * 1024;
@@ -114,7 +116,7 @@ impl R2DirectoryAdapter {
             let stream = result.bytes();
 
             while let Some(byte) = stream.next().await {
-                let byte = byte.with_context(|| "Failed to read byte from file")?;
+                let byte = byte.with_context(|| "Failed to read byte from file").unwrap();
                 yield Ok(byte);
             }
         }
@@ -158,9 +160,7 @@ impl R2DirectoryAdapter {
             byte_buffer: Vec::new(),
         };
         // Stream the bytes directly to S3 without collecting them in memory
-        self.r2_bucket
-            .put_object_stream(&mut stream_reader, &path)
-            .await?;
+        put_object_stream_custom(&self.r2_bucket, &mut stream_reader, &path).await?;
         Ok(())
     }
 }

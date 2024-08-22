@@ -10,6 +10,7 @@ use photon_indexer::snapshot::{
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
+use std::future::pending;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -266,24 +267,39 @@ async fn main() {
         Some(create_server(args.port, directory_adapter.clone()).await)
     };
 
-    // Handle shutdown signal
-    match tokio::signal::ctrl_c().await {
-        Ok(()) => {
+    // Use `tokio::select!` to handle both the shutdown signal and task completions
+    tokio::select! {
+        // Handle shutdown signal (Ctrl+C)
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received shutdown signal, aborting tasks...");
+        }
+
+        // If the snapshotter completes for some reason
+        res = async {
             if let Some(snapshotter_handle) = snapshotter_handle {
-                snapshotter_handle.abort();
-                snapshotter_handle
-                    .await
-                    .expect_err("Snapshotter should have been aborted");
+                let res = snapshotter_handle.await;
+                res
+            } else {
+                pending().await
             }
-            if let Some(server_handle) = server_handle {
-                server_handle.abort();
-                server_handle
-                    .await
-                    .expect_err("Server should have been aborted");
+        } => {
+            match res {
+                Ok(()) => info!("Snapshotter finished successfully"),
+                Err(e) => error!("Snapshotter task failed: {:?}", e),
             }
         }
-        Err(err) => {
-            error!("Unable to listen for shutdown signal: {}", err);
+        // If the snapshotter completes for some reason
+        res = async {
+            if let Some(server_handle) = server_handle {
+                server_handle.await
+            } else {
+                pending().await
+            }
+        } => {
+            match res {
+                Ok(()) => info!("Server finished successfully"),
+                Err(e) => error!("Server task failed: {:?}", e),
+            }
         }
     }
 }
