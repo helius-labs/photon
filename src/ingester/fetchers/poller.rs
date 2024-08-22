@@ -69,7 +69,9 @@ pub fn get_poller_block_stream(
 pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
     loop {
         match client.get_slot().await {
-            Ok(slot) => return slot,
+            Ok(slot) => {
+                return slot;
+            }
             Err(e) => {
                 log::error!("Failed to fetch current slot: {}", e);
                 sleep(Duration::from_secs(5));
