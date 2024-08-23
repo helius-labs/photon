@@ -43,11 +43,13 @@ pub struct FilterSelector {
 }
 
 impl FilterSelector {
-    fn into_filter_instance(self) -> FilterInstance {
+    fn into_filter_instance(self) -> Result<FilterInstance, PhotonApiError> {
         if let Some(memcmp) = self.memcmp {
-            FilterInstance::Memcmp(memcmp)
+            Ok(FilterInstance::Memcmp(memcmp))
         } else {
-            panic!("No filter selected")
+            Err(PhotonApiError::ValidationError(
+                "Filter instance cannot be null".to_string(),
+            ))
         }
     }
 }
@@ -153,7 +155,7 @@ pub async fn get_compressed_accounts_by_owner(
     filters_strings.push("spent = false".to_string());
 
     for filter_selector in filters {
-        match filter_selector.into_filter_instance() {
+        match filter_selector.into_filter_instance()? {
             FilterInstance::Memcmp(memcmp) => {
                 let Memcmp { offset, bytes } = memcmp;
                 let one_based_offset = offset + 1;

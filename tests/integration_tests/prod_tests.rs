@@ -1,30 +1,19 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use function_name::named;
 use insta::assert_json_snapshot;
 use photon_indexer::{
     api::{
         api::PhotonApi,
-        method::{
-            get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
-            get_multiple_compressed_account_proofs::HashList,
-        },
+        method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
     },
     common::typedefs::serializable_pubkey::SerializablePubkey,
-    dao::generated::transactions,
-    ingester::{
-        index_block,
-        parser::parse_transaction,
-        typedefs::block_info::{BlockInfo, BlockMetadata},
-    },
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::utils::*;
-use sea_orm::ColumnTrait;
-use sea_orm::{DbBackend, EntityTrait, QueryFilter, SqlxPostgresConnector};
+use sea_orm::SqlxPostgresConnector;
 use serial_test::serial;
-use solana_sdk::signature::Signature;
 
 #[tokio::test]
 #[serial]
