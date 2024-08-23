@@ -1,0 +1,14 @@
+---
+source: tests/integration_tests/prod_tests.rs
+assertion_line: 52
+expression: response
+---
+{
+  "context": {
+    "slot": 320879219
+  },
+  "value": {
+    "items": [],
+    "cursor": null
+  }
+}
