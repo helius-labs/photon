@@ -359,7 +359,6 @@ pub async fn persist_state_update_using_connection(
 pub async fn index_transaction(setup: &TestSetup, tx: &str) {
     let tx = cached_fetch_transaction(setup, tx).await;
     let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
-    println!("State update {:?}", state_update);
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
