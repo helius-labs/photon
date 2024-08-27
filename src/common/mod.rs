@@ -79,9 +79,9 @@ pub async fn get_network_start_slot(rpc_client: Arc<RpcClient>) -> u64 {
     let genesis_hash = get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
     match genesis_hash.as_str() {
         // Devnet
-        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 310809099 - 1,
+        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 319998226 - 1,
         // Mainnet
-        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 284592713 - 1,
+        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" => 286193746 - 1,
         _ => 0,
     }
 }
