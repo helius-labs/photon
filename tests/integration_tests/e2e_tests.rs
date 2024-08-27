@@ -598,4 +598,16 @@ async fn test_nullfiier_and_address_queue_transactions(
         .await
         .unwrap();
     assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+
+    let address = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
+
+    let address_list = AddressList(vec![SerializablePubkey::try_from(address).unwrap()]);
+
+    let proof = setup
+        .api
+        .get_multiple_new_address_proofs(address_list)
+        .await
+        .unwrap();
+
+    assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof);
 }
