@@ -123,7 +123,6 @@ pub async fn persist_state_update(
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
     debug!("Persisting transaction metadatas...");
-    println!("Persisting transaction metadatas...");
     for chunk in transactions_vec.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
@@ -479,7 +478,6 @@ async fn persist_transactions(
     txn: &DatabaseTransaction,
     transactions: &[Transaction],
 ) -> Result<(), IngesterError> {
-    println!("Persisting transactions {:?}", transactions);
     let transaction_models = transactions
         .iter()
         .map(|transaction| transactions::ActiveModel {
