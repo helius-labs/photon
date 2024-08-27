@@ -7,58 +7,7 @@ expression: accounts
     "slot": 0
   },
   "value": {
-    "items": [
-      {
-        "account": {
-          "hash": "2WfNf8qZoMNGR4mAPX8toADTdRpcKYTX1KUUAEHMi7dJ",
-          "address": null,
-          "data": {
-            "discriminator": 2,
-            "data": "2b5R6MH0bIdXCz0nKe2kPJpKHK5c9CbvbTEjJbkj/ljxw68ZPquGSsxnZaZfZplx46kMBO82jg632dlnzciWRAUAAAAAAAAAAAAA",
-            "dataHash": "BQ8mC2bNT1eTowmH3fJs8HvT2d7eJefgJ9ym1RjGA9d"
-          },
-          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
-          "lamports": 0,
-          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-          "leafIndex": 6,
-          "seq": 7,
-          "slotCreated": 0
-        },
-        "tokenData": {
-          "mint": "FeynqjiR2HGyqQX6ouv5jrRnGxEFYHHRvvnwGQ2HpfSX",
-          "owner": "HGkKWL7Cfm4YAqb6wtCfC6PsAKQ1DL2uccGSyJgzVSKV",
-          "amount": 5,
-          "delegate": null,
-          "state": "initialized",
-          "tlv": null
-        }
-      },
-      {
-        "account": {
-          "hash": "36ewgEJTqSu4enYGWUcxm4CYezR3kgfHBeV29WiEgKaY",
-          "address": null,
-          "data": {
-            "discriminator": 2,
-            "data": "2b5R6MH0bIdXCz0nKe2kPJpKHK5c9CbvbTEjJbkj/ljxw68ZPquGSsxnZaZfZplx46kMBO82jg632dlnzciWRGQAAAAAAAAAAAAA",
-            "dataHash": "2hxQZ7DMb9m1SzGQr5pEi2dNGxwXgQ8ZVuQPTcLbxdVb"
-          },
-          "owner": "HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN",
-          "lamports": 0,
-          "tree": "5bdFnXU47QjzGpzHfXnxcEi5WXyxzEAZzd1vrE39bf1W",
-          "leafIndex": 3,
-          "seq": 4,
-          "slotCreated": 0
-        },
-        "tokenData": {
-          "mint": "FeynqjiR2HGyqQX6ouv5jrRnGxEFYHHRvvnwGQ2HpfSX",
-          "owner": "HGkKWL7Cfm4YAqb6wtCfC6PsAKQ1DL2uccGSyJgzVSKV",
-          "amount": 100,
-          "delegate": null,
-          "state": "initialized",
-          "tlv": null
-        }
-      }
-    ],
+    "items": [],
     "cursor": null
   }
 }

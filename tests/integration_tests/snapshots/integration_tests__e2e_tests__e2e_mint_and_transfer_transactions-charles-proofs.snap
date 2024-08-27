@@ -1,6 +1,6 @@
 ---
-source: tests/integration_tests/mock_tests.rs
-expression: proof
+source: tests/integration_tests/e2e_tests.rs
+expression: proofs
 ---
 {
   "context": {
@@ -8,15 +8,10 @@ expression: proof
   },
   "value": [
     {
-      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
-      "address": "Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W",
-      "lowerRangeAddress": "11111111111111111111111111111111",
-      "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
-      "nextIndex": 1,
       "proof": [
-        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
-        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
-        "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
+        "2o5puhnQbtqyyrcZrsow4DSs6kafmyUTYmgdwXfMMehS",
+        "2watFupNYXaD7N6S4hWe7dp4bMgB2xaounFRtXS5NopH",
+        "2J2Apvd79C6idcpdGg2sNWcr9RAGXto8SaMVrx2y6Jty",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -41,20 +36,17 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkleTree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
-      "rootSeq": 3,
-      "lowElementLeafIndex": 0
+      "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+      "leafIndex": 4,
+      "hash": "2TxrLe9HDTRDpVXmbkXUgXNksCZ7RdU4Tc2Ea1B8ADs2",
+      "merkleTree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+      "rootSeq": 7
     },
     {
-      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
-      "address": "sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd",
-      "lowerRangeAddress": "11111111111111111111111111111111",
-      "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
-      "nextIndex": 1,
       "proof": [
-        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
-        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
-        "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
+        "2TxrLe9HDTRDpVXmbkXUgXNksCZ7RdU4Tc2Ea1B8ADs2",
+        "2watFupNYXaD7N6S4hWe7dp4bMgB2xaounFRtXS5NopH",
+        "2J2Apvd79C6idcpdGg2sNWcr9RAGXto8SaMVrx2y6Jty",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
         "3w895nemtSxb1fEjFT3cXkVpW3y6f9uHQn43jEwu1RWc",
@@ -79,9 +71,11 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkleTree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
-      "rootSeq": 3,
-      "lowElementLeafIndex": 0
+      "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+      "leafIndex": 5,
+      "hash": "2o5puhnQbtqyyrcZrsow4DSs6kafmyUTYmgdwXfMMehS",
+      "merkleTree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+      "rootSeq": 7
     }
   ]
 }

@@ -4,7 +4,7 @@ use crate::{
     common::typedefs::{
         account::Account,
         hash::Hash,
-        token_data::{TokenData, TokenDataLegacy},
+        token_data::TokenData,
     },
     dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
@@ -35,7 +35,7 @@ use sqlx::types::Decimal;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
-const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("HXVfQ44ATEi9WBKLSCCwM54KokdkzqXci9xCQ7ST9SYN");
+const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 const TREE_HEIGHT: u32 = 27;
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 5000;
@@ -170,21 +170,8 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
             let data_slice = data.data.0.as_slice();
-            let token_data = TokenData::try_from_slice(data_slice);
-            match token_data {
-                Ok(token_data) => Ok(Some(token_data)),
-                Err(_) => TokenDataLegacy::try_from_slice(data_slice).map(|token_data| {
-                    Some(TokenData {
-                        mint: token_data.mint,
-                        owner: token_data.owner,
-                        amount: token_data.amount,
-                        delegate: token_data.delegate,
-                        state: token_data.state,
-                        tlv: None,
-                    })
-                }),
-            }
-            .map_err(|e| IngesterError::ParserError(format!("Failed to parse token data: {:?}", e)))
+            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| IngesterError::ParserError(format!("Failed to parse token data: {:?}", e)))?;
+            Ok(Some(token_data))
         }
         _ => Ok(None),
     }
