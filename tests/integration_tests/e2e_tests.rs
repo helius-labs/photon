@@ -27,7 +27,7 @@ use serial_test::serial;
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_e2e_mint_and_transfer_legacy_transactions(
+async fn test_e2e_mint_and_transfer_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use std::str::FromStr;
@@ -53,228 +53,18 @@ async fn test_e2e_mint_and_transfer_legacy_transactions(
     .await;
 
     let bob_pubkey =
-        SerializablePubkey::try_from("D6B941apqSHVU5TV2n7JevkpAVQ4sdhiT6g1fNoEMfYG").unwrap();
+        SerializablePubkey::try_from("EU57rQxcmFhJ24ApVdUy3y4MxFXcTUN3uiVeWvGgtWXu").unwrap();
     let charles_pubkey =
-        SerializablePubkey::try_from("8UMPheZvcShkq7DwPpJN5NusYDKTwfx9FVTyZXnVLSaj").unwrap();
+        SerializablePubkey::try_from("CHvwuTvTiwRSNBwAnrCG14V8YTJ6wwhHQrifxdFzHzsX").unwrap();
 
     let mint_tx =
-        "4uLjV2xNmD6LD76XeSfDZoqxnjfY7bzcnpj7cqG4ZDAhVKqtUbAxajuvs4qSdJxLxbxcAjStvUnY5DhhSPgKQFcB";
+        "64jFxW4xxife8UqpEQyYdA589rzFKWx8rT4vun6soCpWXmDermr588UKX2261YYZ8ZSzcu2NUJY2aCfee64FvTW4";
     let transfer_tx =
-        "4Ld9WjbPxzhDsiTfiPfkw1v9xoAXwEUHWLxnKR9sazxRxWeGCeWHgQHpvABwssQUb8srwdFfgFF2sUxn8Toq8hCM";
+        "5UZuijpSnqBpgMpqnggxZ58bzZ8aJtqqVjtvzx2Pg2C58jXph1rdrXyHdTxJfsHawNJyr8syU4U1MEYccDUQeTSV";
     let transfer_txn2: &str =
-        "5Ea6iQQZ1JYfiDq8H6qMKYdFcut1cUfd9pstCGc3BsQztTbgKA4LhsEx6XKQ1bMhKp5KMyyw5BuuooxEcpGLyHFB";
+        "2J9pSeLvXnyawUPKdks98ZibQWU8v38AEhmZp9g9P3WzY9dJSMQ3RmoUaGN1zVCF3tTQy6q2YbD94jq8uzSZsay7";
     let transfer_txn3 =
-        "41rBbMrNtZveMdPXPrHJLaoEzZ9WvJdgTbvcDhLM39THw7v51FjbCdUyWYFNswr1k3pRYbKvAcYb84bft2NbWgP2";
-
-    let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
-
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-
-    for tx in txs {
-        index_transaction(&setup, tx).await;
-    }
-    for (person, pubkey) in [
-        ("bob", bob_pubkey.clone()),
-        ("charles", charles_pubkey.clone()),
-    ] {
-        let accounts = setup
-            .api
-            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                owner: pubkey.clone(),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
-        let hash_list = HashList(
-            accounts
-                .value
-                .items
-                .iter()
-                .map(|x| x.account.hash.clone())
-                .collect(),
-        );
-        let proofs = setup
-            .api
-            .get_multiple_compressed_account_proofs(hash_list.clone())
-            .await
-            .unwrap();
-
-        assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
-
-        let mut validity_proof = setup
-            .api
-            .get_validity_proof(GetValidityProofRequest {
-                hashes: hash_list.0.clone(),
-                newAddresses: vec![],
-            })
-            .await
-            .unwrap();
-        // The Gnark prover has some randomness.
-        validity_proof.value.compressedProof = CompressedProof::default();
-
-        assert_json_snapshot!(
-            format!("{}-{}-validity-proof", name.clone(), person),
-            validity_proof
-        );
-
-        let mut cursor = None;
-        let limit = Limit::new(1).unwrap();
-        let mut signatures = Vec::new();
-        loop {
-            let res = setup
-                .api
-                .get_compression_signatures_for_token_owner(
-                    GetCompressionSignaturesForTokenOwnerRequest {
-                        owner: pubkey.clone(),
-                        cursor,
-                        limit: Some(limit.clone()),
-                    },
-                )
-                .await
-                .unwrap()
-                .value;
-            signatures.extend(res.items);
-            cursor = res.cursor;
-            if cursor.is_none() {
-                break;
-            }
-        }
-        assert_json_snapshot!(
-            format!("{}-{}-token-signatures", name.clone(), person),
-            signatures
-        );
-
-        let token_balances = setup
-                .api
-                .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
-                    owner: pubkey.clone(),
-                    ..Default::default()
-                })
-                .await
-                .unwrap();
-
-        assert_json_snapshot!(
-            format!("{}-{}-token-balances", name.clone(), person),
-            token_balances
-        );
-    }
-    for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
-        let txn = cached_fetch_transaction(&setup, txn_signature).await;
-        let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
-        // Test get transaction
-        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
-        assert_json_snapshot!(
-            format!("{}-{}-transaction", name.clone(), txn_name),
-            parsed_transaction
-        );
-    }
-
-    let mut cursor = None;
-    let limit = Limit::new(1).unwrap();
-    let mut signatures = Vec::new();
-    loop {
-        let res = setup
-            .api
-            .get_latest_compression_signatures(GetLatestSignaturesRequest {
-                cursor,
-                limit: Some(limit.clone()),
-            })
-            .await
-            .unwrap()
-            .value;
-        signatures.extend(res.items);
-        cursor = res.cursor;
-        if cursor.is_none() {
-            break;
-        }
-    }
-    let all_signatures = setup
-        .api
-        .get_latest_compression_signatures(GetLatestSignaturesRequest {
-            cursor: None,
-            limit: None,
-        })
-        .await
-        .unwrap();
-    assert_eq!(signatures, all_signatures.value.items);
-
-    let all_non_voting_transactions = setup
-        .api
-        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
-            cursor: None,
-            limit: None,
-        })
-        .await
-        .unwrap();
-
-    assert_eq!(
-        all_non_voting_transactions
-            .value
-            .items
-            .into_iter()
-            .map(Into::<SignatureInfo>::into)
-            .collect::<Vec<_>>(),
-        all_signatures.value.items
-    );
-
-    assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
-}
-
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_e2e_mint_and_transfer_new_transactions(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    use std::str::FromStr;
-
-    use photon_indexer::{
-        api::method::{
-            get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-            get_multiple_compressed_account_proofs::HashList,
-            utils::{Limit, SignatureInfo},
-        },
-        common::typedefs::serializable_signature::SerializableSignature,
-    };
-    use solana_sdk::signature::Signature;
-
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    let bob_pubkey =
-        SerializablePubkey::try_from("HGkKWL7Cfm4YAqb6wtCfC6PsAKQ1DL2uccGSyJgzVSKV").unwrap();
-    let charles_pubkey =
-        SerializablePubkey::try_from("5GkBcTAGLJ2nU7WEbaecndeV5HXzp8LicqkGf6DKKR97").unwrap();
-
-    let mint_tx =
-        "2M63FRn8tYUCDxuxo4fJLkwQfu7FQp5RecNVPK42TMdAbq45BiWjuz1P9nNy6uRrcMpXph63eAUW71GzQE1HmEGs";
-    let transfer_tx =
-        "5MqYh45rQf1x8D1EpeiWh4XXM7WBeDsE3MCpqvstTaCMQVBXuk3wMiUoQGY9Y2t83oGhBKoFG8zWUFoHpEB77C1g";
-    let transfer_txn2: &str =
-        "3xB9XfSrNHov4FDtgQdJMZtKvbDcqvhkpyXN72ZurXvRTKbGXpw4XbUGAnbtCuNiHixf7qoSDQskTcXdA6n412yW";
-    let transfer_txn3 =
-        "P3NmVFAosVot31wa7oyJ3e4s4zFPeUwGnm6HhFmPukjXQ14xUQvrxJSuEy2VS8gutuejoRFzPPoga3ZeBRxDJFa";
+        "5oTNJvc5WWJacEdpZLimVjGu1uGkXoMth8dNKaAymVKA7arwhccxeJPRWDuYEvQHNkGnkRNJcwUbtV4KnwebCKj5";
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
@@ -461,17 +251,17 @@ async fn test_lamport_transfers(
     .await;
 
     let compress_tx =
-        "4dqYnWSm8qKxCyeADsc1eqQBSQQ7BneXbeNxmw8P6Fu5TVv26Roud4UwtvBfy4bV7NLFe1NK97ytqwPqwyGRGVT3";
+        "5NLdbqznXqmTPTN8JBLquriDggb9qaRszVGLSvt6t5esy2Q8Z1iqAuXF4qoLK7HM6oGLySUNUkzhnSocwArpAqmV";
     let transfer_tx1 =
-        "kNXkK3aXPDurmMfPbcfPNwNEWbtqdmFLcE8ZrH3oV7tbHBdH3xzUYso7icJZ4sT7MNjemsH8MdK9WW5CTHaUM59";
+        "4TFBPyvatWgjTdNesfaTo3YkbP2spvGmgZgLn6CvTeqRZSi1ZuPCkK7fLaDbPKskMSF4Azge6QPvtZt9VUV7KBF8";
     let transfer_tx2 =
-        "akFrcAJwhAeK6AyrMvtcMXF13Cd451NLmCmGteL3WbZnzCrW25GUr7Ku5thfwCT28M8TJbRa5p854gVr1cVvDgN";
+        "QBrbAZFq12LCbnv5dByn8vB8Znam4ieGQVzybapgPL5LCa9KHfuYZKV6Nah6UGsa6FUptmT6tSpexWZDrbp82iP";
 
     let payer_pubkey = SerializablePubkey(
-        Pubkey::try_from("G2TkKakizZKiAgkMkwWNZzvxdhMZSVDggmysaVuckjmB").unwrap(),
+        Pubkey::try_from("J6ULJViDpQTRntYTmfkpUZZ71KTVkZNJFSDcQhFCo5Ef").unwrap(),
     );
     let receiver_pubkey = SerializablePubkey(
-        Pubkey::try_from("4Y9xHaihpNo3H8tM9CAkBj6sCKS8mdirWArNGomXWS7m").unwrap(),
+        Pubkey::try_from("FLkMEA7eA82Cvp7MqamqFKsRN3E2Vfg3Xa8NRyVARq5n").unwrap(),
     );
     let txs = [compress_tx, transfer_tx1, transfer_tx2];
     let number_of_indexes = [1, 2];
@@ -741,7 +531,7 @@ async fn test_get_latest_non_voting_signatures_with_failures(
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_nullifier_queue(
+async fn test_nullfiier_and_address_queue_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     let name = trim_test_name(function_name!());
@@ -754,16 +544,18 @@ async fn test_nullifier_queue(
     )
     .await;
 
-    let user_pubkey = "5SHZSriNACrYm32eXQFXythrkBM8sWxoFmsBS5hkZ76k";
+    let user_pubkey = "Ecs89dz8NsNoSxyUtp54G2HPbmvJr8qZnxnWUqiLT92r";
 
     let compress_tx =
-        "3z5aGksRbQCFvNvutWcz1qAnC1fzTAsa6Mz6NpbveKZfVcAuQ1xE1vkoFYoJLwEjRbgv5CwLrDPEP1KmVTpJ9skD";
+        "35zJYUMreV5BRzuzSSfqSVWzLtMqPtWtLBkkH2CP24gFWijju46Vi3ARawzxs22GqZPbXo6uzSosaUXGLgRA9Hth";
     let transfer_tx =
-        "wRPnjQc4ydZJWNVQ1ws9fSWCyPNJaYgVWmbJch64HgbbjPey1B5mPRQzqMF46dqphtjoyeuzL9pWKj9kvwGX1kr";
-    let nullifier_transaction =
-        "9LWs9tHoLNPpEVhJojECoDtVEHkmtNJ2VTb2fAEjE6Jqk51pJ5icqgneajXZ128F6isYyrAunu3FxMfvT8AMYt7";
+        "gXhNzuJHcVz6k625LkeLB9qLU7D56WnHXH6hHBCQfdv7eYPbZPqWpqEjpz86qWa23megQofz8PPBYtPqEHCicbF";
+    let forester_tx1 =
+        "3pmqSXTSzdbbgmp63v1Dz1NGM5Z187wisdsonL8gDcPAimfFdnCB3H5agtcHg1fmhkkWk4PgGTjS2GjzQPknuGcg";
+    let forester_tx2 =
+        "3qSTxmtPen9HtjEhKGpzYdLvRqEQaxSeLaGeav2GC5c2PU8ZEVq84HSeMCxN3jrt6NWB5ZoWPAGn1dv27y3zyG75";
 
-    let txs = [compress_tx, transfer_tx, nullifier_transaction];
+    let txs = [compress_tx, transfer_tx, forester_tx1, forester_tx2];
 
     // HACK: We index a block so that API methods can fetch the current slot.
     index_block(
@@ -806,136 +598,4 @@ async fn test_nullifier_queue(
         .await
         .unwrap();
     assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
-}
-
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_address_with_nullifiers(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    let address = "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU";
-    let address_2 = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
-
-    let compress_tx =
-        "3TEXdBWMdMt676EdSHfPKoP2tVWrenpQpQYuD4Cziufm6LMQ5ABsPSYix77ox9U6Vc1CtcgUSciZhsxpKCFHw9JT";
-    let address_tree_signature =
-        "5n531J7yLGAykHPtX12E4sXPr6GMzvZJFmxyJd9z9ZpS965nGmBCM3nthRJ3LpXSVsgc4Rxgr55tLPo5w6dpW18y";
-
-    let txs = [compress_tx, address_tree_signature];
-
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-
-    for tx in txs {
-        index_transaction(&setup, tx).await;
-    }
-
-    let address_list = AddressList(vec![SerializablePubkey::try_from(address_2).unwrap()]);
-
-    let proof = setup
-        .api
-        .get_multiple_new_address_proofs(address_list)
-        .await
-        .unwrap();
-
-    assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
-
-    let transactions  = setup
-        .api
-        .get_compression_signatures_for_address(photon_indexer::api::method::get_compression_signatures_for_address::GetCompressionSignaturesForAddressRequest {
-            address: SerializablePubkey::try_from(address).unwrap(),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
-
-    assert_json_snapshot!(format!("{}-transactions", name.clone()), transactions);
-}
-
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_indexing_bug(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    use photon_indexer::api::method::get_multiple_new_address_proofs::ADDRESS_TREE_ADDRESS;
-
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::ZkTesnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    let tx1 =
-        "5wXw7jheUt9zWQKmhyhS8DaopKGjaFTda47FrBQXVhqyeDfwGVD8hfeJcpVyPzEmmb45FJtLxo2xydKPJFAtJ1j6";
-
-    let tx2 =
-        "5UEYDJUmBZKxNfGTBrnVCZVbjGPA2XLw3ezTQg88zVCJePTbXXpu7s9ncpA7HwfGFxqCNz14HkQqEZwfVtbW3SLK";
-    let tx3 =
-        "Y9FZwudKniSE8ycCbMzTkmU8bzQHRSyv6v67FFbY37yxhrU1Jsyd2RE1XKnf9wrPXCYQ1682bVTdKTLA9125rc6";
-    let tx4 =
-        "53HtJ3XiztjuKAJtY2cX8pRavaw7MGnwsvihcNtXDiSfrAghhj8YhSMwgzRbkPftYY7cQGDcm8W1PA8D2fr4H3wo";
-
-    let txs = [tx1, tx2, tx3, tx4];
-
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-
-    let tree = SerializablePubkey::from(ADDRESS_TREE_ADDRESS);
-
-    for tx in txs {
-        index_transaction(&setup, tx).await;
-        verify_tree(setup.db_conn.as_ref(), tree.clone()).await;
-    }
-
-    let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
-
-    let address_list = AddressList(vec![SerializablePubkey::try_from(proof_address).unwrap()]);
-
-    let proof = setup
-        .api
-        .get_multiple_new_address_proofs(address_list)
-        .await
-        .unwrap();
-
-    assert_json_snapshot!(format!("{}-proof", name.clone()), proof);
 }

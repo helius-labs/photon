@@ -7,13 +7,7 @@ expression: transactions
     "slot": 0
   },
   "value": {
-    "items": [
-      {
-        "signature": "3TEXdBWMdMt676EdSHfPKoP2tVWrenpQpQYuD4Cziufm6LMQ5ABsPSYix77ox9U6Vc1CtcgUSciZhsxpKCFHw9JT",
-        "slot": 0,
-        "blockTime": 0
-      }
-    ],
+    "items": [],
     "cursor": null
   }
 }

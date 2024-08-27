@@ -8,14 +8,14 @@ expression: proof
   },
   "value": [
     {
-      "root": "3QAgBAsxorcwP5fnaZfgkUJHinKVqjfkBeqfKkNVNEuj",
+      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
       "address": "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
       "lowerRangeAddress": "11111111111111111111111111111111",
-      "higherRangeAddress": "14LNC6QgTME7wBRWqnWLc2TW28YUVTZS5BUhYurVjuMU",
-      "nextIndex": 2,
+      "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
+      "nextIndex": 1,
       "proof": [
         "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
-        "3NSmDbNhhgymcVqrKTWPHGN2UbVLgQcMZJh13b5YWhxQ",
+        "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
         "Y8pRoGMGXJPGZyb7m4sqkPsTSJvzZ7oSVnaybCcYbgd",
@@ -41,8 +41,8 @@ expression: proof
         "3dbMMyehykAriNZ8FMJgPc1N6YSzm9ZfV2HcW9sbaXzP",
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
-      "merkleTree": "C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn",
-      "rootSeq": 5,
+      "merkleTree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
+      "rootSeq": 3,
       "lowElementLeafIndex": 0
     }
   ]

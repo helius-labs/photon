@@ -97,7 +97,6 @@ pub enum Network {
     // Localnet is not a great test option since transactions are not persisted but we don't know
     // how to deploy everything into devnet yet.
     Localnet,
-    ZkTesnet,
 }
 
 #[derive(Clone, Copy)]
@@ -138,7 +137,6 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
-        Network::ZkTesnet => "https://zk-testnet.helius.dev:8899".to_string(),
     };
     let client = Arc::new(RpcClient::new(rpc_url.to_string()));
     let prover_url = "http://127.0.0.1:3001".to_string();
@@ -241,7 +239,7 @@ pub async fn fetch_transaction(
             serde_json::json!([sig.to_string(), RPC_CONFIG,]),
         )
         .await
-        .unwrap();
+        .expect(&format!("Failed to fetch transaction: {sig}"));
 
     // Ignore if tx failed or meta is missed
     let meta = txn.transaction.meta.as_ref();
@@ -361,6 +359,7 @@ pub async fn persist_state_update_using_connection(
 pub async fn index_transaction(setup: &TestSetup, tx: &str) {
     let tx = cached_fetch_transaction(setup, tx).await;
     let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
+    println!("State update {:?}", state_update);
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();

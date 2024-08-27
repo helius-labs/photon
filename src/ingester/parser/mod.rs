@@ -26,7 +26,7 @@ pub mod state_update;
 use solana_program::pubkey;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
-    pubkey!("CbjvJc1SNx1aav8tU49dJGHu8EUdzQJSMtkjDmV8miqK");
+    pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");
 const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
