@@ -103,7 +103,7 @@ impl fmt::Display for LoggingFormat {
 
 pub fn setup_logging(logging_format: LoggingFormat) {
     let env_filter = env::var("RUST_LOG")
-        .unwrap_or("info,sqlx=error,sea_orm_migration=error,jsonrpsee_server=warning".to_string());
+        .unwrap_or("info,sqlx=error,sea_orm_migration=error,jsonrpsee_server=warn".to_string());
     let subscriber = tracing_subscriber::fmt().with_env_filter(env_filter);
     match logging_format {
         LoggingFormat::Standard => subscriber.init(),
