@@ -58,7 +58,11 @@ pub fn get_poller_block_stream(
                 .await;
             let mut blocks_to_yield: Vec<_>  = blocks_to_yield.into_iter().filter_map(|block| block).collect();
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
+            let current_slot = fetch_current_slot_with_infinite_retry(client.as_ref()).await;
             for block in blocks_to_yield.drain(..) {
+                if block.metadata.slot != current_slot {
+                    log::warn!("Block slot {} behind. Current slot is {}", block.metadata.slot, current_slot);
+                }
                 yield block;
             }
 
