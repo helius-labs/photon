@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
@@ -13,7 +14,7 @@ use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use tokio::time::sleep;
+use tokio::time::{interval, sleep};
 use tracing::error;
 use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
@@ -25,12 +26,19 @@ use yellowstone_grpc_proto::geyser::{
 };
 use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
+use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::fetchers::poller::get_poller_block_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
+use once_cell::sync::Lazy;
+
+static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
+
 use crate::metric;
+
+use super::poller::fetch_current_slot_with_infinite_retry;
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
@@ -39,20 +47,35 @@ pub fn get_grpc_stream_with_rpc_fallback(
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = BlockInfo> {
     stream! {
+        update_latest_slot(rpc_client.clone()).await;
+        start_latest_slot_updater(rpc_client.clone());
         let grpc_stream = get_grpc_block_stream(endpoint, None);
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = BlockInfo> + Send>>> = None;
+
         // Await either the gRPC stream or the RPC block fetching
         loop {
             match rpc_poll_stream.as_mut() {
                 Some(rpc_poll_stream_value) => {
                     match select(grpc_stream.next(), rpc_poll_stream_value.next()).await {
                         Either::Left((Some(grpc_block), _)) => {
-
+                            let is_healthy = (LATEST_SLOT.load(Ordering::SeqCst) as i64 - grpc_block.metadata.slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE;
                             if grpc_block.metadata.parent_slot == last_indexed_slot {
                                 last_indexed_slot = grpc_block.metadata.slot;
                                 yield grpc_block;
-                                rpc_poll_stream = None;
+                                if is_healthy {
+                                    info!("gRPC stream is healthy, switching back to gRPC block fetching");
+                                    rpc_poll_stream = None;
+                                }
+                            }
+                            if !is_healthy {
+                                info!("gRPC stream is lagging behind, switching to RPC block fetching");
+                                rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                                    rpc_client.clone(),
+                                    last_indexed_slot,
+                                    max_concurrent_block_fetches,
+                                    None,
+                                )));
                             }
                         }
                         Either::Left((None, _)) => {
@@ -65,13 +88,25 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             }
                         }
                         Either::Right((None, _)) => {
-                            rpc_poll_stream = None;
-                            info!("Switching back to gRPC block fetching");
+                            panic!("RPC stream ended unexpectedly");
                         }
                     }
                 }
                 None => {
-                    let block = grpc_stream.next().await.unwrap();
+                    let block = match tokio::time::timeout(Duration::from_secs(2), grpc_stream.next()).await {
+                        Ok(Some(block)) => block,
+                        Ok(None) => panic!("gRPC stream ended unexpectedly"),
+                        Err(_) => {
+                            info!("gRPC stream timed out, enabling RPC block fetching");
+                            rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                                rpc_client.clone(),
+                                last_indexed_slot,
+                                max_concurrent_block_fetches,
+                                None,
+                            )));
+                            continue;
+                        }
+                    };
                     if block.metadata.slot == 0 {
                         continue;
                     }
@@ -84,7 +119,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
-                            Some(block.metadata.slot),
+                            None,
                         )));
 
                     }
@@ -95,6 +130,21 @@ pub fn get_grpc_stream_with_rpc_fallback(
 
         }
     }
+}
+
+async fn update_latest_slot(rpc_client: Arc<RpcClient>) {
+    let slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
+    LATEST_SLOT.store(slot, Ordering::SeqCst);
+}
+
+pub fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            update_latest_slot(rpc_client.clone()).await;
+        }
+    });
 }
 
 fn get_grpc_block_stream(
