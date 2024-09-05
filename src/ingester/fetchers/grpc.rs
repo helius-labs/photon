@@ -63,10 +63,12 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 last_indexed_slot = grpc_block.metadata.slot;
                                 yield grpc_block;
                                 if (LATEST_SLOT.load(Ordering::SeqCst) as i64 - last_indexed_slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE {
+                                    info!("gRPC stream is healthy, switching back to gRPC block fetching");
                                     rpc_poll_stream = None;
                                 }
                             }
                             if (LATEST_SLOT.load(Ordering::SeqCst) as i64 - last_indexed_slot as i64) >  HEALTH_CHECK_SLOT_DISTANCE {
+                                info!("gRPC stream is lagging behind, switching to RPC block fetching");
                                 rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
                                     rpc_client.clone(),
                                     last_indexed_slot,
@@ -85,8 +87,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             }
                         }
                         Either::Right((None, _)) => {
-                            rpc_poll_stream = None;
-                            info!("Switching back to gRPC block fetching");
+                            panic!("RPC stream ended unexpectedly");
                         }
                     }
                 }
