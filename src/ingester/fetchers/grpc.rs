@@ -59,15 +59,16 @@ pub fn get_grpc_stream_with_rpc_fallback(
                 Some(rpc_poll_stream_value) => {
                     match select(grpc_stream.next(), rpc_poll_stream_value.next()).await {
                         Either::Left((Some(grpc_block), _)) => {
+                            let is_healthy = (LATEST_SLOT.load(Ordering::SeqCst) as i64 - grpc_block.metadata.slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE;
                             if grpc_block.metadata.parent_slot == last_indexed_slot {
                                 last_indexed_slot = grpc_block.metadata.slot;
                                 yield grpc_block;
-                                if (LATEST_SLOT.load(Ordering::SeqCst) as i64 - last_indexed_slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE {
+                                if is_healthy {
                                     info!("gRPC stream is healthy, switching back to gRPC block fetching");
                                     rpc_poll_stream = None;
                                 }
                             }
-                            if (LATEST_SLOT.load(Ordering::SeqCst) as i64 - last_indexed_slot as i64) >  HEALTH_CHECK_SLOT_DISTANCE {
+                            if !is_healthy {
                                 info!("gRPC stream is lagging behind, switching to RPC block fetching");
                                 rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
                                     rpc_client.clone(),
