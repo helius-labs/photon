@@ -30,7 +30,7 @@ use tokio::io::{AsyncRead, ReadBuf};
 pub mod s3_utils;
 
 pub const MEGABYTE: usize = 1024 * 1024;
-pub const CHUNK_SIZE: usize = 10 * 1024 * 1024;
+pub const CHUNK_SIZE: usize = 100 * 1024 * 1024;
 
 const SNAPSHOT_VERSION: u8 = 1;
 
@@ -606,8 +606,17 @@ pub async fn create_snapshot_from_byte_stream(
     let mut byte_stream: Pin<Box<dyn Stream<Item = Result<Bytes, anyhow::Error>> + Send>> =
         Box::pin(byte_stream);
 
-    let snapshot_bytes = byte_stream.next().await.unwrap().unwrap();
-    let snapshot_version = snapshot_bytes[0];
+    let mut byte_buffer = Vec::new();
+    while let Some(byte) = byte_stream.next().await {
+        let byte = byte?;
+        byte_buffer.extend(byte.iter().copied());
+        // 1 byte for version, 8 bytes for start slot, 8 bytes for end slot
+        if byte_buffer.len() > 17 {
+            break;
+        }
+    }
+    // Snapshot version is the first byte
+    let snapshot_version = byte_buffer.remove(0);
 
     if snapshot_version != SNAPSHOT_VERSION {
         panic!(
@@ -615,14 +624,26 @@ pub async fn create_snapshot_from_byte_stream(
             snapshot_version
         );
     }
-    let start_slot_bytes = byte_stream.next().await.unwrap().unwrap();
-    let start_slot_bytes: [u8; 8] = start_slot_bytes.to_vec().try_into().unwrap();
+    let start_slot_bytes: [u8; 8] = byte_buffer
+        .drain(..8)
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
     let start_slot = u64::from_le_bytes(start_slot_bytes);
-    let end_slot_bytes = byte_stream.next().await.unwrap().unwrap();
-    let end_slot_bytes: [u8; 8] = end_slot_bytes.to_vec().try_into().unwrap();
+    let end_slot_bytes: [u8; 8] = byte_buffer
+        .drain(..8)
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
     let end_slot = u64::from_le_bytes(end_slot_bytes);
     let snapshot_name = format!("snapshot-{}-{}", start_slot, end_slot);
     info!("Creating snapshot: {}", snapshot_name);
+    let byte_stream = stream! {
+        yield Ok(Bytes::from(byte_buffer));
+        while let Some(byte) = byte_stream.next().await {
+            yield byte;
+        }
+    };
     directory_adapter
         .write_file(snapshot_name.clone(), byte_stream)
         .await?;
