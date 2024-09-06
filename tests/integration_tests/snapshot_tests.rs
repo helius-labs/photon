@@ -68,7 +68,7 @@ async fn test_basic_snapshotting() {
         let directory_adapter = adapter_pair[0].clone();
         let directory_adapter_v2 = adapter_pair[1].clone();
 
-        let blocks: Vec<BlockInfo> = (0..10)
+        let blocks: Vec<BlockInfo> = (0..30)
             .map(|i| {
                 let block = BlockInfo {
                     metadata: BlockMetadata {
