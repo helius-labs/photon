@@ -55,11 +55,29 @@ async fn pub_oject_stream_with_content_type_and_retries<R: AsyncRead + Unpin>(
     let path = msg.key;
     let upload_id = &msg.upload_id;
 
-    let mut part_number: u32 = 0;
+    let mut part_number: u32 = 1;
     let mut etags = Vec::new();
 
     // Collect request handles
-    let mut total_size = 0;
+    let mut total_size = first_chunk.len();
+
+    // Upload the first chunk
+    let response = make_multipart_request(
+        bucket,
+        &path,
+        first_chunk,
+        part_number,
+        upload_id,
+        content_type,
+    )
+    .await?;
+    if !(200..300).contains(&response.status_code()) {
+        // if chunk upload failed - abort the upload
+        bucket.abort_upload(&path, upload_id).await?;
+        return Err(error_from_response_data(response)?);
+    }
+    let etag = response.as_str()?;
+    etags.push(etag.to_string());
 
     loop {
         let mut handles = vec![];
@@ -115,7 +133,6 @@ async fn pub_oject_stream_with_content_type_and_retries<R: AsyncRead + Unpin>(
 
     // Finish the upload
     let inner_data = etags
-        .clone()
         .into_iter()
         .enumerate()
         .map(|(i, x)| Part {
