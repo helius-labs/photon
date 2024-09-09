@@ -1,11 +1,6 @@
-use std::{
-    sync::Arc,
-    thread::sleep,
-    time::Duration,
-};
+use std::{sync::Arc, thread::sleep, time::Duration};
 
 use async_stream::stream;
-use futures::StreamExt;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
@@ -120,7 +115,9 @@ pub async fn fetch_block_with_infinite_retry(
                         return None;
                     }
                 }
-                log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
+                if attempt_counter % FAILED_BLOCK_LOGGING_FREQUENCY == 1 {
+                    log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
+                }
                 attempt_counter += 1;
             }
         }

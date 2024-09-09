@@ -406,22 +406,3 @@ impl PhotonApi {
         ]
     }
 }
-
-async fn init_pool(
-    db_url: &str,
-    max_conn: i32,
-    timeout_seconds: i32,
-) -> Result<DatabaseConnection, sqlx::Error> {
-    let pool = PgPoolOptions::new()
-        .max_connections(max_conn as u32)
-        .after_connect(move |conn, _meta| {
-            Box::pin(async move {
-                conn.execute(format!("SET statement_timeout = '{}s'", timeout_seconds).as_str())
-                    .await?;
-                Ok(())
-            })
-        })
-        .connect(db_url)
-        .await?;
-    Ok(SqlxPostgresConnector::from_sqlx_postgres_pool(pool))
-}
