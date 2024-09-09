@@ -1,4 +1,8 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{
+    sync::Arc,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 use async_stream::stream;
 use futures::stream::FuturesUnordered;
@@ -42,7 +46,7 @@ pub fn get_poller_block_stream(
             }
 
             let mut block_fetching_futures_batch = vec![];
-            while block_fetching_futures_batch.len() < max_concurrent_block_fetches && current_slot_to_fetch <= end_block_slot  {
+            while (block_fetching_futures_batch.len() < max_concurrent_block_fetches) && current_slot_to_fetch <= end_block_slot  {
                 let client = client.clone();
                 block_fetching_futures_batch.push(fetch_block_with_infinite_retry_using_arc(
                     client.clone(),
@@ -51,11 +55,12 @@ pub fn get_poller_block_stream(
                 current_slot_to_fetch += 1;
             }
             // Promise all the block fetching futures
-            let blocks_to_yield = block_fetching_futures_batch
-                .into_iter()
-                .collect::<FuturesUnordered<_>>()
-                .collect::<Vec<_>>()
-                .await;
+            let start = Instant::now();
+            // Get all the blocks but limit to max_concurrent_block_fetches
+            let blocks_to_yield = futures::future::join_all(block_fetching_futures_batch).await;
+            let duration = start.elapsed();
+            log::info!("Fetched {} blocks in {:?}", blocks_to_yield.len(), duration);
+
             let mut blocks_to_yield: Vec<_>  = blocks_to_yield.into_iter().filter_map(|block| block).collect();
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
             for block in blocks_to_yield.drain(..) {
@@ -109,9 +114,7 @@ pub async fn fetch_block_with_infinite_retry(client: &RpcClient, slot: u64) -> O
                         return None;
                     }
                 }
-                if attempt_counter % FAILED_BLOCK_LOGGING_FREQUENCY == 1 {
-                    log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
-                }
+                log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
                 attempt_counter += 1;
             }
         }
