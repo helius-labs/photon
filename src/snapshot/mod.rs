@@ -579,20 +579,25 @@ pub async fn load_block_stream_from_directory_adapter(
         }
 
         let mut reader = Vec::new();
+        let mut index = 0;
         while let Some(bytes) = byte_stream.next().await {
             let bytes = bytes.unwrap();
             reader.extend(&bytes);
-            if reader.len() > CHUNK_SIZE {
-                let block = bincode::deserialize(&reader).unwrap();
+            while reader.len() - index > CHUNK_SIZE {
+                let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
                 let size = bincode::serialized_size(&block).unwrap() as usize;
-                reader.drain(..size);
+                index += size;
                 yield block;
             }
+            if index > 0 {
+                reader.drain(..index);
+                index = 0;
+            }
         }
-        while !reader.is_empty() {
-            let block = bincode::deserialize(&reader).unwrap();
+        while index < reader.len() {
+            let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
             let size = bincode::serialized_size(&block).unwrap() as usize;
-            reader.drain(..size);
+            index += size;
             yield block;
         }
     }
