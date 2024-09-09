@@ -68,15 +68,6 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                     rpc_poll_stream = None;
                                 }
                             }
-                            if !is_healthy {
-                                info!("gRPC stream is lagging behind, switching to RPC block fetching");
-                                rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
-                                    rpc_client.clone(),
-                                    last_indexed_slot,
-                                    max_concurrent_block_fetches,
-                                    None,
-                                )));
-                            }
                         }
                         Either::Left((None, _)) => {
                             panic!("gRPC stream ended unexpectedly");
