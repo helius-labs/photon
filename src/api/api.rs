@@ -30,7 +30,8 @@ use super::method::get_compression_signatures_for_token_owner::{
 use super::method::get_latest_compression_signatures::get_latest_compression_signatures;
 use super::method::get_latest_non_voting_signatures::get_latest_non_voting_signatures;
 use super::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs, AddressList, GetMultipleNewAddressProofsResponse,
+    get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
+    AddressListWithTrees, GetMultipleNewAddressProofsResponse,
 };
 use super::method::get_transaction_with_compression_info::{
     get_transaction_with_compression_info, GetTransactionRequest, GetTransactionResponse,
@@ -169,6 +170,13 @@ impl PhotonApi {
         request: AddressList,
     ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
         get_multiple_new_address_proofs(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_multiple_new_address_proofs_v2(
+        &self,
+        request: AddressListWithTrees,
+    ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
+        get_multiple_new_address_proofs_v2(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_token_accounts_by_owner(
@@ -361,6 +369,11 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getMultipleNewAddressProofs".to_string(),
                 request: Some(AddressList::schema().1),
+                response: GetMultipleNewAddressProofsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleNewAddressProofsV2".to_string(),
+                request: Some(AddressListWithTrees::schema().1),
                 response: GetMultipleNewAddressProofsResponse::schema().1,
             },
             OpenApiSpec {

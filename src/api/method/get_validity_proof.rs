@@ -15,7 +15,8 @@ use utoipa::ToSchema;
 
 use super::{
     get_multiple_new_address_proofs::{
-        get_multiple_new_address_proofs_helper, MerkleContextWithNewAddressProof,
+        get_multiple_new_address_proofs_helper, AddressWithTree, MerkleContextWithNewAddressProof,
+        ADDRESS_TREE_ADDRESS,
     },
     utils::Context,
 };
@@ -252,6 +253,8 @@ pub struct GetValidityProofRequest {
     pub hashes: Vec<Hash>,
     #[serde(default)]
     pub newAddresses: Vec<SerializablePubkey>,
+    #[serde(default)]
+    pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -264,13 +267,32 @@ pub struct GetValidityProofResponse {
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     prover_url: &str,
-    request: GetValidityProofRequest,
+    mut request: GetValidityProofRequest,
 ) -> Result<GetValidityProofResponse, PhotonApiError> {
-    if request.hashes.is_empty() && request.newAddresses.is_empty() {
+    if request.hashes.is_empty()
+        && request.newAddresses.is_empty()
+        && request.newAddressesWithTrees.is_empty()
+    {
         return Err(PhotonApiError::UnexpectedError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
+    if !request.newAddressesWithTrees.is_empty() && !request.newAddresses.is_empty() {
+        return Err(PhotonApiError::UnexpectedError(
+            "Cannot provide both newAddresses and newAddressesWithTree".to_string(),
+        ));
+    }
+    if !request.newAddresses.is_empty() {
+        request.newAddressesWithTrees = request
+            .newAddresses
+            .iter()
+            .map(|new_address| AddressWithTree {
+                address: new_address.clone(),
+                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS.clone()),
+            })
+            .collect();
+    }
+
     let context = Context::extract(conn).await?;
     let client = Client::new();
     let tx = conn.begin().await?;
@@ -288,8 +310,8 @@ pub async fn get_validity_proof(
             vec![]
         }
     };
-    let new_address_proofs = match !request.newAddresses.is_empty() {
-        true => get_multiple_new_address_proofs_helper(&tx, request.newAddresses).await?,
+    let new_address_proofs = match !request.newAddressesWithTrees.is_empty() {
+        true => get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees).await?,
         false => {
             vec![]
         }
