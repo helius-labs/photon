@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, thread::sleep, time::Duration};
+use std::{env, net::UdpSocket, path::PathBuf, thread::sleep, time::Duration};
 
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
@@ -58,7 +58,7 @@ pub async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> Str
     }
 }
 
-pub async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u64 {
+pub async fn fetch_block_parent_slot(rpc_client: &RpcClient, slot: u64) -> u64 {
     rpc_client
         .get_block_with_config(
             slot,
@@ -75,8 +75,8 @@ pub async fn fetch_block_parent_slot(rpc_client: Arc<RpcClient>, slot: u64) -> u
         .parent_slot
 }
 
-pub async fn get_network_start_slot(rpc_client: Arc<RpcClient>) -> u64 {
-    let genesis_hash = get_genesis_hash_with_infinite_retry(rpc_client.as_ref()).await;
+pub async fn get_network_start_slot(rpc_client: &RpcClient) -> u64 {
+    let genesis_hash = get_genesis_hash_with_infinite_retry(rpc_client).await;
     match genesis_hash.as_str() {
         // Devnet
         "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG" => 319998226 - 1,

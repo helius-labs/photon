@@ -11,7 +11,6 @@ use futures::{pin_mut, Stream, StreamExt};
 use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::{interval, sleep};
@@ -28,6 +27,7 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use crate::ingester::fetchers::poller::get_poller_block_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
@@ -42,7 +42,7 @@ use super::poller::fetch_current_slot_with_infinite_retry;
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Arc<RpcClientWithUri>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = BlockInfo> {
@@ -123,12 +123,12 @@ pub fn get_grpc_stream_with_rpc_fallback(
     }
 }
 
-async fn update_latest_slot(rpc_client: Arc<RpcClient>) {
-    let slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
+async fn update_latest_slot(rpc_client: Arc<RpcClientWithUri>) {
+    let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
     LATEST_SLOT.store(slot, Ordering::SeqCst);
 }
 
-pub fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
+pub fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(1));
         loop {

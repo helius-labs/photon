@@ -7,9 +7,8 @@ use photon_indexer::{
         api::PhotonApi,
         method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
     },
-    common::typedefs::serializable_pubkey::SerializablePubkey,
+    common::typedefs::{rpc_client_with_uri::RpcClientWithUri, serializable_pubkey::SerializablePubkey},
 };
-use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::utils::*;
 use sea_orm::SqlxPostgresConnector;
@@ -25,7 +24,7 @@ async fn test_incorrect_root_bug() {
     let readonly_devnet_db_url = std::env::var("READONLY_DEVNET_DB_URL").unwrap();
     let pool = setup_pg_pool(readonly_devnet_db_url.to_string()).await;
     let devnet_db = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(pool));
-    let rpc_client = Arc::new(RpcClient::new("https://api.devnet.solana.com".to_string()));
+    let rpc_client = Arc::new(RpcClientWithUri::new("https://api.devnet.solana.com".to_string()));
     let prover_url = "http://localhost:3001";
     let api = PhotonApi::new(devnet_db.clone(), rpc_client, prover_url.to_string());
 

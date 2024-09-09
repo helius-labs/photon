@@ -5,8 +5,8 @@ use photon_indexer::{
     common::{
         relative_project_path,
         typedefs::{
-            account::Account, hash::Hash, serializable_pubkey::SerializablePubkey,
-            token_data::TokenData,
+            account::Account, hash::Hash, rpc_client_with_uri::RpcClientWithUri,
+            serializable_pubkey::SerializablePubkey, token_data::TokenData,
         },
     },
     dao::generated::state_trees,
@@ -84,7 +84,7 @@ pub struct TestSetup {
     pub db_conn: Arc<DatabaseConnection>,
     pub api: PhotonApi,
     pub name: String,
-    pub client: Arc<RpcClient>,
+    pub client: Arc<RpcClientWithUri>,
     pub prover_url: String,
 }
 
@@ -138,14 +138,14 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
-    let client = Arc::new(RpcClient::new(rpc_url.to_string()));
+    let client = Arc::new(RpcClientWithUri::new(rpc_url.to_string()));
     let prover_url = "http://127.0.0.1:3001".to_string();
     let api = PhotonApi::new(db_conn.clone(), client.clone(), prover_url.clone());
     TestSetup {
         name,
         db_conn,
         api,
-        client,
+        client: client.clone(),
         prover_url,
     }
 }
@@ -264,7 +264,7 @@ pub async fn cached_fetch_transaction(
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let tx = fetch_transaction(&setup.client, sig).await;
+        let tx = fetch_transaction(&setup.client.client, sig).await;
         std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
         tx
     }
@@ -288,7 +288,7 @@ pub async fn cached_fetch_block(setup: &TestSetup, slot: Slot) -> BlockInfo {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let block = fetch_block(&setup.client, slot).await;
+        let block = fetch_block(&setup.client.client, slot).await;
         std::fs::write(file_path, serde_json::to_string(&block).unwrap()).unwrap();
         block
     };
