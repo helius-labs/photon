@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
-use sqlx::{postgres::PgPoolOptions, Executor};
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
+use sqlx::Executor;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
