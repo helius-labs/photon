@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use sqlx::Executor;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
