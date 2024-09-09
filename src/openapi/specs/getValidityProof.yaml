@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.39.0
+  version: 0.44.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
@@ -39,9 +39,6 @@ paths:
                   - getValidityProof
                 params:
                   type: object
-                  required:
-                  - hashes
-                  - newAddresses
                   properties:
                     hashes:
                       type: array
@@ -51,6 +48,10 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SerializablePubkey'
+                    newAddressesWithTrees:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/AddressWithTree'
                   additionalProperties: false
         required: true
       responses:
@@ -89,6 +90,17 @@ paths:
                     type: string
 components:
   schemas:
+    AddressWithTree:
+      type: object
+      required:
+      - address
+      - tree
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+      additionalProperties: false
     CompressedProof:
       type: object
       required:
@@ -153,9 +165,9 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
+      example: 1111111DspJWUYDimq3AsTmnRfCX1iB99FBkVff83
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
-      example: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
+      default: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh
+      example: 1111111DUUhXNEw1bNAMSKgm1Kt2tSPWdzF3G5poh

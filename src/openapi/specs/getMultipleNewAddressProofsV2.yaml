@@ -9,7 +9,7 @@ servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
   /:
-    summary: getMultipleNewAddressProofs
+    summary: getMultipleNewAddressProofsV2
     post:
       requestBody:
         content:
@@ -36,11 +36,11 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getMultipleNewAddressProofs
+                  - getMultipleNewAddressProofsV2
                 params:
                   type: array
                   items:
-                    $ref: '#/components/schemas/SerializablePubkey'
+                    $ref: '#/components/schemas/AddressWithTree'
         required: true
       responses:
         '200':
@@ -79,6 +79,17 @@ paths:
                     type: string
 components:
   schemas:
+    AddressWithTree:
+      type: object
+      required:
+      - address
+      - tree
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+      additionalProperties: false
     Context:
       type: object
       required:
@@ -91,7 +102,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111CGTta3M4t3yXu8uRgkKvaWd2d8DQuZLKrf
+      example: 1111111D596YFweJQuHY1BbjazZYmAbt8jJL2VzVM
     MerkleContextWithNewAddressProof:
       type: object
       required:
@@ -135,5 +146,5 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
-      example: 1111111Bs8Haw3nAsWf5hmLfKzc6PMEzcxUCKkVYK
+      default: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1
+      example: 1111111CfoVZ9eMbESQia3WiAfF4dtpFdUMcnvAB1

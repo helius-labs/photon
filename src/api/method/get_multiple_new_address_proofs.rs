@@ -18,6 +18,14 @@ pub const MAX_ADDRESSES: usize = 50;
 
 use super::utils::Context;
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
+pub struct AddressWithTree {
+    pub address: SerializablePubkey,
+    pub tree: SerializablePubkey,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
@@ -42,7 +50,7 @@ pub struct GetMultipleNewAddressProofsResponse {
 
 pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
-    addresses: Vec<SerializablePubkey>,
+    addresses: Vec<AddressWithTree>,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
@@ -63,10 +71,10 @@ pub async fn get_multiple_new_address_proofs_helper(
 
     let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
 
-    for address in addresses {
+    for AddressWithTree { address, tree } in addresses {
         let (model, proof) = get_exclusion_range_with_proof(
             txn,
-            ADDRESS_TREE_ADDRESS.to_bytes().to_vec(),
+            tree.to_bytes_vec(),
             ADDRESS_TREE_HEIGHT,
             address.to_bytes_vec(),
         )
@@ -79,7 +87,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             nextIndex: model.next_index as u32,
             proof: proof.proof,
             lowElementLeafIndex: model.leaf_index as u32,
-            merkleTree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            merkleTree: tree,
             rootSeq: proof.rootSeq as u64,
         };
         new_address_proofs.push(new_address_proof);
@@ -94,6 +102,28 @@ pub async fn get_multiple_new_address_proofs(
     conn: &DatabaseConnection,
     addresses: AddressList,
 ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
+    let addresses_with_trees = AddressListWithTrees(
+        addresses
+            .0
+            .into_iter()
+            .map(|address| AddressWithTree {
+                address,
+                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            })
+            .collect(),
+    );
+
+    get_multiple_new_address_proofs_v2(conn, addresses_with_trees).await
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct AddressListWithTrees(pub Vec<AddressWithTree>);
+
+// V2 is the same as V1, but it takes a list of AddressWithTree instead of AddressList.
+pub async fn get_multiple_new_address_proofs_v2(
+    conn: &DatabaseConnection,
+    addresses_with_trees: AddressListWithTrees,
+) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -103,7 +133,9 @@ pub async fn get_multiple_new_address_proofs(
         ))
         .await?;
     }
-    let new_address_proofs = get_multiple_new_address_proofs_helper(&tx, addresses.0).await?;
+
+    let new_address_proofs =
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0).await?;
     tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {

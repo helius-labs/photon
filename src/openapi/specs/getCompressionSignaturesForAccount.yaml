@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.39.0
+  version: 0.44.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
@@ -93,7 +93,7 @@ components:
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
-      example: 1111111DspJWUYDimq3AsTmnRfCX1iB99FBkVff83
+      example: 1111111EgVWUh8o98knojjwqGKqVGFkQ9m5AxqKkj
     SerializableSignature:
       type: string
       description: A Solana transaction signature.

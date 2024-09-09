@@ -770,7 +770,10 @@ async fn test_get_multiple_new_address_proofs_interop(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::{
-        get_multiple_new_address_proofs::{get_multiple_new_address_proofs, AddressList},
+        get_multiple_new_address_proofs::{
+            get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
+            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+        },
         get_validity_proof::CompressedProof,
     };
 
@@ -804,7 +807,8 @@ async fn test_get_multiple_new_address_proofs_interop(
         &setup.db_conn,
         &setup.prover_url,
         GetValidityProofRequest {
-            newAddresses: addresses,
+            newAddresses: addresses.clone(),
+            newAddressesWithTrees: vec![],
             hashes: vec![],
         },
     )
@@ -814,6 +818,39 @@ async fn test_get_multiple_new_address_proofs_interop(
     validity_proof.value.compressedProof = CompressedProof::default();
 
     insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
+
+    // Repeat with V2
+    let addresses_with_trees: Vec<AddressWithTree> = addresses
+        .clone()
+        .into_iter()
+        .map(|address| AddressWithTree {
+            address,
+            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+        })
+        .collect();
+    let proof_v2 = get_multiple_new_address_proofs_v2(
+        &setup.db_conn,
+        AddressListWithTrees(addresses_with_trees.clone()),
+    )
+    .await
+    .unwrap();
+
+    insta::assert_json_snapshot!(name.clone(), proof_v2);
+    let mut validity_proof_v2 = get_validity_proof(
+        &setup.db_conn,
+        &setup.prover_url,
+        GetValidityProofRequest {
+            newAddressesWithTrees: addresses_with_trees.clone(),
+            hashes: vec![],
+            newAddresses: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    // The Gnark prover has some randomness.
+    validity_proof_v2.value.compressedProof = CompressedProof::default();
+
+    insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof_v2);
 }
 
 #[named]
