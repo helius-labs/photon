@@ -1,11 +1,10 @@
 use std::{
     sync::Arc,
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use async_stream::stream;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,

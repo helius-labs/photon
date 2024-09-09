@@ -9,7 +9,6 @@ use photon_indexer::{
     },
     common::typedefs::{rpc_client_with_uri::RpcClientWithUri, serializable_pubkey::SerializablePubkey},
 };
-use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::utils::*;
 use sea_orm::SqlxPostgresConnector;

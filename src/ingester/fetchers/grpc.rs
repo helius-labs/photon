@@ -11,7 +11,6 @@ use futures::{pin_mut, Stream, StreamExt};
 use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::{interval, sleep};

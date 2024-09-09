@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use futures::{pin_mut, Stream, StreamExt};
-use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 

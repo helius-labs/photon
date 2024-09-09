@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, thread::sleep, time::Duration};
+use std::{env, net::UdpSocket, path::PathBuf, thread::sleep, time::Duration};
 
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;

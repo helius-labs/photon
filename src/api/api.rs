@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxPostgresConnector, Statement};
-use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{postgres::PgPoolOptions, Executor};
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;

@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::time::Duration;
 
 use async_std::stream::StreamExt;
 use clap::Parser;
@@ -25,8 +24,6 @@ use photon_indexer::migration::{
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
 };
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::commitment_config::CommitmentConfig;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
