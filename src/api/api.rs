@@ -7,6 +7,7 @@ use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
+use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 use super::method::get_compressed_account::AccountResponse;
@@ -77,41 +78,16 @@ use super::{
     },
 };
 
-pub struct PhotonApiConfig {
-    pub db_url: String,
-    pub max_conn: i32,
-    pub timeout_seconds: i32,
-    pub rpc_url: String,
-    pub prover_url: String,
-}
-
 pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Arc<RpcClientWithUri>,
     prover_url: String,
 }
 
 impl PhotonApi {
-    pub async fn new_from_config(config: PhotonApiConfig) -> Result<Self, anyhow::Error> {
-        let PhotonApiConfig {
-            db_url,
-            max_conn,
-            timeout_seconds,
-            prover_url,
-            ..
-        } = config;
-        let db_conn = init_pool(&db_url, max_conn, timeout_seconds).await?;
-        let rpc_client = Arc::new(RpcClient::new(config.rpc_url));
-        Ok(Self {
-            db_conn: Arc::new(db_conn),
-            rpc_client,
-            prover_url,
-        })
-    }
-
     pub fn new(
         db_conn: Arc<DatabaseConnection>,
-        rpc_client: Arc<RpcClient>,
+        rpc_client: Arc<RpcClientWithUri>,
         prover_url: String,
     ) -> Self {
         Self {
@@ -222,7 +198,7 @@ impl PhotonApi {
     }
 
     pub async fn get_indexer_health(&self) -> Result<String, PhotonApiError> {
-        get_indexer_health(self.db_conn.as_ref(), self.rpc_client.as_ref()).await
+        get_indexer_health(self.db_conn.as_ref(), &self.rpc_client.client).await
     }
 
     pub async fn get_indexer_slot(&self) -> Result<UnsignedInteger, PhotonApiError> {
@@ -277,7 +253,7 @@ impl PhotonApi {
     ) -> Result<GetTransactionResponse, PhotonApiError> {
         get_transaction_with_compression_info(
             &self.db_conn.as_ref(),
-            self.rpc_client.as_ref(),
+            &self.rpc_client.client,
             request,
         )
         .await

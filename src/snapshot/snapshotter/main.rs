@@ -1,6 +1,7 @@
 use clap::Parser;
 use futures::StreamExt;
 use log::{error, info};
+use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
@@ -204,11 +205,7 @@ async fn main() {
     setup_logging(args.logging_format);
     setup_metrics(args.metrics_endpoint);
 
-    let rpc_client = Arc::new(RpcClient::new_with_timeout_and_commitment(
-        args.rpc_url.clone(),
-        Duration::from_secs(10),
-        CommitmentConfig::confirmed(),
-    ));
+    let rpc_client = Arc::new(RpcClientWithUri::new(args.rpc_url.clone()));
 
     let directory_adapter = match (args.snapshot_dir.clone(), args.r2_bucket.clone()) {
         (Some(snapshot_dir), None) => {
@@ -235,11 +232,11 @@ async fn main() {
                 if !snapshot_files.is_empty() {
                     panic!("Cannot specify start_slot when snapshot files are present");
                 }
-                fetch_block_parent_slot(rpc_client.clone(), start_slot).await
+                fetch_block_parent_slot(&rpc_client.client, start_slot).await
             }
             None => {
                 if snapshot_files.is_empty() {
-                    get_network_start_slot(rpc_client.clone()).await
+                    get_network_start_slot(&rpc_client.client).await
                 } else {
                     snapshot_files.last().unwrap().end_slot
                 }

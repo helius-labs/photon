@@ -4,6 +4,8 @@ use async_stream::stream;
 use futures::{pin_mut, Stream, StreamExt};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
+use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
+
 use super::typedefs::block_info::BlockInfo;
 
 pub mod grpc;
@@ -13,7 +15,7 @@ use grpc::get_grpc_stream_with_rpc_fallback;
 use poller::get_poller_block_stream;
 
 pub struct BlockStreamConfig {
-    pub rpc_client: Arc<RpcClient>,
+    pub rpc_client: Arc<RpcClientWithUri>,
     pub geyser_url: Option<String>,
     pub max_concurrent_block_fetches: usize,
     pub last_indexed_slot: u64,

@@ -52,11 +52,11 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
 pub async fn index_block_stream(
     block_stream: impl Stream<Item = BlockInfo>,
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: &RpcClient,
     last_indexed_slot_at_start: u64,
 ) {
     pin_mut!(block_stream);
-    let current_slot = fetch_current_slot_with_infinite_retry(rpc_client.as_ref()).await;
+    let current_slot = fetch_current_slot_with_infinite_retry(rpc_client).await;
     let number_of_blocks_to_backfill = current_slot - last_indexed_slot_at_start;
     info!(
         "Backfilling historical blocks. Current number of blocks to backfill: {}",

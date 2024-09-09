@@ -8,6 +8,7 @@ use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
 
+use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
@@ -107,7 +108,7 @@ pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
 
 async fn start_api_server(
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Arc<RpcClientWithUri>,
     prover_url: String,
     api_port: u16,
 ) -> ServerHandle {
@@ -177,12 +178,12 @@ async fn setup_database_connection(
 fn continously_index_new_blocks(
     block_stream_config: BlockStreamConfig,
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Arc<RpcClientWithUri>,
     last_indexed_slot: u64,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let block_stream = block_stream_config.load_block_stream();
-        index_block_stream(block_stream, db, rpc_client, last_indexed_slot).await;
+        index_block_stream(block_stream, db, &rpc_client.client, last_indexed_slot).await;
     })
 }
 
@@ -197,11 +198,7 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
-    let rpc_client = Arc::new(RpcClient::new_with_timeout_and_commitment(
-        args.rpc_url.clone(),
-        Duration::from_secs(10),
-        CommitmentConfig::confirmed(),
-    ));
+    let rpc_client = Arc::new(RpcClientWithUri::new(args.rpc_url));
 
     if let Some(snapshot_dir) = args.snapshot_dir {
         let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
@@ -220,15 +217,15 @@ async fn main() {
             index_block_stream(
                 stream::iter(vec![first_block].into_iter()),
                 db_conn.clone(),
-                rpc_client.clone(),
+                &rpc_client.client,
                 last_indexed_slot,
             )
             .await;
-            index_block_stream(block_stream, db_conn.clone(), rpc_client.clone(), slot).await;
+            index_block_stream(block_stream, db_conn.clone(), &rpc_client.client, slot).await;
         }
     }
 
-    let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
+    let is_rpc_node_local = rpc_client.uri.contains("127.0.0.1");
 
     let indexer_handle = match args.disable_indexing {
         true => {
@@ -250,11 +247,11 @@ async fn main() {
             };
 
             let last_indexed_slot = match args.start_slot {
-                Some(start_slot) => fetch_block_parent_slot(rpc_client.clone(), start_slot).await,
+                Some(start_slot) => fetch_block_parent_slot(&rpc_client.client, start_slot).await,
                 None => {
                     (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
                         .await
-                        .unwrap_or(get_network_start_slot(rpc_client.clone()).await as i64))
+                        .unwrap_or(get_network_start_slot(&rpc_client.client).await as i64))
                         as u64
                 }
             };
