@@ -86,13 +86,13 @@ async fn test_e2e_mint_and_transfer_transactions(
         index_transaction(&setup, tx).await;
     }
     for (person, pubkey) in [
-        ("bob", bob_pubkey.clone()),
-        ("charles", charles_pubkey.clone()),
+        ("bob", bob_pubkey),
+        ("charles", charles_pubkey),
     ] {
         let accounts = setup
             .api
             .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                owner: pubkey.clone(),
+                owner: pubkey,
                 ..Default::default()
             })
             .await
@@ -139,7 +139,7 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .api
                 .get_compression_signatures_for_token_owner(
                     GetCompressionSignaturesForTokenOwnerRequest {
-                        owner: pubkey.clone(),
+                        owner: pubkey,
                         cursor,
                         limit: Some(limit.clone()),
                     },
@@ -161,7 +161,7 @@ async fn test_e2e_mint_and_transfer_transactions(
         let token_balances = setup
                 .api
                 .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
-                    owner: pubkey.clone(),
+                    owner: pubkey,
                     ..Default::default()
                 })
                 .await
@@ -298,8 +298,8 @@ async fn test_lamport_transfers(
             }
         }
         for (owner, owner_name) in [
-            (payer_pubkey.clone(), "payer"),
-            (receiver_pubkey.clone(), "receiver"),
+            (payer_pubkey, "payer"),
+            (receiver_pubkey, "receiver"),
         ] {
             let accounts = setup
                 .api
@@ -336,11 +336,9 @@ async fn test_lamport_transfers(
                     newAddressesWithTrees: vec![],
                 })
                 .await
-                .expect(&format!(
-                    "Failed to get validity proof for owner with hash list len: {} {}",
+                .unwrap_or_else(|_| panic!("Failed to get validity proof for owner with hash list len: {} {}",
                     owner_name,
-                    hash_list.0.len()
-                ));
+                    hash_list.0.len()));
             // The Gnark prover has some randomness.
             validity_proof.value.compressedProof = CompressedProof::default();
 
@@ -365,7 +363,7 @@ async fn test_lamport_transfers(
                 let res = setup
                     .api
                     .get_compression_signatures_for_owner(photon_indexer::api::method::get_compression_signatures_for_owner::GetCompressionSignaturesForOwnerRequest {
-                        owner: owner.clone(),
+                        owner,
                         cursor,
                         limit: Some(limit.clone()),
                     })

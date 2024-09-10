@@ -130,7 +130,7 @@ pub async fn get_transaction_helper(
 ) -> Result<GetTransactionResponse, PhotonApiError> {
     // Ignore if tx failed or meta is missed
     let meta = txn.transaction.meta.as_ref();
-    if !meta.is_some() {
+    if meta.is_none() {
         return Err(PhotonApiError::ValidationError(
             "Transaction missing metatada information".to_string(),
         ));

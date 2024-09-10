@@ -63,7 +63,7 @@ fn convert_non_inclusion_merkle_proof_to_hex(
             path_elements: non_inclusion_merkle_proof_inputs[i]
                 .proof
                 .iter()
-                .map(|x| hash_to_hex(x))
+                .map(hash_to_hex)
                 .collect(),
             next_index: non_inclusion_merkle_proof_inputs[i].nextIndex,
             leaf_lower_range_value: pubkey_to_hex(
@@ -89,7 +89,7 @@ fn convert_inclusion_proofs_to_hex(
             path_elements: inclusion_proof_inputs[i]
                 .proof
                 .iter()
-                .map(|x| hash_to_hex(x))
+                .map(hash_to_hex)
                 .collect(),
             leaf: hash_to_hex(&inclusion_proof_inputs[i].hash),
         };
@@ -287,8 +287,8 @@ pub async fn get_validity_proof(
             .newAddresses
             .iter()
             .map(|new_address| AddressWithTree {
-                address: new_address.clone(),
-                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS.clone()),
+                address: *new_address,
+                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
             })
             .collect();
     }
@@ -327,7 +327,7 @@ pub async fn get_validity_proof(
     let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
             "Got an error while serializing the request {}",
-            e.to_string()
+            e
         ))
     })?;
     let res = client
@@ -337,7 +337,7 @@ pub async fn get_validity_proof(
         .send()
         .await
         .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e.to_string()))
+            PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e))
         })?;
 
     if !res.status().is_success() {
@@ -348,13 +348,13 @@ pub async fn get_validity_proof(
     }
 
     let text = res.text().await.map_err(|e| {
-        PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e.to_string()))
+        PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e))
     })?;
 
     let proof: GnarkProofJson = serde_json::from_str(&text).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
             "Got an error while deserializing the response {}",
-            e.to_string()
+            e
         ))
     })?;
 

@@ -76,7 +76,7 @@ pub async fn persist_state_update(
         .map(|account_transaction| {
             (
                 account_transaction.hash.clone(),
-                account_transaction.signature.clone(),
+                account_transaction.signature,
             )
         })
         .collect::<HashMap<_, _>>();
@@ -87,8 +87,7 @@ pub async fn persist_state_update(
             (
                 LeafNode::from(account.clone()),
                 account_to_transaction
-                    .get(&account.hash)
-                    .map(|signature| signature.clone())
+                    .get(&account.hash).copied()
                     // HACK: We should always have a signature for account transactions, but sometimes
                     //       we don't generate it for mock tests.
                     .unwrap_or(Signature::from([0; 64])),
@@ -97,7 +96,7 @@ pub async fn persist_state_update(
         .chain(leaf_nullifications.iter().map(|leaf_nullification| {
             (
                 LeafNode::from(leaf_nullification.clone()),
-                leaf_nullification.signature.clone(),
+                leaf_nullification.signature,
             )
         }))
         .collect();
@@ -106,11 +105,11 @@ pub async fn persist_state_update(
 
     debug!("Persisting state nodes...");
     for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
-        let chunk_vec = chunk.iter().map(|x| x.clone()).collect_vec();
+        let chunk_vec = chunk.iter().cloned().collect_vec();
         persist_state_tree_history(txn, chunk_vec.clone()).await?;
         let leaf_nodes_chunk = chunk_vec
             .iter()
-            .map(|(leaf_node, _)| LeafNode::from(leaf_node.clone()))
+            .map(|(leaf_node, _)| leaf_node.clone())
             .collect_vec();
 
         persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT).await?;
@@ -310,7 +309,7 @@ async fn execute_account_update_query_and_update_balances(
         IngesterError::DatabaseError(format!(
             "Got error appending {:?} accounts {}. Query {}",
             account_type,
-            e.to_string(),
+            e,
             query.sql
         ))
     })?;
@@ -358,7 +357,7 @@ async fn execute_account_update_query_and_update_balances(
         .map(|(key, value)| format!("({}, {})", key, value))
         .collect::<Vec<String>>();
 
-    if values.len() > 0 {
+    if !values.is_empty() {
         let values_string = values.join(", ");
         let raw_sql = format!(
             "INSERT INTO {owner_table_name} (owner {additional_columns}, {balance_column})

@@ -126,13 +126,11 @@ pub async fn persist_leaf_nodes(
 
     for (tree, node_index, child_level) in all_ancestors.into_iter().rev() {
         let (left_child_hash, left_child_seq) = node_locations_to_hashes_and_seq
-            .get(&(tree.clone(), node_index * 2))
-            .map(Clone::clone)
+            .get(&(tree.clone(), node_index * 2)).cloned()
             .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
         let (right_child_hash, right_child_seq) = node_locations_to_hashes_and_seq
-            .get(&(tree.clone(), node_index * 2 + 1))
-            .map(Clone::clone)
+            .get(&(tree.clone(), node_index * 2 + 1)).cloned()
             .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
         let level = child_level + 1;
@@ -236,8 +234,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                 .ok_or(PhotonApiError::RecordNotFound(format!(
                     "Leaf node not found for hash: {}",
                     hash
-                )))
-                .map(Clone::clone)
+                ))).cloned()
         })
         .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
 

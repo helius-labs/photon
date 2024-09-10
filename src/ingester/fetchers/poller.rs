@@ -52,7 +52,7 @@ pub fn get_poller_block_stream(
                 current_slot_to_fetch += 1;
             }
             let blocks_to_yield = futures::future::join_all(block_fetching_futures_batch).await;
-            let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().filter_map(|block| block).collect();
+            let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().flatten().collect();
 
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
             for block in blocks_to_yield.clone() {
@@ -128,9 +128,7 @@ pub async fn fetch_block_with_infinite_retry(
     }
 }
 
-fn fetch_block_with_infinite_retry_using_arc(
+async fn fetch_block_with_infinite_retry_using_arc(
     client: Arc<RpcClientWithUri>,
     slot: u64,
-) -> impl futures::Future<Output = Option<BlockInfo>> {
-    async move { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
-}
+) -> Option<BlockInfo> { fetch_block_with_infinite_retry(client.as_ref(), slot).await }

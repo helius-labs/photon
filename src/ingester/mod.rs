@@ -86,7 +86,7 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(&block)?);
+        state_updates.push(derive_block_state_update(block)?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     tx.commit().await?;

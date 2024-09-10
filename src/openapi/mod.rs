@@ -251,7 +251,7 @@ fn filter_unused_components(
     used_components.extend(find_all_components(response));
 
     let mut check_stack = used_components.clone();
-    while check_stack.len() > 0 {
+    while !check_stack.is_empty() {
         // Pop any element from the stack
         let current = check_stack.iter().next().unwrap().clone();
         check_stack.remove(&current);

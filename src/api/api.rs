@@ -250,7 +250,7 @@ impl PhotonApi {
         request: GetTransactionRequest,
     ) -> Result<GetTransactionResponse, PhotonApiError> {
         get_transaction_with_compression_info(
-            &self.db_conn.as_ref(),
+            self.db_conn.as_ref(),
             &self.rpc_client.client,
             request,
         )

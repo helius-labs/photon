@@ -20,7 +20,7 @@ async fn test_basic_snapshotting() {
     use std::env::temp_dir;
 
     let temp_dir = temp_dir();
-    let snapshot_dirs = vec!["snapshots1", "snapshots2"];
+    let snapshot_dirs = ["snapshots1", "snapshots2"];
     let file_system_directory_adapters = snapshot_dirs
         .iter()
         .map(|snapshot_dir| {
@@ -28,11 +28,11 @@ async fn test_basic_snapshotting() {
             let filesystem_adapter = photon_indexer::snapshot::FileSystemDirectoryApapter {
                 snapshot_dir: snapshot_dir.clone().to_str().unwrap().to_string(),
             };
-            let directory_adapter = Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
+            
+            Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
                 Some(filesystem_adapter),
                 None,
-            ));
-            directory_adapter
+            ))
         })
         .collect::<Vec<Arc<photon_indexer::snapshot::DirectoryAdapter>>>();
 
@@ -70,7 +70,8 @@ async fn test_basic_snapshotting() {
 
         let blocks: Vec<BlockInfo> = (0..30)
             .map(|i| {
-                let block = BlockInfo {
+                
+                BlockInfo {
                     metadata: BlockMetadata {
                         slot: i,
                         parent_slot: if i == 0 { 0 } else { i - 1 },
@@ -80,8 +81,7 @@ async fn test_basic_snapshotting() {
                         block_height: i,
                     },
                     transactions: vec![],
-                };
-                block
+                }
             })
             .collect();
         let blocks_stream = stream::iter(vec![blocks.clone()]);

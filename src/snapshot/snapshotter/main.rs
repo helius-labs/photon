@@ -271,8 +271,8 @@ async fn main() {
         // If the snapshotter completes for some reason
         res = async {
             if let Some(snapshotter_handle) = snapshotter_handle {
-                let res = snapshotter_handle.await;
-                res
+                
+                snapshotter_handle.await
             } else {
                 pending().await
             }
