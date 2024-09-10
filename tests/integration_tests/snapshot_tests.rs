@@ -2,7 +2,6 @@ use futures::stream;
 
 use photon_indexer::common::typedefs::hash::Hash;
 
-use futures::StreamExt;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use photon_indexer::snapshot::{
     create_snapshot_from_byte_stream, get_r2_bucket, get_snapshot_files_with_metadata,
