@@ -241,7 +241,7 @@ async fn test_multiple_accounts(
         let res = setup
             .api
             .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                owner: owner,
+                owner,
                 ..Default::default()
             })
             .await
@@ -256,7 +256,7 @@ async fn test_multiple_accounts(
             let res = setup
                 .api
                 .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                    owner: owner,
+                    owner,
                     cursor: cursor.clone(),
                     limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
@@ -291,7 +291,7 @@ async fn test_multiple_accounts(
         let res = setup
             .api
             .get_compressed_balance_by_owner(GetCompressedBalanceByOwnerRequest {
-                owner: owner,
+                owner,
             })
             .await
             .unwrap()
@@ -442,7 +442,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                owner: owner,
+                owner,
                 ..Default::default()
             })
             .await
@@ -455,7 +455,7 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                    owner: owner,
+                    owner,
                     cursor: cursor.clone(),
                     limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                     ..Default::default()
@@ -482,7 +482,7 @@ async fn test_persist_token_data(
         }
         for (mint, balance) in mint_to_balance.iter() {
             let request = GetCompressedTokenBalancesByOwnerRequest {
-                owner: owner,
+                owner,
                 mint: Some(*mint),
                 ..Default::default()
             };
@@ -520,7 +520,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
-                delegate: delegate,
+                delegate,
                 ..Default::default()
             })
             .await
@@ -532,7 +532,7 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
-                    delegate: delegate,
+                    delegate,
                     cursor: cursor.clone(),
                     limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                     ..Default::default()
@@ -576,7 +576,7 @@ async fn test_persisted_state_trees(
         .map(|i| LeafNode {
             hash: Hash::new_unique(),
             leaf_index: i,
-            tree: tree,
+            tree,
             seq: i,
         })
         .collect();
@@ -613,7 +613,7 @@ async fn test_persisted_state_trees(
         .map(|i| LeafNode {
             hash: Hash::new_unique(),
             leaf_index: i,
-            tree: tree,
+            tree,
             seq: i + num_nodes,
         })
         .collect();
@@ -891,7 +891,7 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
             }),
             owner: SerializablePubkey::new_unique(),
             lamports: UnsignedInteger(1000),
-            tree: tree,
+            tree,
             leaf_index: UnsignedInteger(leaf_index),
             seq: UnsignedInteger(0),
             slot_created: UnsignedInteger(0),

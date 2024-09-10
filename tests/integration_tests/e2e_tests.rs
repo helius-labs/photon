@@ -363,7 +363,7 @@ async fn test_lamport_transfers(
                 let res = setup
                     .api
                     .get_compression_signatures_for_owner(photon_indexer::api::method::get_compression_signatures_for_owner::GetCompressionSignaturesForOwnerRequest {
-                        owner: owner,
+                        owner,
                         cursor,
                         limit: Some(limit.clone()),
                     })
