@@ -21,7 +21,7 @@ pub struct BlockStreamConfig {
 }
 
 impl BlockStreamConfig {
-    pub fn load_block_stream(&self) -> impl Stream<Item = BlockInfo> {
+    pub fn load_block_stream(&self) -> impl Stream<Item = Vec<BlockInfo>> {
         let grpc_stream = self.geyser_url.as_ref().map(|geyser_url| {
             get_grpc_stream_with_rpc_fallback(
                 geyser_url.clone(),
@@ -47,7 +47,7 @@ impl BlockStreamConfig {
                 pin_mut!(grpc_stream);
                 loop {
                     match grpc_stream.next().await {
-                        Some(block) => yield block,
+                        Some(blocks) => yield blocks,
                         None => break,
                     }
                 }
@@ -57,7 +57,7 @@ impl BlockStreamConfig {
                 pin_mut!(poller_stream);
                 loop {
                     match poller_stream.next().await {
-                        Some(block) => yield block,
+                        Some(blocks) => yield blocks,
                         None => break,
                     }
                 }

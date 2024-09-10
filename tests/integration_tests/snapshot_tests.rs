@@ -2,6 +2,7 @@ use futures::stream;
 
 use photon_indexer::common::typedefs::hash::Hash;
 
+use futures::StreamExt;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use photon_indexer::snapshot::{
     create_snapshot_from_byte_stream, get_r2_bucket, get_snapshot_files_with_metadata,
@@ -84,7 +85,7 @@ async fn test_basic_snapshotting() {
                 block
             })
             .collect();
-        let blocks_stream = stream::iter(blocks.clone().into_iter());
+        let blocks_stream = stream::iter(vec![blocks.clone()]);
 
         let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
             .await
@@ -96,7 +97,8 @@ async fn test_basic_snapshotting() {
         update_snapshot_helper(directory_adapter.clone(), blocks_stream, 0, 2, 4).await;
         let snapshot_blocks =
             load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
-        let snapshot_blocks: Vec<BlockInfo> = snapshot_blocks.collect().await;
+        let snapshot_blocks: Vec<Vec<BlockInfo>> = snapshot_blocks.collect().await;
+        let snapshot_blocks: Vec<BlockInfo> = snapshot_blocks.into_iter().flatten().collect();
         assert_eq!(snapshot_blocks, blocks);
 
         let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
@@ -111,7 +113,8 @@ async fn test_basic_snapshotting() {
             .unwrap();
         let snapshot_blocks_v2 =
             load_block_stream_from_directory_adapter(directory_adapter_v2.clone()).await;
-        let snapshot_blocks_v2: Vec<BlockInfo> = snapshot_blocks_v2.collect().await;
+        let snapshot_blocks_v2: Vec<Vec<BlockInfo>> = snapshot_blocks_v2.collect().await;
+        let snapshot_blocks_v2: Vec<BlockInfo> = snapshot_blocks_v2.into_iter().flatten().collect();
         assert_eq!(snapshot_blocks_v2, blocks);
     }
 }

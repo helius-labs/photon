@@ -50,7 +50,7 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
 }
 
 pub async fn index_block_stream(
-    block_stream: impl Stream<Item = BlockInfo>,
+    block_stream: impl Stream<Item = Vec<BlockInfo>>,
     db: Arc<DatabaseConnection>,
     rpc_client: &RpcClient,
     last_indexed_slot_at_start: u64,
@@ -66,9 +66,10 @@ pub async fn index_block_stream(
 
     let mut finished_backfill = false;
 
-    while let Some(block) = block_stream.next().await {
-        let slot_indexed = block.metadata.slot;
-        index_block_batch_with_infinite_retries(db.as_ref(), vec![block]).await;
+    while let Some(blocks) = block_stream.next().await {
+        let slot_indexed = blocks.last().unwrap().metadata.slot;
+        index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
+
 
         if !finished_backfill {
             let blocks_indexed = slot_indexed - last_indexed_slot_at_start;

@@ -45,13 +45,13 @@ pub fn get_grpc_stream_with_rpc_fallback(
     rpc_client: Arc<RpcClientWithUri>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
-) -> impl Stream<Item = BlockInfo> {
+) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         update_latest_slot(rpc_client.clone()).await;
         start_latest_slot_updater(rpc_client.clone());
         let grpc_stream = get_grpc_block_stream(endpoint, None);
         pin_mut!(grpc_stream);
-        let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = BlockInfo> + Send>>> = None;
+        let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = None;
 
         // Await either the gRPC stream or the RPC block fetching
         loop {
@@ -62,7 +62,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             let is_healthy = (LATEST_SLOT.load(Ordering::SeqCst) as i64 - grpc_block.metadata.slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE;
                             if grpc_block.metadata.parent_slot == last_indexed_slot {
                                 last_indexed_slot = grpc_block.metadata.slot;
-                                yield grpc_block;
+                                yield vec![grpc_block];
                                 if is_healthy {
                                     info!("gRPC stream is healthy, switching back to gRPC block fetching");
                                     rpc_poll_stream = None;
@@ -72,10 +72,12 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         Either::Left((None, _)) => {
                             panic!("gRPC stream ended unexpectedly");
                         }
-                        Either::Right((Some(rpc_block), _)) => {
-                            if rpc_block.metadata.parent_slot == last_indexed_slot {
-                                last_indexed_slot = rpc_block.metadata.slot;
-                                yield rpc_block;
+                        Either::Right((Some(rpc_blocks), _)) => {
+                            let parent_slot = rpc_blocks.first().unwrap().metadata.parent_slot;
+                            let last_slot = rpc_blocks.last().unwrap().metadata.slot;
+                            if parent_slot == last_indexed_slot {
+                                last_indexed_slot = last_slot;
+                                yield rpc_blocks;
                             }
                         }
                         Either::Right((None, _)) => {
@@ -103,7 +105,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                     }
                     if block.metadata.parent_slot == last_indexed_slot {
                         last_indexed_slot = block.metadata.slot;
-                        yield block;
+                        yield vec![block];
                     } else {
                         info!("Switching to RPC block fetching");
                         rpc_poll_stream = Some(Box::pin(get_poller_block_stream(

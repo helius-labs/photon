@@ -360,7 +360,7 @@ fn is_compression_instruction(instruction: &Instruction) -> bool {
             .contains(&ACCOUNT_COMPRESSION_PROGRAM_ID)
 }
 
-fn is_compression_transaction(tx: &TransactionInfo) -> bool {
+pub fn is_compression_transaction(tx: &TransactionInfo) -> bool {
     for instruction_group in &tx.instruction_groups {
         if is_compression_instruction(&instruction_group.outer_instruction) {
             return true;
@@ -462,7 +462,7 @@ pub async fn update_snapshot(
 
 pub async fn update_snapshot_helper(
     directory_adapter: Arc<DirectoryAdapter>,
-    blocks: impl Stream<Item = BlockInfo>,
+    blocks_stream: impl Stream<Item = Vec<BlockInfo>>,
     last_indexed_slot: u64,
     incremental_snapshot_interval_slots: u64,
     full_snapshot_interval_slots: u64,
@@ -482,45 +482,48 @@ pub async fn update_snapshot_helper(
 
     let mut byte_buffer = Vec::new();
 
-    pin_mut!(blocks);
-    while let Some(block) = blocks.next().await {
-        let slot = block.metadata.slot;
-        let write_full_snapshot = slot - last_full_snapshot_slot + (last_indexed_slot == 0) as u64
-            >= full_snapshot_interval_slots;
-        let write_incremental_snapshot = slot - last_snapshot_slot
-            + (last_snapshot_slot == 0) as u64
-            >= incremental_snapshot_interval_slots;
+    pin_mut!(blocks_stream);
+    while let Some(blocks) = blocks_stream.next().await {
+        for block in blocks {
+            let slot = block.metadata.slot;
+            let write_full_snapshot = slot - last_full_snapshot_slot
+                + (last_indexed_slot == 0) as u64
+                >= full_snapshot_interval_slots;
+            let write_incremental_snapshot = slot - last_snapshot_slot
+                + (last_snapshot_slot == 0) as u64
+                >= incremental_snapshot_interval_slots;
 
-        let trimmed_block = BlockInfo {
-            metadata: block.metadata.clone(),
-            transactions: block
-                .transactions
-                .iter()
-                .filter(|tx| is_compression_transaction(tx))
-                .cloned()
-                .collect(),
-        };
-        let block_bytes = bincode::serialize(&trimmed_block).unwrap();
-        byte_buffer.extend(block_bytes);
-
-        if write_incremental_snapshot {
-            let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
-            info!("Writing snapshot file: {}", snapshot_file_path);
-            let byte_buffer_clone = byte_buffer.clone();
-            let byte_stream = stream! {
-                yield Ok(Bytes::from(byte_buffer_clone));
+            let trimmed_block = BlockInfo {
+                metadata: block.metadata.clone(),
+                transactions: block
+                    .transactions
+                    .iter()
+                    .filter(|tx| is_compression_transaction(tx))
+                    .cloned()
+                    .collect(),
             };
-            directory_adapter
-                .as_ref()
-                .write_file(snapshot_file_path, byte_stream)
-                .await
-                .unwrap();
-            byte_buffer.clear();
-            last_snapshot_slot = slot;
-        }
-        if write_full_snapshot {
-            merge_snapshots(directory_adapter.clone()).await;
-            last_full_snapshot_slot = slot;
+            let block_bytes = bincode::serialize(&trimmed_block).unwrap();
+            byte_buffer.extend(block_bytes);
+
+            if write_incremental_snapshot {
+                let snapshot_file_path = format!("snapshot-{}-{}", last_snapshot_slot + 1, slot);
+                info!("Writing snapshot file: {}", snapshot_file_path);
+                let byte_buffer_clone = byte_buffer.clone();
+                let byte_stream = stream! {
+                    yield Ok(Bytes::from(byte_buffer_clone));
+                };
+                directory_adapter
+                    .as_ref()
+                    .write_file(snapshot_file_path, byte_stream)
+                    .await
+                    .unwrap();
+                byte_buffer.clear();
+                last_snapshot_slot = slot;
+            }
+            if write_full_snapshot {
+                merge_snapshots(directory_adapter.clone()).await;
+                last_full_snapshot_slot = slot;
+            }
         }
     }
 }
@@ -561,7 +564,7 @@ pub async fn load_byte_stream_from_directory_adapter(
 
 pub async fn load_block_stream_from_directory_adapter(
     directory_adapter: Arc<DirectoryAdapter>,
-) -> impl Stream<Item = BlockInfo> {
+) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
         pin_mut!(byte_stream);
@@ -587,7 +590,7 @@ pub async fn load_block_stream_from_directory_adapter(
                 let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
                 let size = bincode::serialized_size(&block).unwrap() as usize;
                 index += size;
-                yield block;
+                yield vec![block];
             }
             if index > 0 {
                 reader.drain(..index);
@@ -598,7 +601,7 @@ pub async fn load_block_stream_from_directory_adapter(
             let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
             let size = bincode::serialized_size(&block).unwrap() as usize;
             index += size;
-            yield block;
+            yield vec![block];
         }
     }
 }
