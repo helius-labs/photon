@@ -70,7 +70,6 @@ pub async fn index_block_stream(
         let slot_indexed = blocks.last().unwrap().metadata.slot;
         index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
 
-
         if !finished_backfill {
             let blocks_indexed = slot_indexed - last_indexed_slot_at_start;
             if blocks_indexed <= number_of_blocks_to_backfill {
