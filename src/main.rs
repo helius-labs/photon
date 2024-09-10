@@ -208,11 +208,11 @@ async fn main() {
             let block_stream =
                 load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
             pin_mut!(block_stream);
-            let first_block = block_stream.next().await.unwrap();
-            let slot = first_block.metadata.slot;
-            let last_indexed_slot = first_block.metadata.parent_slot;
+            let first_blocks = block_stream.next().await.unwrap();
+            let slot = first_blocks.last().unwrap().metadata.slot;
+            let last_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
             index_block_stream(
-                stream::iter(vec![first_block].into_iter()),
+                stream::iter(vec![first_blocks].into_iter()),
                 db_conn.clone(),
                 &rpc_client.client,
                 last_indexed_slot,

@@ -21,7 +21,7 @@ pub fn get_poller_block_stream(
     last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
     end_block_slot: Option<u64>,
-) -> impl futures::Stream<Item = BlockInfo> {
+) -> impl futures::Stream<Item = Vec<BlockInfo>> {
     stream! {
         let mut current_slot_to_fetch = match last_indexed_slot {
             0 => 0,
@@ -55,9 +55,7 @@ pub fn get_poller_block_stream(
             let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().filter_map(|block| block).collect();
 
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
-            for block in blocks_to_yield.drain(..) {
-                yield block;
-            }
+            yield blocks_to_yield;
 
         }
     }
