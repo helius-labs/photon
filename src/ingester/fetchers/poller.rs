@@ -18,7 +18,7 @@ const FAILED_BLOCK_LOGGING_FREQUENCY: u64 = 100;
 
 pub fn get_poller_block_stream(
     client: Arc<RpcClientWithUri>,
-    last_indexed_slot: u64,
+    mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
     end_block_slot: Option<u64>,
 ) -> impl futures::Stream<Item = Vec<BlockInfo>> {
@@ -55,6 +55,12 @@ pub fn get_poller_block_stream(
             let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().filter_map(|block| block).collect();
 
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
+            for block in blocks_to_yield.clone() {
+                if last_indexed_slot !=0 && block.metadata.parent_slot != last_indexed_slot {
+                    panic!("Block slot is not sequential. Last indexed slot: {}, current slot: {}", last_indexed_slot, block.metadata.slot);
+                }
+                last_indexed_slot = block.metadata.slot;
+            }
             yield blocks_to_yield;
 
         }
