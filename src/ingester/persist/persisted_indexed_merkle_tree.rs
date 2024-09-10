@@ -61,7 +61,7 @@ fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
         next_index: 1,
         next_value: vec![0]
             .into_iter()
-            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be().into_iter())
+            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be())
             .collect(),
         seq: 0,
     }
@@ -73,7 +73,7 @@ fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
         leaf_index: 1,
         value: vec![0]
             .into_iter()
-            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be().into_iter())
+            .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be())
             .collect(),
         next_index: 0,
         next_value: vec![0; 32],
@@ -137,7 +137,6 @@ pub async fn get_exclusion_range_with_proof(
     }
     let range_node = btree
         .values()
-        .into_iter()
         .next()
         .ok_or(PhotonApiError::RecordNotFound(
             "No range proof found".to_string(),
@@ -176,13 +175,14 @@ pub async fn multi_append_fully_specified(
 ) -> Result<(), IngesterError> {
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
     for tree in trees {
-        for leaf in [get_top_element(tree.to_bytes().to_vec())] {
+        {
+            let leaf = get_top_element(tree.to_bytes().to_vec());
             let leaf_update = indexed_leaf_updates.get(&(tree, leaf.leaf_index as u64));
-            if !leaf_update.is_some() {
+            if leaf_update.is_none() {
                 indexed_leaf_updates.insert(
                     (tree, leaf.leaf_index as u64),
                     IndexedTreeLeafUpdate {
-                        tree: tree.clone(),
+                        tree,
                         hash: compute_range_node_hash(&leaf)
                             .map_err(|e| {
                                 IngesterError::ParserError(format!("Failed to compute hash: {}", e))
@@ -197,9 +197,7 @@ pub async fn multi_append_fully_specified(
                             })?,
                             next_index: leaf.next_index as usize,
                             next_value: leaf.next_value.try_into().map_err(|_e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to convert next value to array",
-                                ))
+                                IngesterError::ParserError("Failed to convert next value to array".to_string())
                             })?,
                             index: leaf.leaf_index as usize,
                         },
@@ -250,11 +248,11 @@ pub async fn multi_append_fully_specified(
             .iter()
             .map(|x| {
                 Ok(LeafNode {
-                    tree: SerializablePubkey::try_from(x.tree.clone()).map_err(|e| {
+                    tree: SerializablePubkey::try_from(x.tree).map_err(|e| {
                         IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
                     })?,
                     leaf_index: x.leaf.index as u32,
-                    hash: Hash::try_from(x.hash.clone()).map_err(|e| {
+                    hash: Hash::try_from(x.hash).map_err(|e| {
                         IngesterError::DatabaseError(format!("Failed to serialize hash: {}", e))
                     })?,
                     seq: x.seq as u32,

@@ -239,7 +239,7 @@ pub async fn fetch_transaction(
             serde_json::json!([sig.to_string(), RPC_CONFIG,]),
         )
         .await
-        .expect(&format!("Failed to fetch transaction: {sig}"));
+        .unwrap_or_else(|_| panic!("Failed to fetch transaction: {sig}"));
 
     // Ignore if tx failed or meta is missed
     let meta = txn.transaction.meta.as_ref();
@@ -329,8 +329,8 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     let token_accounts = response.items;
     for (account, tlv) in token_accounts.iter().zip(order_token_datas(tlvs).iter()) {
         let account = account.clone();
-        assert_eq!(account.token_data.mint, tlv.mint.into());
-        assert_eq!(account.token_data.owner, tlv.owner.into());
+        assert_eq!(account.token_data.mint, tlv.mint);
+        assert_eq!(account.token_data.owner, tlv.owner);
         assert_eq!(account.token_data.amount, tlv.amount);
         assert_eq!(account.token_data.delegate, tlv.delegate.map(Into::into));
     }

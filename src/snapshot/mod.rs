@@ -85,7 +85,7 @@ where
         cx: &mut std::task::Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
-        if self.byte_buffer.len() > 0 {
+        if !self.byte_buffer.is_empty() {
             let len = std::cmp::min(self.byte_buffer.len(), buf.remaining_mut());
             buf.put_slice(&self.byte_buffer[..len]);
             self.byte_buffer.drain(..len);
@@ -99,7 +99,7 @@ where
                 self.byte_buffer.drain(..len);
                 Poll::Ready(Ok(()))
             }
-            Some(Err(e)) => Poll::Ready(Err(e.into())),
+            Some(Err(e)) => Poll::Ready(Err(e)),
             None => Poll::Ready(Ok(())), // EOF
         }
     }

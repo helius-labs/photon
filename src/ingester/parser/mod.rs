@@ -191,8 +191,8 @@ fn parse_indexed_merkle_tree_update(
                 tree: Pubkey::try_from(id).map_err(|_e| {
                     IngesterError::ParserError("Unable to parse tree pubkey".to_string())
                 })?,
-                hash: hash.clone(),
-                leaf: leaf.clone(),
+                hash: *hash,
+                leaf: *leaf,
                 seq,
             };
             seq += 1;

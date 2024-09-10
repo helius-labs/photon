@@ -109,7 +109,7 @@ async fn test_persist_state_update_basic(
 
     let request = CompressedAccountRequest {
         address: None,
-        hash: Some(Hash::from(account.hash.clone())),
+        hash: Some(account.hash.clone()),
     };
 
     let res = setup
@@ -241,7 +241,7 @@ async fn test_multiple_accounts(
         let res = setup
             .api
             .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                owner: SerializablePubkey::from(owner),
+                owner: owner,
                 ..Default::default()
             })
             .await
@@ -256,7 +256,7 @@ async fn test_multiple_accounts(
             let res = setup
                 .api
                 .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                    owner: SerializablePubkey::from(owner),
+                    owner: owner,
                     cursor: cursor.clone(),
                     limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
@@ -291,7 +291,7 @@ async fn test_multiple_accounts(
         let res = setup
             .api
             .get_compressed_balance_by_owner(GetCompressedBalanceByOwnerRequest {
-                owner: SerializablePubkey::from(owner),
+                owner: owner,
             })
             .await
             .unwrap()
@@ -424,8 +424,8 @@ async fn test_persist_token_data(
     let res = setup
         .api
         .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-            owner: SerializablePubkey::from(owner1),
-            mint: Some(SerializablePubkey::from(mint1)),
+            owner: owner1,
+            mint: Some(mint1),
             ..Default::default()
         })
         .await
@@ -442,7 +442,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                owner: SerializablePubkey::from(owner),
+                owner: owner,
                 ..Default::default()
             })
             .await
@@ -455,7 +455,7 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                    owner: SerializablePubkey::from(owner),
+                    owner: owner,
                     cursor: cursor.clone(),
                     limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                     ..Default::default()
@@ -476,14 +476,14 @@ async fn test_persist_token_data(
 
         for token_account in paginated_res.iter() {
             let balance = mint_to_balance
-                .entry(token_account.token_data.mint.clone())
+                .entry(token_account.token_data.mint)
                 .or_insert(0);
             *balance += token_account.token_data.amount.0;
         }
         for (mint, balance) in mint_to_balance.iter() {
             let request = GetCompressedTokenBalancesByOwnerRequest {
-                owner: SerializablePubkey::from(owner),
-                mint: Some(mint.clone()),
+                owner: owner,
+                mint: Some(*mint),
                 ..Default::default()
             };
             let res = setup
@@ -520,7 +520,7 @@ async fn test_persist_token_data(
         let res = setup
             .api
             .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
-                delegate: SerializablePubkey::from(delegate),
+                delegate: delegate,
                 ..Default::default()
             })
             .await
@@ -532,7 +532,7 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
-                    delegate: SerializablePubkey::from(delegate),
+                    delegate: delegate,
                     cursor: cursor.clone(),
                     limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                     ..Default::default()
@@ -576,7 +576,7 @@ async fn test_persisted_state_trees(
         .map(|i| LeafNode {
             hash: Hash::new_unique(),
             leaf_index: i,
-            tree: tree.clone(),
+            tree: tree,
             seq: i,
         })
         .collect();
@@ -613,7 +613,7 @@ async fn test_persisted_state_trees(
         .map(|i| LeafNode {
             hash: Hash::new_unique(),
             leaf_index: i,
-            tree: tree.clone(),
+            tree: tree,
             seq: i + num_nodes,
         })
         .collect();
@@ -891,7 +891,7 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
             }),
             owner: SerializablePubkey::new_unique(),
             lamports: UnsignedInteger(1000),
-            tree: tree.clone(),
+            tree: tree,
             leaf_index: UnsignedInteger(leaf_index),
             seq: UnsignedInteger(0),
             slot_created: UnsignedInteger(0),
@@ -901,7 +901,7 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
     for i in 0..100000 {
         state_update
             .out_accounts
-            .push(generate_mock_account(i, tree.clone()));
+            .push(generate_mock_account(i, tree));
     }
     persist_state_update_using_connection(setup.db_conn.as_ref(), state_update)
         .await
@@ -992,7 +992,7 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
 
         let address_list = AddressList(vec![SerializablePubkey::try_from(proof_address).unwrap()]);
 
-        verify_tree(setup.db_conn.as_ref(), tree.clone()).await;
+        verify_tree(setup.db_conn.as_ref(), tree).await;
         get_multiple_new_address_proofs(&setup.db_conn, address_list)
             .await
             .unwrap();
@@ -1051,7 +1051,7 @@ async fn test_gpa_filters(
     let res = setup
         .api
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-            owner: SerializablePubkey::from(owner1),
+            owner: owner1,
 
             dataSlice: Some(DataSlice {
                 offset: 0,
@@ -1077,7 +1077,7 @@ async fn test_gpa_filters(
         let res = setup
             .api
             .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-                owner: SerializablePubkey::from(owner1),
+                owner: owner1,
                 filters: vec![FilterSelector {
                     memcmp: Some(Memcmp {
                         offset: filter.1,
