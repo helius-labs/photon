@@ -1,11 +1,7 @@
 use super::{error, parser::state_update::AccountTransaction};
 use crate::{
-    api::method::get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT,
-    common::typedefs::{
-        account::Account,
-        hash::Hash,
-        token_data::TokenData,
-    },
+    api::method::{get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT, utils::PAGE_LIMIT},
+    common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
 };
@@ -26,7 +22,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, Order,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
-use std::collections::HashMap;
+use std::{cmp::max, collections::HashMap};
 
 use error::IngesterError;
 use solana_program::pubkey;
@@ -123,7 +119,25 @@ pub async fn persist_state_update(
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
     debug!("Persisting transaction metadatas...");
-    for chunk in transactions_vec.chunks(MAX_SQL_INSERTS) {
+    let (compression_transactions, non_compression_transactions): (Vec<_>, Vec<_>) =
+        transactions_vec
+            .into_iter()
+            .partition(|tx| tx.uses_compression);
+
+    let non_compression_transactions_to_keep = max(
+        0,
+        PAGE_LIMIT as i64 - non_compression_transactions.len() as i64,
+    );
+    let transactions_to_persist = compression_transactions
+        .into_iter()
+        .chain(
+            non_compression_transactions
+                .into_iter()
+                .rev()
+                .take(non_compression_transactions_to_keep as usize),
+        )
+        .collect_vec();
+    for chunk in transactions_to_persist.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
 
@@ -170,7 +184,9 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
             let data_slice = data.data.0.as_slice();
-            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| IngesterError::ParserError(format!("Failed to parse token data: {:?}", e)))?;
+            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
+            })?;
             Ok(Some(token_data))
         }
         _ => Ok(None),
@@ -506,7 +522,7 @@ async fn persist_transactions(
         .filter(transactions::Column::UsesCompression.eq(false))
         .order_by(transactions::Column::Slot, Order::Desc)
         .order_by(transactions::Column::Signature, Order::Desc)
-        .offset(1000)
+        .offset(PAGE_LIMIT)
         .limit(1)
         .all(txn)
         .await?;

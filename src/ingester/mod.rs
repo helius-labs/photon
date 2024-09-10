@@ -20,7 +20,6 @@ use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
-use crate::snapshot::is_compression_transaction;
 pub mod error;
 pub mod fetchers;
 pub mod indexer;
@@ -82,19 +81,6 @@ pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
 ) -> Result<(), IngesterError> {
-    let block_batch: Vec<BlockInfo> = block_batch
-        .clone()
-        .into_iter()
-        .map(|b| BlockInfo {
-            metadata: b.metadata.clone(),
-            transactions: b
-                .transactions
-                .iter()
-                .filter(|tx| is_compression_transaction(tx))
-                .cloned()
-                .collect(),
-        })
-        .collect();
     let tx = db.begin().await?;
     let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
     index_block_metadatas(&tx, block_metadatas).await?;
