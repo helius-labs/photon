@@ -1,5 +1,6 @@
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
+use photon_indexer::api::method::get_latest_non_voting_signatures::MAX_LATEST_NON_VOTING_SIGNATURES;
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
@@ -498,6 +499,8 @@ async fn test_get_latest_non_voting_signatures(
 async fn test_get_latest_non_voting_signatures_with_failures(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use itertools::Itertools;
+
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -519,8 +522,8 @@ async fn test_get_latest_non_voting_signatures_with_failures(
         })
         .await
         .unwrap();
-    assert_json_snapshot!(
-        format!("{}-non-voting-transactions", name.clone()),
+    assert_eq!(
+        MAX_LATEST_NON_VOTING_SIGNATURES as usize,
         all_nonvoting_transactions.value.items.len()
     );
 }
