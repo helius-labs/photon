@@ -1,8 +1,4 @@
-use std::{
-    sync::Arc,
-    thread::sleep,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, thread::sleep, time::Duration};
 
 use async_stream::stream;
 use solana_client::{
@@ -55,10 +51,7 @@ pub fn get_poller_block_stream(
                 ));
                 current_slot_to_fetch += 1;
             }
-            let start = Instant::now();
             let blocks_to_yield = futures::future::join_all(block_fetching_futures_batch).await;
-            let duration = start.elapsed();
-            log::info!("Fetched {} blocks in {:?}", blocks_to_yield.len(), duration);
             let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().filter_map(|block| block).collect();
 
             blocks_to_yield.sort_by_key(|block| block.metadata.slot);
