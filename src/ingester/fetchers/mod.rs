@@ -36,7 +36,6 @@ impl BlockStreamConfig {
                 self.rpc_client.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,
-                None,
             ))
         } else {
             None
