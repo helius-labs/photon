@@ -7207,6 +7207,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "rustls 0.21.12",
+ "smallvec",
  "solana-metrics",
  "solana-perf",
  "solana-sdk",

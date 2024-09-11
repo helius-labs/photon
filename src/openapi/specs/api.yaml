@@ -4,9 +4,9 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.28.0
+  version: 0.45.0
 servers:
-- url: http://127.0.0.1
+- url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
   /getCompressedAccount:
     summary: getCompressedAccount
@@ -94,6 +94,130 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/Account'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getCompressedAccountBalance:
+    summary: getCompressedAccountBalance
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getCompressedAccountBalance
+                params:
+                  type: object
+                  description: Request for compressed account data
+                  default:
+                    address: null
+                    hash: '11111111111111111111111111111111'
+                  properties:
+                    address:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                    hash:
+                      allOf:
+                      - $ref: '#/components/schemas/Hash'
+                      nullable: true
+                  additionalProperties: false
+                  example:
+                    address: null
+                    hash: '11111111111111111111111111111111'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        $ref: '#/components/schemas/UnsignedInteger'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -281,6 +405,14 @@ paths:
                       allOf:
                       - $ref: '#/components/schemas/Hash'
                       nullable: true
+                    dataSlice:
+                      allOf:
+                      - $ref: '#/components/schemas/DataSlice'
+                      nullable: true
+                    filters:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FilterSelector'
                     limit:
                       allOf:
                       - $ref: '#/components/schemas/Limit'
@@ -327,130 +459,6 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/PaginatedAccountList'
-                    additionalProperties: false
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-  /getCompressedBalance:
-    summary: getCompressedBalance
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getCompressedBalance
-                params:
-                  type: object
-                  description: Request for compressed account data
-                  default:
-                    address: null
-                    hash: '11111111111111111111111111111111'
-                  properties:
-                    address:
-                      allOf:
-                      - $ref: '#/components/schemas/SerializablePubkey'
-                      nullable: true
-                    hash:
-                      allOf:
-                      - $ref: '#/components/schemas/Hash'
-                      nullable: true
-                  additionalProperties: false
-                  example:
-                    address: null
-                    hash: '11111111111111111111111111111111'
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    required:
-                    - context
-                    - value
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        $ref: '#/components/schemas/UnsignedInteger'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -1962,7 +1970,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/SignatureInfoList'
+                        $ref: '#/components/schemas/SignatureInfoListWithError'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -2351,6 +2359,116 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getMultipleNewAddressProofsV2:
+    summary: getMultipleNewAddressProofsV2
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getMultipleNewAddressProofsV2
+                params:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AddressWithTree'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MerkleContextWithNewAddressProof'
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getTransactionWithCompressionInfo:
     summary: getTransactionWithCompressionInfo
     post:
@@ -2506,9 +2624,6 @@ paths:
                   - getValidityProof
                 params:
                   type: object
-                  required:
-                  - hashes
-                  - newAddresses
                   properties:
                     hashes:
                       type: array
@@ -2518,6 +2633,10 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SerializablePubkey'
+                    newAddressesWithTrees:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/AddressWithTree'
                   additionalProperties: false
         required: true
       responses:
@@ -2551,39 +2670,14 @@ paths:
                   result:
                     type: object
                     required:
-                    - compressedProof
-                    - roots
-                    - rootIndices
-                    - leafIndices
-                    - leaves
-                    - merkleTrees
+                    - value
+                    - context
                     properties:
-                      compressedProof:
-                        $ref: '#/components/schemas/CompressedProof'
-                      leafIndices:
-                        type: array
-                        items:
-                          type: integer
-                          format: uint32
-                          minimum: 0
-                      leaves:
-                        type: array
-                        items:
-                          type: string
-                      merkleTrees:
-                        type: array
-                        items:
-                          type: string
-                      rootIndices:
-                        type: array
-                        items:
-                          type: integer
-                          format: uint64
-                          minimum: 0
-                      roots:
-                        type: array
-                        items:
-                          type: string
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        $ref: '#/components/schemas/CompressedProofWithContext'
+                    additionalProperties: false
         '429':
           description: Exceeded rate limit.
           content:
@@ -2693,6 +2787,21 @@ components:
         optionalTokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
+    AddressListWithTrees:
+      type: array
+      items:
+        $ref: '#/components/schemas/AddressWithTree'
+    AddressWithTree:
+      type: object
+      required:
+      - address
+      - tree
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+      additionalProperties: false
     Base58String:
       type: string
       description: A base 58 encoded string.
@@ -2765,6 +2874,23 @@ components:
           format: uint64
           default: 100
           example: 100
+    DataSlice:
+      type: object
+      required:
+      - offset
+      - length
+      properties:
+        length:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+    FilterSelector:
+      type: object
+      properties:
+        memcmp:
+          $ref: '#/components/schemas/Memcmp'
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
@@ -2773,6 +2899,17 @@ components:
       type: integer
       format: uint64
       minimum: 0
+    Memcmp:
+      type: object
+      required:
+      - offset
+      - bytes
+      properties:
+        bytes:
+          $ref: '#/components/schemas/Base58String'
+        offset:
+          type: integer
+          minimum: 0
     MerkleContextWithNewAddressProof:
       type: object
       required:
@@ -2898,6 +3035,31 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureInfo'
+    SignatureInfoListWithError:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignatureInfoWithError'
+    SignatureInfoWithError:
+      type: object
+      required:
+      - signature
+      - slot
+      - blockTime
+      properties:
+        blockTime:
+          $ref: '#/components/schemas/UnixTimestamp'
+        error:
+          type: string
+          nullable: true
+        signature:
+          $ref: '#/components/schemas/SerializableSignature'
+        slot:
+          $ref: '#/components/schemas/UnsignedInteger'
     TokenAcccount:
       type: object
       required:
@@ -2968,6 +3130,8 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         state:
           $ref: '#/components/schemas/AccountState'
+        tlv:
+          $ref: '#/components/schemas/Base64String'
     UnixTimestamp:
       type: integer
       description: An Unix timestamp (seconds)

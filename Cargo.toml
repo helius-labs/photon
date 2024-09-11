@@ -111,7 +111,7 @@ tracing-subscriber = { version = "0.3.16", features = [
   "env-filter",
   "ansi",
 ] }
-utoipa = { version = "4.2.0", features = ["yaml", "chrono"] }
+utoipa = { version = "4.2.0", features = ["yaml", "chrono", "non_strict_integers"] }
 yellowstone-grpc-client = "1.15.0"
 yellowstone-grpc-proto = "1.14.0"
 cadence = "1.4.0"
