@@ -97,7 +97,6 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         Ok(Some(block)) => block,
                         Ok(None) => panic!("gRPC stream ended unexpectedly"),
                         Err(_) => {
-                            panic!("Waiting for gRPC stream");
                             info!("gRPC stream timed out, enabling RPC block fetching");
                             rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
                                 rpc_client.clone(),
@@ -108,7 +107,6 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             continue;
                         }
                     };
-                    panic!("Block: {:?}", block);
                     if block.metadata.slot == 0 {
                         continue;
                     }
