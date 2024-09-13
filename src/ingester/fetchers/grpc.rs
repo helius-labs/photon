@@ -51,7 +51,14 @@ pub fn get_grpc_stream_with_rpc_fallback(
         start_latest_slot_updater(rpc_client.clone());
         let grpc_stream = get_grpc_block_stream(endpoint, None);
         pin_mut!(grpc_stream);
-        let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = None;
+        let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
+            Box::pin(get_poller_block_stream(
+                rpc_client.clone(),
+                last_indexed_slot,
+                max_concurrent_block_fetches,
+                None,
+            ))
+        );
 
         // Await either the gRPC stream or the RPC block fetching
         loop {
