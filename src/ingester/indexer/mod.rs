@@ -16,7 +16,7 @@ use crate::{
 
 use super::typedefs::block_info::BlockInfo;
 const POST_BACKFILL_FREQUENCY: u64 = 100;
-const PRE_BACKFILL_FREQUENCY: u64 = 10;
+const PRE_BACKFILL_FREQUENCY: u64 = 1000;
 
 #[derive(FromQueryResult)]
 pub struct OptionalContextModel {
@@ -54,9 +54,10 @@ pub async fn index_block_stream(
     db: Arc<DatabaseConnection>,
     rpc_client: &RpcClient,
     last_indexed_slot_at_start: u64,
+    end_slot: Option<u64>,
 ) {
     pin_mut!(block_stream);
-    let current_slot = fetch_current_slot_with_infinite_retry(rpc_client).await;
+    let current_slot = end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(rpc_client).await);
     let number_of_blocks_to_backfill = current_slot - last_indexed_slot_at_start;
     info!(
         "Backfilling historical blocks. Current number of blocks to backfill: {}",
@@ -65,25 +66,29 @@ pub async fn index_block_stream(
     let mut last_indexed_slot = last_indexed_slot_at_start;
 
     let mut finished_backfill = false;
+    let mut last_num_blocks_indexed = 0;
 
     while let Some(blocks) = block_stream.next().await {
         let slot_indexed = blocks.last().unwrap().metadata.slot;
         index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
 
-
         if !finished_backfill {
-            let blocks_indexed = slot_indexed - last_indexed_slot_at_start;
-            if blocks_indexed <= number_of_blocks_to_backfill {
-                if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
-                    info!(
-                        "Backfilled {} / {} blocks",
-                        blocks_indexed, number_of_blocks_to_backfill
-                    );
+            let blocks_indexed_in_batch = slot_indexed - last_indexed_slot_at_start;
+            for blocks_indexed in last_num_blocks_indexed..blocks_indexed_in_batch {
+                if blocks_indexed <= number_of_blocks_to_backfill {
+                    if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
+                        info!(
+                            "Backfilled {} / {} blocks",
+                            blocks_indexed, number_of_blocks_to_backfill
+                        );
+                    }
+                } else {
+                    finished_backfill = true;
+                    info!("Finished backfilling historical blocks!");
                 }
-            } else {
-                finished_backfill = true;
-                info!("Finished backfilling historical blocks!");
             }
+
+            last_num_blocks_indexed = blocks_indexed_in_batch
         } else {
             for slot in last_indexed_slot..slot_indexed {
                 if slot % POST_BACKFILL_FREQUENCY == 0 {
