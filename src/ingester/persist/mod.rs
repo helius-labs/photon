@@ -87,7 +87,8 @@ pub async fn persist_state_update(
             (
                 LeafNode::from(account.clone()),
                 account_to_transaction
-                    .get(&account.hash).copied()
+                    .get(&account.hash)
+                    .copied()
                     // HACK: We should always have a signature for account transactions, but sometimes
                     //       we don't generate it for mock tests.
                     .unwrap_or(Signature::from([0; 64])),
@@ -123,10 +124,8 @@ pub async fn persist_state_update(
             .into_iter()
             .partition(|tx| tx.uses_compression);
 
-    let non_compression_transactions_to_keep = max(
-        0,
-        PAGE_LIMIT as i64 - non_compression_transactions.len() as i64,
-    );
+    let non_compression_transactions_to_keep =
+        max(0, PAGE_LIMIT as i64 - compression_transactions.len() as i64);
     let transactions_to_persist = compression_transactions
         .into_iter()
         .chain(
@@ -308,9 +307,7 @@ async fn execute_account_update_query_and_update_balances(
     let result = txn.query_all(query.clone()).await.map_err(|e| {
         IngesterError::DatabaseError(format!(
             "Got error appending {:?} accounts {}. Query {}",
-            account_type,
-            e,
-            query.sql
+            account_type, e, query.sql
         ))
     })?;
     let multiplier = Decimal::from(match &modification_type {
