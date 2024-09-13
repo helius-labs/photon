@@ -1,9 +1,6 @@
 use super::{error, parser::state_update::AccountTransaction};
 use crate::{
-    api::method::{
-        get_latest_non_voting_signatures::MAX_LATEST_NON_VOTING_SIGNATURES,
-        get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT,
-    },
+    api::method::{get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT, utils::PAGE_LIMIT},
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
@@ -127,10 +124,8 @@ pub async fn persist_state_update(
             .into_iter()
             .partition(|tx| tx.uses_compression);
 
-    let non_compression_transactions_to_keep = max(
-        0,
-        MAX_LATEST_NON_VOTING_SIGNATURES as i64 - compression_transactions.len() as i64,
-    );
+    let non_compression_transactions_to_keep =
+        max(0, PAGE_LIMIT as i64 - compression_transactions.len() as i64);
     let transactions_to_persist = compression_transactions
         .into_iter()
         .chain(
@@ -140,7 +135,6 @@ pub async fn persist_state_update(
                 .take(non_compression_transactions_to_keep as usize),
         )
         .collect_vec();
-
     for chunk in transactions_to_persist.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
@@ -524,7 +518,7 @@ async fn persist_transactions(
         .filter(transactions::Column::UsesCompression.eq(false))
         .order_by(transactions::Column::Slot, Order::Desc)
         .order_by(transactions::Column::Signature, Order::Desc)
-        .offset(MAX_LATEST_NON_VOTING_SIGNATURES)
+        .offset(PAGE_LIMIT)
         .limit(1)
         .all(txn)
         .await?;

@@ -73,7 +73,7 @@ pub async fn persist_leaf_nodes(
         .map(|node| (node.tree.to_bytes_vec(), node.node_index(tree_height)))
         .collect::<Vec<_>>();
 
-    let node_locations_to_models = get_proof_nodes(txn, leaf_locations).await?;
+    let node_locations_to_models = get_proof_nodes(txn, leaf_locations, true).await?;
     let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))
@@ -126,11 +126,13 @@ pub async fn persist_leaf_nodes(
 
     for (tree, node_index, child_level) in all_ancestors.into_iter().rev() {
         let (left_child_hash, left_child_seq) = node_locations_to_hashes_and_seq
-            .get(&(tree.clone(), node_index * 2)).cloned()
+            .get(&(tree.clone(), node_index * 2))
+            .cloned()
             .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
         let (right_child_hash, right_child_seq) = node_locations_to_hashes_and_seq
-            .get(&(tree.clone(), node_index * 2 + 1)).cloned()
+            .get(&(tree.clone(), node_index * 2 + 1))
+            .cloned()
             .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
 
         let level = child_level + 1;
@@ -234,7 +236,8 @@ pub async fn get_multiple_compressed_leaf_proofs(
                 .ok_or(PhotonApiError::RecordNotFound(format!(
                     "Leaf node not found for hash: {}",
                     hash
-                ))).cloned()
+                )))
+                .cloned()
         })
         .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
 
@@ -245,10 +248,11 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     txn: &DatabaseTransaction,
     leaf_nodes_with_node_index: Vec<(LeafNode, i64)>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    let include_leafs = false;
     let leaf_locations_to_required_nodes = leaf_nodes_with_node_index
         .iter()
         .map(|(leaf_node, node_index)| {
-            let required_node_indices = get_proof_path(*node_index);
+            let required_node_indices = get_proof_path(*node_index, include_leafs);
             (
                 (leaf_node.tree.to_bytes_vec(), *node_index),
                 (required_node_indices),
@@ -262,6 +266,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             .iter()
             .map(|(node, node_index)| (node.tree.to_bytes_vec(), *node_index))
             .collect::<Vec<(Vec<u8>, i64)>>(),
+        include_leafs,
     )
     .await?;
 
@@ -363,9 +368,12 @@ pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiErr
     Ok(())
 }
 
-pub fn get_proof_path(index: i64) -> Vec<i64> {
+pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     let mut indexes = vec![];
     let mut idx = index;
+    if include_leaf {
+        indexes.push(index);
+    }
     while idx > 1 {
         if idx % 2 == 0 {
             indexes.push(idx + 1)
@@ -381,6 +389,7 @@ pub fn get_proof_path(index: i64) -> Vec<i64> {
 pub async fn get_proof_nodes<T>(
     txn_or_conn: &T,
     leaf_nodes_locations: Vec<(Vec<u8>, i64)>,
+    include_leafs: bool,
 ) -> Result<HashMap<(Vec<u8>, i64), state_trees::Model>, DbErr>
 where
     T: ConnectionTrait + TransactionTrait,
@@ -388,7 +397,7 @@ where
     let all_required_node_indices = leaf_nodes_locations
         .iter()
         .flat_map(|(tree, index)| {
-            get_proof_path(*index)
+            get_proof_path(*index, include_leafs)
                 .iter()
                 .map(move |&idx| (tree.clone(), idx))
                 .collect::<Vec<(Vec<u8>, i64)>>()
