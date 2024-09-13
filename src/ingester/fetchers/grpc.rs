@@ -95,6 +95,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 rpc_client.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
+                                None,
                             )));
                             continue;
                         }
@@ -111,6 +112,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
+                            None,
                         )));
 
                     }
