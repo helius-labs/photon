@@ -31,6 +31,8 @@ pub mod s3_utils;
 
 pub const MEGABYTE: usize = 1024 * 1024;
 pub const CHUNK_SIZE: usize = 100 * 1024 * 1024;
+// Up to 50 MB
+pub const TRANSACTIONS_TO_ACCUMULATE: usize = 50000;
 
 const SNAPSHOT_VERSION: u8 = 1;
 
@@ -583,6 +585,9 @@ pub async fn load_block_stream_from_directory_adapter(
 
         let mut reader = Vec::new();
         let mut index = 0;
+        let mut accumulated_blocks = Vec::new();
+        let mut accumulated_transactions = 0;
+
         while let Some(bytes) = byte_stream.next().await {
             let bytes = bytes.unwrap();
             reader.extend(&bytes);
@@ -590,18 +595,35 @@ pub async fn load_block_stream_from_directory_adapter(
                 let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
                 let size = bincode::serialized_size(&block).unwrap() as usize;
                 index += size;
-                yield vec![block];
+                accumulated_transactions += block.transactions.len();
+                accumulated_blocks.push(block);
+                if accumulated_transactions >= TRANSACTIONS_TO_ACCUMULATE {
+                    yield accumulated_blocks;
+                    accumulated_blocks = Vec::new();
+                    accumulated_transactions = 0;
+                }
             }
             if index > 0 {
                 reader.drain(..index);
                 index = 0;
             }
         }
+
         while index < reader.len() {
             let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
             let size = bincode::serialized_size(&block).unwrap() as usize;
             index += size;
-            yield vec![block];
+            accumulated_transactions += block.transactions.len();
+            accumulated_blocks.push(block);
+            if accumulated_transactions >= TRANSACTIONS_TO_ACCUMULATE {
+                yield accumulated_blocks;
+                accumulated_blocks = Vec::new();
+                accumulated_transactions = 0;
+            }
+        }
+
+        if !accumulated_blocks.is_empty() {
+            yield accumulated_blocks;
         }
     }
 }

@@ -34,7 +34,7 @@ pub mod persisted_state_tree;
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 const TREE_HEIGHT: u32 = 27;
 // To avoid exceeding the 64k total parameter limit
-pub const MAX_SQL_INSERTS: usize = 5000;
+pub const MAX_SQL_INSERTS: usize = 500;
 
 pub async fn persist_state_update(
     txn: &DatabaseTransaction,
