@@ -129,7 +129,7 @@ pub async fn persist_state_update(
 
     let non_compression_transactions_to_keep = max(
         0,
-        MAX_LATEST_NON_VOTING_SIGNATURES as i64 - compression_transactions.len() as i64,
+        MAX_LATEST_NON_VOTING_SIGNATURES as i64 - non_compression_transactions.len() as i64,
     );
     let transactions_to_persist = compression_transactions
         .into_iter()
@@ -140,7 +140,6 @@ pub async fn persist_state_update(
                 .take(non_compression_transactions_to_keep as usize),
         )
         .collect_vec();
-
     for chunk in transactions_to_persist.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
