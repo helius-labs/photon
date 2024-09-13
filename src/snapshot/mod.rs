@@ -32,7 +32,7 @@ pub mod s3_utils;
 pub const MEGABYTE: usize = 1024 * 1024;
 pub const CHUNK_SIZE: usize = 100 * 1024 * 1024;
 // Up to 50 MB
-pub const TRANSACTIONS_TO_ACCUMULATE: usize = 50000;
+pub const TRANSACTIONS_TO_ACCUMULATE: usize = 5000;
 
 const SNAPSHOT_VERSION: u8 = 1;
 

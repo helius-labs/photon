@@ -1,8 +1,9 @@
 use std::fs::File;
 
 use async_std::stream::StreamExt;
+use async_stream::stream;
 use clap::Parser;
-use futures::{pin_mut, stream};
+use futures::pin_mut;
 use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
@@ -180,7 +181,14 @@ fn continously_index_new_blocks(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let block_stream = block_stream_config.load_block_stream();
-        index_block_stream(block_stream, db, &rpc_client.client, last_indexed_slot).await;
+        index_block_stream(
+            block_stream,
+            db,
+            &rpc_client.client,
+            last_indexed_slot,
+            None,
+        )
+        .await;
     })
 }
 
@@ -199,26 +207,31 @@ async fn main() {
 
     if let Some(snapshot_dir) = args.snapshot_dir {
         let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
-        if !get_snapshot_files_with_metadata(&directory_adapter.clone())
+        let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
             .await
-            .unwrap()
-            .is_empty()
-        {
+            .unwrap();
+        if !snapshot_files.is_empty() {
             info!("Detected snapshot files. Loading snapshot...");
+            let last_slot = snapshot_files.last().unwrap().end_slot;
             let block_stream =
                 load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
             pin_mut!(block_stream);
             let first_blocks = block_stream.next().await.unwrap();
-            let slot = first_blocks.last().unwrap().metadata.slot;
             let last_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
+            let block_stream = stream! {
+                yield first_blocks;
+                while let Some(blocks) = block_stream.next().await {
+                    yield blocks;
+                }
+            };
             index_block_stream(
-                stream::iter(vec![first_blocks].into_iter()),
+                block_stream,
                 db_conn.clone(),
                 &rpc_client.client,
                 last_indexed_slot,
+                Some(last_slot),
             )
             .await;
-            index_block_stream(block_stream, db_conn.clone(), &rpc_client.client, slot).await;
         }
     }
 
