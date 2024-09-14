@@ -107,9 +107,6 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             continue;
                         }
                     };
-                    if block.metadata.slot == 0 {
-                        continue;
-                    }
                     if block.metadata.parent_slot == last_indexed_slot {
                         last_indexed_slot = block.metadata.slot;
                         yield vec![block];
@@ -186,7 +183,10 @@ fn get_grpc_block_stream(
                 match message {
                     Ok(message) => match message.update_oneof {
                         Some(UpdateOneof::Block(block)) => {
-                            yield parse_block(block);
+                            let block = parse_block(block);
+                            if block.metadata.slot != 0 {
+                                yield block;
+                            }
                         }
                         Some(UpdateOneof::Ping(_)) => {
                             // This is necessary to keep load balancers that expect client pings alive. If your load balancer doesn't
