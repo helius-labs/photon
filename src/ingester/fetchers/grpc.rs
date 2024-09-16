@@ -42,6 +42,7 @@ use super::poller::fetch_current_slot_with_infinite_retry;
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
+    auth_header: String,
     rpc_client: Arc<RpcClientWithUri>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
@@ -49,7 +50,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
     stream! {
         update_latest_slot(rpc_client.clone()).await;
         start_latest_slot_updater(rpc_client.clone());
-        let grpc_stream = get_grpc_block_stream(endpoint, None);
+        let grpc_stream = get_grpc_block_stream(endpoint, auth_header);
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
             Box::pin(get_poller_block_stream(
@@ -71,7 +72,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 last_indexed_slot = grpc_block.metadata.slot;
                                 yield vec![grpc_block];
                                 if is_healthy {
-                                    info!("gRPC stream is healthy, switching back to gRPC block fetching");
+                                    info!("Switching to gRPC block fetching since Photon is up-to-date");
                                     rpc_poll_stream = None;
                                 }
                             }
@@ -144,16 +145,12 @@ pub fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
     });
 }
 
-fn get_grpc_block_stream(
-    endpoint: String,
-    auth_header: Option<String>,
-) -> impl Stream<Item = BlockInfo> {
+fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<Item = BlockInfo> {
     stream! {
         loop {
             let mut grpc_tx;
             let mut grpc_rx;
             {
-                yield BlockInfo::default();
                 let grpc_client =
                     build_geyser_client(endpoint.clone(), auth_header.clone()).await;
                 if let Err(e) = grpc_client {
@@ -184,9 +181,7 @@ fn get_grpc_block_stream(
                     Ok(message) => match message.update_oneof {
                         Some(UpdateOneof::Block(block)) => {
                             let block = parse_block(block);
-                            if block.metadata.slot != 0 {
-                                yield block;
-                            }
+                            yield block;
                         }
                         Some(UpdateOneof::Ping(_)) => {
                             // This is necessary to keep load balancers that expect client pings alive. If your load balancer doesn't
@@ -223,10 +218,10 @@ fn get_grpc_block_stream(
 
 async fn build_geyser_client(
     endpoint: String,
-    auth_header: Option<String>,
+    auth_header: String,
 ) -> GeyserGrpcBuilderResult<GeyserGrpcClient<impl Interceptor>> {
     GeyserGrpcClient::build_from_shared(endpoint)?
-        .x_token(auth_header)?
+        .x_token(Some(auth_header))?
         .connect_timeout(Duration::from_secs(10))
         .max_decoding_message_size(8388608)
         .timeout(Duration::from_secs(10))

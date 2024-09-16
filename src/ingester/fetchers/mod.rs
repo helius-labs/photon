@@ -23,8 +23,10 @@ pub struct BlockStreamConfig {
 impl BlockStreamConfig {
     pub fn load_block_stream(&self) -> impl Stream<Item = Vec<BlockInfo>> {
         let grpc_stream = self.geyser_url.as_ref().map(|geyser_url| {
+            let auth_header = std::env::var("GRPC_X_TOKEN").unwrap();
             get_grpc_stream_with_rpc_fallback(
                 geyser_url.clone(),
+                auth_header,
                 self.rpc_client.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,

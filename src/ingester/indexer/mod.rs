@@ -16,7 +16,7 @@ use crate::{
 
 use super::typedefs::block_info::BlockInfo;
 const POST_BACKFILL_FREQUENCY: u64 = 100;
-const PRE_BACKFILL_FREQUENCY: u64 = 1000;
+const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
 #[derive(FromQueryResult)]
 pub struct OptionalContextModel {
@@ -65,38 +65,31 @@ pub async fn index_block_stream(
     );
     let mut last_indexed_slot = last_indexed_slot_at_start;
 
-    let mut finished_backfill = false;
-    let mut last_num_blocks_indexed = 0;
+    let mut finished_backfill_slot = None;
 
     while let Some(blocks) = block_stream.next().await {
-        let slot_indexed = blocks.last().unwrap().metadata.slot;
+        let last_slot_in_block = blocks.last().unwrap().metadata.slot;
         index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
 
-        if !finished_backfill {
-            let blocks_indexed_in_batch = slot_indexed - last_indexed_slot_at_start;
-            for blocks_indexed in last_num_blocks_indexed..blocks_indexed_in_batch {
-                if blocks_indexed <= number_of_blocks_to_backfill {
-                    if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
-                        info!(
-                            "Backfilled {} / {} blocks",
-                            blocks_indexed, number_of_blocks_to_backfill
-                        );
-                    }
-                } else {
-                    finished_backfill = true;
-                    info!("Finished backfilling historical blocks!");
+        for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
+            let blocks_indexed = slot - last_indexed_slot_at_start;
+            if blocks_indexed < number_of_blocks_to_backfill {
+                if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
+                    info!(
+                        "Backfilled {} / {} blocks",
+                        blocks_indexed, number_of_blocks_to_backfill
+                    );
                 }
-            }
-
-            last_num_blocks_indexed = blocks_indexed_in_batch
-        } else {
-            for slot in last_indexed_slot..slot_indexed {
+            } else {
+                if finished_backfill_slot.is_none() {
+                    info!("Finished backfilling historical blocks!");
+                    finished_backfill_slot = Some(slot);
+                }
                 if slot % POST_BACKFILL_FREQUENCY == 0 {
                     info!("Indexed slot {}", slot);
                 }
             }
+            last_indexed_slot = slot;
         }
-
-        last_indexed_slot = slot_indexed;
     }
 }
