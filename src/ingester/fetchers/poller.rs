@@ -1,12 +1,23 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    thread::sleep,
+    time::Duration,
+};
 
 use async_stream::stream;
+use futures::{stream::FuturesUnordered, StreamExt};
 use solana_client::{
-    nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
+    client_error, nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig,
+    rpc_request::RpcError,
 };
 
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
+use tokio::time::interval;
 
 use crate::{
     common::typedefs::rpc_client_with_uri::RpcClientWithUri,
@@ -14,57 +25,149 @@ use crate::{
 };
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
-const FAILED_BLOCK_LOGGING_FREQUENCY: u64 = 100;
+const RETRIES: u64 = 3;
+const INFINITY: u64 = u64::MAX;
+const MAX_LOOK_AHEAD: u64 = 2;
+
+use once_cell::sync::Lazy;
+
+pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 
 pub fn get_poller_block_stream(
     client: Arc<RpcClientWithUri>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
-    end_block_slot: Option<u64>,
 ) -> impl futures::Stream<Item = Vec<BlockInfo>> {
     stream! {
-        let mut current_slot_to_fetch = match last_indexed_slot {
-            0 => 0,
-            last_indexed_slot => last_indexed_slot + 1
-        };
-        let polls_forever = end_block_slot.is_none();
-        let mut end_block_slot = end_block_slot.unwrap_or(fetch_current_slot_with_infinite_retry(&client.client).await);
+        start_latest_slot_updater(client.clone()).await;
+        let mut block_fetching_futures = FuturesUnordered::new();
+        let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
+        let mut in_process_slots = HashSet::new();
+
+
 
         loop {
-            if current_slot_to_fetch > end_block_slot  && !polls_forever {
-                break;
+            let mut next_slot_to_fetch = match last_indexed_slot {
+                0 => 0,
+                last_indexed_slot => last_indexed_slot + 1
+            };
+            let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
+            for _ in 0..max_concurrent_block_fetches {
+                if next_slot_to_fetch > current_slot + MAX_LOOK_AHEAD {
+                    break;
+                }
+                if is_slot_unprocessed(next_slot_to_fetch, &in_process_slots, &block_cache, last_indexed_slot) {
+                    block_fetching_futures.push(fetch_block(
+                        client.uri.clone(),
+                        next_slot_to_fetch,
+                        RETRIES
+                    ));
+                    in_process_slots.insert(next_slot_to_fetch);
+                }
+                next_slot_to_fetch += 1;
             }
 
-            while current_slot_to_fetch > end_block_slot {
-                end_block_slot = fetch_current_slot_with_infinite_retry(&client.client).await;
-                if end_block_slot <= current_slot_to_fetch {
-                    sleep(Duration::from_millis(10));
+            while let Some(block) = block_fetching_futures.next().await {
+                let (block_result, slot) = block;
+                in_process_slots.remove(&slot);
+                if let Ok(block) = block_result {
+                    let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
+                    for next_slot in (block.metadata.slot + 1)..(block.metadata.slot + 1 + max_concurrent_block_fetches as u64) {
+                        if in_process_slots.len() >= max_concurrent_block_fetches {
+                            break;
+                        }
+                        if next_slot > current_slot + MAX_LOOK_AHEAD {
+                            break;
+                        }
+                        if is_slot_unprocessed(next_slot, &in_process_slots, &block_cache, last_indexed_slot) {
+                            block_fetching_futures.push(fetch_block(
+                                client.uri.clone(),
+                                next_slot,
+                                RETRIES
+                            ));
+                            in_process_slots.insert(next_slot);
+                        }
+                    }
+                    if block.metadata.slot == 0 || block.metadata.parent_slot == last_indexed_slot {
+                        last_indexed_slot = block.metadata.slot;
+                        let mut blocks_to_index = vec![block];
+                        let (cached_blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
+                        last_indexed_slot = last_indexed_slot_from_cache;
+                        blocks_to_index.extend(cached_blocks_to_index);
+                        yield blocks_to_index;
+                    }
+                    else {
+                        let parent_slot = block.metadata.parent_slot;
+                        if is_slot_unprocessed(parent_slot, &in_process_slots, &block_cache, last_indexed_slot) {
+                            block_fetching_futures.push(fetch_block(
+                                client.uri.clone(),
+                                parent_slot,
+                                INFINITY
+                            ));
+                            in_process_slots.insert(parent_slot);
+                        }
+                        block_cache.insert(block.metadata.slot, block.clone());
+
+                        for next_slot in (parent_slot + 1)..(parent_slot + 1 + max_concurrent_block_fetches as u64) {
+                            if in_process_slots.len() >= max_concurrent_block_fetches {
+                                break;
+                            }
+                            if next_slot > current_slot + MAX_LOOK_AHEAD {
+                                break;
+                            }
+                            if is_slot_unprocessed(next_slot, &in_process_slots, &block_cache, last_indexed_slot) {
+                                block_fetching_futures.push(fetch_block(
+                                    client.uri.clone(),
+                                    next_slot,
+                                    RETRIES
+                                ));
+                                in_process_slots.insert(next_slot);
+                            }
+                        }
+
+
+                    }
                 }
             }
-
-            let mut block_fetching_futures_batch = vec![];
-            while (block_fetching_futures_batch.len() < max_concurrent_block_fetches) && current_slot_to_fetch <= end_block_slot  {
-                let client = client.clone();
-                block_fetching_futures_batch.push(fetch_block_with_infinite_retry_using_arc(
-                    client.clone(),
-                    current_slot_to_fetch,
-                ));
-                current_slot_to_fetch += 1;
-            }
-            let blocks_to_yield = futures::future::join_all(block_fetching_futures_batch).await;
-            let mut blocks_to_yield: Vec<_> = blocks_to_yield.into_iter().flatten().collect();
-
-            blocks_to_yield.sort_by_key(|block| block.metadata.slot);
-            for block in blocks_to_yield.clone() {
-                if last_indexed_slot !=0 && block.metadata.parent_slot != last_indexed_slot {
-                    panic!("Block slot is not sequential. Last indexed slot: {}, current slot: {}", last_indexed_slot, block.metadata.slot);
-                }
-                last_indexed_slot = block.metadata.slot;
-            }
-            yield blocks_to_yield;
 
         }
     }
+}
+
+fn is_slot_unprocessed(
+    slot: u64,
+    in_process_slots: &HashSet<u64>,
+    block_cache: &BTreeMap<u64, BlockInfo>,
+    last_indexed_slot: u64,
+) -> bool {
+    !in_process_slots.contains(&slot)
+        && !block_cache.contains_key(&slot)
+        && slot > last_indexed_slot
+}
+
+fn pop_cached_blocks_to_index(
+    block_cache: &mut BTreeMap<u64, BlockInfo>,
+    mut last_indexed_slot: u64,
+) -> (Vec<BlockInfo>, u64) {
+    let mut blocks = Vec::new();
+    loop {
+        let min_slot = match block_cache.keys().min() {
+            Some(&slot) => slot,
+            None => break,
+        };
+        let block: &BlockInfo = block_cache.get(&min_slot).unwrap();
+        if block.metadata.parent_slot == last_indexed_slot {
+            last_indexed_slot = block.metadata.slot;
+            blocks.push(block.clone());
+        } else {
+            if min_slot < last_indexed_slot {
+                panic!("Block is not indexed: {}", min_slot);
+            }
+            break;
+        }
+        block_cache.remove(&min_slot);
+    }
+    (blocks, last_indexed_slot)
 }
 
 pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
@@ -81,15 +184,16 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
     }
 }
 
-pub async fn fetch_block_with_infinite_retry(
-    client: &RpcClientWithUri,
+pub async fn fetch_block(
+    rpc_uri: String,
     slot: u64,
-) -> Option<BlockInfo> {
+    retries: u64,
+) -> (Result<BlockInfo, client_error::ClientError>, u64) {
     let mut attempt_counter = 0;
     loop {
-        let timeout_sec = if attempt_counter == 0 { 1 } else { 20 };
+        let timeout_sec = if attempt_counter == 0 { 3 } else { 20 };
         let client = RpcClient::new_with_timeout_and_commitment(
-            client.uri.clone(),
+            rpc_uri.clone(),
             Duration::from_secs(timeout_sec),
             CommitmentConfig::confirmed(),
         );
@@ -107,7 +211,7 @@ pub async fn fetch_block_with_infinite_retry(
             .await
         {
             Ok(block) => {
-                return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
+                return (Ok(parse_ui_confirmed_blocked(block, slot).unwrap()), slot);
             }
             Err(e) => {
                 if let solana_client::client_error::ClientErrorKind::RpcError(
@@ -115,20 +219,42 @@ pub async fn fetch_block_with_infinite_retry(
                 ) = e.kind
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
-                        log::warn!("Skipped block: {}", slot);
-                        return None;
+                        if retries == INFINITY {
+                            log::error!(
+                                "Got skipped block error for block that is supposed to exist: {}",
+                                slot
+                            );
+                        } else {
+                            log::info!("Skipped block: {}", slot);
+                        }
+                        return (Err(e), slot);
                     }
                 }
-                if attempt_counter % FAILED_BLOCK_LOGGING_FREQUENCY == 1 {
-                    log::warn!("Failed to fetch block: {}. {}", slot, e.to_string());
-                }
+                log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
                 attempt_counter += 1;
+                if attempt_counter >= retries {
+                    return (Err(e), slot);
+                }
             }
         }
     }
 }
 
-async fn fetch_block_with_infinite_retry_using_arc(
-    client: Arc<RpcClientWithUri>,
-    slot: u64,
-) -> Option<BlockInfo> { fetch_block_with_infinite_retry(client.as_ref(), slot).await }
+pub async fn update_latest_slot(rpc_client: Arc<RpcClientWithUri>) {
+    let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
+    LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
+}
+
+pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
+    if LATEST_SLOT.load(Ordering::SeqCst) != 0 {
+        return;
+    }
+    update_latest_slot(rpc_client.clone()).await;
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_millis(100));
+        loop {
+            interval.tick().await;
+            update_latest_slot(rpc_client.clone()).await;
+        }
+    });
+}
