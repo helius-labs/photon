@@ -70,9 +70,6 @@ pub async fn index_block_stream(
     while let Some(blocks) = block_stream.next().await {
         let last_slot_in_block = blocks.last().unwrap().metadata.slot;
         index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
-        let current_slot = fetch_current_slot_with_infinite_retry(rpc_client).await;
-        let lag = current_slot as i64 - last_slot_in_block as i64;
-        println!("Lag: {}", lag);
 
         for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
             let blocks_indexed = slot - last_indexed_slot_at_start;

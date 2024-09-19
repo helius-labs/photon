@@ -13,6 +13,7 @@ use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
 
+use photon_indexer::ingester::fetchers::poller::fetch_current_slot_with_infinite_retry;
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::ingester::indexer::{
     fetch_last_indexed_slot_with_infinite_retry, index_block_stream,

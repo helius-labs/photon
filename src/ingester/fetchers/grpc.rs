@@ -28,17 +28,14 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
-use crate::ingester::fetchers::poller::get_poller_block_stream;
+use crate::ingester::fetchers::poller::{
+    get_poller_block_stream, start_latest_slot_updater, LATEST_SLOT,
+};
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
-use once_cell::sync::Lazy;
-
-static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 
 use crate::metric;
-
-use super::poller::fetch_current_slot_with_infinite_retry;
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
@@ -48,8 +45,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
-        update_latest_slot(rpc_client.clone()).await;
-        start_latest_slot_updater(rpc_client.clone());
+        start_latest_slot_updater(rpc_client.clone()).await;
         let grpc_stream = get_grpc_block_stream(endpoint, auth_header);
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
@@ -125,21 +121,6 @@ pub fn get_grpc_stream_with_rpc_fallback(
 
         }
     }
-}
-
-async fn update_latest_slot(rpc_client: Arc<RpcClientWithUri>) {
-    let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
-    LATEST_SLOT.store(slot, Ordering::SeqCst);
-}
-
-pub fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(1));
-        loop {
-            interval.tick().await;
-            update_latest_slot(rpc_client.clone()).await;
-        }
-    });
 }
 
 fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<Item = BlockInfo> {
