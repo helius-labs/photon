@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
@@ -13,7 +13,7 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use tokio::time::{interval, sleep};
+use tokio::time::sleep;
 use tracing::error;
 use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
