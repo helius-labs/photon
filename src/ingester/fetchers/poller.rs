@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_stream::stream;
+use cadence_macros::statsd_count;
 use futures::{stream::FuturesUnordered, StreamExt};
 use solana_client::{
     client_error, nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig,
@@ -23,6 +24,7 @@ use tokio::time::interval;
 use crate::{
     common::typedefs::rpc_client_with_uri::RpcClientWithUri,
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+    metric,
 };
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
@@ -95,6 +97,10 @@ pub fn get_poller_block_stream(
                         let (cached_blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
                         last_indexed_slot = last_indexed_slot_from_cache;
                         blocks_to_index.extend(cached_blocks_to_index);
+                        let blocks_to_index_len = blocks_to_index.len();
+                        metric! {
+                            statsd_count!("rpc_block_emitted", blocks_to_index_len as i64);
+                        }
                         yield blocks_to_index;
                     }
                     else {
@@ -212,6 +218,9 @@ pub async fn fetch_block(
             .await
         {
             Ok(block) => {
+                metric! {
+                    statsd_count!("rpc_block_fetched", 1);
+                }
                 return (Ok(parse_ui_confirmed_blocked(block, slot).unwrap()), slot);
             }
             Err(e) => {
@@ -226,6 +235,9 @@ pub async fn fetch_block(
                                 slot
                             );
                         } else {
+                            metric! {
+                                statsd_count!("rpc_skipped_block", 1);
+                            }
                             log::info!("Skipped block: {}", slot);
                         }
                         return (Err(e), slot);
@@ -234,6 +246,9 @@ pub async fn fetch_block(
                 log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
                 attempt_counter += 1;
                 if attempt_counter >= retries {
+                    metric! {
+                        statsd_count!("rpc_block_fetch_failed", 1);
+                    }
                     return (Err(e), slot);
                 }
             }
