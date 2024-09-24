@@ -5,6 +5,7 @@ use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
+use photon_indexer::ingester::fetchers::poller::fetch_current_slot_with_infinite_retry;
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,
@@ -31,9 +32,9 @@ struct Args {
     #[arg(short, long, default_value = "http://127.0.0.1:8899")]
     rpc_url: String,
 
-    /// The start slot to begin indexing from
+    /// The start slot to begin indexing from. If "latest", the latest slot is used.
     #[arg(short, long)]
-    start_slot: Option<u64>,
+    start_slot: Option<String>,
 
     /// Logging format
     #[arg(short, long, default_value_t = LoggingFormat::Standard)]
@@ -224,12 +225,23 @@ async fn main() {
         let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
             .await
             .unwrap();
+
         let last_indexed_slot = match args.start_slot {
             Some(start_slot) => {
                 if !snapshot_files.is_empty() {
                     panic!("Cannot specify start_slot when snapshot files are present");
                 }
-                fetch_block_parent_slot(&rpc_client.client, start_slot).await
+                let start_slot = match start_slot.as_str() {
+                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client.client).await,
+                    _ => {
+                        fetch_block_parent_slot(
+                            &rpc_client.client,
+                            start_slot.parse::<u64>().unwrap(),
+                        )
+                        .await
+                    }
+                };
+                start_slot
             }
             None => {
                 if snapshot_files.is_empty() {

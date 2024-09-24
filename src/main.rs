@@ -54,7 +54,7 @@ struct Args {
     /// The start slot to begin indexing from. Defaults to the last indexed slot in the database plus
     /// one.  
     #[arg(short, long)]
-    start_slot: Option<u64>,
+    start_slot: Option<String>,
 
     /// Max database connections to use in database pool
     #[arg(long, default_value_t = 10)]
@@ -256,15 +256,27 @@ async fn main() {
                     }
                 }
             };
-
             let last_indexed_slot = match args.start_slot {
-                Some(start_slot) => fetch_block_parent_slot(&rpc_client.client, start_slot).await,
-                None => {
-                    (fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                Some(start_slot) => match start_slot.as_str() {
+                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client.client).await,
+                    _ => {
+                        fetch_block_parent_slot(
+                            &rpc_client.client,
+                            start_slot.parse::<u64>().unwrap(),
+                        )
                         .await
-                        .unwrap_or(get_network_start_slot(&rpc_client.client).await as i64))
-                        as u64
-                }
+                    }
+                },
+                None => fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                    .await
+                    .unwrap_or(
+                        get_network_start_slot(&rpc_client.client)
+                            .await
+                            .try_into()
+                            .unwrap(),
+                    )
+                    .try_into()
+                    .unwrap(),
             };
 
             let block_stream_config = BlockStreamConfig {
