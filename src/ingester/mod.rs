@@ -1,6 +1,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
+use cadence_macros::statsd_count;
 use error::IngesterError;
 
 use parser::parse_transaction;
@@ -20,6 +21,7 @@ use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
+use crate::metric;
 pub mod error;
 pub mod fetchers;
 pub mod indexer;
@@ -81,6 +83,7 @@ pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
 ) -> Result<(), IngesterError> {
+    let blocks_len = block_batch.len();
     let tx = db.begin().await?;
     let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
     index_block_metadatas(&tx, block_metadatas).await?;
@@ -89,6 +92,9 @@ pub async fn index_block_batch(
         state_updates.push(derive_block_state_update(block)?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
+    metric! {
+        statsd_count!("blocks_indexed", blocks_len as i64);
+    }
     tx.commit().await?;
     Ok(())
 }

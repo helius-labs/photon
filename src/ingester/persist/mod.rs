@@ -4,6 +4,7 @@ use crate::{
     common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
+    metric,
 };
 use crate::{
     dao::generated::{accounts, token_accounts},
@@ -14,6 +15,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
+use cadence_macros::statsd_count;
 use log::debug;
 use persisted_indexed_merkle_tree::multi_append_fully_specified;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
@@ -51,6 +53,11 @@ pub async fn persist_state_update(
         leaf_nullifications,
         indexed_merkle_tree_updates,
     } = state_update;
+
+    let input_accounts_len = in_accounts.len();
+    let output_accounts_len = out_accounts.len();
+    let leaf_nullifications_len = leaf_nullifications.len();
+    let indexed_merkle_tree_updates_len = indexed_merkle_tree_updates.len();
 
     debug!(
         "Persisting state update with {} input accounts, {} output accounts",
@@ -147,6 +154,13 @@ pub async fn persist_state_update(
 
     debug!("Persisting index tree updates...");
     multi_append_fully_specified(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
+
+    metric! {
+        statsd_count!("state_update.input_accounts", input_accounts_len as u64);
+        statsd_count!("state_update.output_accounts", output_accounts_len as u64);
+        statsd_count!("state_update.leaf_nullifications", leaf_nullifications_len as u64);
+        statsd_count!("state_update.indexed_merkle_tree_updates", indexed_merkle_tree_updates_len as u64);
+    }
 
     Ok(())
 }

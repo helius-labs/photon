@@ -62,11 +62,14 @@ pub fn get_grpc_stream_with_rpc_fallback(
                 Some(rpc_poll_stream_value) => {
                     match select(grpc_stream.next(), rpc_poll_stream_value.next()).await {
                         Either::Left((Some(grpc_block), _)) => {
-                            let is_healthy = (LATEST_SLOT.load(Ordering::SeqCst) as i64 - grpc_block.metadata.slot as i64) <=  HEALTH_CHECK_SLOT_DISTANCE;
+                            let slot = grpc_block.metadata.slot;
                             if grpc_block.metadata.parent_slot == last_indexed_slot {
                                 last_indexed_slot = grpc_block.metadata.slot;
                                 yield vec![grpc_block];
-                                if is_healthy {
+                                metric! {
+                                    statsd_count!("grpc_block_indexed", 1);
+                                }
+                                if is_healthy(slot) {
                                     info!("Switching to gRPC block fetching since Photon is up-to-date");
                                     rpc_poll_stream = None;
                                 }
@@ -76,11 +79,15 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             panic!("gRPC stream ended unexpectedly");
                         }
                         Either::Right((Some(rpc_blocks), _)) => {
+                            let blocks_len = rpc_blocks.len();
                             let parent_slot = rpc_blocks.first().unwrap().metadata.parent_slot;
                             let last_slot = rpc_blocks.last().unwrap().metadata.slot;
                             if parent_slot == last_indexed_slot {
                                 last_indexed_slot = last_slot;
                                 yield rpc_blocks;
+                                metric! {
+                                    statsd_count!("rpc_block_indexed", blocks_len as i64);
+                                }
                             }
                         }
                         Either::Right((None, _)) => {
@@ -93,6 +100,9 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         Ok(Some(block)) => block,
                         Ok(None) => panic!("gRPC stream ended unexpectedly"),
                         Err(_) => {
+                            metric! {
+                                statsd_count!("grpc_timeout", 1);
+                            }
                             info!("gRPC stream timed out, enabling RPC block fetching");
                             rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
                                 rpc_client.clone(),
@@ -102,25 +112,43 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             continue;
                         }
                     };
+                    let slot = block.metadata.slot;
                     if block.metadata.parent_slot == last_indexed_slot {
                         last_indexed_slot = block.metadata.slot;
                         yield vec![block];
                     } else {
+                        metric! {
+                            statsd_count!("grpc_out_of_order", 1);
+                        }
                         info!("Switching to RPC block fetching");
                         rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
                         )));
-
+                        continue;
                     }
-
+                    if !is_healthy(slot) && rpc_poll_stream.is_none() {
+                        info!("gRPC is unhealthy. Enabling RPC block fetching");
+                        metric! {
+                            statsd_count!("grpc_stale", 1);
+                        }
+                        rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                            rpc_client.clone(),
+                            last_indexed_slot,
+                            max_concurrent_block_fetches,
+                        )));
+                    }
                 }
             }
 
 
         }
     }
+}
+
+fn is_healthy(slot: u64) -> bool {
+    (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE
 }
 
 fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<Item = BlockInfo> {
@@ -135,7 +163,6 @@ fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<I
                     error!("Error connecting to gRPC, waiting one second then retrying connect: {}", e);
                     metric! {
                         statsd_count!("grpc_connect_error", 1);
-
                     }
                     sleep(Duration::from_secs(1)).await;
                     continue;
@@ -159,6 +186,9 @@ fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<I
                     Ok(message) => match message.update_oneof {
                         Some(UpdateOneof::Block(block)) => {
                             let block = parse_block(block);
+                            metric! {
+                                statsd_count!("grpc_block_emitted", 1);
+                            }
                             yield block;
                         }
                         Some(UpdateOneof::Ping(_)) => {
