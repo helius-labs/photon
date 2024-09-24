@@ -1,4 +1,5 @@
 use std::{
+    cmp::max,
     collections::{BTreeMap, HashSet},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -43,15 +44,15 @@ pub fn get_poller_block_stream(
         let mut block_fetching_futures = FuturesUnordered::new();
         let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
         let mut in_process_slots = HashSet::new();
-
+        let mut next_slot_to_fetch = match last_indexed_slot {
+            0 => 0,
+            last_indexed_slot => last_indexed_slot + 1
+        };
 
 
         loop {
-            let mut next_slot_to_fetch = match last_indexed_slot {
-                0 => 0,
-                last_indexed_slot => last_indexed_slot + 1
-            };
             let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
+            next_slot_to_fetch = max(next_slot_to_fetch, last_indexed_slot + 1);
             for _ in 0..max_concurrent_block_fetches {
                 if next_slot_to_fetch > current_slot + MAX_LOOK_AHEAD {
                     break;
