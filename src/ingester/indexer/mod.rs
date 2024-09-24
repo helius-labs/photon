@@ -58,7 +58,11 @@ pub async fn index_block_stream(
 ) {
     pin_mut!(block_stream);
     let current_slot = end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(rpc_client).await);
-    let number_of_blocks_to_backfill = current_slot - last_indexed_slot_at_start;
+    let number_of_blocks_to_backfill = if current_slot > last_indexed_slot_at_start {
+        current_slot - last_indexed_slot_at_start
+    } else {
+        0
+    };
     info!(
         "Backfilling historical blocks. Current number of blocks to backfill: {}",
         number_of_blocks_to_backfill
