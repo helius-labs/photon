@@ -154,7 +154,7 @@ pub fn get_poller_block_stream(
                 }
             }
             // Sleep to give the chance to other thread to update LATEST_SLOT
-            sleep(Duration::from_millis(10));
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         }
     }

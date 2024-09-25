@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::typedefs::block_info::BlockInfo;
-const POST_BACKFILL_FREQUENCY: u64 = 100;
+const POST_BACKFILL_FREQUENCY: u64 = 10;
 const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
 #[derive(FromQueryResult)]
@@ -87,6 +87,7 @@ pub async fn index_block_stream(
             } else {
                 if finished_backfill_slot.is_none() {
                     info!("Finished backfilling historical blocks!");
+                    info!("Starting to index new blocks...");
                     finished_backfill_slot = Some(slot);
                 }
                 if slot % POST_BACKFILL_FREQUENCY == 0 {
