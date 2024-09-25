@@ -114,12 +114,6 @@ pub fn get_poller_block_stream(
                         metric! {
                             statsd_count!("rpc_block_emitted", blocks_to_index_len as i64);
                         }
-                        let max_slot = blocks_to_index.iter().map(|block| block.metadata.slot).max().unwrap();
-                        let lag = if current_slot > max_slot {
-                            current_slot - max_slot
-                        } else {
-                            0
-                        };
                         yield blocks_to_index;
                     }
                     else {
