@@ -60,7 +60,6 @@ pub fn get_poller_block_stream(
             let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
             // Refill the block fetching futures with new slots to fetch
             next_slot_to_fetch = max(next_slot_to_fetch, last_indexed_slot + 1);
-            println!("next_slot_to_fetch: {:?}", next_slot_to_fetch);
             for _ in 0..max_concurrent_block_fetches {
                 if next_slot_to_fetch > current_slot + MAX_LOOK_AHEAD {
                     break;
@@ -75,7 +74,6 @@ pub fn get_poller_block_stream(
                 }
                 next_slot_to_fetch += 1;
             }
-            println!("block_fetching_futures: {:?}", block_fetching_futures.len());
             while let Some(block) = block_fetching_futures.next().await {
                 let (block_result, slot) = block;
                 in_process_slots.remove(&slot);
@@ -84,10 +82,6 @@ pub fn get_poller_block_stream(
                         skipped_slot_cache.push(slot, true);
                     }
                     let block = block.unwrap();
-                    println!("block: {:?}", block.metadata.slot);
-                    println!("slot: {:?}", block_cache.keys());
-                    println!("in_process_slots: {:?}", in_process_slots);
-                    println!("last_indexed_slot: {:?}", last_indexed_slot);
 
                     let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
 
@@ -126,7 +120,6 @@ pub fn get_poller_block_stream(
                         } else {
                             0
                         };
-                        println!("Current slot: {}, max slot: {}, lag: {}", current_slot, max_slot, lag);
                         yield blocks_to_index;
                     }
                     else {
@@ -189,7 +182,6 @@ fn pop_cached_blocks_to_index(
     mut last_indexed_slot: u64,
 ) -> (Vec<BlockInfo>, u64) {
     let mut blocks = Vec::new();
-    println!("block_cache: {:?}", block_cache.keys());
     loop {
         let min_slot = match block_cache.keys().min() {
             Some(&slot) => slot,
@@ -257,7 +249,6 @@ pub async fn fetch_block(
                 metric! {
                     statsd_count!("rpc_block_fetched", 1);
                 }
-                println!("block slot: {:?}", slot);
                 return (
                     Ok(Some(parse_ui_confirmed_blocked(block, slot).unwrap())),
                     slot,
@@ -268,7 +259,6 @@ pub async fn fetch_block(
                     RpcError::RpcResponseError { code, .. },
                 ) = e.kind
                 {
-                    println!("Failed to fetch block: {}. {}", slot, e.to_string());
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         if retries == INFINITY {
                             log::error!(
@@ -283,9 +273,6 @@ pub async fn fetch_block(
                         }
                         return (Ok(None), slot);
                     }
-                }
-                if retries == INFINITY {
-                    println!("Failed to fetch block: {}. {}", slot, e.to_string());
                 }
                 log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
                 attempt_counter += 1;
@@ -302,7 +289,6 @@ pub async fn fetch_block(
 
 pub async fn update_latest_slot(rpc_client: Arc<RpcClientWithUri>) {
     let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
-    println!("Updating latest slot: {:?}", slot);
     LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
 }
 
@@ -310,13 +296,10 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
     if LATEST_SLOT.load(Ordering::SeqCst) != 0 {
         return;
     }
-    println!("Updating latest slot");
     update_latest_slot(rpc_client.clone()).await;
     tokio::spawn(async move {
-        println!("Starting latest slot updater");
         let mut interval = interval(Duration::from_millis(100));
         loop {
-            println!("Updating latest slot");
             interval.tick().await;
             update_latest_slot(rpc_client.clone()).await;
         }
