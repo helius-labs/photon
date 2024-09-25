@@ -3289,6 +3289,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37ee39891760e7d94734f6f63fedc29a2e4a152f836120753a72503f09fcf904"
+dependencies = [
+ "hashbrown 0.14.2",
+]
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3926,6 +3935,7 @@ dependencies = [
  "lazy_static",
  "light-poseidon",
  "log",
+ "lru",
  "num-bigint 0.4.4",
  "num-traits",
  "num_enum 0.7.2",
