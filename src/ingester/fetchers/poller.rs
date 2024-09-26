@@ -45,7 +45,6 @@ pub fn get_poller_block_stream(
 ) -> impl futures::Stream<Item = Vec<BlockInfo>> {
     stream! {
         start_latest_slot_updater(client.clone()).await;
-        println!("last_indexed_slot: {:?}", last_indexed_slot);
         let mut block_fetching_futures = FuturesUnordered::new();
         let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
         let mut in_process_slots = HashSet::new();
@@ -80,6 +79,7 @@ pub fn get_poller_block_stream(
                 if let Ok(block) = block_result {
                     if let None = block {
                         skipped_slot_cache.push(slot, true);
+                        continue;
                     }
                     let block = block.unwrap();
 
