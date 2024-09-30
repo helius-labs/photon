@@ -1,4 +1,6 @@
 use crate::common::typedefs::hash::ParseHashError;
+use crate::metric;
+use cadence_macros::statsd_count;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use log::error;
@@ -26,16 +28,42 @@ pub enum PhotonApiError {
 impl From<PhotonApiError> for RpcError {
     fn from(val: PhotonApiError) -> Self {
         match val {
-            PhotonApiError::ValidationError(_)
-            | PhotonApiError::InvalidPubkey { .. }
-            | PhotonApiError::RecordNotFound(_)
-            | PhotonApiError::StaleSlot(_) => invalid_request(val),
+            PhotonApiError::ValidationError(_) => {
+                metric! {
+                    statsd_count!("validation_api_error", 1);
+                }
+                invalid_request(val)
+            }
+            PhotonApiError::InvalidPubkey { .. } => {
+                metric! {
+                    statsd_count!("invalid_pubkey_api_error", 1);
+                }
+                invalid_request(val)
+            }
+            PhotonApiError::RecordNotFound(_) => {
+                metric! {
+                    statsd_count!("record_not_found_api_error", 1);
+                }
+                invalid_request(val)
+            }
+            PhotonApiError::StaleSlot(_) => {
+                metric! {
+                    statsd_count!("stale_slot_api_error", 1);
+                }
+                invalid_request(val)
+            }
             PhotonApiError::DatabaseError(e) => {
                 error!("Internal server database error: {}", e);
+                metric! {
+                    statsd_count!("internal_database_api_error", 1);
+                }
                 internal_server_error()
             }
             PhotonApiError::UnexpectedError(e) => {
                 error!("Internal server error: {}", e);
+                metric! {
+                    statsd_count!("unexpected_api_error", 1);
+                }
                 internal_server_error()
             }
         }
