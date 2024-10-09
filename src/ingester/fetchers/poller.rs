@@ -140,8 +140,6 @@ pub fn get_poller_block_stream(
                         block_cache.insert(block.metadata.slot, block.clone());
                     }
 
-
-
                     // Refill the block fetching futures with new slots to fetch
                     for next_slot in (last_indexed_slot + 1)..(slot + 1 + max_concurrent_block_fetches as u64) {
                         if in_process_slots.len() >= max_concurrent_block_fetches {
