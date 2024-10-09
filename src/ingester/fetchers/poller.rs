@@ -37,6 +37,27 @@ use once_cell::sync::Lazy;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 
+/// This function creates a stream that continuously fetches and emits blocks from a Solana blockchain.
+/// It implements a concurrent block fetching algorithm with the following key features:
+///
+/// 1. Concurrent block fetching: It can fetch multiple blocks simultaneously up to a specified limit.
+/// 2. Block caching: Fetched blocks are cached if they can't be immediately processed.
+/// 3. Skipped slot handling: It keeps track of skipped slots to avoid unnecessary fetching attempts.
+/// 4. Parent block fetching: If a block's parent is missing, it initiates a fetch for the parent.
+/// 5. Ordered block emission: It ensures blocks are emitted in the correct order, even if fetched out of order.
+///
+/// Algorithm overview:
+/// - Initialize data structures for block fetching, caching, and tracking.
+/// - Enter a loop that continues indefinitely:
+///   a. Fetch the current latest slot.
+///   b. Initiate new block fetches up to the concurrent limit.
+///   c. Process completed block fetches:
+///      - If the block is the next in sequence, emit it along with any cached blocks that follow.
+///      - If not, cache the block and fetch its parent if necessary.
+///   d. Refill the block fetching queue.
+///   e. Brief sleep to allow other threads to update the latest slot.
+///
+/// This approach allows for efficient block fetching while maintaining the correct order of block processing.
 pub fn get_poller_block_stream(
     client: Arc<RpcClientWithUri>,
     mut last_indexed_slot: u64,
