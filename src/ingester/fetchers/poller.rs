@@ -43,8 +43,7 @@ pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::
 /// 1. Concurrent block fetching: It can fetch multiple blocks simultaneously up to a specified limit.
 /// 2. Block caching: Fetched blocks are cached if they can't be immediately processed.
 /// 3. Skipped slot handling: It keeps track of skipped slots to avoid unnecessary fetching attempts.
-/// 4. Parent block fetching: If a block's parent is missing, it initiates a fetch for the parent.
-/// 5. Ordered block emission: It ensures blocks are emitted in the correct order, even if fetched out of order.
+/// 4. Ordered block emission: It ensures blocks are emitted in the correct order, even if fetched out of order.
 ///
 /// Algorithm overview:
 /// - Initialize data structures for block fetching, caching, and tracking.
