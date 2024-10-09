@@ -77,7 +77,13 @@ pub fn get_poller_block_stream(
 
         loop {
             let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
+
             // Refill the block fetching futures with new slots to fetch
+            //
+            // If we just continued from the last indexed slot + 1, we might get into an infinite retry loop when
+            // we encounter a large number of skipped slots. To avoid that, when we refill the block fetching
+            // futures, we continue from the max of the block fetched in the previous outer loop iteration and
+            // the last indexed slot + 1.
             next_slot_to_fetch = max(next_slot_to_fetch, last_indexed_slot + 1);
             for _ in 0..max_concurrent_block_fetches {
                 if next_slot_to_fetch > current_slot {
@@ -93,6 +99,7 @@ pub fn get_poller_block_stream(
                 }
                 next_slot_to_fetch += 1;
             }
+
             while let Some(block) = block_fetching_futures.next().await {
                 let (block_result, slot) = block;
                 in_process_slots.remove(&slot);
