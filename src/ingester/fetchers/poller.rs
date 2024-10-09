@@ -32,7 +32,6 @@ use crate::{
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 const RETRIES: u64 = 3;
 const INFINITY: u64 = u64::MAX;
-const MAX_LOOK_AHEAD: u64 = 0;
 
 use once_cell::sync::Lazy;
 
@@ -60,7 +59,7 @@ pub fn get_poller_block_stream(
             // Refill the block fetching futures with new slots to fetch
             next_slot_to_fetch = max(next_slot_to_fetch, last_indexed_slot + 1);
             for _ in 0..max_concurrent_block_fetches {
-                if next_slot_to_fetch > current_slot + MAX_LOOK_AHEAD {
+                if next_slot_to_fetch > current_slot {
                     break;
                 }
                 if !skipped_slot_cache.contains(&next_slot_to_fetch) && is_slot_unprocessed(next_slot_to_fetch, &in_process_slots, &block_cache, last_indexed_slot) {
@@ -85,24 +84,6 @@ pub fn get_poller_block_stream(
 
                     let current_slot = LATEST_SLOT.load(Ordering::SeqCst);
 
-                    // Refill the block fetching futures with new slots to fetch
-                    for next_slot in (block.metadata.slot + 1 )..(block.metadata.slot + 1 + max_concurrent_block_fetches as u64) {
-                        if in_process_slots.len() >= max_concurrent_block_fetches {
-                            break;
-                        }
-                        if next_slot > current_slot + MAX_LOOK_AHEAD {
-                            break;
-                        }
-                        if !skipped_slot_cache.contains(&next_slot) && is_slot_unprocessed(next_slot, &in_process_slots, &block_cache, last_indexed_slot) {
-                            block_fetching_futures.push(fetch_block(
-                                client.uri.clone(),
-                                next_slot,
-                                RETRIES
-                            ));
-                            in_process_slots.insert(next_slot);
-                        }
-                    }
-
                     // If the block is the next block to index, emit it and the consecutive blocks in the block cache
                     if block.metadata.slot == 0 || block.metadata.parent_slot == last_indexed_slot {
                         last_indexed_slot = block.metadata.slot;
@@ -118,7 +99,6 @@ pub fn get_poller_block_stream(
                     }
                     else {
                         let parent_slot = block.metadata.parent_slot;
-                        let slot = block.metadata.slot;
 
                         // If the parent block is not processed, fetch it
                         if is_slot_unprocessed(parent_slot, &in_process_slots, &block_cache, last_indexed_slot) {
@@ -130,26 +110,26 @@ pub fn get_poller_block_stream(
                             in_process_slots.insert(parent_slot);
                         }
                         block_cache.insert(block.metadata.slot, block.clone());
+                    }
 
-                        // Refill the block fetching futures with new slots to fetch
-                        for next_slot in (last_indexed_slot + 1)..(slot + 1 + max_concurrent_block_fetches as u64) {
-                            if in_process_slots.len() >= max_concurrent_block_fetches {
-                                break;
-                            }
-                            if next_slot > current_slot + MAX_LOOK_AHEAD {
-                                break;
-                            }
-                            if !skipped_slot_cache.contains(&next_slot) && is_slot_unprocessed(next_slot, &in_process_slots, &block_cache, last_indexed_slot) {
-                                block_fetching_futures.push(fetch_block(
-                                    client.uri.clone(),
-                                    next_slot,
-                                    RETRIES
-                                ));
-                                in_process_slots.insert(next_slot);
-                            }
+
+
+                    // Refill the block fetching futures with new slots to fetch
+                    for next_slot in (last_indexed_slot + 1)..(slot + 1 + max_concurrent_block_fetches as u64) {
+                        if in_process_slots.len() >= max_concurrent_block_fetches {
+                            break;
                         }
-
-
+                        if next_slot > current_slot {
+                            break;
+                        }
+                        if !skipped_slot_cache.contains(&next_slot) && is_slot_unprocessed(next_slot, &in_process_slots, &block_cache, last_indexed_slot) {
+                            block_fetching_futures.push(fetch_block(
+                                client.uri.clone(),
+                                next_slot,
+                                RETRIES
+                            ));
+                            in_process_slots.insert(next_slot);
+                        }
                     }
                 }
             }
