@@ -1,12 +1,8 @@
-# Photon: Primordial Indexer for ZK Compression
+# Photon: Core Indexer for ZK Compression on Solana
 
-Photon is the primordial indexer for [ZK Compression](zkcompression.com) on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
+Photon is the core indexer for [ZK Compression](zkcompression.com) on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
 
 ## 🚀 Quick Start
-
-### Prerequisites
-
-Ensure you have Rust and Cargo installed.
 
 ### Installation
 
@@ -26,7 +22,8 @@ cargo install photon-indexer
 
 #### Basic Usage 
 
-Run Photon with default settings against localnet:
+* Run Photon with default settings against localnet:
+
 ```bash
 photon
 ```
@@ -111,24 +108,24 @@ photon --db-url=$DATABASE_URL
 ### Running Tests
 
 1. Set up the environment:
-   ```bash
-   export MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
-   export DEVNET_RPC_URL=https://api.devnet.solana.com
-   export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
-   ```
+```bash
+export MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
+export DEVNET_RPC_URL=https://api.devnet.solana.com
+export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
+```
 
 2. Install additional tools:
-   ```bash
-   npm install -g @apidevtools/swagger-cli
-   wget https://dl.min.io/server/minio/release/linux-amd64/minio
-   chmod +x minio
-   docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
-   ```
+```bash
+npm install -g @apidevtools/swagger-cli
+wget https://dl.min.io/server/minio/release/linux-amd64/minio
+chmod +x minio
+docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
+```
 
 3. Run tests:
-   ```bash
-   cargo test
-   ```
+```bash
+cargo test
+```
 
 Note: All migrations run automatically during tests for both Postgres and SQLite.
 
