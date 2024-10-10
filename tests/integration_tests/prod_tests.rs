@@ -7,7 +7,7 @@ use photon_indexer::{
         api::PhotonApi,
         method::{
             get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest,
-            get_multiple_new_address_proofs::{AddressList, AddressListWithTrees, AddressWithTree},
+            get_multiple_new_address_proofs::{AddressListWithTrees, AddressWithTree},
         },
     },
     common::typedefs::{

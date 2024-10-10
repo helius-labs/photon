@@ -28,9 +28,8 @@ use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
 };
 use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    PgPool, SqlitePool,
+    SqlitePool,
 };
 use std::env::temp_dir;
 use std::sync::Arc;

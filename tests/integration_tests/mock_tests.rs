@@ -1,7 +1,6 @@
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
-use itertools::Itertools;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::{
     DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
 };

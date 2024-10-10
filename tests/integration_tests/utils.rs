@@ -1,29 +1,26 @@
-use std::{collections::HashMap, env, path::Path, str::FromStr, sync::Mutex};
+use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
         relative_project_path,
         typedefs::{
-            account::Account, hash::Hash, rpc_client_with_uri::RpcClientWithUri,
-            serializable_pubkey::SerializablePubkey, token_data::TokenData,
+            account::Account, rpc_client_with_uri::RpcClientWithUri, token_data::TokenData,
         },
     },
-    dao::generated::state_trees,
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
-        persist::{compute_parent_hash, persist_state_update, persisted_state_tree::ZERO_BYTES},
+        persist::persist_state_update,
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
 };
-use sea_orm::ColumnTrait;
 
 use once_cell::sync::Lazy;
 use photon_indexer::migration::{Migrator, MigratorTrait};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, ExecResult, QueryFilter,
-    SqlxPostgresConnector, SqlxSqliteConnector, Statement, TransactionTrait,
+    ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
+    SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
 pub use rstest::rstest;

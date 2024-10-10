@@ -2,14 +2,13 @@ use clap::Parser;
 use log::info;
 use photon_indexer::{
     common::{
-        setup_logging, setup_pg_connection, setup_pg_pool,
-        typedefs::serializable_pubkey::SerializablePubkey, LoggingFormat,
+        setup_logging, setup_pg_connection, typedefs::serializable_pubkey::SerializablePubkey,
+        LoggingFormat,
     },
     ingester::persist::persisted_indexed_merkle_tree::validate_tree,
 };
-use sea_orm::SqlxPostgresConnector;
 use solana_sdk::pubkey::Pubkey;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 use tokio;
 
 #[derive(Parser)]
