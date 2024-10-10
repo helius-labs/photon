@@ -1,6 +1,6 @@
-# Photon: Advanced Indexer for Solana Compression
+# Photon: Primordial Indexer for ZK Compression
 
-Photon is a high-performance indexer designed specifically for general compression on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
+Photon is the primordial indexer for [ZK Compression](zkcompression.com) on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
 
 ## 🚀 Quick Start
 
