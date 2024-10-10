@@ -4,9 +4,14 @@ use std::{env, net::UdpSocket, path::PathBuf, thread::sleep, time::Duration};
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
 use clap::{Parser, ValueEnum};
+use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    PgPool,
+};
 pub mod typedefs;
 
 pub fn relative_project_path(path: &str) -> PathBuf {
@@ -109,4 +114,19 @@ pub fn setup_logging(logging_format: LoggingFormat) {
         LoggingFormat::Standard => subscriber.init(),
         LoggingFormat::Json => subscriber.json().init(),
     }
+}
+
+pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
+    let options: PgConnectOptions = database_url.parse().unwrap();
+    PgPoolOptions::new()
+        .max_connections(max_connections)
+        .connect_with(options)
+        .await
+        .unwrap()
+}
+
+pub async fn setup_pg_connection(database_url: &str, max_connections: u32) -> DatabaseConnection {
+    SqlxPostgresConnector::from_sqlx_postgres_pool(
+        setup_pg_pool(database_url, max_connections).await,
+    )
 }

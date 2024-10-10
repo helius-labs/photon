@@ -15,15 +15,17 @@ use photon_indexer::api::method::utils::{
     GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
-use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
+use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
+    get_exclusion_range_with_proof, validate_tree,
+};
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::dao::generated::indexed_trees;
+use photon_indexer::dao::generated::{indexed_trees, state_trees};
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use photon_indexer::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, ZERO_BYTES,
 };
-use sea_orm::TransactionTrait;
+use sea_orm::{QueryFilter, TransactionTrait};
 
 use photon_indexer::common::typedefs::account::Account;
 use photon_indexer::common::typedefs::bs64_string::Base64String;
@@ -47,6 +49,7 @@ use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use photon_indexer::api::method::utils::Limit;
+use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
 
@@ -290,9 +293,7 @@ async fn test_multiple_accounts(
 
         let res = setup
             .api
-            .get_compressed_balance_by_owner(GetCompressedBalanceByOwnerRequest {
-                owner,
-            })
+            .get_compressed_balance_by_owner(GetCompressedBalanceByOwnerRequest { owner })
             .await
             .unwrap()
             .value;
@@ -651,6 +652,8 @@ async fn test_persisted_state_trees(
 async fn test_indexed_merkle_trees(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::validate_tree;
+
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
     let tree = SerializablePubkey::new_unique();
@@ -701,7 +704,7 @@ async fn test_indexed_merkle_trees(
 
     txn.commit().await.unwrap();
 
-    verify_tree(setup.db_conn.as_ref(), tree).await;
+    validate_tree(setup.db_conn.as_ref(), tree).await;
 
     let (model, _) = get_exclusion_range_with_proof(
         &setup.db_conn.begin().await.unwrap(),
@@ -915,8 +918,11 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
 async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use photon_indexer::api::method::get_multiple_new_address_proofs::{
-        get_multiple_new_address_proofs, AddressList,
+    use photon_indexer::{
+        api::method::get_multiple_new_address_proofs::{
+            get_multiple_new_address_proofs, AddressList,
+        },
+        ingester::persist::persisted_indexed_merkle_tree::validate_tree,
     };
 
     let name = trim_test_name(function_name!());
@@ -992,7 +998,7 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
 
         let address_list = AddressList(vec![SerializablePubkey::try_from(proof_address).unwrap()]);
 
-        verify_tree(setup.db_conn.as_ref(), tree).await;
+        validate_tree(setup.db_conn.as_ref(), tree).await;
         get_multiple_new_address_proofs(&setup.db_conn, address_list)
             .await
             .unwrap();
@@ -1091,5 +1097,186 @@ async fn test_gpa_filters(
             .value;
 
         assert_eq!(res.items.len(), expected_count);
+    }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_persisted_state_trees_multiple_cases(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let tree = SerializablePubkey::new_unique();
+    let tree_height = 10;
+
+    info!("Test case 1: Sequential leaf nodes");
+    let leaf_nodes_1 = create_leaf_nodes(tree, 0..5, |i| i);
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_1, tree_height).await;
+
+    info!("Test case 2: Sequential leaf nodes with random seq order");
+    let leaf_nodes_2 = create_leaf_nodes(tree, 0..5, |i| vec![4, 2, 0, 1, 3][i as usize]);
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_2, tree_height).await;
+
+    info!("Test case 3: Duplicate leaf indices");
+    let leaf_nodes_3 = create_leaf_nodes(tree, vec![1, 1, 2, 2, 3, 2].into_iter(), |_| {
+        let mut rng = rand::thread_rng();
+        rng.gen_range(0..1000)
+    });
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_3, tree_height).await;
+
+    info!("Test case 4: Large gaps in sequence numbers");
+    let leaf_nodes_4 = create_leaf_nodes(tree, 0..5, |i| i * 1000);
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_4, tree_height).await;
+
+    info!("Test case 7: Very large tree");
+    let large_tree_height = 20;
+    let leaf_nodes_7 = create_leaf_nodes(tree, 0..20, |i| i);
+    test_persist_and_verify(
+        name.clone(),
+        db_backend,
+        tree,
+        leaf_nodes_7,
+        large_tree_height,
+    )
+    .await;
+
+    info!("Test case 10: Random sequence numbers");
+    use log::info;
+    use rand::Rng;
+    let leaf_nodes_10 = create_leaf_nodes(tree, 0..10, |_| {
+        let mut rng = rand::thread_rng();
+        rng.gen_range(0..1000)
+    });
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_10, tree_height).await;
+
+    info!("Test case 11: Maximum sequence number (u32::MAX)");
+    let leaf_nodes_11 = create_leaf_nodes(tree, 0..5, |i| if i == 2 { u32::MAX as u64 } else { i });
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_11, tree_height).await;
+
+    info!("Test case 12: Updating all leaves in reverse order");
+    let leaf_nodes_13b = create_leaf_nodes(tree, (0..=10).rev(), |i| i + 100);
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_13b, tree_height).await;
+
+    info!("Test case 13: Inserting leaves with all zero hashes");
+    let leaf_nodes_13 = (0..5)
+        .map(|i| LeafNode {
+            hash: Hash::try_from(vec![0; 32]).unwrap(),
+            leaf_index: i,
+            tree,
+            seq: i,
+        })
+        .collect::<Vec<_>>();
+    test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_13, tree_height).await;
+}
+
+fn create_leaf_nodes<F>(
+    tree: SerializablePubkey,
+    range: impl Iterator<Item = u64>,
+    seq_fn: F,
+) -> Vec<LeafNode>
+where
+    F: Fn(u64) -> u64,
+{
+    range
+        .map(|i| LeafNode {
+            hash: Hash::new_unique(),
+            leaf_index: i as u32,
+            tree,
+            seq: seq_fn(i) as u32,
+        })
+        .collect()
+}
+
+async fn test_persist_and_verify(
+    name: String,
+    db_backend: DatabaseBackend,
+    tree: SerializablePubkey,
+    mut leaf_nodes: Vec<LeafNode>,
+    tree_height: u32,
+) {
+    for one_at_a_time in [true, false] {
+        let setup = setup(name.clone(), db_backend).await;
+
+        let txn = setup.db_conn.as_ref().begin().await.unwrap();
+        if one_at_a_time {
+            for leaf_node in leaf_nodes.clone() {
+                persist_leaf_nodes(&txn, vec![leaf_node], tree_height)
+                    .await
+                    .unwrap();
+            }
+        } else {
+            persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+                .await
+                .unwrap();
+        }
+        txn.commit().await.unwrap();
+
+        let mut leaf_node_indexes = vec![];
+        let mut de_duplicated_leaf_nodes = vec![];
+
+        leaf_nodes.sort_by_key(|x| x.seq);
+        for leaf_node in leaf_nodes.into_iter().rev() {
+            if !leaf_node_indexes.contains(&leaf_node.leaf_index) {
+                leaf_node_indexes.push(leaf_node.leaf_index);
+                de_duplicated_leaf_nodes.push(leaf_node);
+            }
+        }
+
+        let state_tree_models = state_trees::Entity::find()
+            .filter(state_trees::Column::Level.eq(0))
+            .all(setup.db_conn.as_ref())
+            .await
+            .unwrap();
+
+        let hash_index_and_seq_tuples = state_tree_models
+            .iter()
+            .map(|x| {
+                (
+                    Hash::try_from(x.hash.clone()).unwrap(),
+                    x.leaf_idx.unwrap_or(0) as u64,
+                    x.seq as u64,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        println!(
+            "hash_index_and_seq_tuples: {:#?}",
+            hash_index_and_seq_tuples
+        );
+        leaf_nodes = de_duplicated_leaf_nodes;
+        let proofs = get_multiple_compressed_leaf_proofs(
+            &setup.db_conn.begin().await.unwrap(),
+            leaf_nodes
+                .iter()
+                .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+                .collect(),
+        )
+        .await
+        .unwrap();
+
+        let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
+        let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
+        assert_eq!(
+            proof_hashes, leaf_hashes,
+            "Proof hashes should match leaf hashes"
+        );
+
+        let max_seq = leaf_nodes.iter().map(|x| x.seq).max().unwrap_or(0) as u64;
+
+        for proof in proofs {
+            assert_eq!(proof.merkleTree, tree, "Merkle tree should match");
+            assert_eq!(
+                max_seq, proof.rootSeq,
+                "Root sequence should be the maximum sequence number"
+            );
+            assert_eq!(
+                tree_height - 1,
+                proof.proof.len() as u32,
+                "Proof length should be tree height minus one"
+            );
+        }
+        validate_tree(&setup.db_conn, tree).await;
     }
 }
