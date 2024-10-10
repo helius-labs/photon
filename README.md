@@ -1,146 +1,151 @@
-# Photon
+# Photon: Advanced Indexer for Solana Compression
 
-Solana indexer for general compression
+Photon is a high-performance indexer designed specifically for general compression on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
 
-## Installation
+## 🚀 Quick Start
 
-First install dependencies (Ubuntu):
+### Prerequisites
+
+Ensure you have Rust and Cargo installed.
+
+### Installation
+
+1. Install dependencies:
 
 ```bash
-apt install -y build-essential pkg-config libssl-dev
+sudo apt install -y build-essential pkg-config libssl-dev
 ```
 
-Then run:
+2. Install `photon-indexer`:
+
 ```bash
 cargo install photon-indexer
 ```
 
-### Running Photon 
+### 🔧 Usage
 
-To run photon run:
+#### Basic Usage 
+
+Run Photon with default settings against localnet:
+```bash
+photon
+```
+
+#### Configuration
+
+* Connect to Devnet:
 
 ```bash
-# Against localnet
-photon
-
-# Against devnet
 photon --rpc-url=https://api.devnet.solana.com
+```
 
-# Streaming new blocks using gRPC instead of polling. GRPC_X_TOKEN env variable must be set.
+* Use gRPC for block streaming (requires GRPC_X_TOKEN env variable):
+
+```bash
 photon --rpc-url=https://api.devnet.solana.com --grpc-url=<grpc_url>
+```
 
-# Using your local Postgres database instead of the default temporary SQL database
+* Use a local Postgres database:
+
+```bash
 photon --db-url=postgres://postgres@localhost/postgres
+```
 
-# Specifying a start slot. Defaults to 0 for localnet and current for devnet/mainnet
-photon --start-slot=123 
+* Specify a start slot:
 
-# To see more configuration options
+```bash
+photon --start-slot=123
+```
+
+* For more advanced options:
+
+```bash
 photon --help
 ```
 
-### Photon Snapshots
+## 📸 Snapshots
 
-Photon supports snapshots, which enable Photon operators to load Photon more quickly. Otherwise,
-operators need to index all of the Solana blocks since the ZK Compression contract was released.
+Photon supports snapshots for quick bootstrapping. 
 
-Helius supports a public endpoint for loading snapshots. To load a snapshot simply run:
+### Loading a Snapshot
+
+1. Download a snapshot:
+
 ```bash
-photon-snapshot-loader  --snapshot-dir=~/snapshot --snapshot-server-url=https://photon-devnet-snapshot.helius-rpc.com
+photon-snapshot-loader --snapshot-dir=~/snapshot --snapshot-server-url=https://photon-devnet-snapshot.helius-rpc.com
 ```
 
-Then use the snapshot to load Photon faster:
+2. Run Photon with the snapshot:
+
 ```bash
-# Photon will disregard the snapshot if the database is more up-to-date.
-photon-indexer --snapshot-dir=~/snapshot --r=https://api.devnet.solana.com --db-url=postgres://postgres@localhost/postgres
+photon --snapshot-dir=~/snapshot --rpc-url=https://api.devnet.solana.com --db-url=postgres://postgres@localhost/postgres
 ```
 
-To create snapshots you can run the Photon snapshotter:
+### Creating Snapshots
+
+Create a local snapshot:
 ```bash
 photon-snapshotter --snapshot-dir=~/snapshot
 ```
 
-You can also specify an R2 bucket for storing the snapshot files instead of a local directory:
+Store snapshots in an R2 bucket:
 ```bash
-# If you specify an R2 bucket, you must set the R2_ACCESS_KEY, R2_ACCOUNT_ID and R2_SECRET_KEY
 photon-snapshotter --r2-bucket=some-bucket --r2-prefix=prefix
 ```
 
+Note: Set `R2_ACCESS_KEY`, `R2_ACCOUNT_ID`, and `R2_SECRET_KEY` environment variables when using R2.
 
-### Database Management
+## 🗄️ Database Management
 
-We support both Postgres and SQLite as database backends. Photon uses a auto-configured SQLite
-in-memory database by default. To specify another database backend run migrations and specify the
-database url when running Photon.
+Photon supports both Postgres and SQLite. By default, it uses an in-memory SQLite database.
 
+To use a custom database:
 ```bash
-export DATABASE_URL="postgres://postgres@localhost/postgres" # Or your SQLlite database url
+export DATABASE_URL="postgres://postgres@localhost/postgres"
 photon-migration up
 photon --db-url=$DATABASE_URL
 ```
 
-## Local Development
+## 🛠️ Local Development
 
 ### Running Tests
 
-To run tests, install and run Postgres and SQLlite locally. For MacOS users, we recommend using
-Homebrew to run local Postgres: https://wiki.postgresql.org/wiki/Homebrew.
+1. Set up the environment:
+   ```bash
+   export MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
+   export DEVNET_RPC_URL=https://api.devnet.solana.com
+   export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
+   ```
 
-Then export environment variables to configure your RPC and your test Postgres url. For SQLlite testing,
-we always use an in-memory SQLlite database, so there is no need to configure a test url.
+2. Install additional tools:
+   ```bash
+   npm install -g @apidevtools/swagger-cli
+   wget https://dl.min.io/server/minio/release/linux-amd64/minio
+   chmod +x minio
+   docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
+   ```
 
-```bash
-export MAINNET_RPC_URL=https://api.devnet.solana.com
-export DEVNET_RPC_URL=https://api.mainnet-beta.solana.com
-export TEST_DATABASE_URL="postgres://postgres@localhost/postgres"
-```
+3. Run tests:
+   ```bash
+   cargo test
+   ```
 
-Additionally, for tests we use `swagger-cli` to validate our OpenAPI schemas. So please install it:
-```bash
-npm install -g @apidevtools/swagger-cli
-```
+Note: All migrations run automatically during tests for both Postgres and SQLite.
 
-Run minio to test snapshotting:
-```bash
-wget https://dl.min.io/server/minio/release/linux-amd64/minio
-chmod +x minio
-```
+### Database Model Generation
 
-Finally run the Gnark prover, which is needed for integration tests:
-```bash
-docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
-```
-
-After finishing setup simply run:
-```bash
-cargo test
-```
-
-Note that for both Postgres and SQLlite all migrations will run automatically during tests. So no
-prior configuration is needed.
-
-### Database Model Autogeneration
-
-To generate database models first install sea-orm-cli:
 ```bash
 cargo install sea-orm-cli --version 0.10.6
-```
-
-Then run:
-```bash
 sea-orm-cli generate entity -o src/dao/generated
 ```
 
+### API Documentation
 
-### Documentation Generation
-
-In order to update the OpenAPI schemas for the API please first install the `swagger-cli` through:
-
-```bash
-npm install -g @apidevtools/swagger-cli
-```
-
-Then run:
+Generate OpenAPI schemas:
 ```bash
 cargo run --bin=photon-openapi
 ```
+
+## 📬 Support
+
+For support or queries, please open an issue on Github or contact the [Helius discord](https://discord.gg/HjummjUXgq).
