@@ -6,17 +6,18 @@ use std::{
 use ark_bn254::Fr;
 use itertools::Itertools;
 use light_poseidon::Poseidon;
+use log::info;
 use num_bigint::BigUint;
 use sea_orm::{
-    sea_query::OnConflict, ConnectionTrait, DatabaseBackend,
-    DatabaseTransaction, EntityTrait, QueryTrait, Set, Statement, TransactionTrait,
+    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
+    EntityTrait, QueryFilter, QueryTrait, Set, Statement, TransactionTrait,
 };
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     api::error::PhotonApiError,
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
-    dao::generated::indexed_trees,
+    dao::generated::{indexed_trees, state_trees},
     ingester::{
         error::IngesterError,
         parser::{indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate},
@@ -135,12 +136,9 @@ pub async fn get_exclusion_range_with_proof(
         validate_proof(&merkle_proof)?;
         return Ok((zeroeth_element, merkle_proof));
     }
-    let range_node = btree
-        .values()
-        .next()
-        .ok_or(PhotonApiError::RecordNotFound(
-            "No range proof found".to_string(),
-        ))?;
+    let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
+        "No range proof found".to_string(),
+    ))?;
     let hash = compute_range_node_hash(range_node)
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
@@ -197,7 +195,9 @@ pub async fn multi_append_fully_specified(
                             })?,
                             next_index: leaf.next_index as usize,
                             next_value: leaf.next_value.try_into().map_err(|_e| {
-                                IngesterError::ParserError("Failed to convert next value to array".to_string())
+                                IngesterError::ParserError(
+                                    "Failed to convert next value to array".to_string(),
+                                )
                             })?,
                             index: leaf.leaf_index as usize,
                         },
@@ -470,4 +470,56 @@ fn format_bytes(bytes: Vec<u8>, database_backend: DatabaseBackend) -> String {
         DatabaseBackend::Sqlite => format!("x'{}'", hex_bytes),
         _ => unimplemented!(),
     }
+}
+
+pub async fn validate_tree(db_conn: &sea_orm::DatabaseConnection, tree: SerializablePubkey) {
+    info!("Fetching state tree nodes for {:?}...", tree);
+    let models = state_trees::Entity::find()
+        .filter(state_trees::Column::Tree.eq(tree.to_bytes_vec()))
+        .all(db_conn)
+        .await
+        .unwrap();
+
+    let node_to_model = models
+        .iter()
+        .map(|x| (x.node_idx, x.clone()))
+        .collect::<HashMap<i64, state_trees::Model>>();
+
+    info!("Fetched {} nodes", node_to_model.len());
+
+    info!("Validating tree...");
+
+    let mut count = 0;
+    for model in node_to_model.values() {
+        count += 1;
+        if count % 1000 == 0 {
+            info!("Validated {} nodes...", count);
+        }
+        if model.level > 0 {
+            let node_index = model.node_idx;
+            let child_level = model.level - 1;
+            let left_child = node_to_model
+                .get(&(node_index * 2))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let right_child = node_to_model
+                .get(&(node_index * 2 + 1))
+                .map(|x| x.hash.clone())
+                .unwrap_or(ZERO_BYTES[child_level as usize].to_vec());
+
+            let node_hash_pretty = Hash::try_from(model.hash.clone()).unwrap();
+            let left_child_pretty = Hash::try_from(left_child.clone()).unwrap();
+            let right_child_pretty = Hash::try_from(right_child.clone()).unwrap();
+
+            let parent_hash = compute_parent_hash(left_child, right_child).unwrap();
+
+            assert_eq!(
+                model.hash, parent_hash,
+                "Unexpected parent hash. Level {}. Hash: {}, Left: {}, Right: {}",
+                model.level, node_hash_pretty, left_child_pretty, right_child_pretty
+            );
+        }
+    }
+    info!("Finished validating tree");
 }

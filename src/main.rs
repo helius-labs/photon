@@ -10,7 +10,8 @@ use photon_indexer::api::{self, api::PhotonApi};
 
 use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
-    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
+    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, setup_pg_pool,
+    LoggingFormat,
 };
 
 use photon_indexer::ingester::fetchers::poller::fetch_current_slot_with_infinite_retry;
@@ -94,15 +95,6 @@ struct Args {
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
-}
-
-pub async fn setup_pg_pool(database_url: &str, max_connections: u32) -> PgPool {
-    let options: PgConnectOptions = database_url.parse().unwrap();
-    PgPoolOptions::new()
-        .max_connections(max_connections)
-        .connect_with(options)
-        .await
-        .unwrap()
 }
 
 async fn start_api_server(

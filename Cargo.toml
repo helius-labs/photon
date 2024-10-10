@@ -29,6 +29,9 @@ path = "src/snapshot/snapshotter/main.rs"
 name = "photon-snapshot-loader"
 path = "src/snapshot/loader/main.rs"
 
+[[bin]]
+name = "photon-tree-validator"
+path = "src/tools/tree_validator/main.rs"
 
 [dependencies]
 anchor-lang = "0.29.0"
