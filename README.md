@@ -1,4 +1,4 @@
-# Photon: Core Indexer for ZK Compression on Solana
+# Photon: the Indexer for ZK Compression on Solana
 
 Photon is the core indexer for [ZK Compression](zkcompression.com) on the Solana blockchain. It offers rapid indexing capabilities, snapshot support, and flexible database options to cater to local and production deployments.
 
