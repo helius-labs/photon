@@ -96,7 +96,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                     }
                 }
                 None => {
-                    let block = match tokio::time::timeout(Duration::from_secs(2), grpc_stream.next()).await {
+                    let block = match tokio::time::timeout(Duration::from_secs(5), grpc_stream.next()).await {
                         Ok(Some(block)) => block,
                         Ok(None) => panic!("gRPC stream ended unexpectedly"),
                         Err(_) => {

@@ -225,7 +225,7 @@ pub async fn fetch_block(
 ) -> (Result<Option<BlockInfo>, client_error::ClientError>, u64) {
     let mut attempt_counter = 0;
     loop {
-        let timeout_sec = if attempt_counter == 0 { 3 } else { 20 };
+        let timeout_sec = 5;
         let client = RpcClient::new_with_timeout_and_commitment(
             rpc_uri.clone(),
             Duration::from_secs(timeout_sec),
