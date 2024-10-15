@@ -1,5 +1,6 @@
 use std::{cmp::max, collections::HashMap};
 
+use cadence_macros::statsd_count;
 use itertools::Itertools;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
@@ -13,6 +14,7 @@ use crate::{
     common::typedefs::{account::Account, hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::state_trees,
     ingester::{error::IngesterError, parser::state_update::LeafNullification},
+    metric,
 };
 
 use super::{compute_parent_hash, get_node_direct_ancestors};
@@ -359,6 +361,9 @@ pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiErr
     }
 
     if computed_root != proof.root.to_vec() {
+        metric! {
+            statsd_count!("invalid_proof_response", 1);
+        }
         return Err(PhotonApiError::UnexpectedError(format!(
             "Computed root does not match the provided root. Proof; {:?}",
             proof

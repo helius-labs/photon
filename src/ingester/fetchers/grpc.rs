@@ -28,14 +28,13 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
-use crate::ingester::fetchers::poller::{
-    get_poller_block_stream, start_latest_slot_updater, LATEST_SLOT,
-};
+use crate::ingester::fetchers::poller::get_poller_block_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
 
 use crate::metric;
+use crate::monitor::{start_latest_slot_updater, LATEST_SLOT};
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,

@@ -27,6 +27,7 @@ use crate::{
     common::typedefs::rpc_client_with_uri::RpcClientWithUri,
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     metric,
+    monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
@@ -34,8 +35,6 @@ const RETRIES: u64 = 3;
 const INFINITY: u64 = u64::MAX;
 
 use once_cell::sync::Lazy;
-
-pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 
 /// This function creates a stream that continuously fetches and emits blocks from a Solana blockchain.
 /// It implements a concurrent block fetching algorithm with the following key features:
@@ -204,20 +203,6 @@ fn pop_cached_blocks_to_index(
     (blocks, last_indexed_slot)
 }
 
-pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
-    loop {
-        match client.get_slot().await {
-            Ok(slot) => {
-                return slot;
-            }
-            Err(e) => {
-                log::error!("Failed to fetch current slot: {}", e);
-                sleep(Duration::from_secs(5));
-            }
-        }
-    }
-}
-
 pub async fn fetch_block(
     rpc_uri: String,
     slot: u64,
@@ -284,23 +269,4 @@ pub async fn fetch_block(
             }
         }
     }
-}
-
-pub async fn update_latest_slot(rpc_client: Arc<RpcClientWithUri>) {
-    let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
-    LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
-}
-
-pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
-    if LATEST_SLOT.load(Ordering::SeqCst) != 0 {
-        return;
-    }
-    update_latest_slot(rpc_client.clone()).await;
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_millis(100));
-        loop {
-            interval.tick().await;
-            update_latest_slot(rpc_client.clone()).await;
-        }
-    });
 }

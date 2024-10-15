@@ -27,9 +27,11 @@ pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
+use solana_sdk::account::Account as SolanaAccount;
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    pubkey::Pubkey,
     signature::Signature,
 };
 use solana_transaction_status::{
@@ -376,4 +378,24 @@ pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
+}
+
+pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaAccount {
+    let dir = relative_project_path(&format!("tests/data/accounts/{}", setup.name));
+    if !Path::new(&dir).exists() {
+        std::fs::create_dir(&dir).unwrap();
+    }
+    let file_path = dir.join(account.to_string());
+    if file_path.exists() {
+        let account_string = std::fs::read(file_path).unwrap();
+        serde_json::from_slice(&account_string).unwrap()
+    } else {
+        let account = fetch_account(&setup.client.client, account).await;
+        std::fs::write(file_path, serde_json::to_string(&account).unwrap()).unwrap();
+        account
+    }
+}
+
+async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
+    client.get_account(&account).await.unwrap()
 }

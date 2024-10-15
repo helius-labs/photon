@@ -3,9 +3,9 @@ use futures::StreamExt;
 use log::{error, info};
 use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
-    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
+    fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
+    setup_logging, setup_metrics, LoggingFormat,
 };
-use photon_indexer::ingester::fetchers::poller::fetch_current_slot_with_infinite_retry;
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,

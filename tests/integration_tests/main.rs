@@ -8,3 +8,4 @@ mod open_api_tests;
 mod prod_tests;
 mod snapshot_tests;
 mod utils;
+mod monitor_tests;

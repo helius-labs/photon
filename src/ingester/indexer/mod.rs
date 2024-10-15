@@ -7,11 +7,8 @@ use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult,
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
-    dao::generated::blocks,
-    ingester::{
-        fetchers::poller::fetch_current_slot_with_infinite_retry,
-        index_block_batch_with_infinite_retries,
-    },
+    common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
+    ingester::index_block_batch_with_infinite_retries,
 };
 
 use super::typedefs::block_info::BlockInfo;
