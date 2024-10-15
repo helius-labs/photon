@@ -325,10 +325,7 @@ pub async fn get_validity_proof(
 
     let inclusion_proof_url = format!("{}/prove", prover_url);
     let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
-        PhotonApiError::UnexpectedError(format!(
-            "Got an error while serializing the request {}",
-            e
-        ))
+        PhotonApiError::UnexpectedError(format!("Got an error while serializing the request {}", e))
     })?;
     let res = client
         .post(&inclusion_proof_url)
@@ -336,9 +333,7 @@ pub async fn get_validity_proof(
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e))
-        })?;
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e)))?;
 
     if !res.status().is_success() {
         return Err(PhotonApiError::UnexpectedError(format!(
@@ -347,9 +342,10 @@ pub async fn get_validity_proof(
         )));
     }
 
-    let text = res.text().await.map_err(|e| {
-        PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e))
-    })?;
+    let text = res
+        .text()
+        .await
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e)))?;
 
     let proof: GnarkProofJson = serde_json::from_str(&text).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
