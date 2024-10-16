@@ -35,7 +35,9 @@ jobs:
       - name: Build and Push Docker image
         run: |
             IMAGE_TAG=${{ github.run_number }}-${{ env.SHORT_SHA }}
-            IMAGE_URI=public.ecr.aws/f7o9l7p1/photon:$IMAGE_TAG
-            docker build . -t $IMAGE_URI
+            IMAGE_LOCATION=public.ecr.aws/f7o9l7p1/photon
+            IMAGE_URI=$IMAGE_LOCATION:$IMAGE_TAG
+            docker build . -t $IMAGE_URI -t $IMAGE_LOCATION:latest
             docker push $IMAGE_URI
-            echo "$IMAGE_URI"
+            docker push $IMAGE_LOCATION:latest
+            echo "Image pushed: $IMAGE_URI"
