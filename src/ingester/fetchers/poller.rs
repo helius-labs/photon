@@ -2,10 +2,7 @@ use std::{
     cmp::max,
     collections::{BTreeMap, HashSet},
     num::NonZeroUsize,
-    sync::{
-        atomic::Ordering,
-        Arc,
-    },
+    sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 
@@ -31,7 +28,6 @@ use crate::{
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 const RETRIES: u64 = 3;
 const INFINITY: u64 = u64::MAX;
-
 
 /// This function creates a stream that continuously fetches and emits blocks from a Solana blockchain.
 /// It implements a concurrent block fetching algorithm with the following key features:
@@ -207,7 +203,7 @@ pub async fn fetch_block(
 ) -> (Result<Option<BlockInfo>, client_error::ClientError>, u64) {
     let mut attempt_counter = 0;
     loop {
-        let timeout_sec = 5;
+        let timeout_sec = if attempt_counter <= 1 { 5 } else { 20 };
         let client = RpcClient::new_with_timeout_and_commitment(
             rpc_uri.clone(),
             Duration::from_secs(timeout_sec),
