@@ -16,18 +16,6 @@ use tokio::{
     time::{interval, sleep},
 };
 
-use crate::api::method::get_compressed_accounts_by_owner::{
-    DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
-};
-use crate::api::method::get_validity_proof::{get_validity_proof, GetValidityProofRequest};
-use crate::api::method::utils::{
-    CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
-    GetCompressedTokenAccountsByOwner,
-};
-use crate::common::typedefs::bs58_string::Base58String;
-use crate::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof, validate_tree,
-};
 use crate::{
     api::method::{get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE, utils::Context},
     common::{
@@ -36,42 +24,19 @@ use crate::{
     dao::generated::state_trees,
     metric,
 };
-use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
-use insta::assert_json_snapshot;
 use light_concurrent_merkle_tree::copy::ConcurrentMerkleTreeCopy;
 use light_concurrent_merkle_tree::light_hasher::Poseidon;
 use light_sdk::state::MerkleTreeMetadata;
 
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::dao::generated::indexed_trees;
-use crate::ingester::persist::persisted_indexed_merkle_tree::multi_append;
-use crate::ingester::persist::persisted_state_tree::{
-    get_multiple_compressed_leaf_proofs, ZERO_BYTES,
-};
-use sea_orm::TransactionTrait;
 
-use crate::common::typedefs::account::Account;
-use crate::common::typedefs::bs64_string::Base64String;
-use crate::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
-use crate::dao::generated::accounts;
-use crate::ingester::index_block;
-use crate::ingester::parser::state_update::StateUpdate;
-use crate::ingester::persist::persisted_state_tree::{persist_leaf_nodes, LeafNode};
-use crate::ingester::persist::{compute_parent_hash, persist_token_accounts, EnrichedTokenAccount};
+use crate::common::typedefs::hash::Hash;
 
-use crate::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-use sea_orm::Set;
 
-use crate::common::typedefs::account::AccountData;
 use solana_sdk::account::Account as SolanaAccount;
-use std::collections::{HashMap, HashSet};
 
-use crate::common::typedefs::token_data::{AccountState, TokenData};
-use sqlx::types::Decimal;
 
-use crate::api::method::utils::Limit;
 use solana_sdk::pubkey::Pubkey;
-use std::{mem, vec};
+use std::mem;
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));

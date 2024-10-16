@@ -3,10 +3,9 @@ use std::{
     collections::{BTreeMap, HashSet},
     num::NonZeroUsize,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::Ordering,
         Arc,
     },
-    thread::sleep,
     time::Duration,
 };
 
@@ -21,7 +20,6 @@ use solana_client::{
 
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
-use tokio::time::interval;
 
 use crate::{
     common::typedefs::rpc_client_with_uri::RpcClientWithUri,
@@ -34,7 +32,6 @@ const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 const RETRIES: u64 = 3;
 const INFINITY: u64 = u64::MAX;
 
-use once_cell::sync::Lazy;
 
 /// This function creates a stream that continuously fetches and emits blocks from a Solana blockchain.
 /// It implements a concurrent block fetching algorithm with the following key features:
