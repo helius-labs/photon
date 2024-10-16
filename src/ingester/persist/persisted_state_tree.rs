@@ -362,7 +362,7 @@ pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiErr
 
     if computed_root != proof.root.to_vec() {
         metric! {
-            statsd_count!("invalid_proof_response", 1);
+            statsd_count!("invalid_proof", 1);
         }
         return Err(PhotonApiError::UnexpectedError(format!(
             "Computed root does not match the provided root. Proof; {:?}",

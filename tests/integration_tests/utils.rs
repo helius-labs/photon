@@ -380,6 +380,7 @@ pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
         .unwrap();
 }
 
+#[allow(dead_code)]
 pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaAccount {
     let dir = relative_project_path(&format!("tests/data/accounts/{}", setup.name));
     if !Path::new(&dir).exists() {
@@ -396,6 +397,7 @@ pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaA
     }
 }
 
+#[allow(dead_code)]
 async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
     client.get_account(&account).await.unwrap()
 }
