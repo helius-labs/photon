@@ -10,11 +10,10 @@ use photon_indexer::api::{self, api::PhotonApi};
 
 use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
-    fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, setup_pg_pool,
-    LoggingFormat,
+    fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
+    setup_logging, setup_metrics, setup_pg_pool, LoggingFormat,
 };
 
-use photon_indexer::ingester::fetchers::poller::fetch_current_slot_with_infinite_retry;
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::ingester::indexer::{
     fetch_last_indexed_slot_with_infinite_retry, index_block_stream,
@@ -24,6 +23,7 @@ use photon_indexer::migration::{
     Migrator, MigratorTrait,
 };
 
+use photon_indexer::monitor::continously_monitor_photon;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
 };
@@ -229,10 +229,10 @@ async fn main() {
 
     let is_rpc_node_local = rpc_client.uri.contains("127.0.0.1");
 
-    let indexer_handle = match args.disable_indexing {
+    let (indexer_handle, monitor_handle) = match args.disable_indexing {
         true => {
             info!("Indexing is disabled");
-            None
+            (None, None)
         }
         false => {
             info!("Starting indexer...");
@@ -277,12 +277,18 @@ async fn main() {
                 geyser_url: args.grpc_url,
             };
 
-            Some(continously_index_new_blocks(
-                block_stream_config,
-                db_conn.clone(),
-                rpc_client.clone(),
-                last_indexed_slot,
-            ))
+            (
+                Some(continously_index_new_blocks(
+                    block_stream_config,
+                    db_conn.clone(),
+                    rpc_client.clone(),
+                    last_indexed_slot,
+                )),
+                Some(continously_monitor_photon(
+                    db_conn.clone(),
+                    rpc_client.clone(),
+                )),
+            )
         }
     };
 
@@ -313,6 +319,14 @@ async fn main() {
             if let Some(api_handler) = &api_handler {
                 info!("Shutting down API server...");
                 api_handler.stop().unwrap();
+            }
+
+            if let Some(monitor_handle) = monitor_handle {
+                info!("Shutting down monitor...");
+                monitor_handle.abort();
+                monitor_handle
+                    .await
+                    .expect_err("Monitor should have been aborted");
             }
         }
         Err(err) => {

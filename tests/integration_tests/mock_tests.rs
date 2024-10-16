@@ -59,11 +59,6 @@ struct Person {
     age: u64,
 }
 
-// TODO:
-// - Add tests for duplicate inserts.
-// - Add tests for accounts input spends without existing accounts.
-// - Add test for multi-input/output transitions.
-
 #[named]
 #[rstest]
 #[tokio::test]
