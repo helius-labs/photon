@@ -154,7 +154,30 @@ pub async fn get_exclusion_range_with_proof(
 
     let leaf_proofs: Vec<MerkleProofWithContext> =
         get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)])
-            .await?;
+            .await
+            .map_err(|proof_error| {
+                let tree_pubkey = match SerializablePubkey::try_from(range_node.tree.clone()) {
+                    Ok(pubkey) => pubkey,
+                    Err(e) => {
+                        log::error!("Failed to serialize tree pubkey: {}", e);
+                        return proof_error;
+                    }
+                };
+                let value_pubkey = match SerializablePubkey::try_from(range_node.value.clone()) {
+                    Ok(pubkey) => pubkey,
+                    Err(e) => {
+                        log::error!("Failed to serialize value pubkey: {}", e);
+                        return proof_error;
+                    }
+                };
+                log::error!(
+                    "Failed to get multiple compressed leaf proofs for {:?} for value {:?}: {}",
+                    tree_pubkey,
+                    value_pubkey,
+                    proof_error
+                );
+                proof_error
+            })?;
 
     let leaf_proof = leaf_proofs
         .into_iter()
