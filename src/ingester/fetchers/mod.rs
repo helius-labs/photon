@@ -11,7 +11,7 @@ pub mod grpc;
 pub mod poller;
 
 use grpc::get_grpc_stream_with_rpc_fallback;
-use poller::get_poller_block_stream;
+use poller::get_block_poller_stream;
 
 pub struct BlockStreamConfig {
     pub rpc_client: Arc<RpcClientWithUri>,
@@ -34,7 +34,7 @@ impl BlockStreamConfig {
         });
 
         let poller_stream = if self.geyser_url.is_none() {
-            Some(get_poller_block_stream(
+            Some(get_block_poller_stream(
                 self.rpc_client.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,
