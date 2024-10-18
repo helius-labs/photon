@@ -249,11 +249,12 @@ pub async fn fetch_transaction(
 }
 
 pub async fn cached_fetch_transaction(
-    setup: &TestSetup,
+    test_name: &str,
+    rpc_client: Arc<RpcClientWithUri>,
     tx: &str,
 ) -> EncodedConfirmedTransactionWithStatusMeta {
     let sig = Signature::from_str(tx).unwrap();
-    let dir = relative_project_path(&format!("tests/data/transactions/{}", setup.name));
+    let dir = relative_project_path(&format!("tests/data/transactions/{}", test_name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
@@ -263,7 +264,7 @@ pub async fn cached_fetch_transaction(
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let tx = fetch_transaction(&setup.client.client, sig).await;
+        let tx = fetch_transaction(&rpc_client.client, sig).await;
         std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
         tx
     }
@@ -276,8 +277,12 @@ async fn fetch_block(client: &RpcClient, slot: Slot) -> UiConfirmedBlock {
         .unwrap()
 }
 
-pub async fn cached_fetch_block(setup: &TestSetup, slot: Slot) -> BlockInfo {
-    let dir = relative_project_path(&format!("tests/data/blocks/{}", setup.name));
+pub async fn cached_fetch_block(
+    test_name: &str,
+    rpc_client: Arc<RpcClientWithUri>,
+    slot: Slot,
+) -> BlockInfo {
+    let dir = relative_project_path(&format!("tests/data/blocks/{}", test_name));
     if !Path::new(&dir).exists() {
         std::fs::create_dir(&dir).unwrap();
     }
@@ -287,7 +292,7 @@ pub async fn cached_fetch_block(setup: &TestSetup, slot: Slot) -> BlockInfo {
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let block = fetch_block(&setup.client.client, slot).await;
+        let block = fetch_block(&rpc_client.client, slot).await;
         std::fs::write(file_path, serde_json::to_string(&block).unwrap()).unwrap();
         block
     };
@@ -355,18 +360,28 @@ pub async fn persist_state_update_using_connection(
     Ok(())
 }
 
-pub async fn index_transaction(setup: &TestSetup, tx: &str) {
-    let tx = cached_fetch_transaction(setup, tx).await;
+pub async fn index_transaction(
+    test_name: &str,
+    db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClientWithUri>,
+    tx: &str,
+) {
+    let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
     let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
-    persist_state_update_using_connection(&setup.db_conn, state_update)
+    persist_state_update_using_connection(db_conn.as_ref(), state_update)
         .await
         .unwrap();
 }
 
-pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
+pub async fn index_multiple_transactions(
+    test_name: &str,
+    db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClientWithUri>,
+    txs: Vec<&str>,
+) {
     let mut transactions_infos = Vec::<TransactionInfo>::new();
     for tx in txs {
-        let tx = cached_fetch_transaction(setup, tx).await;
+        let tx = cached_fetch_transaction(test_name, rpc_client.clone(), tx).await;
         transactions_infos.push(tx.try_into().unwrap());
     }
     let mut state_updates = Vec::new();
@@ -375,7 +390,7 @@ pub async fn index_multiple_transactions(setup: &TestSetup, txs: Vec<&str>) {
         state_updates.push(tx_state_update);
     }
     let state_update = StateUpdate::merge_updates(state_updates);
-    persist_state_update_using_connection(&setup.db_conn, state_update)
+    persist_state_update_using_connection(db_conn.as_ref(), state_update)
         .await
         .unwrap();
 }

@@ -28,7 +28,7 @@ async fn test_basic_snapshotting() {
             let filesystem_adapter = photon_indexer::snapshot::FileSystemDirectoryApapter {
                 snapshot_dir: snapshot_dir.clone().to_str().unwrap().to_string(),
             };
-            
+
             Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
                 Some(filesystem_adapter),
                 None,
@@ -69,19 +69,16 @@ async fn test_basic_snapshotting() {
         let directory_adapter_v2 = adapter_pair[1].clone();
 
         let blocks: Vec<BlockInfo> = (0..30)
-            .map(|i| {
-                
-                BlockInfo {
-                    metadata: BlockMetadata {
-                        slot: i,
-                        parent_slot: if i == 0 { 0 } else { i - 1 },
-                        block_time: 0,
-                        blockhash: Hash::default(),
-                        parent_blockhash: Hash::default(),
-                        block_height: i,
-                    },
-                    transactions: vec![],
-                }
+            .map(|i| BlockInfo {
+                metadata: BlockMetadata {
+                    slot: i,
+                    parent_slot: if i == 0 { 0 } else { i - 1 },
+                    block_time: 0,
+                    blockhash: Hash::default(),
+                    parent_blockhash: Hash::default(),
+                    block_height: i,
+                },
+                transactions: vec![],
             })
             .collect();
         let blocks_stream = stream::iter(vec![blocks.clone()]);
