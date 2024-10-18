@@ -1,13 +1,18 @@
+use std::sync::Arc;
+
 use function_name::named;
+use futures::Stream;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
+use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::utils::*;
+use futures::pin_mut;
 use insta::assert_json_snapshot;
 use photon_indexer::api::method::utils::{
     GetCompressedTokenAccountsByOwner, GetLatestSignaturesRequest,
@@ -18,10 +23,79 @@ use photon_indexer::api::method::{
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
+use sea_orm::{ColumnTrait, DatabaseConnection};
 use serial_test::serial;
+use std::str::FromStr;
+
+use futures::StreamExt;
+use photon_indexer::{
+    api::method::{
+        get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
+        utils::{Limit, SignatureInfo},
+    },
+    common::typedefs::serializable_signature::SerializableSignature,
+};
+use solana_sdk::signature::Signature;
+
+// Photon does not support out-of-order transactions, but it does reprocessing previous transactions.
+fn all_valid_permutations(txns: &[&str]) -> Vec<Vec<String>> {
+    let txns = txns.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+    let mut permutations = Vec::new();
+    permutations.push(txns.clone());
+
+    let mut txns_with_earlier_txns_repeated = txns.clone();
+    for i in 0..txns.len() - 1 {
+        txns_with_earlier_txns_repeated.push(txns[i].clone());
+    }
+    permutations.push(txns_with_earlier_txns_repeated);
+
+    permutations
+}
+
+fn all_indexing_methodologies(
+    test_name: String,
+    db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClientWithUri>,
+    txns: &[&str],
+) -> impl Stream<Item = ()> {
+    let txs_permutations = all_valid_permutations(txns);
+    async_stream::stream! {
+        for index_transactions_individually in [true, false] {
+            for txs in txs_permutations.clone() {
+                reset_tables(db_conn.as_ref()).await.unwrap();
+                // HACK: We index a block so that API methods can fetch the current slot.
+                index_block(
+                    db_conn.as_ref(),
+                    &BlockInfo {
+                        metadata: BlockMetadata {
+                    slot: 0,
+                    ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                ).await
+                .unwrap();
+
+                if index_transactions_individually {
+                    for tx in txs {
+                        index_transaction(&test_name, db_conn.clone(), rpc_client.clone(), &tx).await;
+                    }
+                } else {
+                    index_multiple_transactions(
+                        &test_name,
+                        db_conn.clone(),
+                        rpc_client.clone(),
+                        txs.iter().map(|x| x.as_str()).collect(),
+                    )
+                    .await;
+                }
+                yield ();
+            }
+        }
+    }
+}
 
 #[named]
 #[rstest]
@@ -30,18 +104,6 @@ use serial_test::serial;
 async fn test_e2e_mint_and_transfer_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
-    use std::str::FromStr;
-
-    use photon_indexer::{
-        api::method::{
-            get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-            get_multiple_compressed_account_proofs::HashList,
-            utils::{Limit, SignatureInfo},
-        },
-        common::typedefs::serializable_signature::SerializableSignature,
-    };
-    use solana_sdk::signature::Signature;
-
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
         name.clone(),
@@ -68,68 +130,109 @@ async fn test_e2e_mint_and_transfer_transactions(
 
     let txs = [mint_tx, transfer_tx, transfer_txn2, transfer_txn3];
 
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
+    let indexing_methodologies = all_indexing_methodologies(
+        name.clone(),
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        &txs,
+    );
+    pin_mut!(indexing_methodologies);
+    while let Some(_) = indexing_methodologies.next().await {
+        for (person, pubkey) in [("bob", bob_pubkey), ("charles", charles_pubkey)] {
+            let accounts = setup
+                .api
+                .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+                    owner: pubkey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+            let hash_list = HashList(
+                accounts
+                    .value
+                    .items
+                    .iter()
+                    .map(|x| x.account.hash.clone())
+                    .collect(),
+            );
+            let proofs = setup
+                .api
+                .get_multiple_compressed_account_proofs(hash_list.clone())
+                .await
+                .unwrap();
 
-    for tx in txs {
-        index_transaction(&setup, tx).await;
-    }
-    for (person, pubkey) in [
-        ("bob", bob_pubkey),
-        ("charles", charles_pubkey),
-    ] {
-        let accounts = setup
-            .api
-            .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
-                owner: pubkey,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
-        let hash_list = HashList(
-            accounts
-                .value
-                .items
-                .iter()
-                .map(|x| x.account.hash.clone())
-                .collect(),
-        );
-        let proofs = setup
-            .api
-            .get_multiple_compressed_account_proofs(hash_list.clone())
-            .await
-            .unwrap();
+            assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
 
-        assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), person), proofs);
+            let mut validity_proof = setup
+                .api
+                .get_validity_proof(GetValidityProofRequest {
+                    hashes: hash_list.0.clone(),
+                    newAddresses: vec![],
+                    newAddressesWithTrees: vec![],
+                })
+                .await
+                .unwrap();
+            // The Gnark prover has some randomness.
+            validity_proof.value.compressedProof = CompressedProof::default();
 
-        let mut validity_proof = setup
-            .api
-            .get_validity_proof(GetValidityProofRequest {
-                hashes: hash_list.0.clone(),
-                newAddresses: vec![],
-                newAddressesWithTrees: vec![],
-            })
-            .await
-            .unwrap();
-        // The Gnark prover has some randomness.
-        validity_proof.value.compressedProof = CompressedProof::default();
+            assert_json_snapshot!(
+                format!("{}-{}-validity-proof", name.clone(), person),
+                validity_proof
+            );
 
-        assert_json_snapshot!(
-            format!("{}-{}-validity-proof", name.clone(), person),
-            validity_proof
-        );
+            let mut cursor = None;
+            let limit = Limit::new(1).unwrap();
+            let mut signatures = Vec::new();
+            loop {
+                let res = setup
+                    .api
+                    .get_compression_signatures_for_token_owner(
+                        GetCompressionSignaturesForTokenOwnerRequest {
+                            owner: pubkey,
+                            cursor,
+                            limit: Some(limit.clone()),
+                        },
+                    )
+                    .await
+                    .unwrap()
+                    .value;
+                signatures.extend(res.items);
+                cursor = res.cursor;
+                if cursor.is_none() {
+                    break;
+                }
+            }
+            assert_json_snapshot!(
+                format!("{}-{}-token-signatures", name.clone(), person),
+                signatures
+            );
+
+            let token_balances = setup
+                .api
+                .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
+                    owner: pubkey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            assert_json_snapshot!(
+                format!("{}-{}-token-balances", name.clone(), person),
+                token_balances
+            );
+        }
+        for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
+            let txn =
+                cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
+            let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
+            // Test get transaction
+            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
+            assert_json_snapshot!(
+                format!("{}-{}-transaction", name.clone(), txn_name),
+                parsed_transaction
+            );
+        }
 
         let mut cursor = None;
         let limit = Limit::new(1).unwrap();
@@ -137,13 +240,10 @@ async fn test_e2e_mint_and_transfer_transactions(
         loop {
             let res = setup
                 .api
-                .get_compression_signatures_for_token_owner(
-                    GetCompressionSignaturesForTokenOwnerRequest {
-                        owner: pubkey,
-                        cursor,
-                        limit: Some(limit.clone()),
-                    },
-                )
+                .get_latest_compression_signatures(GetLatestSignaturesRequest {
+                    cursor,
+                    limit: Some(limit.clone()),
+                })
                 .await
                 .unwrap()
                 .value;
@@ -153,85 +253,37 @@ async fn test_e2e_mint_and_transfer_transactions(
                 break;
             }
         }
-        assert_json_snapshot!(
-            format!("{}-{}-token-signatures", name.clone(), person),
-            signatures
-        );
-
-        let token_balances = setup
-                .api
-                .get_compressed_token_balances_by_owner(photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest {
-                    owner: pubkey,
-                    ..Default::default()
-                })
-                .await
-                .unwrap();
-
-        assert_json_snapshot!(
-            format!("{}-{}-token-balances", name.clone(), person),
-            token_balances
-        );
-    }
-    for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
-        let txn = cached_fetch_transaction(&setup, txn_signature).await;
-        let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
-        // Test get transaction
-        let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
-        assert_json_snapshot!(
-            format!("{}-{}-transaction", name.clone(), txn_name),
-            parsed_transaction
-        );
-    }
-
-    let mut cursor = None;
-    let limit = Limit::new(1).unwrap();
-    let mut signatures = Vec::new();
-    loop {
-        let res = setup
+        let all_signatures = setup
             .api
             .get_latest_compression_signatures(GetLatestSignaturesRequest {
-                cursor,
-                limit: Some(limit.clone()),
+                cursor: None,
+                limit: None,
             })
             .await
-            .unwrap()
-            .value;
-        signatures.extend(res.items);
-        cursor = res.cursor;
-        if cursor.is_none() {
-            break;
-        }
+            .unwrap();
+        assert_eq!(signatures, all_signatures.value.items);
+
+        let all_non_voting_transactions = setup
+            .api
+            .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
+                cursor: None,
+                limit: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            all_non_voting_transactions
+                .value
+                .items
+                .into_iter()
+                .map(Into::<SignatureInfo>::into)
+                .collect::<Vec<_>>(),
+            all_signatures.value.items
+        );
+
+        assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
     }
-    let all_signatures = setup
-        .api
-        .get_latest_compression_signatures(GetLatestSignaturesRequest {
-            cursor: None,
-            limit: None,
-        })
-        .await
-        .unwrap();
-    assert_eq!(signatures, all_signatures.value.items);
-
-    let all_non_voting_transactions = setup
-        .api
-        .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
-            cursor: None,
-            limit: None,
-        })
-        .await
-        .unwrap();
-
-    assert_eq!(
-        all_non_voting_transactions
-            .value
-            .items
-            .into_iter()
-            .map(Into::<SignatureInfo>::into)
-            .collect::<Vec<_>>(),
-        all_signatures.value.items
-    );
-
-    assert_json_snapshot!(format!("{}-latest-signatures", name.clone()), signatures);
 }
 
 #[named]
@@ -265,42 +317,16 @@ async fn test_lamport_transfers(
         Pubkey::try_from("FLkMEA7eA82Cvp7MqamqFKsRN3E2Vfg3Xa8NRyVARq5n").unwrap(),
     );
     let txs = [compress_tx, transfer_tx1, transfer_tx2];
-    let number_of_indexes = [1, 2];
 
-    for individually in [true, false] {
-        reset_tables(&setup.db_conn).await.unwrap();
-        for number in number_of_indexes.iter() {
-            for _ in 0..*number {
-                // HACK: We index a block so that API methods can fetch the current slot.
-                index_block(
-                    &setup.db_conn,
-                    &BlockInfo {
-                        metadata: BlockMetadata {
-                            slot: 0,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                )
-                .await
-                .unwrap();
-
-                match individually {
-                    true => {
-                        for tx in txs.iter() {
-                            index_transaction(&setup, tx).await;
-                        }
-                    }
-                    false => {
-                        index_multiple_transactions(&setup, txs.to_vec()).await;
-                    }
-                }
-            }
-        }
-        for (owner, owner_name) in [
-            (payer_pubkey, "payer"),
-            (receiver_pubkey, "receiver"),
-        ] {
+    let indexing_methodologies = all_indexing_methodologies(
+        name.clone(),
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        &txs,
+    );
+    pin_mut!(indexing_methodologies);
+    while let Some(_) = indexing_methodologies.next().await {
+        for (owner, owner_name) in [(payer_pubkey, "payer"), (receiver_pubkey, "receiver")] {
             let accounts = setup
                 .api
                 .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
@@ -336,9 +362,13 @@ async fn test_lamport_transfers(
                     newAddressesWithTrees: vec![],
                 })
                 .await
-                .unwrap_or_else(|_| panic!("Failed to get validity proof for owner with hash list len: {} {}",
-                    owner_name,
-                    hash_list.0.len()));
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to get validity proof for owner with hash list len: {} {}",
+                        owner_name,
+                        hash_list.0.len()
+                    )
+                });
             // The Gnark prover has some randomness.
             validity_proof.value.compressedProof = CompressedProof::default();
 
@@ -422,7 +452,7 @@ async fn test_index_block_metadata(
     .await;
 
     let slot = 254170887;
-    let block = cached_fetch_block(&setup, slot).await;
+    let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     let filter = blocks::Column::Slot.eq(block.metadata.slot);
 
@@ -453,7 +483,7 @@ async fn test_index_block_metadata(
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot);
 
     // Verify that get_indexer_slot() gets updated a new block is indexed.
-    let block = cached_fetch_block(&setup, slot + 1).await;
+    let block = cached_fetch_block(&setup.name, setup.client.clone(), slot + 1).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot + 1);
 }
@@ -476,7 +506,7 @@ async fn test_get_latest_non_voting_signatures(
     .await;
 
     let slot = 270893658;
-    let block = cached_fetch_block(&setup, slot).await;
+    let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     let all_nonvoting_transactions = setup
         .api
@@ -511,7 +541,7 @@ async fn test_get_latest_non_voting_signatures_with_failures(
     .await;
 
     let slot = 279620356;
-    let block = cached_fetch_block(&setup, slot).await;
+    let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
     index_block(&setup.db_conn, &block).await.unwrap();
     let all_nonvoting_transactions = setup
         .api
@@ -560,69 +590,59 @@ async fn test_nullfiier_and_address_queue_transactions(
         "3qSTxmtPen9HtjEhKGpzYdLvRqEQaxSeLaGeav2GC5c2PU8ZEVq84HSeMCxN3jrt6NWB5ZoWPAGn1dv27y3zyG75";
 
     let txs = [compress_tx, transfer_tx, forester_tx1, forester_tx2];
-
-    // HACK: We index a block so that API methods can fetch the current slot.
-    index_block(
-        &setup.db_conn,
-        &BlockInfo {
-            metadata: BlockMetadata {
-                slot: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    .await
-    .unwrap();
-
-    for tx in txs {
-        index_transaction(&setup, tx).await;
-    }
-
-    let accounts = setup
-        .api
-        .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
-            owner: SerializablePubkey::try_from(user_pubkey).unwrap(),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
-    assert_json_snapshot!(format!("{}-accounts", name.clone()), accounts);
-    let hash_list = HashList(
-        accounts
-            .value
-            .items
-            .iter()
-            .map(|x| x.hash.clone())
-            .collect(),
+    let indexing_methodologies = all_indexing_methodologies(
+        name.clone(),
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        &txs,
     );
-    let proofs = setup
-        .api
-        .get_multiple_compressed_account_proofs(hash_list.clone())
-        .await
-        .unwrap();
-    assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
+    pin_mut!(indexing_methodologies);
+    while let Some(_) = indexing_methodologies.next().await {
+        let accounts = setup
+            .api
+            .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
+                owner: SerializablePubkey::try_from(user_pubkey).unwrap(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_json_snapshot!(format!("{}-accounts", name.clone()), accounts);
+        let hash_list = HashList(
+            accounts
+                .value
+                .items
+                .iter()
+                .map(|x| x.hash.clone())
+                .collect(),
+        );
+        let proofs = setup
+            .api
+            .get_multiple_compressed_account_proofs(hash_list.clone())
+            .await
+            .unwrap();
+        assert_json_snapshot!(format!("{}-proofs", name.clone()), proofs);
 
-    let address = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
+        let address = "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh";
 
-    let address_list = AddressList(vec![SerializablePubkey::try_from(address).unwrap()]);
+        let address_list = AddressList(vec![SerializablePubkey::try_from(address).unwrap()]);
 
-    let proof_v1 = setup
-        .api
-        .get_multiple_new_address_proofs(address_list)
-        .await
-        .unwrap();
+        let proof_v1 = setup
+            .api
+            .get_multiple_new_address_proofs(address_list)
+            .await
+            .unwrap();
 
-    let address_list_with_trees = AddressListWithTrees(vec![AddressWithTree {
-        address: SerializablePubkey::try_from(address).unwrap(),
-        tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
-    }]);
+        let address_list_with_trees = AddressListWithTrees(vec![AddressWithTree {
+            address: SerializablePubkey::try_from(address).unwrap(),
+            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+        }]);
 
-    let proof_v2 = setup
-        .api
-        .get_multiple_new_address_proofs_v2(address_list_with_trees)
-        .await
-        .unwrap();
-    assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof_v1);
-    assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof_v2);
+        let proof_v2 = setup
+            .api
+            .get_multiple_new_address_proofs_v2(address_list_with_trees)
+            .await
+            .unwrap();
+        assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof_v1);
+        assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof_v2);
+    }
 }
