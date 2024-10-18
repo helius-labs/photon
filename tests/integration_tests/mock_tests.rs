@@ -16,7 +16,7 @@ use photon_indexer::api::method::utils::{
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof, validate_tree,
+    get_exclusion_range_with_proof, update_indexed_tree_leaves, validate_tree,
 };
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -1273,5 +1273,70 @@ async fn test_persist_and_verify(
             );
         }
         validate_tree(&setup.db_conn, tree).await;
+    }
+}
+
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_update_indexed_merkle_tree(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    use itertools::Itertools;
+    use photon_indexer::ingester::parser::{
+        indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate,
+    };
+    let name = trim_test_name(function_name!());
+    let setup = setup(name.clone(), db_backend).await;
+    let tree = Pubkey::new_unique();
+    let tree_height = 10;
+    let index = 1;
+    let value = [1; 32];
+    let index_element_1 = RawIndexedElement {
+        value,
+        next_index: 3,
+        next_value: [2; 32],
+        index,
+    };
+    let index_element_2 = RawIndexedElement {
+        value,
+        next_index: 4,
+        next_value: [7; 32],
+        index,
+    };
+    let paramaeters = vec![(index_element_1, 0), (index_element_2, 1)];
+    for permutation in paramaeters.iter().permutations(2) {
+        let txn = setup.db_conn.as_ref().begin().await.unwrap();
+        for (indexed_element, seq) in permutation {
+            let mut indexed_leaf_updates = HashMap::new();
+            indexed_leaf_updates.insert(
+                (tree, index as u64),
+                IndexedTreeLeafUpdate {
+                    tree,
+                    leaf: indexed_element.clone(),
+                    hash: Hash::new_unique().into(), // HACK: We don't care about the hash
+                    seq: *seq as u64,
+                },
+            );
+            update_indexed_tree_leaves(&txn, indexed_leaf_updates, tree_height)
+                .await
+                .unwrap();
+        }
+        txn.commit().await.unwrap();
+        let tree_model = indexed_trees::Entity::find()
+            .filter(
+                indexed_trees::Column::Tree
+                    .eq(tree.to_bytes().to_vec())
+                    .and(indexed_trees::Column::LeafIndex.eq(1)),
+            )
+            .one(setup.db_conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(tree_model.value, index_element_2.value);
+        assert_eq!(tree_model.next_value, index_element_2.next_value);
+        assert_eq!(tree_model.next_index, index_element_2.next_index as i64);
+        assert_eq!(tree_model.seq, 1 as i64);
     }
 }
