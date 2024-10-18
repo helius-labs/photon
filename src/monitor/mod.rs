@@ -7,7 +7,7 @@ use std::{
 };
 
 use cadence_macros::{statsd_count, statsd_gauge};
-use log::error;
+use log::{error, info};
 use once_cell::sync::Lazy;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -28,12 +28,9 @@ use light_concurrent_merkle_tree::copy::ConcurrentMerkleTreeCopy;
 use light_concurrent_merkle_tree::light_hasher::Poseidon;
 use light_sdk::state::MerkleTreeMetadata;
 
-
 use crate::common::typedefs::hash::Hash;
 
-
 use solana_sdk::account::Account as SolanaAccount;
-
 
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
@@ -73,6 +70,7 @@ pub fn continously_monitor_photon(
             if lag < HEALTH_CHECK_SLOT_DISTANCE as u64 {
                 has_been_healthy = true;
             }
+            info!("Indexing lag: {}", lag);
             if has_been_healthy && lag > HEALTH_CHECK_SLOT_DISTANCE as u64 {
                 error!("Indexing lag is too high: {}", lag);
                 continue;

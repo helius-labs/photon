@@ -28,7 +28,7 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
-use crate::ingester::fetchers::poller::get_poller_block_stream;
+use crate::ingester::fetchers::poller::get_block_poller_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
@@ -48,7 +48,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
         let grpc_stream = get_grpc_block_stream(endpoint, auth_header);
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
-            Box::pin(get_poller_block_stream(
+            Box::pin(get_block_poller_stream(
                 rpc_client.clone(),
                 last_indexed_slot,
                 max_concurrent_block_fetches,
@@ -103,7 +103,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 statsd_count!("grpc_timeout", 1);
                             }
                             info!("gRPC stream timed out, enabling RPC block fetching");
-                            rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                            rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                                 rpc_client.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
@@ -120,7 +120,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             statsd_count!("grpc_out_of_order", 1);
                         }
                         info!("Switching to RPC block fetching");
-                        rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                        rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
@@ -132,7 +132,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         metric! {
                             statsd_count!("grpc_stale", 1);
                         }
-                        rpc_poll_stream = Some(Box::pin(get_poller_block_stream(
+                        rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
