@@ -42,6 +42,9 @@ pub async fn persist_state_update(
     txn: &DatabaseTransaction,
     state_update: StateUpdate,
 ) -> Result<(), IngesterError> {
+    use std::time::Instant;
+    let start_time = Instant::now();
+
     if state_update == StateUpdate::default() {
         return Ok(());
     }
@@ -59,17 +62,23 @@ pub async fn persist_state_update(
     let leaf_nullifications_len = leaf_nullifications.len();
     let indexed_merkle_tree_updates_len = indexed_merkle_tree_updates.len();
 
-    debug!(
+    println!(
         "Persisting state update with {} input accounts, {} output accounts",
         in_accounts.len(),
         out_accounts.len()
     );
-    debug!("Persisting output accounts...");
+    println!("Persisting output accounts...");
+    let output_accounts_start = Instant::now();
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
     }
+    println!(
+        "Output accounts persisted in {:?}",
+        output_accounts_start.elapsed()
+    );
 
-    debug!("Persisting spent accounts...");
+    println!("Persisting spent accounts...");
+    let spent_accounts_start = Instant::now();
     for chunk in in_accounts
         .into_iter()
         .collect::<Vec<_>>()
@@ -77,6 +86,10 @@ pub async fn persist_state_update(
     {
         spend_input_accounts(txn, chunk).await?;
     }
+    println!(
+        "Spent accounts persisted in {:?}",
+        spent_accounts_start.elapsed()
+    );
 
     let account_to_transaction = account_transactions
         .iter()
@@ -111,7 +124,8 @@ pub async fn persist_state_update(
 
     leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
 
-    debug!("Persisting state nodes...");
+    println!("Persisting state nodes...");
+    let state_nodes_start = Instant::now();
     for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
         let chunk_vec = chunk.iter().cloned().collect_vec();
         persist_state_tree_history(txn, chunk_vec.clone()).await?;
@@ -122,10 +136,12 @@ pub async fn persist_state_update(
 
         persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT).await?;
     }
+    println!("State nodes persisted in {:?}", state_nodes_start.elapsed());
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
 
-    debug!("Persisting transaction metadatas...");
+    println!("Persisting transaction metadatas...");
+    let transaction_metadatas_start = Instant::now();
     let (compression_transactions, non_compression_transactions): (Vec<_>, Vec<_>) =
         transactions_vec
             .into_iter()
@@ -145,15 +161,29 @@ pub async fn persist_state_update(
     for chunk in transactions_to_persist.chunks(MAX_SQL_INSERTS) {
         persist_transactions(txn, chunk).await?;
     }
+    println!(
+        "Transaction metadatas persisted in {:?}",
+        transaction_metadatas_start.elapsed()
+    );
 
-    debug!("Persisting account transactions...");
+    println!("Persisting account transactions...");
+    let account_transactions_start = Instant::now();
     let account_transactions = account_transactions.into_iter().collect::<Vec<_>>();
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
+    println!(
+        "Account transactions persisted in {:?}",
+        account_transactions_start.elapsed()
+    );
 
-    debug!("Persisting index tree updates...");
+    println!("Persisting index tree updates...");
+    let index_tree_updates_start = Instant::now();
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
+    println!(
+        "Index tree updates persisted in {:?}",
+        index_tree_updates_start.elapsed()
+    );
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
@@ -161,6 +191,11 @@ pub async fn persist_state_update(
         statsd_count!("state_update.leaf_nullifications", leaf_nullifications_len as u64);
         statsd_count!("state_update.indexed_merkle_tree_updates", indexed_merkle_tree_updates_len as u64);
     }
+
+    println!(
+        "Total time to persist state update: {:?}",
+        start_time.elapsed()
+    );
 
     Ok(())
 }
