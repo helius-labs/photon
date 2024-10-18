@@ -17,7 +17,7 @@ use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
 use log::debug;
-use persisted_indexed_merkle_tree::multi_append_fully_specified;
+use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
@@ -153,7 +153,7 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting index tree updates...");
-    multi_append_fully_specified(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
+    update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);

@@ -189,7 +189,7 @@ pub async fn get_exclusion_range_with_proof(
     Ok((range_node.clone(), leaf_proof))
 }
 
-pub async fn multi_append_fully_specified(
+pub async fn update_indexed_tree_leaves(
     txn: &DatabaseTransaction,
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
     tree_height: u32,
@@ -254,8 +254,10 @@ pub async fn multi_append_fully_specified(
                     indexed_trees::Column::LeafIndex,
                 ])
                 .update_columns([
+                    indexed_trees::Column::Value,
                     indexed_trees::Column::NextIndex,
                     indexed_trees::Column::NextValue,
+                    indexed_trees::Column::Seq,
                 ])
                 .to_owned(),
             )
