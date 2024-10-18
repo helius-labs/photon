@@ -1,18 +1,14 @@
 use std::{
-    cmp::max,
-    collections::{BTreeMap, HashSet},
-    num::NonZeroUsize,
+    collections::BTreeMap,
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 
 use async_stream::stream;
 use cadence_macros::statsd_count;
-use futures::{pin_mut, stream::FuturesUnordered, Stream, StreamExt};
-use lru::LruCache;
+use futures::{pin_mut, Stream, StreamExt};
 use solana_client::{
-    client_error, nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig,
-    rpc_request::RpcError,
+    nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
 
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -26,8 +22,6 @@ use crate::{
 };
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
-const RETRIES: u64 = 3;
-const INFINITY: u64 = u64::MAX;
 
 fn get_slot_stream(rpc_client: Arc<RpcClientWithUri>, start_slot: u64) -> impl Stream<Item = u64> {
     stream! {
@@ -73,7 +67,9 @@ pub fn get_block_poller_stream(
             metric! {
                 statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
             }
-            yield blocks_to_index;
+            if !blocks_to_index.is_empty() {
+                yield blocks_to_index;
+            }
         }
     }
 }
