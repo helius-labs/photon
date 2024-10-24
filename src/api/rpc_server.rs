@@ -19,7 +19,8 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
     let middleware = tower::ServiceBuilder::new()
         .layer(cors)
         .layer(ProxyGetRequestLayer::new("/liveness", "liveness")?)
-        .layer(ProxyGetRequestLayer::new("/readiness", "readiness")?);
+        .layer(ProxyGetRequestLayer::new("/readiness", "readiness")?)
+        .layer(ProxyGetRequestLayer::new("/health", "health")?);
     let server = ServerBuilder::default()
         .set_middleware(middleware)
         .build(addr)
@@ -42,6 +43,13 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         let api = rpc_context.as_ref();
         api.readiness().await.map_err(Into::into)
     })?;
+
+    module.register_async_method("health", |_rpc_params, rpc_context| async move {
+        debug!("Checking Health");
+        let api = rpc_context.as_ref();
+        api.health().await.map_err(Into::into)
+    })?;
+
 
     module.register_async_method(
         "getCompressedAccount",
