@@ -118,6 +118,13 @@ impl PhotonApi {
             .map_err(Into::into)
     }
 
+    pub async fn health(&self) -> Result<(), PhotonApiError> {
+        self.get_indexer_health()
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
     pub async fn get_compressed_account(
         &self,
         request: CompressedAccountRequest,
