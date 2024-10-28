@@ -12,8 +12,8 @@ use crate::{
 };
 
 use super::typedefs::block_info::BlockInfo;
-const POST_BACKFILL_FREQUENCY: u64 = 10;
-const PRE_BACKFILL_FREQUENCY: u64 = 10;
+const POST_BACKFILL_FREQUENCY: u64 = 10000;
+const PRE_BACKFILL_FREQUENCY: u64 = 10000;
 
 #[derive(FromQueryResult)]
 pub struct OptionalContextModel {
