@@ -69,8 +69,10 @@ pub fn continously_monitor_photon(
                 has_been_healthy = true;
             }
             info!("Indexing lag: {}", lag);
-            if has_been_healthy && lag > HEALTH_CHECK_SLOT_DISTANCE as u64 {
-                error!("Indexing lag is too hgh: {}", lag);
+            if lag > HEALTH_CHECK_SLOT_DISTANCE as u64 {
+                if has_been_healthy {
+                    error!("Indexing lag is too high: {}", lag);
+                }
             } else {
                 let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
                 validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
