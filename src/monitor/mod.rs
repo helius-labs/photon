@@ -59,8 +59,8 @@ pub fn continously_monitor_photon(
         loop {
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
-            let lag = if last_indexed_slot > latest_slot {
-                last_indexed_slot - latest_slot
+            let lag = if latest_slot > last_indexed_slot {
+                latest_slot - last_indexed_slot
             } else {
                 0
             };
