@@ -11,6 +11,7 @@ use futures::{pin_mut, Stream, StreamExt};
 use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::sleep;
@@ -27,7 +28,6 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use crate::ingester::fetchers::poller::get_block_poller_stream;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
@@ -39,7 +39,7 @@ use crate::monitor::{start_latest_slot_updater, LATEST_SLOT};
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
     auth_header: String,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {

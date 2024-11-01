@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
-use crate::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 use super::method::get_compressed_account::AccountResponse;
@@ -78,14 +78,14 @@ use super::{
 
 pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     prover_url: String,
 }
 
 impl PhotonApi {
     pub fn new(
         db_conn: Arc<DatabaseConnection>,
-        rpc_client: Arc<RpcClientWithUri>,
+        rpc_client: Arc<RpcClient>,
         prover_url: String,
     ) -> Self {
         Self {
@@ -196,7 +196,7 @@ impl PhotonApi {
     }
 
     pub async fn get_indexer_health(&self) -> Result<String, PhotonApiError> {
-        get_indexer_health(self.db_conn.as_ref(), &self.rpc_client.client).await
+        get_indexer_health(self.db_conn.as_ref(), &self.rpc_client).await
     }
 
     pub async fn get_indexer_slot(&self) -> Result<UnsignedInteger, PhotonApiError> {
@@ -249,12 +249,8 @@ impl PhotonApi {
         &self,
         request: GetTransactionRequest,
     ) -> Result<GetTransactionResponse, PhotonApiError> {
-        get_transaction_with_compression_info(
-            self.db_conn.as_ref(),
-            &self.rpc_client.client,
-            request,
-        )
-        .await
+        get_transaction_with_compression_info(self.db_conn.as_ref(), &self.rpc_client, request)
+            .await
     }
 
     pub async fn get_validity_proof(

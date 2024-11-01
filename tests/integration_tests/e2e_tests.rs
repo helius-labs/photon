@@ -6,9 +6,9 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressed
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
-use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::utils::*;
@@ -57,7 +57,7 @@ fn all_valid_permutations(txns: &[&str]) -> Vec<Vec<String>> {
 fn all_indexing_methodologies(
     test_name: String,
     db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     txns: &[&str],
 ) -> impl Stream<Item = ()> {
     let txs_permutations = all_valid_permutations(txns);
