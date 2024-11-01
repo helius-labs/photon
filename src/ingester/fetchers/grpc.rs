@@ -78,6 +78,10 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             panic!("gRPC stream ended unexpectedly");
                         }
                         Either::Right((Some(rpc_blocks), _)) => {
+                            let rpc_blocks: Vec<BlockInfo> = rpc_blocks
+                                .into_iter()
+                                .filter(|b| b.metadata.slot > last_indexed_slot)
+                                .collect();
                             let blocks_len = rpc_blocks.len();
                             let parent_slot = rpc_blocks.first().unwrap().metadata.parent_slot;
                             let last_slot = rpc_blocks.last().unwrap().metadata.slot;
