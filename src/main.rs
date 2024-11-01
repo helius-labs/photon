@@ -8,10 +8,9 @@ use jsonrpsee::server::ServerHandle;
 use log::{error, info};
 use photon_indexer::api::{self, api::PhotonApi};
 
-use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
     fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
-    setup_logging, setup_metrics, setup_pg_pool, LoggingFormat,
+    get_rpc_client, setup_logging, setup_metrics, setup_pg_pool, LoggingFormat,
 };
 
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
@@ -27,6 +26,7 @@ use photon_indexer::monitor::continously_monitor_photon;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
 };
+use solana_client::nonblocking::rpc_client::RpcClient;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
@@ -98,7 +98,7 @@ struct Args {
 
 async fn start_api_server(
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     prover_url: String,
     api_port: u16,
 ) -> ServerHandle {
@@ -168,7 +168,7 @@ async fn setup_database_connection(
 fn continously_index_new_blocks(
     block_stream_config: BlockStreamConfig,
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     last_indexed_slot: u64,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -176,7 +176,7 @@ fn continously_index_new_blocks(
         index_block_stream(
             block_stream,
             db,
-            &rpc_client.client,
+            rpc_client.clone(),
             last_indexed_slot,
             None,
         )
@@ -195,7 +195,8 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
-    let rpc_client = Arc::new(RpcClientWithUri::new(args.rpc_url));
+    let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
+    let rpc_client = get_rpc_client(&args.rpc_url);
 
     if let Some(snapshot_dir) = args.snapshot_dir {
         let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
@@ -219,15 +220,13 @@ async fn main() {
             index_block_stream(
                 block_stream,
                 db_conn.clone(),
-                &rpc_client.client,
+                rpc_client.clone(),
                 last_indexed_slot,
                 Some(last_slot),
             )
             .await;
         }
     }
-
-    let is_rpc_node_local = rpc_client.uri.contains("127.0.0.1");
 
     let (indexer_handle, monitor_handle) = match args.disable_indexing {
         true => {
@@ -249,19 +248,16 @@ async fn main() {
             };
             let last_indexed_slot = match args.start_slot {
                 Some(start_slot) => match start_slot.as_str() {
-                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client.client).await,
+                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
                     _ => {
-                        fetch_block_parent_slot(
-                            &rpc_client.client,
-                            start_slot.parse::<u64>().unwrap(),
-                        )
-                        .await
+                        fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
+                            .await
                     }
                 },
                 None => fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
                     .await
                     .unwrap_or(
-                        get_network_start_slot(&rpc_client.client)
+                        get_network_start_slot(&rpc_client)
                             .await
                             .try_into()
                             .unwrap(),
