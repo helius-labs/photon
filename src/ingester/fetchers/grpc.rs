@@ -82,6 +82,9 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 .into_iter()
                                 .filter(|b| b.metadata.slot > last_indexed_slot)
                                 .collect();
+                            if rpc_blocks.is_empty() {
+                                continue;
+                            }
                             let blocks_len = rpc_blocks.len();
                             let parent_slot = rpc_blocks.first().unwrap().metadata.parent_slot;
                             let last_slot = rpc_blocks.last().unwrap().metadata.slot;
