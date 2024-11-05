@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{env, net::UdpSocket, path::PathBuf, thread::sleep, time::Duration};
+use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, thread::sleep, time::Duration};
 
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
@@ -143,4 +143,12 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
             }
         }
     }
+}
+
+pub fn get_rpc_client(rpc_url: &str) -> Arc<RpcClient> {
+    Arc::new(RpcClient::new_with_timeout_and_commitment(
+        rpc_url.to_string(),
+        Duration::from_secs(90),
+        CommitmentConfig::confirmed(),
+    ))
 }

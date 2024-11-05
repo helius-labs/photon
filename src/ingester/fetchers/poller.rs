@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     sync::{atomic::Ordering, Arc},
-    time::Duration,
 };
 
 use async_stream::stream;
@@ -15,7 +14,6 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
-    common::typedefs::rpc_client_with_uri::RpcClientWithUri,
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
@@ -23,7 +21,7 @@ use crate::{
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 
-fn get_slot_stream(rpc_client: Arc<RpcClientWithUri>, start_slot: u64) -> impl Stream<Item = u64> {
+fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<Item = u64> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
         let mut next_slot_to_fetch = start_slot;
@@ -39,7 +37,7 @@ fn get_slot_stream(rpc_client: Arc<RpcClientWithUri>, start_slot: u64) -> impl S
 }
 
 pub fn get_block_poller_stream(
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
@@ -53,7 +51,7 @@ pub fn get_block_poller_stream(
         let block_stream = slot_stream
             .map(|slot| {
                 let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.uri.clone(), slot).await }
+                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
             })
             .buffer_unordered(max_concurrent_block_fetches);
         pin_mut!(block_stream);
@@ -102,17 +100,12 @@ fn pop_cached_blocks_to_index(
     (blocks, last_indexed_slot)
 }
 
-pub async fn fetch_block_with_infinite_retries(rpc_uri: String, slot: u64) -> Option<BlockInfo> {
-    let mut attempt_counter = 0;
+pub async fn fetch_block_with_infinite_retries(
+    rpc_client: Arc<RpcClient>,
+    slot: u64,
+) -> Option<BlockInfo> {
     loop {
-        let timeout_sec = if attempt_counter <= 1 { 5 } else { 30 };
-        attempt_counter += 1;
-        let client = RpcClient::new_with_timeout_and_commitment(
-            rpc_uri.clone(),
-            Duration::from_secs(timeout_sec),
-            CommitmentConfig::confirmed(),
-        );
-        match client
+        match rpc_client
             .get_block_with_config(
                 slot,
                 RpcBlockConfig {
@@ -144,7 +137,7 @@ pub async fn fetch_block_with_infinite_retries(rpc_uri: String, slot: u64) -> Op
                         return None;
                     }
                 }
-                log::debug!("Failed to fetch block: {}. {}", slot, e.to_string());
+                log::info!("Failed to fetch block: {}. {}", slot, e.to_string());
                 metric! {
                     statsd_count!("rpc_block_fetch_failed", 1);
                 }

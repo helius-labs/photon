@@ -18,9 +18,7 @@ use tokio::{
 
 use crate::{
     api::method::{get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE, utils::Context},
-    common::{
-        fetch_current_slot_with_infinite_retry, typedefs::rpc_client_with_uri::RpcClientWithUri,
-    },
+    common::fetch_current_slot_with_infinite_retry,
     dao::generated::state_trees,
     metric,
 };
@@ -50,7 +48,7 @@ async fn fetch_last_indexed_slot_with_infinite_retry(db: &DatabaseConnection) ->
 // Return a tokio join handle for the monitoring task
 pub fn continously_monitor_photon(
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut has_been_healthy = false;
@@ -59,8 +57,8 @@ pub fn continously_monitor_photon(
         loop {
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
-            let lag = if last_indexed_slot > latest_slot {
-                last_indexed_slot - latest_slot
+            let lag = if latest_slot > last_indexed_slot {
+                latest_slot - last_indexed_slot
             } else {
                 0
             };
@@ -71,24 +69,25 @@ pub fn continously_monitor_photon(
                 has_been_healthy = true;
             }
             info!("Indexing lag: {}", lag);
-            if has_been_healthy && lag > HEALTH_CHECK_SLOT_DISTANCE as u64 {
-                error!("Indexing lag is too high: {}", lag);
-                continue;
+            if lag > HEALTH_CHECK_SLOT_DISTANCE as u64 {
+                if has_been_healthy {
+                    error!("Indexing lag is too high: {}", lag);
+                }
+            } else {
+                let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
+                validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
             }
-
-            let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
-            validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
-            sleep(Duration::from_millis(1000)).await;
+            sleep(Duration::from_millis(5000)).await;
         }
     })
 }
 
-pub async fn update_latest_slot(rpc_client: &RpcClientWithUri) {
-    let slot = fetch_current_slot_with_infinite_retry(&rpc_client.client).await;
+pub async fn update_latest_slot(rpc_client: &RpcClient) {
+    let slot = fetch_current_slot_with_infinite_retry(&rpc_client).await;
     LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
 }
 
-pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClientWithUri>) {
+pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
     if LATEST_SLOT.load(Ordering::SeqCst) != 0 {
         return;
     }
@@ -174,10 +173,10 @@ async fn load_accounts_with_infinite_retry(
     }
 }
 
-async fn validate_tree_roots(rpc_client: &RpcClientWithUri, db_roots: Vec<(Pubkey, Hash)>) {
+async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash)>) {
     for chunk in db_roots.chunks(CHUNK_SIZE) {
         let pubkeys = chunk.iter().map(|(pubkey, _)| pubkey.clone()).collect();
-        let accounts = load_accounts_with_infinite_retry(&rpc_client.client, pubkeys).await;
+        let accounts = load_accounts_with_infinite_retry(rpc_client, pubkeys).await;
         for ((pubkey, db_hash), account) in chunk.iter().zip(accounts) {
             let account_roots = parse_historical_roots(account);
             if !account_roots.contains(db_hash) {

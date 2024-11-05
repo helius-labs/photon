@@ -3,10 +3,8 @@ use std::{env, path::Path, str::FromStr, sync::Mutex};
 use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
-        relative_project_path,
-        typedefs::{
-            account::Account, rpc_client_with_uri::RpcClientWithUri, token_data::TokenData,
-        },
+        get_rpc_client, relative_project_path,
+        typedefs::{account::Account, token_data::TokenData},
     },
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
@@ -83,7 +81,7 @@ pub struct TestSetup {
     pub db_conn: Arc<DatabaseConnection>,
     pub api: PhotonApi,
     pub name: String,
-    pub client: Arc<RpcClientWithUri>,
+    pub client: Arc<RpcClient>,
     pub prover_url: String,
 }
 
@@ -137,7 +135,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
         Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
-    let client = Arc::new(RpcClientWithUri::new(rpc_url.to_string()));
+    let client = get_rpc_client(&rpc_url);
     let prover_url = "http://127.0.0.1:3001".to_string();
     let api = PhotonApi::new(db_conn.clone(), client.clone(), prover_url.clone());
     TestSetup {
@@ -250,7 +248,7 @@ pub async fn fetch_transaction(
 
 pub async fn cached_fetch_transaction(
     test_name: &str,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     tx: &str,
 ) -> EncodedConfirmedTransactionWithStatusMeta {
     let sig = Signature::from_str(tx).unwrap();
@@ -264,7 +262,7 @@ pub async fn cached_fetch_transaction(
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let tx = fetch_transaction(&rpc_client.client, sig).await;
+        let tx = fetch_transaction(&rpc_client, sig).await;
         std::fs::write(file_path, serde_json::to_string(&tx).unwrap()).unwrap();
         tx
     }
@@ -279,7 +277,7 @@ async fn fetch_block(client: &RpcClient, slot: Slot) -> UiConfirmedBlock {
 
 pub async fn cached_fetch_block(
     test_name: &str,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     slot: Slot,
 ) -> BlockInfo {
     let dir = relative_project_path(&format!("tests/data/blocks/{}", test_name));
@@ -292,7 +290,7 @@ pub async fn cached_fetch_block(
         let txn_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&txn_string).unwrap()
     } else {
-        let block = fetch_block(&rpc_client.client, slot).await;
+        let block = fetch_block(&rpc_client, slot).await;
         std::fs::write(file_path, serde_json::to_string(&block).unwrap()).unwrap();
         block
     };
@@ -363,7 +361,7 @@ pub async fn persist_state_update_using_connection(
 pub async fn index_transaction(
     test_name: &str,
     db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     tx: &str,
 ) {
     let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
@@ -376,7 +374,7 @@ pub async fn index_transaction(
 pub async fn index_multiple_transactions(
     test_name: &str,
     db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClientWithUri>,
+    rpc_client: Arc<RpcClient>,
     txs: Vec<&str>,
 ) {
     let mut transactions_infos = Vec::<TransactionInfo>::new();
@@ -406,7 +404,7 @@ pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaA
         let account_string = std::fs::read(file_path).unwrap();
         serde_json::from_slice(&account_string).unwrap()
     } else {
-        let account = fetch_account(&setup.client.client, account).await;
+        let account = fetch_account(&setup.client, account).await;
         std::fs::write(file_path, serde_json::to_string(&account).unwrap()).unwrap();
         account
     }

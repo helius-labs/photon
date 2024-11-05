@@ -1,10 +1,9 @@
 use clap::Parser;
 use futures::StreamExt;
 use log::{error, info};
-use photon_indexer::common::typedefs::rpc_client_with_uri::RpcClientWithUri;
 use photon_indexer::common::{
     fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
-    setup_logging, setup_metrics, LoggingFormat,
+    get_rpc_client, setup_logging, setup_metrics, LoggingFormat,
 };
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::snapshot::{
@@ -203,7 +202,7 @@ async fn main() {
     setup_logging(args.logging_format);
     setup_metrics(args.metrics_endpoint);
 
-    let rpc_client = Arc::new(RpcClientWithUri::new(args.rpc_url.clone()));
+    let rpc_client = get_rpc_client(&args.rpc_url);
 
     let directory_adapter = match (args.snapshot_dir.clone(), args.r2_bucket.clone()) {
         (Some(snapshot_dir), None) => {
@@ -232,20 +231,17 @@ async fn main() {
                     panic!("Cannot specify start_slot when snapshot files are present");
                 }
                 let start_slot = match start_slot.as_str() {
-                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client.client).await,
+                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
                     _ => {
-                        fetch_block_parent_slot(
-                            &rpc_client.client,
-                            start_slot.parse::<u64>().unwrap(),
-                        )
-                        .await
+                        fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
+                            .await
                     }
                 };
                 start_slot
             }
             None => {
                 if snapshot_files.is_empty() {
-                    get_network_start_slot(&rpc_client.client).await
+                    get_network_start_slot(&rpc_client).await
                 } else {
                     snapshot_files.last().unwrap().end_slot
                 }

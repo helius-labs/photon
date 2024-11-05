@@ -49,12 +49,13 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
 pub async fn index_block_stream(
     block_stream: impl Stream<Item = Vec<BlockInfo>>,
     db: Arc<DatabaseConnection>,
-    rpc_client: &RpcClient,
+    rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
     end_slot: Option<u64>,
 ) {
     pin_mut!(block_stream);
-    let current_slot = end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(rpc_client).await);
+    let current_slot =
+        end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(&rpc_client).await);
     let number_of_blocks_to_backfill = if current_slot > last_indexed_slot_at_start {
         current_slot - last_indexed_slot_at_start
     } else {
