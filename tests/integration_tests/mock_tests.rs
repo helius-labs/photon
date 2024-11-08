@@ -591,6 +591,10 @@ async fn test_persist_token_data(
                 break;
             }
         }
+        // Assert that items are in descending balance order
+        for i in 1..items.len() {
+            assert!(items[i].balance.0 <= items[i - 1].balance.0);
+        }
         assert_eq!(items.len(), owner_to_balance.len());
         for item in items {
             assert_eq!(item.balance.0, *owner_to_balance.get(&item.owner).unwrap());
