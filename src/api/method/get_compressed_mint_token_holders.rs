@@ -55,7 +55,7 @@ pub async fn get_compressed_mint_token_holders(
         let bytes = cursor.0;
         let expected_cursor_length = 40;
         let (balance, owner) = if bytes.len() == expected_cursor_length {
-            let (balance, owner) = bytes.split_at(32);
+            let (balance, owner) = bytes.split_at(8);
             (balance, owner)
         } else {
             return Err(PhotonApiError::ValidationError(format!(
