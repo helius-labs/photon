@@ -45,7 +45,7 @@ use serial_test::serial;
 use photon_indexer::common::typedefs::account::AccountData;
 use std::collections::{HashMap, HashSet};
 
-use photon_indexer::common::typedefs::token_data::{self, AccountState, TokenData};
+use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use photon_indexer::api::method::utils::Limit;

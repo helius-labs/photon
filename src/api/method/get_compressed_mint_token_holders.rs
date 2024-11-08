@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
@@ -10,11 +8,8 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::token_owner_balances;
 
-use super::utils::{
-    parse_decimal, Authority, Context, GetCompressedTokenAccountsByAuthorityOptions, Limit,
-    PAGE_LIMIT,
-};
-use super::{super::error::PhotonApiError, utils::fetch_token_accounts};
+use super::super::error::PhotonApiError;
+use super::utils::{parse_decimal, Context, Limit, PAGE_LIMIT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct OwnerBalance {
@@ -58,18 +53,15 @@ pub async fn get_compressed_mint_token_holders(
     if let Some(cursor) = cursor {
         let bytes = cursor.0;
         let expected_cursor_length = 40;
-        let (balance, owner) = match bytes.len() {
-            expected_cursor_length => {
-                let (balance, owner) = bytes.split_at(expected_cursor_length);
-                (balance, owner)
-            }
-            _ => {
-                return Err(PhotonApiError::ValidationError(format!(
-                    "Invalid cursor length. Expected {}. Received {}.",
-                    expected_cursor_length,
-                    bytes.len()
-                )));
-            }
+        let (balance, owner) = if bytes.len() == expected_cursor_length {
+            let (balance, owner) = bytes.split_at(expected_cursor_length);
+            (balance, owner)
+        } else {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid cursor length. Expected {}. Received {}.",
+                expected_cursor_length,
+                bytes.len()
+            )));
         };
         let balance = LittleEndian::read_u64(&balance);
         filter = filter.and(

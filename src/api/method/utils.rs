@@ -11,7 +11,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Statement, Value,
+    QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use solana_sdk::signature::Signature;

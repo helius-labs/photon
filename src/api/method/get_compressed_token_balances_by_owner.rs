@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
@@ -10,10 +9,10 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::token_owner_balances;
 
 use super::utils::{
-    parse_decimal, Authority, Context, GetCompressedTokenAccountsByAuthorityOptions, Limit,
+    parse_decimal, Context, Limit,
     PAGE_LIMIT,
 };
-use super::{super::error::PhotonApiError, utils::fetch_token_accounts};
+use super::super::error::PhotonApiError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TokenBalance {
