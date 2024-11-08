@@ -466,15 +466,6 @@ async fn test_persist_token_data(
             .unwrap()
             .value;
 
-        for token_account in res.items.iter() {
-            let hash = token_account.account.hash.clone();
-            let mint = token_account.token_data.mint.clone();
-            println!("Hash: {:?}", hash);
-            println!("Hash bytes: {:?}", hash.to_vec());
-            println!("Mint: {:?}", mint);
-            println!("Mint bytes: {:?}", mint.to_bytes_vec());
-        }
-
         let mut paginated_res = Vec::new();
         let mut cursor = None;
         loop {
