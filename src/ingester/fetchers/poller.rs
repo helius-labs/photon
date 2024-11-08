@@ -137,7 +137,6 @@ pub async fn fetch_block_with_infinite_retries(
                         return None;
                     }
                 }
-                log::info!("Failed to fetch block: {}. {}", slot, e.to_string());
                 metric! {
                     statsd_count!("rpc_block_fetch_failed", 1);
                 }
