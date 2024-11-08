@@ -50,11 +50,12 @@ pub async fn get_compressed_mint_token_holders(
         limit,
     } = request;
     let mut filter = token_owner_balances::Column::Mint.eq::<Vec<u8>>(mint.into());
+
     if let Some(cursor) = cursor {
         let bytes = cursor.0;
         let expected_cursor_length = 40;
         let (balance, owner) = if bytes.len() == expected_cursor_length {
-            let (balance, owner) = bytes.split_at(expected_cursor_length);
+            let (balance, owner) = bytes.split_at(32);
             (balance, owner)
         } else {
             return Err(PhotonApiError::ValidationError(format!(
@@ -64,11 +65,12 @@ pub async fn get_compressed_mint_token_holders(
             )));
         };
         let balance = LittleEndian::read_u64(&balance);
+
         filter = filter.and(
             token_owner_balances::Column::Amount.lt(balance).or(
                 token_owner_balances::Column::Amount
                     .eq(balance)
-                    .and(token_owner_balances::Column::Owner.gt::<Vec<u8>>(owner.into())),
+                    .and(token_owner_balances::Column::Owner.lt::<Vec<u8>>(owner.into())),
             ),
         );
     }
@@ -77,7 +79,7 @@ pub async fn get_compressed_mint_token_holders(
     let items = token_owner_balances::Entity::find()
         .filter(filter)
         .order_by_desc(token_owner_balances::Column::Amount)
-        .order_by_asc(token_owner_balances::Column::Mint)
+        .order_by_desc(token_owner_balances::Column::Owner)
         .limit(limit)
         .all(conn)
         .await?

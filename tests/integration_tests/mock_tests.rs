@@ -577,7 +577,7 @@ async fn test_persist_token_data(
                 .api
                 .get_compressed_mint_token_holders(GetCompressedMintTokenHoldersRequest {
                     mint: mint.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(100).unwrap()),
+                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
                     cursor,
                 })
                 .await
