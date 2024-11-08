@@ -5,6 +5,9 @@ use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
+use crate::api::method::get_compressed_mint_token_holders::OwnerBalance;
+use crate::api::method::get_compressed_mint_token_holders::OwnerBalanceList;
+use crate::api::method::get_compressed_mint_token_holders::OwnerBalancesResponse;
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
@@ -102,6 +105,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     Memcmp,
     AddressListWithTrees,
     AddressWithTree,
+    OwnerBalance,
+    OwnerBalanceList,
+    OwnerBalancesResponse,
 )))]
 struct ApiDoc;
 

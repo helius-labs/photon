@@ -325,6 +325,8 @@ async fn test_multiple_accounts(
 async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use photon_indexer::api::method::get_compressed_mint_token_holders::GetCompressedMintTokenHoldersRequest;
+
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
     let mint1 = SerializablePubkey::new_unique();
@@ -375,7 +377,26 @@ async fn test_persist_token_data(
         state: AccountState::frozen,
         tlv: None,
     };
-    let all_token_data = vec![token_data1, token_data2, token_data3];
+    let token_data4 = TokenData {
+        mint: mint1,
+        owner: owner2,
+        amount: UnsignedInteger(4),
+        delegate: Some(delegate1),
+        state: AccountState::frozen,
+        tlv: None,
+    };
+    let all_token_data = vec![token_data1, token_data2, token_data3, token_data4];
+
+    let mut mint_to_owner_to_balance = HashMap::new();
+    for token_data in all_token_data.clone() {
+        let mint = token_data.mint;
+        let owner = token_data.owner;
+        let mint_owner_balances = mint_to_owner_to_balance
+            .entry(mint)
+            .or_insert(HashMap::new());
+        let balance = mint_owner_balances.entry(owner).or_insert(0);
+        *balance += token_data.amount.0;
+    }
 
     let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
         .await
@@ -429,7 +450,7 @@ async fn test_persist_token_data(
         .value;
     verify_responses_match_tlv_data(res.clone(), owner_tlv);
 
-    for owner in [owner1, owner2] {
+    for owner in [owner2] {
         let owner_tlv = all_token_data
             .iter()
             .filter(|x| x.owner == owner)
@@ -545,6 +566,35 @@ async fn test_persist_token_data(
         }
         assert_eq!(paginated_res, res.items);
         verify_responses_match_tlv_data(res, delegate_tlv)
+    }
+
+    for (mint, owner_to_balance) in mint_to_owner_to_balance.iter() {
+        let mut items = Vec::new();
+
+        let mut cursor: Option<Base58String> = None;
+        loop {
+            let res = setup
+                .api
+                .get_compressed_mint_token_holders(GetCompressedMintTokenHoldersRequest {
+                    mint: mint.clone(),
+                    limit: Some(photon_indexer::api::method::utils::Limit::new(100).unwrap()),
+                    cursor,
+                })
+                .await
+                .unwrap()
+                .value;
+            for item in res.items.clone() {
+                items.push(item);
+            }
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(items.len(), owner_to_balance.len());
+        for item in items {
+            assert_eq!(item.balance.0, *owner_to_balance.get(&item.owner).unwrap());
+        }
     }
 }
 

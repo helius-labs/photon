@@ -271,9 +271,14 @@ pub async fn fetch_token_accounts(
             )));
         }
         let (mint, hash) = bytes.split_at(32);
-        filter = filter
-            .and(token_accounts::Column::Mint.gte::<Vec<u8>>(mint.into()))
-            .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into()));
+
+        filter = filter.and(
+            token_accounts::Column::Mint.gt::<Vec<u8>>(mint.into()).or(
+                token_accounts::Column::Mint
+                    .eq::<Vec<u8>>(mint.into())
+                    .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into())),
+            ),
+        );
     }
     if let Some(l) = options.limit {
         limit = l.value();
@@ -282,9 +287,11 @@ pub async fn fetch_token_accounts(
     let items = token_accounts::Entity::find()
         .find_also_related(accounts::Entity)
         .filter(filter)
-        .order_by_asc(token_accounts::Column::Mint)
-        .order_by_asc(token_accounts::Column::Hash)
+        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
+        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .limit(limit)
+        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
+        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .all(conn)
         .await?
         .drain(..)
@@ -572,15 +579,14 @@ fn compute_cursor_filter(
             let signature = Signature::try_from(signature).map_err(|_| {
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
-            let (slot_arg_index, signature_arg_index) =
-                (num_preceding_args + 1, num_preceding_args + 2);
 
             Ok((
                 format!(
-                    "AND transactions.slot <= ${} AND transactions.signature < ${}",
-                    slot_arg_index, signature_arg_index
+                    "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
+                    num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
                 ),
                 vec![
+                    slot.into(),
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
                 ],
