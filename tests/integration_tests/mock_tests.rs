@@ -334,6 +334,8 @@ async fn test_persist_token_data(
     let mint3 = SerializablePubkey::new_unique();
     let owner1 = SerializablePubkey::new_unique();
     let owner2 = SerializablePubkey::new_unique();
+    let owner3 = SerializablePubkey::new_unique();
+    let owner4 = SerializablePubkey::new_unique();
     let delegate1 = SerializablePubkey::new_unique();
     let delegate2 = SerializablePubkey::new_unique();
 
@@ -385,10 +387,56 @@ async fn test_persist_token_data(
         state: AccountState::frozen,
         tlv: None,
     };
-    let all_token_data = vec![token_data1, token_data2, token_data3, token_data4];
+    let token_data5 = TokenData {
+        mint: mint1,
+        owner: owner3,
+        amount: UnsignedInteger(4),
+        delegate: Some(delegate1),
+        state: AccountState::frozen,
+        tlv: None,
+    };
+    let token_data6 = TokenData {
+        mint: mint1,
+        owner: owner4,
+        amount: UnsignedInteger(6),
+        delegate: Some(delegate1),
+        state: AccountState::frozen,
+        tlv: None,
+    };
+    let token_data7 = TokenData {
+        mint: mint1,
+        owner: owner2,
+        amount: UnsignedInteger(4),
+        delegate: Some(delegate1),
+        state: AccountState::frozen,
+        tlv: None,
+    };
+    let all_token_data = vec![
+        token_data1,
+        token_data2,
+        token_data3,
+        token_data4,
+        token_data5,
+        token_data6,
+        token_data7,
+    ];
+    let hashes = all_token_data
+        .iter()
+        .map(|_| Hash::new_unique())
+        .collect::<HashSet<Hash>>();
+
+    let all_token_data: Vec<TokenDataWithHash> = all_token_data
+        .iter()
+        .zip(hashes.iter())
+        .map(|(token_data, hash)| TokenDataWithHash {
+            token_data: token_data.clone(),
+            hash: hash.clone(),
+        })
+        .collect();
 
     let mut mint_to_owner_to_balance = HashMap::new();
     for token_data in all_token_data.clone() {
+        let token_data = token_data.token_data;
         let mint = token_data.mint;
         let owner = token_data.owner;
         let mint_owner_balances = mint_to_owner_to_balance
@@ -406,7 +454,8 @@ async fn test_persist_token_data(
 
     for (i, token_data) in all_token_data.iter().enumerate() {
         let slot = 11;
-        let hash = Hash::new_unique();
+        let hash = token_data.hash.clone();
+        let token_data = token_data.token_data.clone();
         let model = accounts::ActiveModel {
             hash: Set(hash.clone().into()),
             address: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
@@ -434,7 +483,7 @@ async fn test_persist_token_data(
 
     let owner_tlv = all_token_data
         .iter()
-        .filter(|x| x.owner == owner1 && x.mint == mint1)
+        .filter(|x| x.token_data.owner == owner1 && x.token_data.mint == mint1)
         .map(Clone::clone)
         .collect();
 
@@ -448,12 +497,12 @@ async fn test_persist_token_data(
         .await
         .unwrap()
         .value;
-    verify_responses_match_tlv_data(res.clone(), owner_tlv);
+    verify_response_matches_input_token_data(res.clone(), owner_tlv);
 
     for owner in [owner2] {
         let owner_tlv = all_token_data
             .iter()
-            .filter(|x| x.owner == owner)
+            .filter(|x| x.token_data.owner == owner)
             .map(Clone::clone)
             .collect();
         let res = setup
@@ -512,7 +561,7 @@ async fn test_persist_token_data(
             assert_eq!(res.token_balances[0].balance.0, *balance);
         }
 
-        verify_responses_match_tlv_data(res.clone(), owner_tlv);
+        verify_response_matches_input_token_data(res.clone(), owner_tlv);
         for token_account in res.items {
             let request = CompressedAccountRequest {
                 address: None,
@@ -532,7 +581,7 @@ async fn test_persist_token_data(
         let delegate_tlv = all_token_data
             .clone()
             .into_iter()
-            .filter(|x| x.delegate == Some(delegate))
+            .filter(|x| x.token_data.delegate == Some(delegate))
             .collect();
         let res = setup
             .api
@@ -565,7 +614,7 @@ async fn test_persist_token_data(
             }
         }
         assert_eq!(paginated_res, res.items);
-        verify_responses_match_tlv_data(res, delegate_tlv)
+        verify_response_matches_input_token_data(res, delegate_tlv);
     }
 
     for (mint, owner_to_balance) in mint_to_owner_to_balance.iter() {
