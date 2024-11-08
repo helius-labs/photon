@@ -1,5 +1,8 @@
 use std::{env, path::Path, str::FromStr, sync::Mutex};
 
+use once_cell::sync::Lazy;
+use photon_indexer::common::typedefs::hash::Hash;
+use photon_indexer::migration::{Migrator, MigratorTrait};
 use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
@@ -12,9 +15,6 @@ use photon_indexer::{
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
 };
-
-use once_cell::sync::Lazy;
-use photon_indexer::migration::{Migrator, MigratorTrait};
 pub use sea_orm::DatabaseBackend;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbBackend, DbErr, ExecResult, SqlxPostgresConnector,
@@ -306,20 +306,27 @@ pub fn trim_test_name(name: &str) -> String {
         .to_string()
 }
 
-fn order_token_datas(mut token_datas: Vec<TokenData>) -> Vec<TokenData> {
-    let mut without_duplicates = token_datas.clone();
-    without_duplicates.dedup_by(|a, b| a.mint == b.mint);
-    if without_duplicates.len() != token_datas.len() {
-        panic!(
-            "Duplicate mint in token_datas: {:?}. Need hashes to further order token tlv data.",
-            token_datas
-        );
-    }
-    token_datas.sort_by(|a, b| a.mint.0.cmp(&b.mint.0));
+#[derive(Clone, Debug)]
+pub struct TokenDataWithHash {
+    pub token_data: TokenData,
+    pub hash: Hash,
+}
+
+fn order_token_datas(mut token_datas: Vec<TokenDataWithHash>) -> Vec<TokenDataWithHash> {
+    token_datas.sort_by(|a, b| {
+        a.token_data
+            .mint
+            .0
+            .cmp(&b.token_data.mint.0)
+            .then_with(|| a.hash.to_vec().cmp(&b.hash.to_vec()))
+    });
     token_datas
 }
 
-pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<TokenData>) {
+pub fn verify_response_matches_input_token_data(
+    response: TokenAccountList,
+    tlvs: Vec<TokenDataWithHash>,
+) {
     if response.items.len() != tlvs.len() {
         panic!(
             "Mismatch in number of accounts. Expected: {}, Actual: {}",
@@ -331,10 +338,13 @@ pub fn verify_responses_match_tlv_data(response: TokenAccountList, tlvs: Vec<Tok
     let token_accounts = response.items;
     for (account, tlv) in token_accounts.iter().zip(order_token_datas(tlvs).iter()) {
         let account = account.clone();
-        assert_eq!(account.token_data.mint, tlv.mint);
-        assert_eq!(account.token_data.owner, tlv.owner);
-        assert_eq!(account.token_data.amount, tlv.amount);
-        assert_eq!(account.token_data.delegate, tlv.delegate.map(Into::into));
+        assert_eq!(account.token_data.mint, tlv.token_data.mint);
+        assert_eq!(account.token_data.owner, tlv.token_data.owner);
+        assert_eq!(account.token_data.amount, tlv.token_data.amount);
+        assert_eq!(
+            account.token_data.delegate,
+            tlv.token_data.delegate.map(Into::into)
+        );
     }
 }
 pub fn assert_account_response_list_matches_input(
