@@ -580,22 +580,9 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
-
             Ok((
                 format!(
-                    "(transactions.slot < ${}) OR (transactions.slot = ${} AND (transactions.signature < ${})",
-                    num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
-                ),
-                vec![
-                    slot.into(),
-                    slot.into(),
-                    Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
-                ],
-            ))
-
-            Ok((
-                format!(
-                    "(transactions.slot < ${}) OR (transactions.slot = ${} AND (transactions.signature < ${})",
+                    "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
                     num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
                 ),
                 vec![
