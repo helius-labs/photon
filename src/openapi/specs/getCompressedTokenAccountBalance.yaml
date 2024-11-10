@@ -6,9 +6,9 @@ info:
     name: Apache-2.0
   version: 0.45.0
 servers:
-- url: https://devnet.helius-rpc.com?api-key=<api_key>
+- url: https://mainnet.helius-rpc.com
 paths:
-  /:
+  /?api-key=<api_key>:
     summary: getCompressedTokenAccountBalance
     post:
       requestBody:
