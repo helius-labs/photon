@@ -323,7 +323,7 @@ pub fn update_docs(is_test: bool) {
         path_item.summary = Some(spec.name.clone());
         doc.paths.paths.insert("/".to_string(), path_item);
         doc.servers = Some(vec![ServerBuilder::new()
-            .url("https://devnet.helius-rpc.com?api-key=<api_key>".to_string())
+            .url("https://mainnet.helius-rpc.com?api-key=<api_key>".to_string())
             .build()]);
 
         let yaml = doc.to_yaml().unwrap();

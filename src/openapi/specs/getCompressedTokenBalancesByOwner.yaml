@@ -4,11 +4,11 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.45.0
+  version: 0.47.0
 servers:
-- url: https://mainnet.helius-rpc.com
+- url: https://mainnet.helius-rpc.com?api-key=<api_key>
 paths:
-  /?api-key=<api_key>:
+  /:
     summary: getCompressedTokenBalancesByOwner
     post:
       requestBody:
@@ -115,8 +115,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
-      example: 11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo
+      default: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
+      example: 11111113pNDtm61yGF8j2ycAwLEPsuWQXobye5qDR
     TokenBalance:
       type: object
       required:
