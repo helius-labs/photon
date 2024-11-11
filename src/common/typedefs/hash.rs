@@ -47,7 +47,9 @@ impl<'__s> ToSchema<'__s> for Hash {
                 .schema_type(SchemaType::String)
                 .description(Some("A 32-byte hash represented as a base58 string."))
                 .example(Some(serde_json::Value::String(
-                    Hash::new_unique().to_base58(),
+                    Hash::try_from("11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP")
+                        .unwrap()
+                        .to_base58(),
                 )))
                 .build(),
         );
