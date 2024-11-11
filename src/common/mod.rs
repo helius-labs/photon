@@ -43,10 +43,7 @@ pub fn setup_metrics(metrics_endpoint: Option<String>) {
         let udp_sink = BufferedUdpMetricSink::from((host, port), socket).unwrap();
         let queuing_sink = QueuingMetricSink::from(udp_sink);
         let builder = StatsdClient::builder("photon", queuing_sink);
-        let client = builder
-            .with_tag("env", env)
-            .with_tag("version", env!("CARGO_PKG_VERSION"))
-            .build();
+        let client = builder.with_tag("env", env).build();
         set_global_default(client);
     }
 }
