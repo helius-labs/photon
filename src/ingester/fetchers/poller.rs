@@ -86,16 +86,12 @@ fn pop_cached_blocks_to_index(
         if block.metadata.parent_slot == last_indexed_slot {
             last_indexed_slot = block.metadata.slot;
             blocks.push(block.clone());
+            block_cache.remove(&min_slot);
+        } else if min_slot < last_indexed_slot {
+            block_cache.remove(&min_slot);
         } else {
-            if min_slot < last_indexed_slot {
-                panic!(
-                    "Block is smaller than last indexed slot: {} < {}",
-                    min_slot, last_indexed_slot
-                );
-            }
             break;
         }
-        block_cache.remove(&min_slot);
     }
     (blocks, last_indexed_slot)
 }
