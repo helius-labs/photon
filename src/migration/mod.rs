@@ -5,6 +5,7 @@ mod m20240623_000002_init;
 mod m20240624_000003_init;
 mod m20240807_000004_init;
 mod m20240914_000005_init;
+mod m20241008_000006_init;
 mod model;
 
 pub struct Migrator;
@@ -18,6 +19,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240624_000003_init::Migration),
             Box::new(m20240807_000004_init::Migration),
             Box::new(m20240914_000005_init::Migration),
+            Box::new(m20241008_000006_init::Migration),
         ]
     }
 }

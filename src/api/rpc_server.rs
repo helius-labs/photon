@@ -299,6 +299,16 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
                 .map_err(Into::into)
         },
     )?;
+    module.register_async_method(
+        "getCompressedMintTokenHolders",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_mint_token_holders(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
 
     Ok(module)
 }
