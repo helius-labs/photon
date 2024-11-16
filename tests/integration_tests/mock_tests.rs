@@ -554,11 +554,19 @@ async fn test_persist_token_data(
             };
             let res = setup
                 .api
-                .get_compressed_token_balances_by_owner(request)
+                .get_compressed_token_balances_by_owner(request.clone())
                 .await
                 .unwrap()
                 .value;
             assert_eq!(res.token_balances[0].balance.0, *balance);
+
+            let res_v2 = setup
+                .api
+                .get_compressed_token_balances_by_owner_v2(request)
+                .await
+                .unwrap()
+                .value;
+            assert_eq!(res_v2.items, res.token_balances);
         }
 
         verify_response_matches_input_token_data(res.clone(), owner_tlv);

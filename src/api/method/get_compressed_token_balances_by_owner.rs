@@ -1,4 +1,3 @@
-
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -8,11 +7,8 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::token_owner_balances;
 
-use super::utils::{
-    parse_decimal, Context, Limit,
-    PAGE_LIMIT,
-};
 use super::super::error::PhotonApiError;
+use super::utils::{parse_decimal, Context, Limit, PAGE_LIMIT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TokenBalance {
@@ -103,6 +99,38 @@ pub async fn get_compressed_token_balances_by_owner(
     Ok(TokenBalancesResponse {
         value: TokenBalanceList {
             token_balances: items,
+            cursor,
+        },
+        context,
+    })
+}
+
+// We do not use generics to simplify documentation generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenBalancesResponseV2 {
+    pub context: Context,
+    pub value: TokenBalanceListV2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct TokenBalanceListV2 {
+    pub items: Vec<TokenBalance>,
+    pub cursor: Option<Base58String>,
+}
+
+pub async fn get_compressed_token_balances_by_owner_v2(
+    conn: &DatabaseConnection,
+    request: GetCompressedTokenBalancesByOwnerRequest,
+) -> Result<TokenBalancesResponseV2, PhotonApiError> {
+    let response = get_compressed_token_balances_by_owner(conn, request).await?;
+    let context = response.context;
+    let token_balance_list = response.value;
+    let token_balances = token_balance_list.token_balances;
+    let cursor = token_balance_list.cursor;
+    Ok(TokenBalancesResponseV2 {
+        value: TokenBalanceListV2 {
+            items: token_balances,
             cursor,
         },
         context,
