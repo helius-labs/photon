@@ -13,26 +13,6 @@ version = "0.49.0"
 name = "photon"
 path = "src/main.rs"
 
-[[bin]]
-name = "photon-migration"
-path = "src/migration/main.rs"
-
-[[bin]]
-name = "photon-openapi"
-path = "src/openapi/main.rs"
-
-[[bin]]
-name = "photon-snapshotter"
-path = "src/snapshot/snapshotter/main.rs"
-
-[[bin]]
-name = "photon-snapshot-loader"
-path = "src/snapshot/loader/main.rs"
-
-[[bin]]
-name = "photon-tree-validator"
-path = "src/tools/tree_validator/main.rs"
-
 [dependencies]
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"

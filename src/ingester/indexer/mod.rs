@@ -6,10 +6,7 @@ use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
-use crate::{
-    common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
-    ingester::index_block_batch_with_infinite_retries,
-};
+use crate::common::fetch_current_slot_with_infinite_retry;
 
 use super::typedefs::block_info::BlockInfo;
 const POST_BACKFILL_FREQUENCY: u64 = 10;
@@ -21,41 +18,13 @@ pub struct OptionalContextModel {
     pub slot: Option<i64>,
 }
 
-pub async fn fetch_last_indexed_slot_with_infinite_retry(
-    db_conn: &DatabaseConnection,
-) -> Option<i64> {
-    loop {
-        let context = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
-            .into_model::<OptionalContextModel>()
-            .one(db_conn)
-            .await;
-
-        match context {
-            Ok(context) => {
-                return context
-                    .expect("Always expected maximum query to return a result")
-                    .slot
-            }
-            Err(e) => {
-                log::error!("Failed to fetch current slot from database: {}", e);
-                sleep(Duration::from_secs(5));
-            }
-        }
-    }
-}
-
 pub async fn index_block_stream(
     block_stream: impl Stream<Item = Vec<BlockInfo>>,
-    db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
-    end_slot: Option<u64>,
 ) {
     pin_mut!(block_stream);
-    let current_slot =
-        end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(&rpc_client).await);
+    let current_slot = fetch_current_slot_with_infinite_retry(&rpc_client).await;
     let number_of_blocks_to_backfill = if current_slot > last_indexed_slot_at_start {
         current_slot - last_indexed_slot_at_start
     } else {
@@ -71,7 +40,6 @@ pub async fn index_block_stream(
 
     while let Some(blocks) = block_stream.next().await {
         let last_slot_in_block = blocks.last().unwrap().metadata.slot;
-        index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
 
         for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
             let blocks_indexed = slot - last_indexed_slot_at_start;

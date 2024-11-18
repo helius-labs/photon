@@ -26,7 +26,6 @@ use yellowstone_grpc_proto::geyser::{
 };
 use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
-use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::fetchers::poller::get_block_poller_stream;
 use crate::ingester::typedefs::block_info::{
@@ -34,7 +33,7 @@ use crate::ingester::typedefs::block_info::{
 };
 
 use crate::metric;
-use crate::monitor::{start_latest_slot_updater, LATEST_SLOT};
+use crate::monitor::{start_latest_slot_updater, HEALTH_CHECK_SLOT_DISTANCE, LATEST_SLOT};
 
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
@@ -154,7 +153,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
 }
 
 fn is_healthy(slot: u64) -> bool {
-    (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE
+    (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE as i64
 }
 
 fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<Item = BlockInfo> {
