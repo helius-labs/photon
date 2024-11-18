@@ -12,8 +12,6 @@ use tokio::time::interval;
 
 use crate::common::fetch_current_slot_with_infinite_retry;
 
-const CHUNK_SIZE: usize = 100;
-
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 pub const HEALTH_CHECK_SLOT_DISTANCE: u64 = 20;
 
