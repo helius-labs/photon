@@ -1,27 +1,14 @@
-use std::fs::File;
 
-use async_std::stream::StreamExt;
-use async_stream::stream;
 use clap::Parser;
-use futures::pin_mut;
-use jsonrpsee::server::ServerHandle;
-use log::{error, info};
 
 use photon_indexer::common::{
-    fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
-    get_rpc_client, setup_logging, setup_metrics, setup_pg_pool, LoggingFormat,
+    fetch_current_slot_with_infinite_retry,
+    get_rpc_client, setup_logging, setup_metrics, LoggingFormat,
 };
 
 use photon_indexer::ingester::fetchers::BlockStreamConfig;
 use photon_indexer::ingester::indexer::index_block_stream;
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    SqlitePool,
-};
-use std::env::temp_dir;
-use std::sync::Arc;
 
 /// Photon: a compressed transaction Solana indexer
 #[derive(Parser, Debug)]
