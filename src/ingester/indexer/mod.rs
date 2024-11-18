@@ -1,9 +1,9 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::sync::Arc;
 
 use async_std::stream::StreamExt;
 use futures::{pin_mut, Stream};
 use log::info;
-use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
+use sea_orm::FromQueryResult;
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::common::fetch_current_slot_with_infinite_retry;

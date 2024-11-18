@@ -6,20 +6,12 @@ use std::{
     time::Duration,
 };
 
-use cadence_macros::{statsd_count, statsd_gauge};
-use log::{error, info};
 use once_cell::sync::Lazy;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::{
-    task::JoinHandle,
-    time::{interval, sleep},
-};
+use tokio::time::interval;
 
-use crate::{common::fetch_current_slot_with_infinite_retry, metric};
+use crate::common::fetch_current_slot_with_infinite_retry;
 
-use solana_sdk::pubkey::Pubkey;
-use std::mem;
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
