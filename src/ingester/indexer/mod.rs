@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_std::stream::StreamExt;
 use futures::{pin_mut, Stream};
 use log::info;
 use sea_orm::FromQueryResult;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use sqlx::types::chrono::Utc;
 
 use crate::common::fetch_current_slot_with_infinite_retry;
 
@@ -37,11 +38,29 @@ pub async fn index_block_stream(
     let mut last_indexed_slot = last_indexed_slot_at_start;
 
     let mut finished_backfill_slot = None;
+    let mut slot_latencies = Vec::new();
 
     while let Some(blocks) = block_stream.next().await {
-        let last_slot_in_block = blocks.last().unwrap().metadata.slot;
+        let last_slot_in_block_batch = blocks.last().unwrap().metadata.slot;
 
-        for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
+        // Get utc time now in seconds
+        let now = Utc::now().timestamp_millis();
+        for block in blocks {
+            let block_time = block.metadata.block_time * 1000; // Convert seconds to milliseconds
+            slot_latencies.push(now - block_time);
+            let num_latencies_to_track = 30;
+            if slot_latencies.len() > num_latencies_to_track {
+                slot_latencies.remove(0);
+            }
+            let avg_latency = slot_latencies.iter().sum::<i64>() / slot_latencies.len() as i64;
+            let duration = Duration::from_millis(avg_latency as u64);
+            info!(
+                "Average latency: {:?} for the last {} blocks",
+                duration, num_latencies_to_track
+            );
+        }
+
+        for slot in (last_indexed_slot + 1)..(last_slot_in_block_batch + 1) {
             let blocks_indexed = slot - last_indexed_slot_at_start;
             if blocks_indexed < number_of_blocks_to_backfill {
                 if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
