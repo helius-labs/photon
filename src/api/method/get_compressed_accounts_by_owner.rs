@@ -17,7 +17,7 @@ use super::utils::parse_account_model;
 
 // Max filters allowed constant value of 5
 const MAX_FILTERS: usize = 5;
-const MAX_CHILD_ACCOUNTS_WITH_FILTERS: usize = 100_000;
+const MAX_CHILD_ACCOUNTS_WITH_FILTERS: usize = 1_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
