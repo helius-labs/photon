@@ -657,6 +657,29 @@ async fn test_persist_token_data(
             assert_eq!(item.balance.0, *owner_to_balance.get(&item.owner).unwrap());
         }
     }
+
+    let owner_to_balances = HashMap::new();
+    for (owner, balances) in mint_to_owner_to_balance.into_iter() {
+        for (mint, balance) in balances.into_iter() {
+            owner_to_balances
+                .entry(owner)
+                .or_insert(HashMap::new())
+                .insert(mint, balance);
+        }
+    }
+    for owner in owner_to_balances.keys() {
+        let request = GetCompressedTokenBalancesByOwnerRequest {
+            owner,
+            ..Default::default()
+        };
+        let res = setup
+            .api
+            .get_compressed_token_balances_by_owner(request)
+            .await
+            .unwrap()
+            .value;
+        assert_eq!(res.value, owner_to_balances.get(owner).unwrap());
+    }
 }
 
 #[tokio::test]

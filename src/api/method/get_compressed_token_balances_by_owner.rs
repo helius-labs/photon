@@ -66,7 +66,7 @@ pub async fn get_compressed_token_balances_by_owner(
                 bytes.len()
             )));
         };
-        filter = filter.and(token_owner_balances::Column::Mint.gte::<Vec<u8>>(mint.into()));
+        filter = filter.and(token_owner_balances::Column::Mint.gt::<Vec<u8>>(mint.into()));
     }
     let limit = limit.map(|l| l.value()).unwrap_or(PAGE_LIMIT);
 
