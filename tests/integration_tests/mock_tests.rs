@@ -658,9 +658,9 @@ async fn test_persist_token_data(
         }
     }
 
-    let owner_to_balances = HashMap::new();
-    for (owner, balances) in mint_to_owner_to_balance.into_iter() {
-        for (mint, balance) in balances.into_iter() {
+    let mut owner_to_balances = HashMap::new();
+    for (mint, balances) in mint_to_owner_to_balance.into_iter() {
+        for (owner, balance) in balances.into_iter() {
             owner_to_balances
                 .entry(owner)
                 .or_insert(HashMap::new())
@@ -668,17 +668,33 @@ async fn test_persist_token_data(
         }
     }
     for owner in owner_to_balances.keys() {
-        let request = GetCompressedTokenBalancesByOwnerRequest {
-            owner,
-            ..Default::default()
-        };
-        let res = setup
-            .api
-            .get_compressed_token_balances_by_owner(request)
-            .await
-            .unwrap()
-            .value;
-        assert_eq!(res.value, owner_to_balances.get(owner).unwrap());
+        let mut cursor = None;
+        let mut mint_to_balance = HashMap::new();
+
+        loop {
+            let request = GetCompressedTokenBalancesByOwnerRequest {
+                owner: owner.clone(),
+                cursor,
+                limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                ..Default::default()
+            };
+            let res = setup
+                .api
+                .get_compressed_token_balances_by_owner(request)
+                .await
+                .unwrap()
+                .value;
+            let token_balances = res.token_balances;
+            for token_balance in token_balances.iter() {
+                let balance = mint_to_balance.entry(token_balance.mint).or_insert(0);
+                *balance += token_balance.balance.0;
+            }
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(mint_to_balance, *owner_to_balances.get(owner).unwrap());
     }
 }
 
