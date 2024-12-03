@@ -16,8 +16,8 @@ use super::method::get_compressed_mint_token_holders::{
     get_compressed_mint_token_holders, GetCompressedMintTokenHoldersRequest, OwnerBalancesResponse,
 };
 use super::method::get_compressed_token_balances_by_owner::{
-    get_compressed_token_balances_by_owner, GetCompressedTokenBalancesByOwnerRequest,
-    TokenBalancesResponse,
+    get_compressed_token_balances_by_owner, get_compressed_token_balances_by_owner_v2,
+    GetCompressedTokenBalancesByOwnerRequest, TokenBalancesResponse, TokenBalancesResponseV2,
 };
 use super::method::get_compression_signatures_for_account::get_compression_signatures_for_account;
 use super::method::get_compression_signatures_for_address::{
@@ -191,6 +191,13 @@ impl PhotonApi {
         get_compressed_token_balances_by_owner(&self.db_conn, request).await
     }
 
+    pub async fn get_compressed_token_balances_by_owner_v2(
+        &self,
+        request: GetCompressedTokenBalancesByOwnerRequest,
+    ) -> Result<TokenBalancesResponseV2, PhotonApiError> {
+        get_compressed_token_balances_by_owner_v2(&self.db_conn, request).await
+    }
+
     pub async fn get_compressed_token_account_balance(
         &self,
         request: CompressedAccountRequest,
@@ -317,6 +324,11 @@ impl PhotonApi {
                 name: "getCompressedTokenBalancesByOwner".to_string(),
                 request: Some(GetCompressedTokenBalancesByOwnerRequest::schema().1),
                 response: TokenBalancesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedTokenBalancesByOwnerV2".to_string(),
+                request: Some(GetCompressedTokenBalancesByOwnerRequest::schema().1),
+                response: TokenBalancesResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedAccountsByOwner".to_string(),

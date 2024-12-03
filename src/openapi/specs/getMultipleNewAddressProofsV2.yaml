@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.47.0
+  version: 0.49.0
 servers:
 - url: https://mainnet.helius-rpc.com?api-key=<api_key>
 paths:
@@ -146,5 +146,5 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
-      example: 11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs
+      default: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
+      example: 11111118F5rixNBnFLmioWZSYzjjFuAL5dyoDVzhD
