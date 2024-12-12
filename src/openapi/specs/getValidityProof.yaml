@@ -44,11 +44,6 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Hash'
-                    newAddresses:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/SerializablePubkey'
-                      deprecated: true
                     newAddressesWithTrees:
                       type: array
                       items:
