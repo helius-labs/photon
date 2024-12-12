@@ -252,6 +252,7 @@ pub struct GetValidityProofRequest {
     #[serde(default)]
     pub hashes: Vec<Hash>,
     #[serde(default)]
+    #[schema(deprecated = true)]
     pub newAddresses: Vec<SerializablePubkey>,
     #[serde(default)]
     pub newAddressesWithTrees: Vec<AddressWithTree>,
