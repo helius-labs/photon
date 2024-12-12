@@ -258,6 +258,17 @@ pub struct GetValidityProofRequest {
     pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
+// Create to hide the deprecated newAddresses field from the documentation
+pub struct GetValidityProofRequestDocumentation {
+    #[serde(default)]
+    pub hashes: Vec<Hash>,
+    #[serde(default)]
+    pub newAddressesWithTrees: Vec<AddressWithTree>,
+}
+
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetValidityProofResponse {
