@@ -273,12 +273,12 @@ pub async fn get_validity_proof(
         && request.newAddresses.is_empty()
         && request.newAddressesWithTrees.is_empty()
     {
-        return Err(PhotonApiError::UnexpectedError(
+        return Err(PhotonApiError::ValidationError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
     if !request.newAddressesWithTrees.is_empty() && !request.newAddresses.is_empty() {
-        return Err(PhotonApiError::UnexpectedError(
+        return Err(PhotonApiError::ValidationError(
             "Cannot provide both newAddresses and newAddressesWithTree".to_string(),
         ));
     }
