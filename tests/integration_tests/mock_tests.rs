@@ -27,7 +27,7 @@ use photon_indexer::ingester::persist::persisted_state_tree::{
 };
 use sea_orm::{QueryFilter, TransactionTrait};
 
-use photon_indexer::common::typedefs::account::Account;
+use photon_indexer::common::typedefs::account::{Account, AccountContext, AccountWithContext};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
@@ -96,11 +96,14 @@ async fn test_persist_state_update_basic(
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
-        seq: UnsignedInteger(0),
+        seq: Some(UnsignedInteger(0)),
         slot_created: UnsignedInteger(0),
     };
 
-    state_update.out_accounts.push(account.clone());
+    state_update.out_accounts.push(AccountWithContext {
+        account: account.clone(),
+        context: AccountContext::default(),
+    });
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
@@ -167,67 +170,78 @@ async fn test_multiple_accounts(
     let owner1 = SerializablePubkey::new_unique();
     let owner2 = SerializablePubkey::new_unique();
     let mut state_update = StateUpdate::default();
-
     let accounts = vec![
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(0),
-                data: Base64String(vec![1; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner1,
-            lamports: UnsignedInteger(1000),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(10),
-            seq: UnsignedInteger(1),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(0),
+                    data: Base64String(vec![1; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner1,
+                lamports: UnsignedInteger(1000),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(10),
+                seq: Some(UnsignedInteger(1)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext::default(),
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: None,
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(1),
-                data: Base64String(vec![2; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner1,
-            lamports: UnsignedInteger(1030),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(11),
-            seq: UnsignedInteger(2),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: None,
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(1),
+                    data: Base64String(vec![2; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner1,
+                lamports: UnsignedInteger(1030),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(11),
+                seq: Some(UnsignedInteger(2)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext::default(),
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(4),
-                data: Base64String(vec![4; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner2,
-            lamports: UnsignedInteger(10020),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(13),
-            seq: UnsignedInteger(3),
-            slot_created: UnsignedInteger(1),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(4),
+                    data: Base64String(vec![4; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner2,
+                lamports: UnsignedInteger(10020),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(13),
+                seq: Some(UnsignedInteger(3)),
+                slot_created: UnsignedInteger(1),
+            },
+            context: AccountContext::default(),
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(10),
-                data: Base64String(vec![5; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner2,
-            lamports: UnsignedInteger(10100),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(23),
-            seq: UnsignedInteger(1),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(10),
+                    data: Base64String(vec![5; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner2,
+                lamports: UnsignedInteger(10100),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(23),
+                seq: Some(UnsignedInteger(1)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext::default(),
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -274,6 +288,7 @@ async fn test_multiple_accounts(
         let mut accounts_of_interest = accounts
             .clone()
             .into_iter()
+            .map(|x| x.account)
             .filter(|x| x.owner == owner)
             .collect::<Vec<Account>>();
 
@@ -296,7 +311,7 @@ async fn test_multiple_accounts(
         assert_eq!(res.0, total_balance);
     }
 
-    let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
+    let mut accounts_of_interest = vec![accounts[0].account.clone(), accounts[2].account.clone()];
     let res = setup
         .api
         .get_multiple_compressed_accounts(GetMultipleCompressedAccountsRequest {
@@ -468,7 +483,7 @@ async fn test_persist_token_data(
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
-            seq: Set(0),
+            seq: Set(Some(0)),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();
@@ -723,7 +738,7 @@ async fn test_persisted_state_trees(
             hash: Hash::new_unique(),
             leaf_index: i,
             tree,
-            seq: i,
+            seq: Some(i),
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
@@ -760,7 +775,7 @@ async fn test_persisted_state_trees(
             hash: Hash::new_unique(),
             leaf_index: i,
             tree,
-            seq: i + num_nodes,
+            seq: Some(i + num_nodes),
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
@@ -769,15 +784,14 @@ async fn test_persisted_state_trees(
         .unwrap();
     txn.commit().await.unwrap();
 
-    let proofs = get_multiple_compressed_leaf_proofs(
-        &setup.db_conn.begin().await.unwrap(),
-        leaf_nodes
-            .iter()
-            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
-            .collect(),
-    )
-    .await
-    .unwrap();
+    let leaves = leaf_nodes
+        .iter()
+        .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+        .collect();
+
+    let proofs = get_multiple_compressed_leaf_proofs(&setup.db_conn.begin().await.unwrap(), leaves)
+        .await
+        .unwrap();
 
     let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
     let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
@@ -832,7 +846,7 @@ async fn test_indexed_merkle_trees(
         value: vec![1],
         next_index: 3,
         next_value: vec![5],
-        seq: 0,
+        seq: Some(0),
     };
 
     assert_eq!(model, expected_model);
@@ -866,7 +880,7 @@ async fn test_indexed_merkle_trees(
         value: vec![3],
         next_index: 3,
         next_value: vec![5],
-        seq: 0,
+        seq: Some(0),
     };
 
     assert_eq!(model, expected_model);
@@ -1028,21 +1042,24 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
 
     let tree = SerializablePubkey::new_unique();
 
-    fn generate_mock_account(leaf_index: u64, tree: SerializablePubkey) -> Account {
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(1),
-                data: Base64String(vec![1; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: SerializablePubkey::new_unique(),
-            lamports: UnsignedInteger(1000),
-            tree,
-            leaf_index: UnsignedInteger(leaf_index),
-            seq: UnsignedInteger(0),
-            slot_created: UnsignedInteger(0),
+    fn generate_mock_account(leaf_index: u64, tree: SerializablePubkey) -> AccountWithContext {
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(1),
+                    data: Base64String(vec![1; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: SerializablePubkey::new_unique(),
+                lamports: UnsignedInteger(1000),
+                tree,
+                leaf_index: UnsignedInteger(leaf_index),
+                seq: Some(UnsignedInteger(0)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext::default(),
         }
     }
 
@@ -1094,19 +1111,19 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
             tree,
             leaf_index: 0,
             hash: Hash::try_from("34yinGSAmWKeXw61zZzd8hbE1ySB1pDmgiHzJhRtVwJY").unwrap(),
-            seq: 4,
+            seq: Some(4),
         },
         LeafNode {
             tree,
             leaf_index: 1,
             hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 2,
             hash: Hash::try_from("TTSZiUJsGTcU7sXqYtw53yFY5Ag7DmHXR4GzEjVk7J7").unwrap(),
-            seq: 5,
+            seq: Some(5),
         },
     ];
     let leaf_nodes_2 = vec![
@@ -1114,19 +1131,19 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
             tree,
             leaf_index: 0,
             hash: Hash::try_from("3hH3oNVj2bafrqqXLnZjLjkuDaoxKhyyvmxaSs939hws").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 1,
             hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 2,
             hash: Hash::try_from("25D2cs6h29NZgmDepVqc7bLLSWcNJnMvGoxeTpyZjF3u").unwrap(),
-            seq: 10,
+            seq: Some(10),
         },
     ];
     let leaf_node_chunks = vec![leaf_nodes_1, leaf_nodes_2];
@@ -1179,20 +1196,23 @@ async fn test_gpa_filters(
     let owner1 = SerializablePubkey::new_unique();
     let mut state_update = StateUpdate::default();
 
-    let accounts = vec![Account {
-        hash: Hash::new_unique(),
-        address: Some(SerializablePubkey::new_unique()),
-        data: Some(AccountData {
-            discriminator: UnsignedInteger(0),
-            data: Base64String(vec![1, 2, 3]),
-            data_hash: Hash::new_unique(),
-        }),
-        owner: owner1,
-        lamports: UnsignedInteger(1000),
-        tree: SerializablePubkey::new_unique(),
-        leaf_index: UnsignedInteger(10),
-        seq: UnsignedInteger(1),
-        slot_created: UnsignedInteger(0),
+    let accounts = vec![AccountWithContext {
+        account: Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: UnsignedInteger(0),
+                data: Base64String(vec![1, 2, 3]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner1,
+            lamports: UnsignedInteger(1000),
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: UnsignedInteger(10),
+            seq: Some(UnsignedInteger(1)),
+            slot_created: UnsignedInteger(0),
+        },
+        context: AccountContext::default(),
     }];
     state_update.out_accounts = accounts.clone();
     persist_state_update_using_connection(&setup.db_conn, state_update)
@@ -1203,7 +1223,6 @@ async fn test_gpa_filters(
         .api
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
             owner: owner1,
-
             dataSlice: Some(DataSlice {
                 offset: 0,
                 length: 2,
@@ -1310,7 +1329,7 @@ async fn test_persisted_state_trees_multiple_cases(
             hash: Hash::try_from(vec![0; 32]).unwrap(),
             leaf_index: i,
             tree,
-            seq: i,
+            seq: Some(i),
         })
         .collect::<Vec<_>>();
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_13, tree_height).await;
@@ -1329,7 +1348,7 @@ where
             hash: Hash::new_unique(),
             leaf_index: i as u32,
             tree,
-            seq: seq_fn(i) as u32,
+            seq: Some(seq_fn(i) as u32),
         })
         .collect()
 }
@@ -1381,7 +1400,7 @@ async fn test_persist_and_verify(
                 (
                     Hash::try_from(x.hash.clone()).unwrap(),
                     x.leaf_idx.unwrap_or(0) as u64,
-                    x.seq as u64,
+                    x.seq,
                 )
             })
             .collect::<Vec<_>>();
@@ -1408,7 +1427,11 @@ async fn test_persist_and_verify(
             "Proof hashes should match leaf hashes"
         );
 
-        let max_seq = leaf_nodes.iter().map(|x| x.seq).max().unwrap_or(0) as u64;
+        let max_seq = leaf_nodes
+            .iter()
+            .map(|x| x.seq.unwrap_or_default())
+            .max()
+            .unwrap_or(0) as u64;
 
         for proof in proofs {
             assert_eq!(proof.merkleTree, tree, "Merkle tree should match");
@@ -1487,6 +1510,6 @@ async fn test_update_indexed_merkle_tree(
         assert_eq!(tree_model.value, index_element_2.value);
         assert_eq!(tree_model.next_value, index_element_2.next_value);
         assert_eq!(tree_model.next_index, index_element_2.next_index as i64);
-        assert_eq!(tree_model.seq, 1 as i64);
+        assert_eq!(tree_model.seq, Some(1i64));
     }
 }

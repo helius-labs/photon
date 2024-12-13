@@ -1,13 +1,20 @@
-use std::sync::Arc;
-
-use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
-use utoipa::ToSchema;
-
-use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
+use crate::api::method::get_compressed_accounts_by_owner::{
+    get_compressed_accounts_by_owner_v2, GetCompressedAccountsByOwnerV2Response,
+};
+use crate::api::method::get_multiple_compressed_account_proofs::HashList;
+use crate::api::method::get_queue_elements::{
+    get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
+};
+use crate::api::method::get_validity_proof::{
+    get_validity_proof_v2, GetValidityProofRequestDocumentation,
+};
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use std::sync::Arc;
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
+use utoipa::ToSchema;
 
 use super::method::get_compressed_account::AccountResponse;
 use super::method::get_compressed_balance_by_owner::{
@@ -67,7 +74,6 @@ use super::{
         get_indexer_slot::get_indexer_slot,
         get_multiple_compressed_account_proofs::{
             get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse,
-            HashList,
         },
         get_multiple_compressed_accounts::{
             get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
@@ -214,11 +220,25 @@ impl PhotonApi {
         get_indexer_slot(self.db_conn.as_ref()).await
     }
 
+    pub async fn get_queue_elements(
+        &self,
+        request: GetQueueElementsRequest,
+    ) -> Result<GetQueueElementsResponse, PhotonApiError> {
+        get_queue_elements(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_compressed_accounts_by_owner(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
     ) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
         get_compressed_accounts_by_owner(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_compressed_accounts_by_owner_v2(
+        &self,
+        request: GetCompressedAccountsByOwnerRequest,
+    ) -> Result<GetCompressedAccountsByOwnerV2Response, PhotonApiError> {
+        get_compressed_accounts_by_owner_v2(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_mint_token_holders(
@@ -278,6 +298,13 @@ impl PhotonApi {
         get_validity_proof(self.db_conn.as_ref(), &self.prover_url, request).await
     }
 
+    pub async fn get_validity_proof_v2(
+        &self,
+        request: GetValidityProofRequest,
+    ) -> Result<GetValidityProofResponse, PhotonApiError> {
+        get_validity_proof_v2(self.db_conn.as_ref(), &self.prover_url, request).await
+    }
+
     pub async fn get_latest_compression_signatures(
         &self,
         request: GetLatestSignaturesRequest,
@@ -294,6 +321,11 @@ impl PhotonApi {
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
+            OpenApiSpec {
+                name: "getQueueElements".to_string(),
+                request: Some(GetQueueElementsRequest::schema().1),
+                response: GetQueueElementsResponse::schema().1,
+            },
             OpenApiSpec {
                 name: "getCompressedAccount".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
@@ -328,6 +360,11 @@ impl PhotonApi {
                 name: "getCompressedAccountsByOwner".to_string(),
                 request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
                 response: GetCompressedAccountsByOwnerResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedAccountsByOwnerV2".to_string(),
+                request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
+                response: GetCompressedAccountsByOwnerV2Response::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedMintTokenHolders".to_string(),
@@ -376,6 +413,11 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getValidityProof".to_string(),
+                request: Some(GetValidityProofRequestDocumentation::schema().1),
+                response: GetValidityProofResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getValidityProofV2".to_string(),
                 request: Some(GetValidityProofRequestDocumentation::schema().1),
                 response: GetValidityProofResponse::schema().1,
             },

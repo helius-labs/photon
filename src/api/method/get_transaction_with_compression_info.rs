@@ -1,9 +1,14 @@
-use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::TokenData;
+use crate::common::typedefs::{account::Account, serializable_signature::SerializableSignature};
+use crate::dao::generated::accounts::Model;
 use crate::ingester::parser::parse_transaction;
 use crate::ingester::persist::parse_token_data;
-use crate::{common::typedefs::account::Account, dao::generated::accounts::Model};
 
+use super::{
+    super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
+};
+use crate::api::method::utils::parse_account_model_with_context;
+use crate::common::typedefs::account::AccountWithContext;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -14,11 +19,6 @@ use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTra
 use utoipa::{
     openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
     ToSchema,
-};
-
-use super::{
-    super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
-    utils::parse_account_model,
 };
 
 const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
@@ -48,7 +48,7 @@ pub struct CompressionInfo {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct AccountWithOptionalTokenData {
-    pub account: Account,
+    pub account: crate::common::typedefs::account::Account,
     pub optionalTokenData: Option<TokenData>,
 }
 
@@ -85,7 +85,7 @@ impl<'__s> ToSchema<'__s> for GetTransactionResponse {
         ("GetTransactionResponse", RefOr::T(schema))
     }
 
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+    fn aliases() -> Vec<(&'static str, Schema)> {
         Vec::new()
     }
 }
@@ -132,7 +132,7 @@ pub async fn get_transaction_helper(
     let meta = txn.transaction.meta.as_ref();
     if meta.is_none() {
         return Err(PhotonApiError::ValidationError(
-            "Transaction missing metatada information".to_string(),
+            "Transaction missing metadata information".to_string(),
         ));
     }
     let slot = txn.slot;
@@ -161,16 +161,25 @@ pub async fn get_transaction_helper(
     })
     .collect::<Result<Vec<Model>, PhotonApiError>>()?
     .into_iter()
-    .map(parse_account_model)
-    .collect::<Result<Vec<Account>, PhotonApiError>>()?;
+    .map(parse_account_model_with_context)
+    .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
+
+    let closed_accounts = closed_accounts
+        .into_iter()
+        .map(|x| x.account)
+        .collect::<Vec<Account>>();
+
+    let out_accounts = status_update
+        .out_accounts
+        .into_iter()
+        .map(|x| x.account)
+        .collect::<Vec<Account>>();
 
     Ok(GetTransactionResponse {
         transaction: txn,
         compressionInfo: CompressionInfo {
             closedAccounts: parse_optional_token_data_for_multiple_accounts(closed_accounts)?,
-            openedAccounts: parse_optional_token_data_for_multiple_accounts(
-                status_update.out_accounts,
-            )?,
+            openedAccounts: parse_optional_token_data_for_multiple_accounts(out_accounts)?,
         },
     })
 }

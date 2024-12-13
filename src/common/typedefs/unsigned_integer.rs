@@ -1,11 +1,13 @@
-use serde::{Deserialize, Serialize};
+use serde::de::Visitor;
+use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_json::Number;
+use std::fmt;
 use utoipa::{
-    openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
+    openapi::{KnownFormat, ObjectBuilder, RefOr, Schema, SchemaFormat, SchemaType},
     ToSchema,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, Copy, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default, Copy, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct UnsignedInteger(pub u64);
 
@@ -18,9 +20,46 @@ impl<'__s> ToSchema<'__s> for UnsignedInteger {
                 .example(Some(serde_json::Value::Number(serde_json::Number::from(
                     100,
                 ))))
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::UInt64)))
                 .build(),
         );
         ("UnsignedInteger", RefOr::T(schema))
+    }
+}
+
+impl<'de> Deserialize<'de> for UnsignedInteger {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct UnsignedIntegerVisitor;
+
+        impl<'de> Visitor<'de> for UnsignedIntegerVisitor {
+            type Value = UnsignedInteger;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an unsigned integer or string containing an unsigned integer")
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<UnsignedInteger, E>
+            where
+                E: Error,
+            {
+                Ok(UnsignedInteger(value))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<UnsignedInteger, E>
+            where
+                E: Error,
+            {
+                value
+                    .parse::<u64>()
+                    .map(UnsignedInteger)
+                    .map_err(|e| Error::custom(format!("Invalid unsigned integer value: {}", e)))
+            }
+        }
+
+        deserializer.deserialize_any(UnsignedIntegerVisitor)
     }
 }
 

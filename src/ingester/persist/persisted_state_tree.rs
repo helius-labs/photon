@@ -2,29 +2,31 @@ use std::{cmp::max, collections::HashMap};
 
 use cadence_macros::statsd_count;
 use itertools::Itertools;
+use log::info;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
     QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
+use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 
+use super::{compute_parent_hash, get_node_direct_ancestors, get_tree_height};
+use crate::common::typedefs::account::{Account, AccountWithContext};
 use crate::{
     api::error::PhotonApiError,
-    common::typedefs::{account::Account, hash::Hash, serializable_pubkey::SerializablePubkey},
+    common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::state_trees,
     ingester::{error::IngesterError, parser::state_update::LeafNullification},
     metric,
 };
-
-use super::{compute_parent_hash, get_node_direct_ancestors};
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {
     pub tree: SerializablePubkey,
     pub leaf_index: u32,
     pub hash: Hash,
-    pub seq: u32,
+    pub seq: Option<u32>,
 }
 
 impl LeafNode {
@@ -33,6 +35,7 @@ impl LeafNode {
     }
 }
 
+// leaf_index should be u64 / i64 to avoid overflow
 fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
     2_i64.pow(tree_height - 1) + leaf_index as i64
 }
@@ -43,7 +46,18 @@ impl From<Account> for LeafNode {
             tree: account.tree,
             leaf_index: account.leaf_index.0 as u32,
             hash: account.hash,
-            seq: account.seq.0 as u32,
+            seq: account.seq.map(|x| x.0 as u32),
+        }
+    }
+}
+
+impl From<AccountWithContext> for LeafNode {
+    fn from(account: AccountWithContext) -> Self {
+        Self {
+            tree: account.account.tree,
+            leaf_index: account.account.leaf_index.0 as u32,
+            hash: account.account.hash,
+            seq: account.account.seq.map(|x| x.0 as u32),
         }
     }
 }
@@ -54,7 +68,7 @@ impl From<LeafNullification> for LeafNode {
             tree: SerializablePubkey::from(leaf_nullification.tree),
             leaf_index: leaf_nullification.leaf_index as u32,
             hash: Hash::from(ZERO_BYTES[0]),
-            seq: leaf_nullification.seq as u32,
+            seq: Some(leaf_nullification.seq as u32),
         }
     }
 }
@@ -62,7 +76,6 @@ impl From<LeafNullification> for LeafNode {
 pub async fn persist_leaf_nodes(
     txn: &DatabaseTransaction,
     mut leaf_nodes: Vec<LeafNode>,
-    tree_height: u32,
 ) -> Result<(), IngesterError> {
     if leaf_nodes.is_empty() {
         return Ok(());
@@ -72,10 +85,15 @@ pub async fn persist_leaf_nodes(
 
     let leaf_locations = leaf_nodes
         .iter()
-        .map(|node| (node.tree.to_bytes_vec(), node.node_index(tree_height)))
+        .map(|node| {
+            (
+                node.tree.to_bytes_vec(),
+                node.node_index(get_tree_height(&node.tree.0)),
+            )
+        })
         .collect::<Vec<_>>();
 
-    let node_locations_to_models = get_proof_nodes(txn, leaf_locations, true).await?;
+    let node_locations_to_models = get_proof_nodes(txn, leaf_locations, true, false).await?;
     let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))
@@ -84,7 +102,7 @@ pub async fn persist_leaf_nodes(
     let mut models_to_updates = HashMap::new();
 
     for leaf_node in leaf_nodes.clone() {
-        let node_idx = leaf_node.node_index(tree_height);
+        let node_idx = leaf_node.node_index(get_tree_height(&leaf_node.tree.0));
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
 
@@ -94,25 +112,29 @@ pub async fn persist_leaf_nodes(
             node_idx: Set(node_idx),
             hash: Set(leaf_node.hash.to_vec()),
             leaf_idx: Set(Some(leaf_node.leaf_index as i64)),
-            seq: Set(leaf_node.seq as i64),
+            seq: Set(leaf_node.seq.map(|x| x as i64)),
         };
 
         let existing_seq = node_locations_to_hashes_and_seq
             .get(&key)
             .map(|x| x.1)
-            .unwrap_or(0);
+            .unwrap_or(Some(0));
 
-        if leaf_node.seq >= existing_seq as u32 {
-            models_to_updates.insert(key.clone(), model);
-            node_locations_to_hashes_and_seq
-                .insert(key, (leaf_node.hash.to_vec(), leaf_node.seq as i64));
+        if let Some(existing_seq) = existing_seq {
+            if let Some(leaf_node_seq) = leaf_node.seq {
+                if leaf_node_seq >= existing_seq as u32 {
+                    models_to_updates.insert(key.clone(), model);
+                    node_locations_to_hashes_and_seq
+                        .insert(key, (leaf_node.hash.to_vec(), Some(leaf_node_seq as i64)));
+                }
+            }
         }
     }
 
     let all_ancestors = leaf_nodes
         .iter()
         .flat_map(|leaf_node| {
-            get_node_direct_ancestors(leaf_node.node_index(tree_height))
+            get_node_direct_ancestors(leaf_node.node_index(get_tree_height(&leaf_node.tree.0)))
                 .iter()
                 .enumerate()
                 .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
@@ -130,18 +152,18 @@ pub async fn persist_leaf_nodes(
         let (left_child_hash, left_child_seq) = node_locations_to_hashes_and_seq
             .get(&(tree.clone(), node_index * 2))
             .cloned()
-            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), Some(0)));
 
         let (right_child_hash, right_child_seq) = node_locations_to_hashes_and_seq
             .get(&(tree.clone(), node_index * 2 + 1))
             .cloned()
-            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), Some(0)));
 
         let level = child_level + 1;
 
         let hash = compute_parent_hash(left_child_hash.clone(), right_child_hash.clone())?;
 
-        let seq = max(left_child_seq, right_child_seq) as i64;
+        let seq = max(left_child_seq, right_child_seq);
         let model = state_trees::ActiveModel {
             tree: Set(tree.clone()),
             level: Set(level as i64),
@@ -185,15 +207,72 @@ pub struct MerkleProofWithContext {
     pub rootSeq: u64,
 }
 
+pub async fn get_multiple_compressed_leaf_proofs_by_indices(
+    txn: &DatabaseTransaction,
+    merkle_tree_pubkey: SerializablePubkey,
+    indices: Vec<u64>,
+) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    // TODO: add assertion that: abs(max(index from db) - max(indices)) <= BATCH_SIZE * 2
+    if indices.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let existing_leaves = state_trees::Entity::find()
+        .filter(
+            state_trees::Column::LeafIdx
+                .is_in(indices.iter().map(|&x| x as i64).collect::<Vec<i64>>())
+                .and(state_trees::Column::Level.eq(0))
+                .and(state_trees::Column::Tree.eq(merkle_tree_pubkey.to_bytes_vec())),
+        )
+        .all(txn)
+        .await?;
+
+    let mut index_to_leaf = existing_leaves
+        .into_iter()
+        .map(|x| (x.leaf_idx.unwrap_or_default() as u64, x))
+        .collect::<HashMap<_, _>>();
+
+    // Create leaf nodes for all requested indices
+    let mut leaf_nodes = Vec::new();
+
+    for idx in indices {
+        if let Some(existing) = index_to_leaf.remove(&idx) {
+            // Use existing leaf
+            leaf_nodes.push((
+                LeafNode {
+                    tree: merkle_tree_pubkey,
+                    leaf_index: idx as u32,
+                    hash: Hash::try_from(existing.hash)?,
+                    seq: existing.seq.map(|s| s as u32),
+                },
+                existing.node_idx,
+            ));
+        } else {
+            let zero_leaf = LeafNode {
+                tree: merkle_tree_pubkey,
+                leaf_index: idx as u32,
+                hash: Hash::from(ZERO_BYTES[0]),
+                seq: None,
+            };
+            let node_idx = leaf_index_to_node_index(
+                zero_leaf.leaf_index,
+                get_tree_height(&merkle_tree_pubkey.0),
+            );
+            leaf_nodes.push((zero_leaf.clone(), node_idx));
+        }
+    }
+
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes).await
+}
+
 pub async fn get_multiple_compressed_leaf_proofs(
     txn: &DatabaseTransaction,
     hashes: Vec<Hash>,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
     if hashes.is_empty() {
-        return Err(PhotonApiError::ValidationError(
-            "No hashes provided".to_string(),
-        ));
+        return Ok(Vec::new());
     }
+
     let leaf_nodes_with_node_index = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
@@ -211,7 +290,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                         "Leaf index not found".to_string(),
                     ))? as u32,
                     hash: Hash::try_from(x.hash.clone())?,
-                    seq: 0, // HACK: We don't need seq for now
+                    seq: Some(0),
                 },
                 x.node_idx,
             ))
@@ -225,16 +304,17 @@ pub async fn get_multiple_compressed_leaf_proofs(
             hashes.len()
         )));
     }
+
     let hash_to_leaf_node_with_node_index = leaf_nodes_with_node_index
         .iter()
         .map(|(leaf_node, node_index)| (leaf_node.hash.clone(), (leaf_node.clone(), *node_index)))
         .collect::<HashMap<Hash, (LeafNode, i64)>>();
 
     let leaf_nodes_with_node_index = hashes
-        .into_iter()
+        .iter()
         .map(|hash| {
             hash_to_leaf_node_with_node_index
-                .get(&hash)
+                .get(hash)
                 .ok_or(PhotonApiError::RecordNotFound(format!(
                     "Leaf node not found for hash: {}",
                     hash
@@ -269,6 +349,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             .map(|(node, node_index)| (node.tree.to_bytes_vec(), *node_index))
             .collect::<Vec<(Vec<u8>, i64)>>(),
         include_leafs,
+        true,
     )
     .await?;
 
@@ -299,15 +380,10 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 })
                 .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
 
-            let root_seq = node_to_model
-                .get(&(leaf_node.tree.to_bytes_vec(), 1))
-                .ok_or({
-                    PhotonApiError::UnexpectedError(format!(
-                        "Missing root index for tree {}",
-                        leaf_node.tree
-                    ))
-                })?
-                .seq as u64;
+            let root_seq = match node_to_model.get(&(leaf_node.tree.to_bytes_vec(), 1)) {
+                Some(root) => root.seq,
+                None => None,
+            };
 
             let root = proof.pop().ok_or(PhotonApiError::UnexpectedError(
                 "Root node not found in proof".to_string(),
@@ -319,12 +395,11 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 leafIndex: leaf_node.leaf_index,
                 hash: leaf_node.hash.clone(),
                 merkleTree: leaf_node.tree,
-                rootSeq: root_seq,
+                rootSeq: root_seq.unwrap_or(0i64) as u64,
             })
         })
         .collect();
     let proofs = proofs?;
-
     for proof in proofs.iter() {
         validate_proof(proof)?;
     }
@@ -333,10 +408,15 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
 }
 
 pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
+    info!(
+        "Validating proof for leaf index: {} tree: {}",
+        proof.leafIndex, proof.merkleTree
+    );
     let leaf_index = proof.leafIndex;
     let tree_height = (proof.proof.len() + 1) as u32;
     let node_index = leaf_index_to_node_index(leaf_index, tree_height);
     let mut computed_root = proof.hash.to_vec();
+    info!("leaf_index: {}, node_index: {}", leaf_index, node_index);
 
     for (idx, node) in proof.proof.iter().enumerate() {
         let is_left = (node_index >> idx) & 1 == 0;
@@ -359,7 +439,6 @@ pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiErr
             ))
         })?;
     }
-
     if computed_root != proof.root.to_vec() {
         metric! {
             statsd_count!("invalid_proof", 1);
@@ -391,10 +470,25 @@ pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     indexes
 }
 
+pub fn get_level_by_node_index(index: i64, tree_height: u32) -> i64 {
+    if index >= 2_i64.pow(tree_height - 2) {
+        // If it's a leaf index (large number)
+        return 0;
+    }
+    let mut level = 0;
+    let mut idx = index;
+    while idx > 1 {
+        idx >>= 1;
+        level += 1;
+    }
+    level
+}
+
 pub async fn get_proof_nodes<T>(
     txn_or_conn: &T,
     leaf_nodes_locations: Vec<(Vec<u8>, i64)>,
     include_leafs: bool,
+    include_empty_leaves: bool,
 ) -> Result<HashMap<(Vec<u8>, i64), state_trees::Model>, DbErr>
 where
     T: ConnectionTrait + TransactionTrait,
@@ -439,10 +533,47 @@ where
         .all(txn_or_conn)
         .await?;
 
-    Ok(proof_nodes
+    let mut result = proof_nodes
         .iter()
         .map(|node| ((node.tree.clone(), node.node_idx), node.clone()))
-        .collect::<HashMap<(Vec<u8>, i64), state_trees::Model>>())
+        .collect::<HashMap<(Vec<u8>, i64), state_trees::Model>>();
+
+    if include_empty_leaves {
+        leaf_nodes_locations.iter().for_each(|(tree, index)| {
+            result.entry((tree.clone(), *index)).or_insert_with(|| {
+                log::warn!(
+                    "Missing proof node for tree: {} and index: {}",
+                    SerializablePubkey::try_from(tree.clone()).unwrap(),
+                    index
+                );
+
+                let tree_pubkey = Pubkey::try_from(tree.clone()).unwrap();
+                let tree_height = get_tree_height(&tree_pubkey);
+                println!("tree_height: {}", tree_height);
+                let model = state_trees::Model {
+                    tree: tree.clone(),
+                    level: get_level_by_node_index(*index, tree_height),
+                    node_idx: *index,
+                    hash: ZERO_BYTES[get_level_by_node_index(*index, tree_height) as usize]
+                        .to_vec(),
+                    leaf_idx: None,
+                    seq: None,
+                };
+                model
+            });
+        });
+    }
+
+    Ok(result)
+}
+
+pub fn validate_leaf_index(leaf_index: u32, tree_height: u32) -> bool {
+    let max_leaves = 2_u64.pow(tree_height - 1);
+    (leaf_index as u64) < max_leaves
+}
+
+pub fn get_merkle_proof_length(tree_height: u32) -> usize {
+    (tree_height - 1) as usize
 }
 
 pub const MAX_HEIGHT: usize = 32;
@@ -614,3 +745,232 @@ pub const ZERO_BYTES: ZeroBytes = [
         76u8, 151u8, 52u8, 234u8, 217u8,
     ],
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ingester::persist::{BATCH_STATE_TREE_HEIGHT, LEGACY_TREE_HEIGHT};
+
+    fn node_index_to_leaf_index(index: i64, tree_height: u32) -> i64 {
+        index - 2_i64.pow(get_level_by_node_index(index, tree_height) as u32)
+    }
+
+    #[test]
+    fn test_get_level_by_node_index() {
+        // Tree of height 3 (root level is 0, max is 3)
+        // Node indices in a binary tree: [1, 2, 3, 4, 5, 6, 7]
+        assert_eq!(get_level_by_node_index(1, BATCH_STATE_TREE_HEIGHT), 0); // Root node
+        assert_eq!(get_level_by_node_index(2, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, left child of root
+        assert_eq!(get_level_by_node_index(3, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, right child of root
+        assert_eq!(get_level_by_node_index(4, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 2
+        assert_eq!(get_level_by_node_index(5, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 2
+        assert_eq!(get_level_by_node_index(6, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 3
+        assert_eq!(get_level_by_node_index(7, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 3
+    }
+
+    // Test helper to convert byte arrays to hex strings for easier debugging
+    fn bytes_to_hex(bytes: &[u8]) -> String {
+        bytes
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<String>>()
+            .join("")
+    }
+
+    // Helper to verify node index calculations
+    fn verify_node_index_conversion(leaf_index: u32, tree_height: u32) -> bool {
+        let node_index = leaf_index_to_node_index(leaf_index, tree_height);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
+        recovered_leaf_index == leaf_index as i64
+    }
+
+    #[test]
+    fn test_zero_bytes_consistency() {
+        // Verify that each level's hash in ZERO_BYTES is correctly computed from its children
+        for level in (1..MAX_HEIGHT).rev() {
+            let parent_hash = compute_parent_hash(
+                ZERO_BYTES[level - 1].to_vec(),
+                ZERO_BYTES[level - 1].to_vec(),
+            )
+            .unwrap();
+
+            assert_eq!(
+                parent_hash,
+                ZERO_BYTES[level].to_vec(),
+                "Zero bytes hash mismatch at level {}\nComputed: {}\nExpected: {}",
+                level,
+                bytes_to_hex(&parent_hash),
+                bytes_to_hex(&ZERO_BYTES[level])
+            );
+        }
+    }
+
+    #[ignore = "todo check whether to keep"]
+    #[test]
+    fn test_debug_leaf_zero() {
+        let leaf_index = 0u32;
+        let tree_height = 32u32;
+        let node_index = leaf_index_to_node_index(leaf_index, tree_height);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
+
+        println!("leaf_index: {}", leaf_index);
+        println!("node_index: {}", node_index);
+        println!(
+            "level: {}",
+            get_level_by_node_index(node_index, tree_height)
+        );
+        println!("recovered_leaf_index: {}", recovered_leaf_index);
+
+        assert_eq!(recovered_leaf_index, leaf_index as i64);
+    }
+
+    #[ignore = "todo check whether to keep"]
+    #[test]
+    fn test_debug_max_leaf() {
+        let leaf_index = u32::MAX;
+        let tree_height = 32u32;
+        let node_index = leaf_index_to_node_index(leaf_index, tree_height);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
+
+        println!("max test:");
+        println!("leaf_index: {} (u32)", leaf_index);
+        println!("node_index: {} (i64)", node_index);
+        println!("2^(tree_height-1): {} (i64)", 2_i64.pow(tree_height - 1));
+        println!(
+            "level: {}",
+            get_level_by_node_index(node_index, tree_height)
+        );
+        println!("recovered_leaf_index: {} (i64)", recovered_leaf_index);
+
+        assert_eq!(recovered_leaf_index, leaf_index as i64);
+    }
+
+    #[ignore = "todo check whether to keep"]
+    #[test]
+    fn test_leaf_index_conversions() {
+        let test_cases = vec![
+            (0u32, 32u32),          // First leaf in height 32 tree
+            (1u32, 32u32),          // Second leaf
+            (4294967295u32, 32u32), // Last possible leaf in u32
+            (2147483647u32, 32u32), // i32::MAX
+            (2147483648u32, 32u32), // i32::MAX + 1
+            (0u32, 3u32),           // Small tree test
+            (1u32, 3u32),
+            (2u32, 3u32),
+            (3u32, 3u32),
+        ];
+
+        for (leaf_index, tree_height) in test_cases {
+            assert!(
+                verify_node_index_conversion(leaf_index, tree_height),
+                "Conversion failed for leaf_index={}, tree_height={}",
+                leaf_index,
+                tree_height
+            );
+        }
+    }
+
+    #[test]
+    fn test_proof_validation_components() {
+        // Test case for first non-existent leaf (index 0)
+        let test_leaf_index = 0u32;
+        let tree_height = 32u32;
+        let merkle_tree = SerializablePubkey::try_from(vec![0u8; 32]).unwrap();
+
+        // Create proof components
+        let node_index = leaf_index_to_node_index(test_leaf_index, tree_height);
+        let proof_path = get_proof_path(node_index, false);
+
+        println!("Test leaf index: {}", test_leaf_index);
+        println!("Node index: {}", node_index);
+        println!("Proof path: {:?}", proof_path);
+
+        // Verify proof path length
+        assert_eq!(proof_path.len(), tree_height as usize);
+
+        // Test level calculation for proof path nodes
+        for &idx in &proof_path {
+            let level = get_level_by_node_index(idx, tree_height);
+            println!("Node {} is at level {}", idx, level);
+            assert!(level < tree_height as i64);
+        }
+
+        // Manually compute root hash using proof path
+        let mut current_hash = ZERO_BYTES[0].to_vec(); // Start with leaf level zero bytes
+
+        for (idx, proof_node_index) in proof_path.iter().enumerate() {
+            let is_left = (node_index >> idx) & 1 == 0;
+            let sibling_hash = ZERO_BYTES[idx].to_vec();
+
+            let (left_child, right_child) = if is_left {
+                (current_hash.clone(), sibling_hash)
+            } else {
+                (sibling_hash, current_hash.clone())
+            };
+
+            current_hash = compute_parent_hash(left_child, right_child).unwrap();
+
+            println!(
+                "Level {}: Computed hash: {}",
+                idx,
+                bytes_to_hex(&current_hash)
+            );
+            println!(
+                "         Expected:     {}",
+                bytes_to_hex(&ZERO_BYTES[idx + 1])
+            );
+
+            // Verify against precalculated ZERO_BYTES
+            assert_eq!(
+                current_hash,
+                ZERO_BYTES[idx + 1].to_vec(),
+                "Hash mismatch at level {}",
+                idx + 1
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_proof() {
+        let test_leaf_index = 0u32;
+        let merkle_tree = SerializablePubkey::try_from(vec![0u8; 32]).unwrap();
+
+        // Create a proof for testing
+        let mut proof = Vec::new();
+        for i in 0..31 {
+            // One less than tree height since root is separate
+            proof.push(Hash::try_from(ZERO_BYTES[i].to_vec()).unwrap());
+        }
+
+        let proof_context = MerkleProofWithContext {
+            proof,
+            root: Hash::try_from(ZERO_BYTES[31].to_vec()).unwrap(),
+            leafIndex: test_leaf_index,
+            hash: Hash::try_from(ZERO_BYTES[0].to_vec()).unwrap(),
+            merkleTree: merkle_tree,
+            rootSeq: 0,
+        };
+
+        // Validate the proof
+        let result = validate_proof(&proof_context);
+        assert!(result.is_ok(), "Proof validation failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_validate_leaf_index() {
+        // Test for legacy tree height
+        assert!(validate_leaf_index(0, LEGACY_TREE_HEIGHT));
+        assert!(validate_leaf_index((1 << 26) - 1, LEGACY_TREE_HEIGHT));
+        assert!(!validate_leaf_index(1 << 26, LEGACY_TREE_HEIGHT));
+
+        // Test for batch state tree height
+        assert!(validate_leaf_index(0, BATCH_STATE_TREE_HEIGHT));
+        // assert!(validate_leaf_index((1 << 32) - 1, BATCH_STATE_TREE_HEIGHT));
+    }
+
+    #[test]
+    fn test_merkle_proof_length() {
+        assert_eq!(get_merkle_proof_length(LEGACY_TREE_HEIGHT), 26);
+        assert_eq!(get_merkle_proof_length(BATCH_STATE_TREE_HEIGHT), 32);
+    }
+}

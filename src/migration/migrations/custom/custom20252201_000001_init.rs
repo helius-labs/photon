@@ -27,15 +27,16 @@ impl MigrationTrait for Migration {
             "S1ay5sk6FVkvsNFZShMw2YK3nfgJZ8tpBBGuHWDZ266",
             "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT",
         ];
-        // Encode the accounts as hex strings 
-        let encoded_accounts = solayer_accounts.iter()
+        // Encode the accounts as hex strings
+        let encoded_accounts = solayer_accounts
+            .iter()
             .map(|account| {
                 let pubkey = Pubkey::from_str(account).unwrap();
                 format!("\\x{}", hex::encode(pubkey.to_bytes()))
             })
             .collect::<Vec<String>>()
             .join("', '");
-        
+
         if manager.get_database_backend() == DatabaseBackend::Postgres {
             // Create index concurrently for Postgres
             execute_sql(
@@ -47,24 +48,22 @@ impl MigrationTrait for Migration {
                 ),
             )
             .await?;
-        } 
+        }
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         if manager.get_database_backend() == DatabaseBackend::Postgres {
-        manager
-            .drop_index(
-                Index::drop()
-                    .name("solayer_account_index")
-                    .table(Accounts::Table)
-                    .to_owned(),
-            )
-            .await?;
+            manager
+                .drop_index(
+                    Index::drop()
+                        .name("solayer_account_index")
+                        .table(Accounts::Table)
+                        .to_owned(),
+                )
+                .await?;
         }
 
         Ok(())
     }
-
 }
-

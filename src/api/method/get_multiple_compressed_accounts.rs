@@ -1,21 +1,20 @@
 use std::collections::HashMap;
 
-use crate::{common::typedefs::account::Account, dao::generated::accounts};
+use super::{
+    super::error::PhotonApiError,
+    utils::{Context, PAGE_LIMIT},
+};
+use crate::api::method::utils::parse_account_model;
+use crate::common::typedefs::account::Account;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use utoipa::{
     openapi::{RefOr, Schema},
     ToSchema,
 };
-
-use super::{
-    super::error::PhotonApiError,
-    utils::{Context, PAGE_LIMIT},
-};
-use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-
-use super::utils::parse_account_model;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
