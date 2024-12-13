@@ -32,6 +32,8 @@ use solana_sdk::account::Account as SolanaAccount;
 
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
+use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
+
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
@@ -75,6 +77,7 @@ pub fn continously_monitor_photon(
                 }
             } else {
                 let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
+                println!("Tree roots (continously_monitor_photon): {:?}", tree_roots);
                 validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
             }
             sleep(Duration::from_millis(5000)).await;
@@ -102,16 +105,28 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 }
 
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
-    let roots = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
+    let mut data = account.data.clone();
+    let pubkey = light_compressed_account::pubkey::Pubkey::new_from_array(account.owner.to_bytes());
+
+    fn extract_roots(root_history: &[[u8; 32]]) -> Vec<Hash> {
+        root_history.iter().map(|&root| Hash::from(root)).collect()
+    }
+
+    if let Ok(merkle_tree) = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey) {
+        return extract_roots(merkle_tree.root_history.as_slice());
+    }
+
+    if let Ok(merkle_tree) = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey) {
+        return extract_roots(merkle_tree.root_history.as_slice());
+    }
+
+    // fallback: legacy tree
+    let concurrent_tree = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
         &account.data[8 + mem::size_of::<MerkleTreeMetadata>()..],
     )
-    .unwrap()
-    .roots
-    .iter()
-    .map(|root| Hash::from(*root))
-    .collect();
+        .unwrap();
 
-    roots
+    extract_roots(concurrent_tree.roots.as_slice())
 }
 
 async fn load_db_tree_roots_with_infinite_retry(db: &DatabaseConnection) -> Vec<(Pubkey, Hash)> {
@@ -175,7 +190,7 @@ async fn load_accounts_with_infinite_retry(
 
 async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash)>) {
     for chunk in db_roots.chunks(CHUNK_SIZE) {
-        let pubkeys = chunk.iter().map(|(pubkey, _)| pubkey.clone()).collect();
+        let pubkeys = chunk.iter().map(|(pubkey, _)| *pubkey).collect();
         let accounts = load_accounts_with_infinite_retry(rpc_client, pubkeys).await;
         for ((pubkey, db_hash), account) in chunk.iter().zip(accounts) {
             let account_roots = parse_historical_roots(account);

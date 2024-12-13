@@ -2,6 +2,7 @@ pub mod get_compressed_account;
 pub mod get_compressed_account_balance;
 pub mod get_compressed_account_proof;
 pub mod get_compressed_accounts_by_owner;
+pub mod get_compressed_accounts_by_owner_v2;
 pub mod get_compressed_balance_by_owner;
 pub mod get_compressed_mint_token_holders;
 pub mod get_compressed_token_account_balance;
@@ -21,4 +22,8 @@ pub mod get_multiple_compressed_accounts;
 pub mod get_multiple_new_address_proofs;
 pub mod get_transaction_with_compression_info;
 pub mod get_validity_proof;
+pub mod get_queue_elements;
+pub mod get_subtrees;
 pub mod utils;
+
+

@@ -37,7 +37,7 @@ path = "src/tools/tree_validator/main.rs"
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
-async-trait = "0.1.53"
+async-trait = "0.1.85"
 base64 = "0.21.0"
 borsh = "0.10.3"
 bs58 = "0.4.0"
@@ -77,8 +77,13 @@ solana-client = "1.18.0"
 solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
-light-concurrent-merkle-tree = "=1.1.0"
-light-sdk = "0.11.0"
+
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-v2", features = [] }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-v2", features = [] }
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-v2", features = [] }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-v2", features = [] }
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-v2", features = [] }
+
 sqlx = { version = "0.6.2", features = [
   "macros",
   "runtime-tokio-rustls",
@@ -106,7 +111,7 @@ tracing-subscriber = { version = "0.3.16", features = [
   "env-filter",
   "ansi",
 ] }
-utoipa = { version = "4.2.0", features = ["yaml", "chrono"] }
+utoipa = { version = "4.2.0", features = ["yaml", "chrono", "non_strict_integers"] }
 yellowstone-grpc-client = "1.15.0"
 yellowstone-grpc-proto = "1.14.0"
 cadence = "1.4.0"

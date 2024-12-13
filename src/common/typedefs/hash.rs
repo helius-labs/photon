@@ -26,6 +26,16 @@ const MAX_BASE58_LEN: usize = 44;
 pub struct Hash(pub [u8; 32]);
 
 impl Hash {
+
+    pub fn new(bytes: &[u8]) -> Result<Self, ParseHashError> {
+        if bytes.len() != 32 {
+            return Err(ParseHashError::WrongSize);
+        }
+        let mut array = [0u8; 32];
+        array.copy_from_slice(bytes);
+        Ok(Hash(array))
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }

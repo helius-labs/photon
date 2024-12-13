@@ -17,8 +17,28 @@ pub struct Account {
     pub lamports: UnsignedInteger,
     pub tree: SerializablePubkey,
     pub leaf_index: UnsignedInteger,
-    pub seq: UnsignedInteger,
+    pub seq: Option<UnsignedInteger>,
     pub slot_created: UnsignedInteger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AccountContext {
+    pub queue: Option<SerializablePubkey>,
+    pub in_output_queue: bool,
+    pub spent: bool,
+    pub nullified_in_tree: bool,
+    // if nullifier_queue_index is not None, then this account is in input queue
+    pub nullifier_queue_index: Option<UnsignedInteger>,
+    pub nullifier: Option<Hash>,
+    pub tx_hash: Option<Hash>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AccountWithContext {
+    pub account: Account,
+    pub context: AccountContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]

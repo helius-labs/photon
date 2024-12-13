@@ -1,4 +1,4 @@
-use crate::common::typedefs::account::{Account, AccountData};
+use crate::common::typedefs::account::{AccountData, Account, AccountWithContext, AccountContext};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
@@ -93,7 +93,7 @@ impl<'__s> ToSchema<'__s> for Context {
         ("Context", RefOr::T(schema))
     }
 
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+    fn aliases() -> Vec<(&'static str, Schema)> {
         Vec::new()
     }
 }
@@ -125,7 +125,7 @@ pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
     discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
 }
 
-fn parse_leaf_index(leaf_index: i64) -> Result<u32, PhotonApiError> {
+fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
@@ -155,11 +155,53 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         data,
         owner: account.owner.try_into()?,
         tree: account.tree.try_into()?,
-        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
+        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
         slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: UnsignedInteger(account.seq as u64),
+        seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
     })
+}
+
+pub fn parse_account_model_with_context(account: accounts::Model) -> Result<AccountWithContext, PhotonApiError> {
+        let data = match (account.data, account.data_hash, account.discriminator) {
+            (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
+                data: Base64String(data),
+                data_hash: data_hash.try_into()?,
+                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+            }),
+            (None, None, None) => None,
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid account data".to_string(),
+                ))
+            }
+        };
+
+        Ok(AccountWithContext {
+            account: Account {
+                hash: account.hash.try_into()?,
+                address: account
+                    .address
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?,
+                data,
+                owner: account.owner.try_into()?,
+                tree: account.tree.try_into()?,
+                leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
+                lamports: UnsignedInteger(parse_decimal(account.lamports)?),
+                slot_created: UnsignedInteger(account.slot_created as u64),
+                seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
+            },
+            context: AccountContext {
+                queue: account.queue.map(|queue| queue.try_into()).transpose()?,
+                in_output_queue: account.in_output_queue,
+                spent: account.spent,
+                nullified_in_tree: account.nullified_in_tree,
+                nullifier_queue_index: account.nullifier_queue_index.map(|index| UnsignedInteger(index as u64)),
+                nullifier: account.nullifier.map(Hash::try_from).transpose()?,
+                tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
+            }
+        })
 }
 
 // We do not use generics to simplify documentation generation.
@@ -172,7 +214,7 @@ pub struct TokenAccountListResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct TokenAcccount {
+pub struct TokenAccount {
     pub account: Account,
     pub token_data: TokenData,
 }
@@ -180,7 +222,7 @@ pub struct TokenAcccount {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
-    pub items: Vec<TokenAcccount>,
+    pub items: Vec<TokenAccount>,
     pub cursor: Option<Base58String>,
 }
 
@@ -243,7 +285,7 @@ pub struct EnrichedTokenAccountModel {
 }
 
 pub async fn fetch_token_accounts(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &DatabaseConnection,
     owner_or_delegate: Authority,
     options: GetCompressedTokenAccountsByAuthorityOptions,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
@@ -299,7 +341,7 @@ pub async fn fetch_token_accounts(
             let account = account.ok_or(PhotonApiError::RecordNotFound(
                 "Base account not found for token account".to_string(),
             ))?;
-            Ok(TokenAcccount {
+            Ok(TokenAccount {
                 account: parse_account_model(account)?,
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
@@ -309,7 +351,7 @@ pub async fn fetch_token_accounts(
                         .delegate
                         .map(SerializablePubkey::try_from)
                         .transpose()?,
-                    state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
+                    state: AccountState::try_from(token_account.state as u8).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(
                             "Unable to parse account state {}",
                             e
@@ -319,7 +361,7 @@ pub async fn fetch_token_accounts(
                 },
             })
         })
-        .collect::<Result<Vec<TokenAcccount>, PhotonApiError>>()?;
+        .collect::<Result<Vec<TokenAccount>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|item| {
         Base58String({
@@ -580,11 +622,11 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
-            Ok((
-                format!(
-                    "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
-                    num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
-                ),
+            let cursor_filter =  format!(
+                "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
+                num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
+            );
+            Ok((cursor_filter,
                 vec![
                     slot.into(),
                     slot.into(),

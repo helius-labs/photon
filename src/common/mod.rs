@@ -106,7 +106,11 @@ impl fmt::Display for LoggingFormat {
 pub fn setup_logging(logging_format: LoggingFormat) {
     let env_filter = env::var("RUST_LOG")
         .unwrap_or("info,sqlx=error,sea_orm_migration=error,jsonrpsee_server=warn".to_string());
-    let subscriber = tracing_subscriber::fmt().with_env_filter(env_filter);
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(true)
+        .with_timer(tracing_subscriber::fmt::time::time())
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL);
     match logging_format {
         LoggingFormat::Standard => subscriber.init(),
         LoggingFormat::Json => subscriber.json().init(),

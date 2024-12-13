@@ -5,6 +5,7 @@ use crate::{
         get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
     },
 };
+use borsh::BorshSerialize;
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use reqwest::Client;
@@ -59,18 +60,18 @@ fn convert_non_inclusion_merkle_proof_to_hex(
         let input = NonInclusionHexInputsForProver {
             root: hash_to_hex(&non_inclusion_merkle_proof_inputs[i].root),
             value: pubkey_to_hex(&non_inclusion_merkle_proof_inputs[i].address),
-            path_index: non_inclusion_merkle_proof_inputs[i].lowElementLeafIndex,
+            path_index: non_inclusion_merkle_proof_inputs[i].low_element_leaf_index,
             path_elements: non_inclusion_merkle_proof_inputs[i]
                 .proof
                 .iter()
                 .map(hash_to_hex)
                 .collect(),
-            next_index: non_inclusion_merkle_proof_inputs[i].nextIndex,
+            next_index: non_inclusion_merkle_proof_inputs[i].next_index,
             leaf_lower_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].lowerRangeAddress,
+                &non_inclusion_merkle_proof_inputs[i].lower_range_address,
             ),
             leaf_higher_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].higherRangeAddress,
+                &non_inclusion_merkle_proof_inputs[i].higher_range_address,
             ),
         };
         inputs.push(input);
@@ -85,7 +86,7 @@ fn convert_inclusion_proofs_to_hex(
     for i in 0..inclusion_proof_inputs.len() {
         let input = InclusionHexInputsForProver {
             root: hash_to_hex(&inclusion_proof_inputs[i].root),
-            path_index: inclusion_proof_inputs[i].leafIndex,
+            path_index: inclusion_proof_inputs[i].leaf_index,
             path_elements: inclusion_proof_inputs[i]
                 .proof
                 .iter()
@@ -97,16 +98,24 @@ fn convert_inclusion_proofs_to_hex(
     }
     inputs
 }
-
+use num_traits::identities::Zero;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct HexBatchInputsForProver {
+    #[serde(rename = "circuitType")]
+    pub circuit_type: String,
+    #[serde(rename = "stateTreeHeight", skip_serializing_if = "u32::is_zero")]
+    pub state_tree_height: u32,
+    #[serde(rename = "addressTreeHeight", skip_serializing_if = "u32::is_zero")]
+    pub address_tree_height: u32,
+    #[serde(rename = "publicInputHash", skip_serializing_if = "String::is_empty")]
+    pub public_input_hash: String,
     #[serde(
-        rename = "input-compressed-accounts",
+        rename = "inputCompressedAccounts",
         skip_serializing_if = "Vec::is_empty"
     )]
     input_compressed_accounts: Vec<InclusionHexInputsForProver>,
-    #[serde(rename = "new-addresses", skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "newAddresses", skip_serializing_if = "Vec::is_empty")]
     new_addresses: Vec<NonInclusionHexInputsForProver>,
 }
 
@@ -245,6 +254,72 @@ fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
     }
 }
 
+use solana_program::poseidon::{self, Endianness, Parameters};
+pub fn calculate_two_inputs_hash_chain(
+    hashes_first: &[[u8; 32]],
+    hashes_second: &[[u8; 32]],
+) -> [u8; 32] {
+    assert_eq!(hashes_first.len(), hashes_second.len());
+    if hashes_first.is_empty() {
+        return [0u8; 32];
+    }
+    let mut hash_chain = poseidon::hashv(
+        Parameters::Bn254X5,
+        Endianness::BigEndian,
+        &[&hashes_first[0], &hashes_second[0]],
+    )
+    .unwrap()
+    .to_bytes();
+
+    if hashes_first.len() == 1 {
+        return hash_chain;
+    }
+
+    for i in 1..hashes_first.len() {
+        hash_chain = poseidon::hashv(
+            Parameters::Bn254X5,
+            Endianness::BigEndian,
+            &[&hash_chain, &hashes_first[i], &hashes_second[i]],
+        )
+        .unwrap()
+        .to_bytes();
+    }
+    hash_chain
+}
+fn get_public_input_hash(
+    account_proofs: &Vec<MerkleProofWithContext>,
+    new_address_proofs: &Vec<MerkleContextWithNewAddressProof>,
+) -> [u8; 32] {
+    let account_hashes: Vec<[u8; 32]> = account_proofs
+        .iter()
+        .map(|x| x.hash.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let account_roots: Vec<[u8; 32]> = account_proofs
+        .iter()
+        .map(|x| x.root.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let inclusion_hash_chain: [u8; 32] =
+        calculate_two_inputs_hash_chain(&account_roots, &account_hashes);
+    let new_address_hashes: Vec<[u8; 32]> = new_address_proofs
+        .iter()
+        .map(|x| x.address.try_to_vec().unwrap().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let new_address_roots: Vec<[u8; 32]> = new_address_proofs
+        .iter()
+        .map(|x| x.root.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let non_inclusion_hash_chain =
+        calculate_two_inputs_hash_chain(&new_address_roots, &new_address_hashes);
+    let public_input_hash = if non_inclusion_hash_chain != [0u8; 32] {
+        non_inclusion_hash_chain
+    } else if inclusion_hash_chain != [0u8; 32] {
+        inclusion_hash_chain
+    } else {
+        calculate_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain])
+    };
+    public_input_hash
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
@@ -329,8 +404,43 @@ pub async fn get_validity_proof(
         }
     };
     tx.commit().await?;
+    let state_tree_height = if account_proofs.is_empty() {
+        0
+    } else {
+        account_proofs[0].proof.len() as u32
+    };
+    let address_tree_height = if new_address_proofs.is_empty() {
+        0
+    } else {
+        new_address_proofs[0].proof.len() as u32
+    };
+    let circuit_type = if state_tree_height != 0 && address_tree_height != 0 {
+        "combined".to_string()
+    } else if state_tree_height != 0 {
+        "inclusion".to_string()
+    } else if address_tree_height != 0 {
+        "non-inclusion".to_string()
+    } else {
+        return Err(PhotonApiError::ValidationError(
+            "No proofs found for the given hashes or new addresses".to_string(),
+        ));
+    };
 
+    // TODO: add mainnet option which creates legacy proofs
+    let public_input_hash = if circuit_type == "inclusion" && state_tree_height == 32 {
+        hash_to_hex(
+            &get_public_input_hash(&account_proofs, &new_address_proofs)
+                .try_into()
+                .unwrap(),
+        )
+    } else {
+        String::new()
+    };
     let batch_inputs = HexBatchInputsForProver {
+        public_input_hash,
+        state_tree_height,
+        address_tree_height,
+        circuit_type,
         input_compressed_accounts: convert_inclusion_proofs_to_hex(account_proofs.clone()),
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(new_address_proofs.clone()),
     };
@@ -384,14 +494,14 @@ pub async fn get_validity_proof(
             .collect(),
         rootIndices: account_proofs
             .iter()
-            .map(|x| x.rootSeq)
-            .chain(new_address_proofs.iter().map(|x| x.rootSeq))
+            .map(|x| x.root_seq)
+            .chain(new_address_proofs.iter().map(|x| x.root_seq))
             .map(|x| x % STATE_TREE_QUEUE_SIZE)
             .collect(),
         leafIndices: account_proofs
             .iter()
-            .map(|x| x.leafIndex)
-            .chain(new_address_proofs.iter().map(|x| x.lowElementLeafIndex))
+            .map(|x| x.leaf_index)
+            .chain(new_address_proofs.iter().map(|x| x.low_element_leaf_index))
             .collect(),
         leaves: account_proofs
             .iter()
@@ -404,11 +514,11 @@ pub async fn get_validity_proof(
             .collect(),
         merkleTrees: account_proofs
             .iter()
-            .map(|x| x.merkleTree.clone().to_string())
+            .map(|x| x.merkle_tree.clone().to_string())
             .chain(
                 new_address_proofs
                     .iter()
-                    .map(|x| x.merkleTree.clone().to_string()),
+                    .map(|x| x.merkle_tree.clone().to_string()),
             )
             .collect(),
     };

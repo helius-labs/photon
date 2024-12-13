@@ -1,14 +1,11 @@
 use std::collections::{HashMap, HashSet};
-
 use borsh::{BorshDeserialize, BorshSerialize};
+use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-
-use crate::common::typedefs::account::Account;
-
+use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
-
-use super::indexer_events::RawIndexedElement;
+use super::indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement};
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct PathNode {
@@ -64,14 +61,28 @@ pub struct IndexedTreeLeafUpdate {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-/// Representation of state update of the compression system that is optimal for simple persistance.
+pub struct AccountContext {
+    pub tx_hash: Hash,
+    pub account: Hash,
+    pub nullifier: Hash,
+    pub nullifier_queue_index: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+/// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
-    pub out_accounts: Vec<Account>,
+    pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
+    pub out_accounts: Vec<AccountWithContext>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
+
+    pub batch_append: Vec<BatchAppendEvent>,
+    pub batch_nullify: Vec<BatchNullifyEvent>,
+
+    pub input_context: Vec<AccountContext>,
 }
 
 impl StateUpdate {
@@ -81,7 +92,11 @@ impl StateUpdate {
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
+        // TODO: remove assert after tx_hash and in_seq_numbers are associated with in_accounts
+        // assert!(updates.iter().filter(|update| update.tx_hash != Hash::default()).count() <= 1);
         for update in updates {
+            // legacy
+            merged.in_seq_numbers.extend(update.in_seq_numbers);
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
             merged
@@ -102,6 +117,11 @@ impl StateUpdate {
                     merged.indexed_merkle_tree_updates.insert(key, value);
                 }
             }
+
+            // batch updates
+            merged.input_context.extend(update.input_context);
+            merged.batch_append.extend(update.batch_append);
+            merged.batch_nullify.extend(update.batch_nullify);
         }
         merged
     }

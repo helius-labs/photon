@@ -27,7 +27,7 @@ use photon_indexer::ingester::persist::persisted_state_tree::{
 };
 use sea_orm::{QueryFilter, TransactionTrait};
 
-use photon_indexer::common::typedefs::account::Account;
+use photon_indexer::common::typedefs::account::{Account, AccountV2};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
@@ -96,7 +96,7 @@ async fn test_persist_state_update_basic(
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
-        seq: UnsignedInteger(0),
+        seq: Some(UnsignedInteger(0)),
         slot_created: UnsignedInteger(0),
     };
 
@@ -180,6 +180,8 @@ async fn test_multiple_accounts(
             owner: owner1,
             lamports: UnsignedInteger(1000),
             tree: SerializablePubkey::new_unique(),
+            queue_index: None,
+            queue: None,
             leaf_index: UnsignedInteger(10),
             seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
@@ -195,6 +197,8 @@ async fn test_multiple_accounts(
             owner: owner1,
             lamports: UnsignedInteger(1030),
             tree: SerializablePubkey::new_unique(),
+            queue_index: None,
+            queue: None,
             leaf_index: UnsignedInteger(11),
             seq: UnsignedInteger(2),
             slot_created: UnsignedInteger(0),
@@ -210,6 +214,8 @@ async fn test_multiple_accounts(
             owner: owner2,
             lamports: UnsignedInteger(10020),
             tree: SerializablePubkey::new_unique(),
+            queue_index: None,
+            queue: None,
             leaf_index: UnsignedInteger(13),
             seq: UnsignedInteger(3),
             slot_created: UnsignedInteger(1),
@@ -225,6 +231,8 @@ async fn test_multiple_accounts(
             owner: owner2,
             lamports: UnsignedInteger(10100),
             tree: SerializablePubkey::new_unique(),
+            queue_index: None,
+            queue: None,
             leaf_index: UnsignedInteger(23),
             seq: UnsignedInteger(1),
             slot_created: UnsignedInteger(0),
@@ -735,10 +743,13 @@ async fn test_persisted_state_trees(
 
     let proofs = get_multiple_compressed_leaf_proofs(
         &setup.db_conn.begin().await.unwrap(),
-        leaf_nodes
-            .iter()
-            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
-            .collect(),
+        Some(
+            leaf_nodes
+                .iter()
+                .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+                .collect()
+        ),
+        None,
     )
     .await
     .unwrap();
@@ -769,12 +780,15 @@ async fn test_persisted_state_trees(
         .unwrap();
     txn.commit().await.unwrap();
 
+    let leaves = leaf_nodes
+        .iter()
+        .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+        .collect();
+
     let proofs = get_multiple_compressed_leaf_proofs(
         &setup.db_conn.begin().await.unwrap(),
-        leaf_nodes
-            .iter()
-            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
-            .collect(),
+        Some(leaves),
+        None
     )
     .await
     .unwrap();
@@ -1040,6 +1054,8 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
             owner: SerializablePubkey::new_unique(),
             lamports: UnsignedInteger(1000),
             tree,
+            queue_index: None,
+            queue: None,
             leaf_index: UnsignedInteger(leaf_index),
             seq: UnsignedInteger(0),
             slot_created: UnsignedInteger(0),
@@ -1190,6 +1206,8 @@ async fn test_gpa_filters(
         owner: owner1,
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
+        queue_index: None,
+        queue: None,
         leaf_index: UnsignedInteger(10),
         seq: UnsignedInteger(1),
         slot_created: UnsignedInteger(0),
@@ -1204,7 +1222,7 @@ async fn test_gpa_filters(
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
             owner: owner1,
 
-            dataSlice: Some(DataSlice {
+            data_slice: Some(DataSlice {
                 offset: 0,
                 length: 2,
             }),
@@ -1393,10 +1411,12 @@ async fn test_persist_and_verify(
         leaf_nodes = de_duplicated_leaf_nodes;
         let proofs = get_multiple_compressed_leaf_proofs(
             &setup.db_conn.begin().await.unwrap(),
-            leaf_nodes
+            Some(leaf_nodes
                 .iter()
                 .map(|x| Hash::try_from(x.hash.clone()).unwrap())
-                .collect(),
+                .collect()
+            ),
+            None,
         )
         .await
         .unwrap();

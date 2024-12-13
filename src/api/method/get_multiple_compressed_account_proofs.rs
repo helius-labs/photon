@@ -42,7 +42,7 @@ pub async fn get_multiple_compressed_account_proofs(
             tx.get_database_backend(),
             "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
         ))
-        .await?;
+            .await?;
     }
     let proofs = get_multiple_compressed_leaf_proofs(&tx, request).await?;
     tx.commit().await?;

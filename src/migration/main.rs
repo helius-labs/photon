@@ -7,6 +7,6 @@ async fn main() {
     if custom_indexes_enabled {
         cli::run_cli(MigractorWithCustomMigrations).await;
     } else {
-        cli::run_cli(Migrator).await;
+    cli::run_cli(Migrator).await;
     }
 }
