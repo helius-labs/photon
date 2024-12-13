@@ -742,10 +742,8 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    let tree_height = 5;
-    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
-        .await
-        .unwrap();
+    let tree_height = 33; // prev. 5
+    persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
     txn.commit().await.unwrap();
 
     let proofs = get_multiple_compressed_leaf_proofs(
@@ -779,9 +777,7 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
-        .await
-        .unwrap();
+    persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
     txn.commit().await.unwrap();
 
     let leaves = leaf_nodes
@@ -823,9 +819,9 @@ async fn test_indexed_merkle_trees(
         .unwrap();
 
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
-    let tree_height = 4;
+    let tree_height = 33; // prev. 4
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+    multi_append(&txn, values, tree.to_bytes_vec())
         .await
         .unwrap();
 
@@ -857,7 +853,7 @@ async fn test_indexed_merkle_trees(
 
     let values = vec![vec![3]];
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+    multi_append(&txn, values, tree.to_bytes_vec())
         .await
         .unwrap();
 
@@ -1148,12 +1144,10 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     ];
     let leaf_node_chunks = vec![leaf_nodes_1, leaf_nodes_2];
 
-    let tree_height = 3;
+    let tree_height = 33; // prev. 3
     for chunk in leaf_node_chunks {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
-        persist_leaf_nodes(&txn, chunk.clone(), tree_height)
-            .await
-            .unwrap();
+        persist_leaf_nodes(&txn, chunk.clone()).await.unwrap();
         txn.commit().await.unwrap();
 
         let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
@@ -1273,7 +1267,7 @@ async fn test_persisted_state_trees_multiple_cases(
 ) {
     let name = trim_test_name(function_name!());
     let tree = SerializablePubkey::new_unique();
-    let tree_height = 10;
+    let tree_height = 33; // prev. 10
 
     info!("Test case 1: Sequential leaf nodes");
     let leaf_nodes_1 = create_leaf_nodes(tree, 0..5, |i| i);
@@ -1295,7 +1289,7 @@ async fn test_persisted_state_trees_multiple_cases(
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_4, tree_height).await;
 
     info!("Test case 7: Very large tree");
-    let large_tree_height = 20;
+    let large_tree_height = 33; // prev. 20
     let leaf_nodes_7 = create_leaf_nodes(tree, 0..20, |i| i);
     test_persist_and_verify(
         name.clone(),
@@ -1366,14 +1360,10 @@ async fn test_persist_and_verify(
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         if one_at_a_time {
             for leaf_node in leaf_nodes.clone() {
-                persist_leaf_nodes(&txn, vec![leaf_node], tree_height)
-                    .await
-                    .unwrap();
+                persist_leaf_nodes(&txn, vec![leaf_node]).await.unwrap();
             }
         } else {
-            persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
-                .await
-                .unwrap();
+            persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
         }
         txn.commit().await.unwrap();
 
@@ -1463,7 +1453,7 @@ async fn test_update_indexed_merkle_tree(
     let name = trim_test_name(function_name!());
     let setup = setup(name.clone(), db_backend).await;
     let tree = Pubkey::new_unique();
-    let tree_height = 10;
+    let tree_height = 33; // prev. 10
     let index = 1;
     let value = [1; 32];
     let index_element_1 = RawIndexedElement {
@@ -1492,7 +1482,7 @@ async fn test_update_indexed_merkle_tree(
                     seq: *seq as u64,
                 },
             );
-            update_indexed_tree_leaves(&txn, indexed_leaf_updates, tree_height)
+            update_indexed_tree_leaves(&txn, indexed_leaf_updates)
                 .await
                 .unwrap();
         }
