@@ -166,12 +166,29 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         api.get_indexer_slot().await.map_err(Into::into)
     })?;
 
+    module.register_async_method("getQueueElements", |rpc_params, rpc_context| async move {
+        let api = rpc_context.as_ref();
+        let payload = rpc_params.parse()?;
+        api.get_queue_elements(payload).await.map_err(Into::into)
+    })?;
+
     module.register_async_method(
         "getCompressedAccountsByOwner",
         |rpc_params, rpc_context| async move {
             let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_compressed_accounts_by_owner(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedAccountsByOwnerV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_accounts_by_owner_v2(payload)
                 .await
                 .map_err(Into::into)
         },
@@ -242,10 +259,17 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
                 .map_err(Into::into)
         },
     )?;
+
     module.register_async_method("getValidityProof", |rpc_params, rpc_context| async move {
         let api = rpc_context.as_ref();
         let payload = rpc_params.parse()?;
         api.get_validity_proof(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method("getValidityProofV2", |rpc_params, rpc_context| async move {
+        let api = rpc_context.as_ref();
+        let payload = rpc_params.parse()?;
+        api.get_validity_proof_v2(payload).await.map_err(Into::into)
     })?;
 
     module.register_async_method(

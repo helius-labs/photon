@@ -2,7 +2,6 @@ use core::fmt;
 use std::io::Read;
 use std::str::FromStr;
 
-
 use borsh::BorshDeserialize;
 use serde::Deserialize;
 use solana_sdk::pubkey::ParsePubkeyError;

@@ -1,16 +1,21 @@
+use crate::common::typedefs::{
+    account::AccountData, bs64_string::Base64String, hash::Hash,
+    serializable_pubkey::SerializablePubkey, unsigned_integer::UnsignedInteger,
+};
 use borsh::BorshDeserialize;
 use byteorder::{ByteOrder, LittleEndian};
 use indexer_events::{IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent};
-use log::debug;
+use lazy_static::lazy_static;
+use light_batched_merkle_tree::event::BatchAppendEvent;
+use log::info;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use state_update::{IndexedTreeLeafUpdate, LeafNullification};
+use std::collections::HashMap;
+use std::str::FromStr;
 
-use crate::common::typedefs::{
-    account::{Account, AccountData},
-    bs64_string::Base64String,
-    hash::Hash,
-    serializable_pubkey::SerializablePubkey,
-    unsigned_integer::UnsignedInteger,
+use light_batched_merkle_tree::event::{
+    BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR, BATCH_APPEND_EVENT_DISCRIMINATOR,
+    BATCH_NULLIFY_EVENT_DISCRIMINATOR,
 };
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
@@ -20,9 +25,14 @@ use self::{
     state_update::{AccountTransaction, StateUpdate, Transaction},
 };
 
+mod batch_event_parser;
 pub mod indexer_events;
 pub mod state_update;
 
+use crate::common::typedefs::account::{Account, AccountContext, AccountWithContext};
+use crate::ingester::parser::batch_event_parser::{
+    parse_batch_public_transaction_event, parse_public_transaction_event_v2,
+};
 use solana_program::pubkey;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
@@ -31,6 +41,24 @@ const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
 
+// TODO: add a table which stores tree metadata: tree_pubkey | queue_pubkey | type | ...
+lazy_static! {
+    pub static ref QUEUE_TREE_MAPPING: HashMap<String, String> = {
+        let mut m = HashMap::new();
+        m.insert(
+            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(), // queue
+            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(), // tree
+        );
+        m
+    };
+}
+
+fn queue_to_tree(queue: &str) -> Option<Pubkey> {
+    QUEUE_TREE_MAPPING
+        .get(queue)
+        .map(|x| Pubkey::from_str(x.as_str()).unwrap())
+}
+
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
@@ -38,112 +66,172 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     let mut logged_transaction = false;
 
     for instruction_group in tx.clone().instruction_groups {
-        let mut ordered_intructions = Vec::new();
-        ordered_intructions.push(instruction_group.outer_instruction);
-        ordered_intructions.extend(instruction_group.inner_instructions);
+        let mut ordered_instructions = Vec::new();
+        ordered_instructions.push(instruction_group.outer_instruction.clone());
+        ordered_instructions.extend(instruction_group.inner_instructions.clone());
 
-        for (index, instruction) in ordered_intructions.iter().enumerate() {
-            // Check if there are enough instructions left to potentially find a pattern
-            if ordered_intructions.len() - index > 1 {
-                // Check if the current instruction is from the account compression program
-                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id {
-                    // Look for a NOOP_PROGRAM_ID instruction after one or two SYSTEM_PROGRAM instructions
-                    // We handle up to two system program instructions in the case where we also have to pay a tree rollover fee
-                    let mut noop_instruction_index = None;
-                    let mut system_program_count = 0;
-                    let mut all_intermediate_are_system = true;
-                    
-                    // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM but no more than two
-                    for i in (index + 1)..ordered_intructions.len() {
-                        let current_instruction = &ordered_intructions[i];
+        let mut vec_accounts = Vec::<Vec<Pubkey>>::new();
+        let mut vec_instructions_data = Vec::new();
+        vec_instructions_data.push(instruction_group.outer_instruction.data);
+        vec_accounts.push(instruction_group.outer_instruction.accounts.clone());
+
+        instruction_group
+            .inner_instructions
+            .iter()
+            .find_map(|inner_instruction| {
+                vec_instructions_data.push(inner_instruction.data.clone());
+                vec_accounts.push(inner_instruction.accounts.clone());
+                None::<PublicTransactionEvent>
+            });
+
+        if let Some(event) = parse_public_transaction_event_v2(&vec_instructions_data, vec_accounts)
+        {
+            let state_update = parse_batch_public_transaction_event(tx.signature, slot, event)?;
+            is_compression_transaction = true;
+            state_updates.push(state_update);
+        } else {
+            for (index, instruction) in ordered_instructions.iter().enumerate() {
+                // Check if there are enough instructions left to potentially find a pattern
+                if ordered_instructions.len() - index > 1 {
+                    // Check if the current instruction is from the account compression program
+                    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id {
+                        // Look for a NOOP_PROGRAM_ID instruction after one or two SYSTEM_PROGRAM instructions
+                        // We handle up to two system program instructions in the case where we also have to pay a tree rollover fee
+                        let mut noop_instruction_index = None;
+                        let mut system_program_count = 0;
+                        let mut all_intermediate_are_system = true;
                         
-                        if current_instruction.program_id == NOOP_PROGRAM_ID {
-                            noop_instruction_index = Some(i);
-                            break;
-                        } else if current_instruction.program_id == SYSTEM_PROGRAM {
-                            system_program_count += 1;
-                            if system_program_count > 2 {
+                        // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM but no more than two
+                        for i in (index + 1)..ordered_instructions.len() {
+                            let current_instruction = &ordered_instructions[i];
+                            
+                            if current_instruction.program_id == NOOP_PROGRAM_ID {
+                                noop_instruction_index = Some(i);
+                                break;
+                            } else if current_instruction.program_id == SYSTEM_PROGRAM {
+                                system_program_count += 1;
+                                if system_program_count > 2 {
+                                    all_intermediate_are_system = false;
+                                    break;
+                                }
+                            } else {
                                 all_intermediate_are_system = false;
                                 break;
                             }
-                        } else {
-                            all_intermediate_are_system = false;
-                            break;
                         }
-                    }
-                    
-                    // If we found a NOOP instruction, exactly one or two SYSTEM_PROGRAM instructions, and all intermediates were valid
-                    if let Some(noop_index) = noop_instruction_index {
-                        if system_program_count >= 1 && system_program_count <= 2 && all_intermediate_are_system {
-                            if !logged_transaction {
-                                debug!(
-                                    "Indexing transaction with slot {} and id {}",
-                                    slot, tx.signature
-                                );
-                                logged_transaction = true;
-                            }
-                            is_compression_transaction = true;
+                        
+                        // If we found a NOOP instruction, exactly one or two SYSTEM_PROGRAM instructions, and all intermediates were valid
+                        if let Some(noop_index) = noop_instruction_index {
+                            if system_program_count >= 1 && system_program_count <= 2 && all_intermediate_are_system {
+                                if !logged_transaction {
+                                    info!(
+                                        "Indexing transaction with slot {} and id {}",
+                                        slot, tx.signature
+                                    );
+                                    logged_transaction = true;
+                                }
+                                is_compression_transaction = true;
 
-                            if tx.error.is_none() {
-                                let noop_instruction = &ordered_intructions[noop_index];
-                                let public_transaction_event = PublicTransactionEvent::deserialize(
-                                    &mut noop_instruction.data.as_slice(),
-                                )
-                                .map_err(|e| {
-                                    IngesterError::ParserError(format!(
-                                        "Failed to deserialize PublicTransactionEvent: {}",
-                                        e
-                                    ))
-                                })?;
-                                let state_update = parse_public_transaction_event(
-                                    tx.signature,
-                                    slot,
-                                    public_transaction_event,
-                                )?;
-                                state_updates.push(state_update);
+                                if tx.error.is_none() {
+                                    let noop_instruction = &ordered_instructions[noop_index];
+                                    let public_transaction_event = PublicTransactionEvent::deserialize(
+                                        &mut noop_instruction.data.as_slice(),
+                                    )
+                                    .map_err(|e| {
+                                        IngesterError::ParserError(format!(
+                                            "Failed to deserialize PublicTransactionEvent: {}",
+                                            e
+                                        ))
+                                    })?;
+                                    let state_update = parse_public_transaction_event(
+                                        tx.signature,
+                                        slot,
+                                        public_transaction_event,
+                                    )?;
+                                    state_updates.push(state_update);
+                                }
                             }
                         }
                     }
                 }
-            }
-            if ordered_intructions.len() - index > 1 {
-                let next_instruction = &ordered_intructions[index + 1];
-                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
-                    && next_instruction.program_id == NOOP_PROGRAM_ID
-                {
-                    is_compression_transaction = true;
-                    if tx.error.is_none() {
-                        let merkle_tree_event =
-                            MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
+
+               
+                if ordered_instructions.len() - index > 1 {
+                    let next_instruction = &ordered_instructions[index + 1];
+                    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+                        && next_instruction.program_id == NOOP_PROGRAM_ID
+                    {
+                        is_compression_transaction = true;
+                        if tx.error.is_none() {
+                            // try to deserialize 3 types of events: BatchAppendEvent, BatchNullifyEvent, MerkleTreeEvent
+                            // if any of them is deserialized successfully, then we can parse the event
+                            // if batch append event is deserialized, then we can parse the event and skip the next instruction
+                            // if batch nullify event is deserialized, then we can parse the event and skip the next instruction
+
+                            let batch_event = BatchAppendEvent::deserialize(
+                                &mut next_instruction.data.as_slice(),
+                            )
+                            .map_err(|e| {
+                                IngesterError::ParserError(format!(
+                                    "Failed to deserialize BatchAppendEvent: {}",
+                                    e
+                                ))
+                            });
+
+                            if let Ok(batch_event) = batch_event {
+                                let mut state_update = StateUpdate::new();
+                                let discriminator = batch_event.discriminator;
+
+                                match discriminator {
+                                    BATCH_APPEND_EVENT_DISCRIMINATOR => {
+                                        state_update.batch_append.push(batch_event);
+                                        state_updates.push(state_update);
+                                    }
+                                    BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
+                                        state_update.batch_nullify.push(batch_event);
+                                        state_updates.push(state_update);
+                                    }
+                                    BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
+                                        // TODO: implement
+                                    }
+                                    _ => {
+                                        unimplemented!()
+                                    }
+                                }
+                            } else {
+                                let merkle_tree_event = MerkleTreeEvent::deserialize(
+                                    &mut next_instruction.data.as_slice(),
+                                )
                                 .map_err(|e| {
                                     IngesterError::ParserError(format!(
                                         "Failed to deserialize NullifierEvent: {}",
                                         e
                                     ))
                                 })?;
-
-                        let state_update = match merkle_tree_event {
-                            MerkleTreeEvent::V2(nullifier_event) => {
-                                parse_nullifier_event(tx.signature, nullifier_event)?
+                                let state_update = match merkle_tree_event {
+                                    MerkleTreeEvent::V2(nullifier_event) => {
+                                        parse_nullifier_event(tx.signature, nullifier_event)
+                                    }
+                                    MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
+                                        parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
+                                    }
+                                    _ => {
+                                        return Err(IngesterError::ParserError(
+                                            "Expected nullifier event or merkle tree update"
+                                                .to_string(),
+                                        ))
+                                    }
+                                };
+                                state_updates.push(state_update?);
                             }
-                            MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                                parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
-                            }
-                            _ => {
-                                return Err(IngesterError::ParserError(
-                                    "Expected nullifier event or merkle tree update".to_string(),
-                                ))
-                            }
-                        };
-                        state_updates.push(state_update);
+                        }
                     }
                 }
             }
         }
     }
 
-    let mut state_update = StateUpdate::merge_updates(state_updates);
-
+    let mut state_update = StateUpdate::merge_updates(state_updates.clone());
     if !is_voting_transaction(tx) || is_compression_transaction {
         state_update.transactions.insert(Transaction {
             signature: tx.signature,
@@ -162,14 +250,20 @@ fn is_voting_transaction(tx: &TransactionInfo) -> bool {
         .any(|group| group.outer_instruction.program_id == VOTE_PROGRAM_ID)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_account_data(
     compressed_account: CompressedAccount,
     hash: [u8; 32],
     tree: Pubkey,
+    queue: Option<Pubkey>,
     leaf_index: u32,
     slot: u64,
-    seq: u64,
-) -> Account {
+    seq: Option<u64>,
+    in_output_queue: bool,
+    spent: bool,
+    nullifier: Option<Hash>,
+    nullifier_queue_index: Option<u64>,
+) -> AccountWithContext {
     let CompressedAccount {
         owner,
         lamports,
@@ -183,16 +277,27 @@ fn parse_account_data(
         data_hash: Hash::from(d.data_hash),
     });
 
-    Account {
-        owner: owner.into(),
-        lamports: UnsignedInteger(lamports),
-        address: address.map(SerializablePubkey::from),
-        data,
-        hash: hash.into(),
-        slot_created: UnsignedInteger(slot),
-        leaf_index: UnsignedInteger(leaf_index as u64),
-        tree: SerializablePubkey::from(tree),
-        seq: UnsignedInteger(seq),
+    AccountWithContext {
+        account: Account {
+            owner: owner.into(),
+            lamports: UnsignedInteger(lamports),
+            address: address.map(SerializablePubkey::from),
+            data,
+            hash: hash.into(),
+            slot_created: UnsignedInteger(slot),
+            leaf_index: UnsignedInteger(leaf_index as u64),
+            tree: SerializablePubkey::from(tree),
+            seq: seq.map(UnsignedInteger),
+        },
+        context: AccountContext {
+            queue: queue.map(SerializablePubkey::from),
+            in_output_queue,
+            spent,
+            nullified_in_tree: false,
+            nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
+            nullifier,
+            tx_hash: None,
+        },
     }
 }
 
@@ -214,9 +319,7 @@ fn parse_indexed_merkle_tree_update(
         .iter()
         {
             let indexed_tree_leaf_update = IndexedTreeLeafUpdate {
-                tree: Pubkey::try_from(id).map_err(|_e| {
-                    IngesterError::ParserError("Unable to parse tree pubkey".to_string())
-                })?,
+                tree: Pubkey::from(id),
                 hash: *hash,
                 leaf: *leaf,
                 seq,
@@ -247,9 +350,7 @@ fn parse_nullifier_event(
     for (i, leaf_index) in nullified_leaves_indices.iter().enumerate() {
         let leaf_nullification: LeafNullification = {
             LeafNullification {
-                tree: Pubkey::try_from(id).map_err(|_e| {
-                    IngesterError::ParserError("Unable to parse tree pubkey".to_string())
-                })?,
+                tree: Pubkey::from(id),
                 leaf_index: *leaf_index,
                 seq: seq + i as u64,
                 signature: tx,
@@ -277,10 +378,27 @@ fn parse_public_transaction_event(
 
     let mut state_update = StateUpdate::new();
 
-    let mut tree_to_seq_number = sequence_numbers
-        .iter()
-        .map(|seq| (seq.pubkey, seq.seq))
-        .collect::<std::collections::HashMap<_, _>>();
+    let mut has_batched_instructions = false;
+    for seq in sequence_numbers.iter() {
+        if queue_to_tree(&seq.pubkey.to_string()).is_some() {
+            has_batched_instructions = true;
+            break;
+        }
+    }
+
+    let mut tree_to_seq_number = HashMap::new();
+    if has_batched_instructions {
+        for seq in sequence_numbers.iter() {
+            if let Some(tree) = queue_to_tree(&seq.pubkey.to_string()) {
+                tree_to_seq_number.insert(tree, seq.seq);
+            }
+        }
+    } else {
+        tree_to_seq_number = sequence_numbers
+            .iter()
+            .map(|seq| (seq.pubkey, seq.seq))
+            .collect::<HashMap<_, _>>();
+    }
 
     for hash in input_compressed_account_hashes {
         state_update.in_accounts.insert(hash.into());
@@ -291,20 +409,42 @@ fn parse_public_transaction_event(
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
-        let tree = pubkey_array[out_account.merkle_tree_index as usize];
-        let seq = tree_to_seq_number
-            .get_mut(&tree)
-            .ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
+        let mut tree = pubkey_array[out_account.merkle_tree_index as usize];
+        let mut queue = queue_to_tree(&tree.to_string());
+        if let Some(q) = queue {
+            // swap tree and q
+            let temp = tree;
+            tree = q;
+            queue = Some(temp);
+        };
 
+        let mut seq = None;
+        if queue.is_none() {
+            seq = Some(*tree_to_seq_number.get(&tree).ok_or_else(|| {
+                IngesterError::ParserError("Missing sequence number".to_string())
+            })?);
+        }
         let enriched_account = parse_account_data(
             out_account.compressed_account,
             hash,
             tree,
+            queue,
             *leaf_index,
             slot,
-            *seq,
+            seq,
+            queue.is_some(),
+            false,
+            None,
+            None,
         );
-        *seq += 1;
+
+        if queue.is_none() {
+            let seq = tree_to_seq_number
+                .get_mut(&tree)
+                .ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
+            *seq += 1;
+        }
+
         state_update.out_accounts.push(enriched_account);
     }
 
@@ -327,7 +467,7 @@ fn parse_public_transaction_event(
                 .out_accounts
                 .iter()
                 .map(|a| AccountTransaction {
-                    hash: a.hash.clone(),
+                    hash: a.account.hash.clone(),
                     signature: tx,
                 }),
         );

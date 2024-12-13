@@ -21,7 +21,6 @@ pub struct GetCompressionSignaturesForTokenOwnerRequest {
     pub cursor: Option<String>,
 }
 
-
 pub async fn get_compression_signatures_for_token_owner(
     conn: &DatabaseConnection,
     request: GetCompressionSignaturesForTokenOwnerRequest,
