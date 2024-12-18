@@ -9,6 +9,9 @@ readme = "README.md"
 repository = "https://github.com/helius-labs/photon"
 version = "0.50.0"
 
+[features]
+test-sbf = []
+
 [[bin]]
 name = "photon"
 path = "src/main.rs"

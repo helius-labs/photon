@@ -41,18 +41,62 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         let mut ordered_intructions = Vec::new();
         ordered_intructions.push(instruction_group.outer_instruction);
         ordered_intructions.extend(instruction_group.inner_instructions);
-
+        
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if ordered_intructions.len() - index > 2 {
+            if ordered_intructions.len() - index > 3 {
+                debug!("ordered_instructions: {:?}", ordered_intructions);
+
                 let next_instruction = &ordered_intructions[index + 1];
                 let next_next_instruction = &ordered_intructions[index + 2];
+                let next_next_next_instruction = &ordered_intructions[index + 3];
                 // We need to check if the account compression instruction contains a noop account to determine
                 // if the instruction emits a noop event. If it doesn't then we want avoid indexing
                 // the following noop instruction because it'll contain either irrelevant or malicious data.
+    
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && next_instruction.program_id == SYSTEM_PROGRAM
-                    && next_next_instruction.program_id == NOOP_PROGRAM_ID
-                {
+                    && next_next_instruction.program_id == SYSTEM_PROGRAM
+                    && next_next_next_instruction.program_id == NOOP_PROGRAM_ID {
+                    if !logged_transaction {
+                        debug!(
+                            "Indexing transaction with slot {} and id {}",
+                            slot, tx.signature
+                        );
+                        logged_transaction = true;
+                    }
+                    is_compression_transaction = true;
+
+                    if tx.error.is_none() {
+                        let public_transaction_event = PublicTransactionEvent::deserialize(
+                            &mut next_next_next_instruction.data.as_slice(),
+                        )
+                        .map_err(|e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to deserialize PublicTransactionEvent: {}",
+                                e
+                            ))
+                        })?;
+                        let state_update = parse_public_transaction_event(
+                            tx.signature,
+                            slot,
+                            public_transaction_event,
+                        )?;
+                        state_updates.push(state_update);
+                    }
+                }
+            }
+            if ordered_intructions.len() - index > 2 {
+                debug!("ordered_instructions: {:?}", ordered_intructions);
+
+                let next_instruction = &ordered_intructions[index + 1];
+                let next_next_instruction = &ordered_intructions[index + 2];                
+                // We need to check if the account compression instruction contains a noop account to determine
+                // if the instruction emits a noop event. If it doesn't then we want avoid indexing
+                // the following noop instruction because it'll contain either irrelevant or malicious data.
+                    
+                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+                    && next_instruction.program_id == SYSTEM_PROGRAM
+                    && next_next_instruction.program_id == NOOP_PROGRAM_ID {
                     if !logged_transaction {
                         debug!(
                             "Indexing transaction with slot {} and id {}",
@@ -82,12 +126,14 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 }
             }
             if ordered_intructions.len() - index > 1 {
+                debug!("Parsing tx with signature: {}", tx.signature);
                 let next_instruction = &ordered_intructions[index + 1];
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
                     && next_instruction.program_id == NOOP_PROGRAM_ID
                 {
                     is_compression_transaction = true;
                     if tx.error.is_none() {
+                        debug!("Indexing tx with signature: {}", tx.signature);
                         let merkle_tree_event =
                             MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
                                 .map_err(|e| {
@@ -96,7 +142,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                                         e
                                     ))
                                 })?;
-
+                        debug!("Merkle tree event: {:?}", merkle_tree_event);
                         let state_update = match merkle_tree_event {
                             MerkleTreeEvent::V2(nullifier_event) => {
                                 parse_nullifier_event(tx.signature, nullifier_event)?
