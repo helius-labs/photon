@@ -427,7 +427,7 @@ pub async fn get_validity_proof(
     };
 
     // TODO: add mainnet option which creates legacy proofs
-    let public_input_hash = if circuit_type == "inclusion" {
+    let public_input_hash = if circuit_type == "inclusion" && state_tree_height == 32 {
         hash_to_hex(
             &get_public_input_hash(&account_proofs, &new_address_proofs)
                 .try_into()
