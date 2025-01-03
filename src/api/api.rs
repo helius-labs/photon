@@ -5,6 +5,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 
+use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
@@ -382,7 +383,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getValidityProof".to_string(),
-                request: Some(GetValidityProofRequest::schema().1),
+                request: Some(GetValidityProofRequestDocumentation::schema().1),
                 response: GetValidityProofResponse::schema().1,
             },
             OpenApiSpec {

@@ -252,7 +252,19 @@ pub struct GetValidityProofRequest {
     #[serde(default)]
     pub hashes: Vec<Hash>,
     #[serde(default)]
+    #[schema(deprecated = true)]
     pub newAddresses: Vec<SerializablePubkey>,
+    #[serde(default)]
+    pub newAddressesWithTrees: Vec<AddressWithTree>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
+// Create to hide the deprecated newAddresses field from the documentation
+pub struct GetValidityProofRequestDocumentation {
+    #[serde(default)]
+    pub hashes: Vec<Hash>,
     #[serde(default)]
     pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
@@ -273,12 +285,12 @@ pub async fn get_validity_proof(
         && request.newAddresses.is_empty()
         && request.newAddressesWithTrees.is_empty()
     {
-        return Err(PhotonApiError::UnexpectedError(
+        return Err(PhotonApiError::ValidationError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
     if !request.newAddressesWithTrees.is_empty() && !request.newAddresses.is_empty() {
-        return Err(PhotonApiError::UnexpectedError(
+        return Err(PhotonApiError::ValidationError(
             "Cannot provide both newAddresses and newAddressesWithTree".to_string(),
         ));
     }
