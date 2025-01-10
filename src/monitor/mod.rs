@@ -63,6 +63,8 @@ pub fn continously_monitor_photon(
                 0
             };
             metric! {
+                statsd_count!("latest_slot", latest_slot);
+                statsd_count!("last_indexed_slot", last_indexed_slot);
                 statsd_gauge!("indexing_lag", lag);
             }
             if lag < HEALTH_CHECK_SLOT_DISTANCE as u64 {
