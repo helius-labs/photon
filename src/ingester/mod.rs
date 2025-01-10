@@ -92,10 +92,10 @@ pub async fn index_block_batch(
         state_updates.push(derive_block_state_update(block)?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
+    tx.commit().await?;
     metric! {
         statsd_count!("blocks_indexed", blocks_len as i64);
     }
-    tx.commit().await?;
     Ok(())
 }
 
