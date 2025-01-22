@@ -41,7 +41,7 @@ impl MigrationTrait for Migration {
             execute_sql(
                 manager,
                 &format!(
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS solayer_account_index ON accounts (substring(data, 1, 32)) \
+                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS solayer_account_index ON accounts (spent, owner, substring(data, 1, 32)) \
                     WHERE owner IN ('{}');",
                     encoded_accounts
                 ),
