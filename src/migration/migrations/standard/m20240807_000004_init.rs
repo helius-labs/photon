@@ -1,6 +1,6 @@
 use sea_orm_migration::prelude::*;
 
-use super::model::table::StateTreeHistories;
+use super::super::super::model::table::StateTreeHistories;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
