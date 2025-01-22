@@ -99,9 +99,14 @@ Photon supports both Postgres and SQLite. By default, it uses an in-memory SQLit
 To use a custom database:
 ```bash
 export DATABASE_URL="postgres://postgres@localhost/postgres"
+# Set ENABLE_CUSTOM_INDEXES=true to enable program-specific indexes. 
 photon-migration up
 photon --db-url=$DATABASE_URL
 ```
+
+## 🗄️ Custom Indexes
+
+Developers can easily add program-specific indexes through a custom migration to speed up queries. See `src/migration/migrations/custom/custom20252201_000001_init.rs` for an example. In the future, we will add tooling to make it easier to add custom indexes. For now, contact the Helius team to add custom indexes.
 
 ## 🛠️ Local Development
 
