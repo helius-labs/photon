@@ -1,6 +1,6 @@
 use sea_orm_migration::prelude::*;
 
-use super::model::table::Transactions;
+use super::super::super::model::table::Transactions;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
