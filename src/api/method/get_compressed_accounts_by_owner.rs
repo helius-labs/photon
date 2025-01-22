@@ -115,7 +115,7 @@ pub async fn get_compressed_accounts_by_owner(
 
     let owner_string = bytes_to_sql_format(conn.get_database_backend(), owner.into());
 
-    if filters.is_empty() && !SOL_LAYER_ACCOUNTS.contains(&owner_string.as_str()) {
+    if !filters.is_empty() && !SOL_LAYER_ACCOUNTS.contains(&owner_string.as_str()) {
         let raw_sql = format!(
             "
             SELECT CASE
