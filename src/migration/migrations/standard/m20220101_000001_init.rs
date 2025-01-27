@@ -3,9 +3,9 @@ use sea_orm_migration::{
     sea_orm::{ConnectionTrait, DatabaseBackend, Statement},
 };
 
-use crate::migration::model::table::{Accounts, StateTrees, TokenAccounts};
+use super::super::super::model::table::{Accounts, StateTrees, TokenAccounts};
 
-use super::model::table::{
+use super::super::super::model::table::{
     AccountTransactions, Blocks, IndexedTrees, OwnerBalances, TokenOwnerBalances, Transactions,
 };
 
