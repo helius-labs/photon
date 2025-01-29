@@ -1,10 +1,12 @@
 use std::sync::Arc;
-
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
+use crate::api::method::get_leaf_info::{get_leaf_info, GetLeafInfoRequest, GetLeafInfoResponse};
+use crate::api::method::get_proofs_by_indices::{get_proofs_by_indices, GetProofsByIndicesRequest, GetProofsByIndicesResponse};
 use crate::api::method::get_queue_elements::{get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse};
+use crate::api::method::get_subtrees::{get_subtrees, GetSubtreesRequest, GetSubtreesResponse};
 use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -218,6 +220,18 @@ impl PhotonApi {
         get_queue_elements(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_leaf_info(&self, request: GetLeafInfoRequest) -> Result<GetLeafInfoResponse, PhotonApiError> {
+        get_leaf_info(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_proofs_by_indices(&self, request: GetProofsByIndicesRequest) -> Result<GetProofsByIndicesResponse, PhotonApiError> {
+        get_proofs_by_indices(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_subtrees(&self, request: GetSubtreesRequest) -> Result<GetSubtreesResponse, PhotonApiError> {
+        get_subtrees(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_compressed_accounts_by_owner(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
@@ -298,6 +312,26 @@ impl PhotonApi {
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
+            OpenApiSpec {
+                name: "getQueueElements".to_string(),
+                request: Some(GetQueueElementsRequest::schema().1),
+                response: GetQueueElementsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getLeafInfo".to_string(),
+                request: Some(GetLeafInfoRequest::schema().1),
+                response: GetLeafInfoResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getProofsByIndices".to_string(),
+                request: Some(GetProofsByIndicesRequest::schema().1),
+                response: GetProofsByIndicesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getSubtrees".to_string(),
+                request: Some(GetSubtreesRequest::schema().1),
+                response: GetSubtreesResponse::schema().1,
+            },
             OpenApiSpec {
                 name: "getCompressedAccount".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),

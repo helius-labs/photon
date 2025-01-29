@@ -4,7 +4,7 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.45.0
+  version: 0.50.0
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
@@ -608,6 +608,127 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getCompressedMintTokenHolders:
+    summary: getCompressedMintTokenHolders
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getCompressedMintTokenHolders
+                params:
+                  type: object
+                  required:
+                  - mint
+                  properties:
+                    cursor:
+                      allOf:
+                      - $ref: '#/components/schemas/Base58String'
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
+                    mint:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        $ref: '#/components/schemas/OwnerBalanceList'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getCompressedTokenAccountBalance:
     summary: getCompressedTokenAccountBalance
     post:
@@ -1070,6 +1191,131 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/TokenBalanceList'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getCompressedTokenBalancesByOwnerV2:
+    summary: getCompressedTokenBalancesByOwnerV2
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getCompressedTokenBalancesByOwnerV2
+                params:
+                  type: object
+                  required:
+                  - owner
+                  properties:
+                    cursor:
+                      allOf:
+                      - $ref: '#/components/schemas/Base58String'
+                      nullable: true
+                    limit:
+                      allOf:
+                      - $ref: '#/components/schemas/Limit'
+                      nullable: true
+                    mint:
+                      allOf:
+                      - $ref: '#/components/schemas/SerializablePubkey'
+                      nullable: true
+                    owner:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        $ref: '#/components/schemas/TokenBalanceListV2'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -2008,6 +2254,124 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getLeafInfo:
+    summary: getLeafInfo
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getLeafInfo
+                params:
+                  type: object
+                  required:
+                  - merkleTree
+                  - zkpBatchSize
+                  properties:
+                    merkleTree:
+                      $ref: '#/components/schemas/Hash'
+                    zkpBatchSize:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LeafInfo'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getMultipleCompressedAccountProofs:
     summary: getMultipleCompressedAccountProofs
     post:
@@ -2469,6 +2833,365 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getProofsByIndices:
+    summary: getProofsByIndices
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getProofsByIndices
+                params:
+                  type: object
+                  required:
+                  - merkleTree
+                  - indices
+                  properties:
+                    indices:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/UnsignedInteger'
+                    merkleTree:
+                      $ref: '#/components/schemas/Hash'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProofOfLeaf'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getQueueElements:
+    summary: getQueueElements
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getQueueElements
+                params:
+                  type: object
+                  required:
+                  - queue
+                  - startOffset
+                  - endOffset
+                  - batch
+                  properties:
+                    batch:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                    endOffset:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                    queue:
+                      $ref: '#/components/schemas/Hash'
+                    startOffset:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Hash'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getSubtrees:
+    summary: getSubtrees
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getSubtrees
+                params:
+                  type: object
+                  required:
+                  - merkleTree
+                  properties:
+                    merkleTree:
+                      $ref: '#/components/schemas/Hash'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Hash'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getTransactionWithCompressionInfo:
     summary: getTransactionWithCompressionInfo
     post:
@@ -2629,10 +3352,6 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Hash'
-                    newAddresses:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/SerializablePubkey'
                     newAddressesWithTrees:
                       type: array
                       items:
@@ -2895,6 +3614,19 @@ components:
       type: string
       description: A 32-byte hash represented as a base58 string.
       example: 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+    LeafInfo:
+      type: object
+      required:
+      - leaf_index
+      - leaf
+      - tx_hash
+      properties:
+        leaf:
+          $ref: '#/components/schemas/Hash'
+        leaf_index:
+          $ref: '#/components/schemas/UnsignedInteger'
+        tx_hash:
+          $ref: '#/components/schemas/Hash'
     Limit:
       type: integer
       format: uint64
@@ -2979,6 +3711,38 @@ components:
           format: uint64
           minimum: 0
       additionalProperties: false
+    OwnerBalance:
+      type: object
+      required:
+      - owner
+      - balance
+      properties:
+        balance:
+          $ref: '#/components/schemas/UnsignedInteger'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+    OwnerBalanceList:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          $ref: '#/components/schemas/Base58String'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerBalance'
+    OwnerBalancesResponse:
+      type: object
+      required:
+      - context
+      - value
+      properties:
+        context:
+          $ref: '#/components/schemas/Context'
+        value:
+          $ref: '#/components/schemas/OwnerBalanceList'
+      additionalProperties: false
     PaginatedAccountList:
       type: object
       required:
@@ -3003,6 +3767,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureInfo'
+    ProofOfLeaf:
+      type: object
+      required:
+      - leaf
+      - proof
+      properties:
+        leaf:
+          $ref: '#/components/schemas/Hash'
+        proof:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
@@ -3106,9 +3882,19 @@ components:
       - token_balances
       properties:
         cursor:
-          type: string
-          nullable: true
+          $ref: '#/components/schemas/Base58String'
         token_balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenBalance'
+    TokenBalanceListV2:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          $ref: '#/components/schemas/Base58String'
+        items:
           type: array
           items:
             $ref: '#/components/schemas/TokenBalance'

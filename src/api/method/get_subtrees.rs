@@ -7,44 +7,40 @@ use utoipa::ToSchema;
 use crate::api::error::PhotonApiError;
 use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 lazy_static! {
-    pub static ref QUEUE_ELEMENTS: Mutex<Vec<Hash>> = Mutex::new(Vec::new());
+    pub static ref SUBTREES: Mutex<Vec<Hash>> = Mutex::new(Vec::new());
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetQueueElementsRequest {
-    pub queue: Hash,
-    pub start_offset: UnsignedInteger,
-    pub end_offset: UnsignedInteger,
-    pub batch: UnsignedInteger,
+pub struct GetSubtreesRequest {
+    pub merkle_tree: Hash,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetQueueElementsResponse {
+pub struct GetSubtreesResponse {
     pub context: Context,
     pub value: Vec<Hash>,
 }
 
-pub async fn get_queue_elements(
+pub async fn get_subtrees(
     conn: &DatabaseConnection,
-    _request: GetQueueElementsRequest,
-) -> Result<GetQueueElementsResponse, PhotonApiError> {
+    _request: GetSubtreesRequest,
+) -> Result<GetSubtreesResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
     let hash = Hash::new_unique();
-    let mut queue_elements = QUEUE_ELEMENTS.lock().unwrap();
-    queue_elements.push(hash);
-    if queue_elements.len() > 10 {
-        queue_elements.remove(0);
+    let mut subtrees = SUBTREES.lock().unwrap();
+    subtrees.push(hash);
+    if subtrees.len() > 10 {
+        subtrees.remove(0);
     }
 
-    let response = GetQueueElementsResponse {
+    let response = GetSubtreesResponse {
         context,
-        value: queue_elements.clone()
+        value: subtrees.clone()
     };
 
     Ok(response)

@@ -22,4 +22,7 @@ pub mod get_multiple_new_address_proofs;
 pub mod get_transaction_with_compression_info;
 pub mod get_validity_proof;
 pub mod get_queue_elements;
+pub mod get_subtrees;
+pub mod get_leaf_info;
+pub mod get_proofs_by_indices;
 pub mod utils;

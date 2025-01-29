@@ -29,6 +29,8 @@ use crate::api::method::utils::SignatureInfoListWithError;
 use crate::api::method::utils::SignatureInfoWithError;
 use crate::api::method::utils::TokenAcccount;
 use crate::api::method::utils::TokenAccountList;
+use crate::api::method::get_leaf_info::LeafInfo;
+use crate::api::method::get_proofs_by_indices::ProofOfLeaf;
 use crate::common::typedefs::account::Account;
 use crate::common::typedefs::account::AccountData;
 use crate::common::typedefs::bs58_string::Base58String;
@@ -110,6 +112,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OwnerBalanceList,
     OwnerBalancesResponse,
     TokenBalanceListV2,
+    LeafInfo,
+    ProofOfLeaf,
 )))]
 struct ApiDoc;
 
