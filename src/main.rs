@@ -214,7 +214,7 @@ async fn main() {
                         Some(start_slot) => match start_slot.as_str() {
                             "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
                             _ => {
-                                fetch_block_parent_slot(&rpc_client, start_slot.parse::<u63>().unwrap())
+                                fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
                                     .await
                             }
                         },
@@ -238,7 +238,7 @@ async fn main() {
                     info!("Detected snapshot files. Loading snapshot...");
                     let last_slot = snapshot_files.last().unwrap().end_slot;
                     // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
-                    let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(-1);
+                    let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
 
                     if snapshot_offset >= last_indexed_slot {
                         info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
