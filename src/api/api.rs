@@ -4,7 +4,7 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
-
+use crate::api::method::get_queue_elements::{get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse};
 use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
 use crate::api::method::utils::GetNonPaginatedSignaturesResponse;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -212,6 +212,10 @@ impl PhotonApi {
 
     pub async fn get_indexer_slot(&self) -> Result<UnsignedInteger, PhotonApiError> {
         get_indexer_slot(self.db_conn.as_ref()).await
+    }
+
+    pub async fn get_queue_elements(&self, request: GetQueueElementsRequest) -> Result<GetQueueElementsResponse, PhotonApiError> {
+        get_queue_elements(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_accounts_by_owner(
