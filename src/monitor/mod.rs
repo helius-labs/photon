@@ -190,6 +190,7 @@ async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash
                     account_roots
                 );
                 root_validation_errors += 1;
+                statsd_count!("root_validation_failure", 1, "pubkey" => pubkey);
             }
         }
     }
