@@ -32,7 +32,7 @@ pub async fn get_compressed_account_proof(
         ))
         .await?;
     }
-    let res = get_multiple_compressed_leaf_proofs(&tx, vec![hash])
+    let res = get_multiple_compressed_leaf_proofs(&tx, Some(vec![hash]), None)
         .await?
         .into_iter()
         .next()

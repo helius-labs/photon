@@ -42,7 +42,7 @@ lazy_static! {
     .unwrap();
 }
 
-fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
+pub fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
     let mut poseidon = Poseidon::<Fr>::new_circom(3).unwrap();
     let next_index = node.next_index.to_be_bytes();
     Hash::try_from(
@@ -54,7 +54,7 @@ fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, Ingester
     .map_err(|e| IngesterError::ParserError(format!("Failed to convert hash: {}", e)))
 }
 
-fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
+pub fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
     indexed_trees::Model {
         tree,
         leaf_index: 0,
@@ -68,7 +68,7 @@ fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
     }
 }
 
-fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
+pub fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
     indexed_trees::Model {
         tree,
         leaf_index: 1,

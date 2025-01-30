@@ -4,7 +4,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
 use crate::api::method::get_leaf_info::{get_leaf_info, GetLeafInfoRequest, GetLeafInfoResponse};
-use crate::api::method::get_proofs_by_indices::{get_proofs_by_indices, GetProofsByIndicesRequest, GetProofsByIndicesResponse};
+use crate::api::method::get_multiple_compressed_account_proofs::GetMultipleCompressedAccountProofsRequest;
 use crate::api::method::get_queue_elements::{get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse};
 use crate::api::method::get_subtrees::{get_subtrees, GetSubtreesRequest, GetSubtreesResponse};
 use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
@@ -69,7 +69,6 @@ use super::{
         get_indexer_slot::get_indexer_slot,
         get_multiple_compressed_account_proofs::{
             get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse,
-            HashList,
         },
         get_multiple_compressed_accounts::{
             get_multiple_compressed_accounts, GetMultipleCompressedAccountsRequest,
@@ -140,7 +139,7 @@ impl PhotonApi {
 
     pub async fn get_multiple_compressed_account_proofs(
         &self,
-        request: HashList,
+        request: GetMultipleCompressedAccountProofsRequest,
     ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
@@ -222,10 +221,6 @@ impl PhotonApi {
 
     pub async fn get_leaf_info(&self, request: GetLeafInfoRequest) -> Result<GetLeafInfoResponse, PhotonApiError> {
         get_leaf_info(self.db_conn.as_ref(), request).await
-    }
-
-    pub async fn get_proofs_by_indices(&self, request: GetProofsByIndicesRequest) -> Result<GetProofsByIndicesResponse, PhotonApiError> {
-        get_proofs_by_indices(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_subtrees(&self, request: GetSubtreesRequest) -> Result<GetSubtreesResponse, PhotonApiError> {
@@ -323,11 +318,6 @@ impl PhotonApi {
                 response: GetLeafInfoResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getProofsByIndices".to_string(),
-                request: Some(GetProofsByIndicesRequest::schema().1),
-                response: GetProofsByIndicesResponse::schema().1,
-            },
-            OpenApiSpec {
                 name: "getSubtrees".to_string(),
                 request: Some(GetSubtreesRequest::schema().1),
                 response: GetSubtreesResponse::schema().1,
@@ -399,7 +389,7 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getMultipleCompressedAccountProofs".to_string(),
-                request: Some(HashList::schema().1),
+                request: Some(GetMultipleCompressedAccountProofsRequest::adjusted_schema()),
                 response: GetMultipleCompressedAccountProofsResponse::schema().1,
             },
             OpenApiSpec {

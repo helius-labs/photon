@@ -126,7 +126,7 @@ pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
     discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
 }
 
-fn parse_leaf_index(leaf_index: i64) -> Result<u32, PhotonApiError> {
+fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))

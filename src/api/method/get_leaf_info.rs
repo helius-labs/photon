@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use jsonrpsee_core::Serialize;
 use lazy_static::lazy_static;
@@ -18,7 +19,7 @@ pub struct LeafInfo {
 }
 
 lazy_static! {
-    pub static ref LEAF_INFOS: Mutex<Vec<LeafInfo>> = Mutex::new(Vec::new());
+    pub static ref LEAF_INFOS: Mutex<HashMap<Hash, Vec<LeafInfo>>> = Mutex::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -37,24 +38,18 @@ pub struct GetLeafInfoResponse {
 
 pub async fn get_leaf_info(
     conn: &DatabaseConnection,
-    _request: GetLeafInfoRequest,
+    request: GetLeafInfoRequest,
 ) -> Result<GetLeafInfoResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
+    let merkle_tree: Hash = request.merkle_tree.clone();
+    let zkp_batch_size: usize = request.zkp_batch_size.0 as usize;
 
-    let info = LeafInfo {
-        leaf_index: UnsignedInteger(0),
-        leaf: Hash::new_unique(),
-        tx_hash: Hash::new_unique(),
-    };
     let mut infos = LEAF_INFOS.lock().unwrap();
-    infos.push(info);
-    if infos.len() > 10 {
-        infos.remove(0);
-    }
+    let infos = infos.entry(merkle_tree).or_default();
 
     let response = GetLeafInfoResponse {
         context,
-        value: infos.clone()
+        value: infos[..zkp_batch_size].to_vec()
     };
 
     Ok(response)

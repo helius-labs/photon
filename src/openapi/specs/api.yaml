@@ -2402,9 +2402,32 @@ paths:
                   enum:
                   - getMultipleCompressedAccountProofs
                 params:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Hash'
+                  type: object
+                  description: Request for compressed account proof data
+                  default:
+                    hashes:
+                    - 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
+                    - 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+                    indices: null
+                  properties:
+                    hashes:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Hash'
+                      nullable: true
+                    indices:
+                      type: array
+                      items:
+                        type: integer
+                        format: uint64
+                        minimum: 0
+                      nullable: true
+                  additionalProperties: false
+                  example:
+                    hashes:
+                    - 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
+                    - 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+                    indices: null
         required: true
       responses:
         '200':
@@ -2833,126 +2856,6 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
-  /getProofsByIndices:
-    summary: getProofsByIndices
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getProofsByIndices
-                params:
-                  type: object
-                  required:
-                  - merkleTree
-                  - indices
-                  properties:
-                    indices:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/UnsignedInteger'
-                    merkleTree:
-                      $ref: '#/components/schemas/Hash'
-                  additionalProperties: false
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    required:
-                    - context
-                    - value
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/ProofOfLeaf'
-                    additionalProperties: false
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
   /getQueueElements:
     summary: getQueueElements
     post:
@@ -2985,7 +2888,7 @@ paths:
                 params:
                   type: object
                   required:
-                  - queue
+                  - merkleTree
                   - startOffset
                   - endOffset
                   - batch
@@ -2994,7 +2897,7 @@ paths:
                       $ref: '#/components/schemas/UnsignedInteger'
                     endOffset:
                       $ref: '#/components/schemas/UnsignedInteger'
-                    queue:
+                    merkleTree:
                       $ref: '#/components/schemas/Hash'
                     startOffset:
                       $ref: '#/components/schemas/UnsignedInteger'
@@ -3767,23 +3670,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureInfo'
-    ProofOfLeaf:
-      type: object
-      required:
-      - leaf
-      - proof
-      properties:
-        leaf:
-          $ref: '#/components/schemas/Hash'
-        proof:
-          type: array
-          items:
-            $ref: '#/components/schemas/Hash'
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
-      example: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
+      default: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
+      example: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
