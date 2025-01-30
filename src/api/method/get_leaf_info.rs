@@ -49,7 +49,7 @@ pub async fn get_leaf_info(
 
     let response = GetLeafInfoResponse {
         context,
-        value: infos[..zkp_batch_size].to_vec()
+        value: infos[..std::cmp::min(zkp_batch_size, infos.len())].to_vec()
     };
 
     Ok(response)
