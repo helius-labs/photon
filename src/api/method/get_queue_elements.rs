@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::info;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Deserialize;
+use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 use crate::api::error::PhotonApiError;
 use crate::api::method::utils::Context;
@@ -38,7 +39,27 @@ pub async fn get_queue_elements(
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let merkle_tree = request.merkle_tree.to_vec();
-    info!("Getting queue elements for merkle tree {:?}", merkle_tree);
+    let tree_pubkey = Pubkey::try_from(merkle_tree.clone()).unwrap();
+    info!("Getting queue elements for merkle tree {} : {:?}", tree_pubkey.to_string(), merkle_tree);
+
+    println!("Indexed trees:");
+    let all_indexed_trees = indexed_trees::Entity::find()
+        .all(conn)
+        .await
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error checking indexed trees: {}", e)))?;
+    for tree in all_indexed_trees {
+        println!("Indexed tree: {:?}", tree.tree);
+    }
+
+    println!("State trees:");
+    let all_state_trees = state_trees::Entity::find()
+        .all(conn)
+        .await
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error checking indexed trees: {}", e)))?;
+    for tree in all_state_trees {
+        let tree_pubkey = Pubkey::try_from(tree.tree.clone()).unwrap();
+        println!("State tree {} : {:?} ", tree_pubkey.to_string(), tree.tree);
+    }
 
     let indexed_exists = indexed_trees::Entity::find()
         .filter(indexed_trees::Column::Tree.eq(merkle_tree.clone()))
