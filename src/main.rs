@@ -202,64 +202,6 @@ async fn main() {
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
     let rpc_client = get_rpc_client(&args.rpc_url);
 
-    let last_indexed_slot = match args.start_slot {
-                Some(start_slot) => match start_slot.as_str() {
-                    "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
-                    _ => {
-                        fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
-                            .await
-                    }
-                },
-                None => fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
-                    .await
-                    .unwrap_or(
-                        get_network_start_slot(&rpc_client)
-                            .await
-                            .try_into()
-                            .unwrap(),
-                    )
-                    .try_into()
-                    .unwrap(),
-            };
-    if let Some(snapshot_dir) = args.snapshot_dir {
-        let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
-        let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
-            .await
-            .unwrap();
-        if !snapshot_files.is_empty() {
-            info!("Detected snapshot files. Loading snapshot...");
-            let last_slot = snapshot_files.last().unwrap().end_slot;
-            // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
-            let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
-
-            if snapshot_offset >= last_indexed_slot {
-                info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
-
-                let block_stream =
-                    load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
-                pin_mut!(block_stream);
-                let first_blocks = block_stream.next().await.unwrap();
-                let last_stream_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
-                let block_stream = stream! {
-                    yield first_blocks;
-                    while let Some(blocks) = block_stream.next().await {
-                        yield blocks;
-                    }
-                };
-                index_block_stream(
-                    block_stream,
-                    db_conn.clone(),
-                    rpc_client.clone(),
-                    last_stream_indexed_slot,
-                    Some(last_slot),
-                )
-                .await;
-            } else {
-                info!("Snapshot is already indexed. Skipping...");
-            }
-        }
-    }
-
     let (indexer_handle, monitor_handle) = match args.disable_indexing {
         true => {
             info!("Indexing is disabled");
@@ -267,6 +209,66 @@ async fn main() {
         }
         false => {
             info!("Starting indexer...");
+
+            let last_indexed_slot = match args.start_slot {
+                        Some(start_slot) => match start_slot.as_str() {
+                            "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
+                            _ => {
+                                fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
+                                    .await
+                            }
+                        },
+                        None => fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
+                            .await
+                            .unwrap_or(
+                                get_network_start_slot(&rpc_client)
+                                    .await
+                                    .try_into()
+                                    .unwrap(),
+                            )
+                            .try_into()
+                            .unwrap(),
+                    };
+            if let Some(snapshot_dir) = args.snapshot_dir {
+                let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+                let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
+                    .await
+                    .unwrap();
+                if !snapshot_files.is_empty() {
+                    info!("Detected snapshot files. Loading snapshot...");
+                    let last_slot = snapshot_files.last().unwrap().end_slot;
+                    // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
+                    let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
+
+                    if snapshot_offset >= last_indexed_slot {
+                        info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
+
+                        let block_stream =
+                            load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
+                        pin_mut!(block_stream);
+                        let first_blocks = block_stream.next().await.unwrap();
+                        let last_stream_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
+                        let block_stream = stream! {
+                            yield first_blocks;
+                            while let Some(blocks) = block_stream.next().await {
+                                yield blocks;
+                            }
+                        };
+                        index_block_stream(
+                            block_stream,
+                            db_conn.clone(),
+                            rpc_client.clone(),
+                            last_stream_indexed_slot,
+                            Some(last_slot),
+                        )
+                        .await;
+                    } else {
+                        info!("Snapshot is already indexed. Skipping...");
+                    }
+                }
+            }
+
+
             // For localnet we can safely use a large batch size to speed up indexing.
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
                 Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
