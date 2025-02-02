@@ -245,8 +245,9 @@ async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash
                         db_hash,
                         account_roots
                     );
+                    let pubkey_str = pubkey.to_string();
                     metric! {
-                        statsd_count!("root_validation_failures", 1, "pubkey" => pubkey);
+                        statsd_count!("root_validation_failures", 1, "pubkey" => &pubkey_str);
                         statsd_gauge!("root_validation_success", 0);
                     }
                     return; 
