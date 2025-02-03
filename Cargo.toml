@@ -40,7 +40,7 @@ path = "src/tools/tree_validator/main.rs"
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
-async-trait = "0.1.53"
+async-trait = "0.1.85"
 base64 = "0.21.0"
 borsh = "0.10.3"
 bs58 = "0.4.0"
@@ -82,6 +82,8 @@ solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
 light-concurrent-merkle-tree = "=1.1.0"
 light-sdk = "0.11.0"
+light-utils = { git = "https://github.com/Lightprotocol/light-protocol", branch = "jorrit/perf-account-compression-cpi", features = [] }
+
 sqlx = { version = "0.6.2", features = [
   "macros",
   "runtime-tokio-rustls",
