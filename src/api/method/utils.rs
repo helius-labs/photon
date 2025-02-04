@@ -25,6 +25,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
+use tracing::info;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
@@ -580,11 +581,11 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
-            Ok((
-                format!(
-                    "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
-                    num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
-                ),
+            let cursor_filter =  format!(
+                "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
+                num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
+            );
+            Ok((cursor_filter,
                 vec![
                     slot.into(),
                     slot.into(),

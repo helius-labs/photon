@@ -34,12 +34,12 @@ const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNR
 const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
-    info!("=====================");
-    info!("Parsing transaction with signature: {}", tx.signature);
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
     let mut logged_transaction = false;
+
+    let enable_new_parse_logic = true;
 
     for instruction_group in tx.clone().instruction_groups {
         let mut ordered_instructions = Vec::new();
@@ -47,11 +47,11 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         ordered_instructions.extend(instruction_group.inner_instructions.clone());
 
         let mut vec_accounts = Vec::<Vec<Pubkey>>::new();
-        let mut vec = Vec::new();
-        vec.push(instruction_group.outer_instruction.data);
+        let mut vec_instructions_data = Vec::new();
+        vec_instructions_data.push(instruction_group.outer_instruction.data);
 
         instruction_group.inner_instructions.iter().find_map(|inner_instruction| {
-            vec.push(inner_instruction.data.clone());
+            vec_instructions_data.push(inner_instruction.data.clone());
             vec_accounts.push(
                 inner_instruction
                     .accounts.clone()
@@ -60,14 +60,13 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             None::<PublicTransactionEvent>
         });
 
-        info!("vec_accounts: {:?}", vec_accounts);
-        info!("vec: {:?}", vec);
+        let e = if enable_new_parse_logic {
+            event_from_light_transaction(&*vec_instructions_data, vec_accounts)
+                .map_err(|e| IngesterError::ParserError(e.to_string()))?
+        } else {
+            None
+        };
 
-        let e = event_from_light_transaction(&*vec, vec_accounts)
-            .map_err(|e| IngesterError::ParserError(e.to_string()))?;
-
-        info!("event: {:?}", e);
-        info!("=====================");
         if let Some(public_transaction_event) = e {
             let event = PublicTransactionEvent {
                 input_compressed_account_hashes: public_transaction_event.input_compressed_account_hashes,
@@ -97,12 +96,12 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 message: public_transaction_event.message,
             };
             let state_update = parse_public_transaction_event(tx.signature, slot, event)?;
+            is_compression_transaction = true;
             state_updates.push(state_update);
+
         } else {
             for (index, instruction) in ordered_instructions.iter().enumerate() {
                 if ordered_instructions.len() - index > 3 {
-                    debug!("ordered_instructions: {:?}", ordered_instructions);
-
                     let next_instruction = &ordered_instructions[index + 1];
                     let next_next_instruction = &ordered_instructions[index + 2];
                     let next_next_next_instruction = &ordered_instructions[index + 3];
