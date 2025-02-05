@@ -80,9 +80,17 @@ solana-client = "1.18.0"
 solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
-light-concurrent-merkle-tree = "=1.1.0"
-light-sdk = "0.11.0"
-light-utils = { git = "https://github.com/Lightprotocol/light-protocol", branch = "jorrit/perf-account-compression-cpi", features = [] }
+
+#light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+#light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+#light-utils = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+#account-compression = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+
+light-concurrent-merkle-tree = { path = "../light-protocol/program-libs/concurrent-merkle-tree", features = [] }
+light-sdk = { path = "../light-protocol/sdk-libs/sdk", features = [] }
+light-utils = { path = "../light-protocol/program-libs/utils", features = [] }
+account-compression = { path = "../light-protocol/programs/account-compression", features = [] }
+light-batched-merkle-tree = { path = "../light-protocol/program-libs/batched-merkle-tree", features = [] }
 
 sqlx = { version = "0.6.2", features = [
   "macros",

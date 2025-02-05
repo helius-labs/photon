@@ -32,6 +32,11 @@ use solana_sdk::account::Account as SolanaAccount;
 
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
+use account_compression::StateMerkleTreeAccount;
+use borsh::BorshDeserialize;
+use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
+use light_utils::account::check_discriminator;
+
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
@@ -102,6 +107,20 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 }
 
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
+
+    let mut data = account.data.clone();
+    let merkle_tree =
+        BatchedMerkleTreeAccount::state_from_bytes(&mut data);
+
+    if let Ok(merkle_tree) = merkle_tree {
+        let roots = merkle_tree
+            .root_history
+            .iter()
+            .map(|root| Hash::from(*root))
+            .collect();
+        return roots;
+    }
+
     let roots = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
         &account.data[8 + mem::size_of::<MerkleTreeMetadata>()..],
     )

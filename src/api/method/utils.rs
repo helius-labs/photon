@@ -25,7 +25,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
-use tracing::info;
 
 pub const PAGE_LIMIT: u64 = 1000;
 

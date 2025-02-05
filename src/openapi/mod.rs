@@ -131,27 +131,6 @@ fn add_string_property(
     builder.property(name, string_schema)
 }
 
-fn build_error_response_old(description: &str) -> Response {
-    ResponseBuilder::new()
-        .description(description)
-        .content(
-            JSON_CONTENT_TYPE,
-            ContentBuilder::new()
-                .schema(Schema::Object(
-                    ObjectBuilder::new()
-                        .property(
-                            "error",
-                            RefOr::T(Schema::Object(
-                                ObjectBuilder::new().schema_type(SchemaType::String).build(),
-                            )),
-                        )
-                        .build(),
-                ))
-                .build(),
-        )
-        .build()
-}
-
 fn build_error_response(description: &str) -> Response {
     let error_object = ObjectBuilder::new()
         .property(

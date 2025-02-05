@@ -13,6 +13,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "account-compression"
+version = "1.2.0"
+dependencies = [
+ "aligned-sized 1.1.0",
+ "anchor-lang",
+ "bytemuck",
+ "light-batched-merkle-tree",
+ "light-bounded-vec",
+ "light-concurrent-merkle-tree 1.1.0",
+ "light-hash-set",
+ "light-hasher 1.1.0",
+ "light-indexed-merkle-tree 1.1.0",
+ "light-merkle-tree-metadata",
+ "light-utils 1.1.0",
+ "light-zero-copy",
+ "num-bigint 0.4.6",
+ "solana-sdk",
+ "solana-security-txt",
+ "zerocopy 0.8.14",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -101,6 +123,15 @@ name = "aliasable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
+
+[[package]]
+name = "aligned-sized"
+version = "1.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
 
 [[package]]
 name = "aligned-sized"
@@ -380,9 +411,20 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a22f4561524cd949590d78d7d4c5df8f592430d221f7f3c9497bbafd8972120f"
 dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-std",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
+ "ark-std 0.4.0",
+]
+
+[[package]]
+name = "ark-bn254"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d69eab57e8d2663efa5c63135b2af4f396d66424f88954c21104125ab6b3e6bc"
+dependencies = [
+ "ark-ec 0.5.0",
+ "ark-ff 0.5.0",
+ "ark-std 0.5.0",
 ]
 
 [[package]]
@@ -391,12 +433,12 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3a13b34da09176a8baba701233fdffbaa7c1b1192ce031a3da4e55ce1f1a56"
 dependencies = [
- "ark-ec",
- "ark-ff",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
  "ark-relations",
- "ark-serialize",
+ "ark-serialize 0.4.2",
  "ark-snark",
- "ark-std",
+ "ark-std 0.4.0",
  "blake2",
  "derivative",
  "digest 0.10.7",
@@ -410,10 +452,10 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "defd9a439d56ac24968cca0571f598a61bc8c55f71d50a89cda591cb750670ba"
 dependencies = [
- "ark-ff",
- "ark-poly",
- "ark-serialize",
- "ark-std",
+ "ark-ff 0.4.2",
+ "ark-poly 0.4.2",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
  "derivative",
  "hashbrown 0.13.2",
  "itertools 0.10.5",
@@ -423,15 +465,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43d68f2d516162846c1238e755a7c4d131b892b70cc70c471a8e3ca3ed818fce"
+dependencies = [
+ "ahash 0.8.11",
+ "ark-ff 0.5.0",
+ "ark-poly 0.5.0",
+ "ark-serialize 0.5.0",
+ "ark-std 0.5.0",
+ "educe 0.6.0",
+ "fnv",
+ "hashbrown 0.15.2",
+ "itertools 0.13.0",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-ff"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec847af850f44ad29048935519032c33da8aa03340876d351dfab5660d2966ba"
 dependencies = [
- "ark-ff-asm",
- "ark-ff-macros",
- "ark-serialize",
- "ark-std",
+ "ark-ff-asm 0.4.2",
+ "ark-ff-macros 0.4.2",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
  "derivative",
  "digest 0.10.7",
  "itertools 0.10.5",
@@ -444,6 +507,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ff"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a177aba0ed1e0fbb62aa9f6d0502e9b46dad8c2eab04c14258a1212d2557ea70"
+dependencies = [
+ "ark-ff-asm 0.5.0",
+ "ark-ff-macros 0.5.0",
+ "ark-serialize 0.5.0",
+ "ark-std 0.5.0",
+ "arrayvec",
+ "digest 0.10.7",
+ "educe 0.6.0",
+ "itertools 0.13.0",
+ "num-bigint 0.4.6",
+ "num-traits",
+ "paste",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-ff-asm"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -451,6 +534,16 @@ checksum = "3ed4aa4fe255d0bc6d79373f7e31d2ea147bcf486cba1be5ba7ea85abdb92348"
 dependencies = [
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "ark-ff-asm"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62945a2f7e6de02a31fe400aa489f0e0f5b2502e69f95f853adb82a96c7a6b60"
+dependencies = [
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -467,18 +560,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-ff-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09be120733ee33f7693ceaa202ca41accd5653b779563608f1234f78ae07c4b3"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "ark-groth16"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20ceafa83848c3e390f1cbf124bc3193b3e639b3f02009e0e290809a501b95fc"
 dependencies = [
  "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-poly",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
+ "ark-poly 0.4.2",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
  "rayon",
 ]
 
@@ -488,12 +594,27 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d320bfc44ee185d899ccbadfa8bc31aab923ce1558716e1997a1e74057fe86bf"
 dependencies = [
- "ark-ff",
- "ark-serialize",
- "ark-std",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
  "derivative",
  "hashbrown 0.13.2",
  "rayon",
+]
+
+[[package]]
+name = "ark-poly"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "579305839da207f02b89cd1679e50e67b4331e2f9294a57693e5051b7703fe27"
+dependencies = [
+ "ahash 0.8.11",
+ "ark-ff 0.5.0",
+ "ark-serialize 0.5.0",
+ "ark-std 0.5.0",
+ "educe 0.6.0",
+ "fnv",
+ "hashbrown 0.15.2",
 ]
 
 [[package]]
@@ -502,8 +623,8 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00796b6efc05a3f48225e59cb6a2cda78881e7c390872d5786aaf112f31fb4f0"
 dependencies = [
- "ark-ff",
- "ark-std",
+ "ark-ff 0.4.2",
+ "ark-std 0.4.0",
  "tracing",
  "tracing-subscriber 0.2.25",
 ]
@@ -514,8 +635,21 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
 dependencies = [
- "ark-serialize-derive",
- "ark-std",
+ "ark-serialize-derive 0.4.2",
+ "ark-std 0.4.0",
+ "digest 0.10.7",
+ "num-bigint 0.4.6",
+]
+
+[[package]]
+name = "ark-serialize"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f4d068aaf107ebcd7dfb52bc748f8030e0fc930ac8e360146ca54c1203088f7"
+dependencies = [
+ "ark-serialize-derive 0.5.0",
+ "ark-std 0.5.0",
+ "arrayvec",
  "digest 0.10.7",
  "num-bigint 0.4.6",
 ]
@@ -532,15 +666,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-serialize-derive"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213888f660fddcca0d257e88e54ac05bca01885f258ccdf695bafd77031bb69d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "ark-snark"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84d3cc6833a335bb8a600241889ead68ee89a3cf8448081fb7694c0fe503da63"
 dependencies = [
- "ark-ff",
+ "ark-ff 0.4.2",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
 ]
 
 [[package]]
@@ -552,6 +697,16 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
  "rayon",
+]
+
+[[package]]
+name = "ark-std"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "246a225cc6131e9ee4f24619af0f19d67761fff15d7ccc22e42b80846e69449a"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -2162,10 +2317,22 @@ version = "0.4.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f0042ff8246a363dbe77d2ceedb073339e85a804b9a47636c6e016a9a32c05f"
 dependencies = [
- "enum-ordinalize",
+ "enum-ordinalize 3.1.15",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "educe"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
+dependencies = [
+ "enum-ordinalize 4.3.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -2220,6 +2387,26 @@ checksum = "1bf1fa3f06bbff1ea5b1a9c7b14aa992a39657db60a2759457328d7e058f49ee"
 dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "enum-ordinalize"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
@@ -2347,6 +2534,12 @@ dependencies = [
  "indenter",
  "once_cell",
 ]
+
+[[package]]
+name = "fastmurmur3"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d7e9bc68be4cdabbb8938140b01a8b5bc1191937f2c7e7ecc2fcebbe2d749df"
 
 [[package]]
 name = "fastrand"
@@ -2716,10 +2909,10 @@ version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acc65a9ef90161a41b67cd4611e113d09f3819a1d488e4effafde92fca70861d"
 dependencies = [
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
+ "ark-bn254 0.4.0",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
  "solana-program",
  "thiserror 1.0.58",
 ]
@@ -2805,6 +2998,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93e7192158dbcda357bdec5fb5788eebf8bbac027f3f33e719d29135ae84156"
 dependencies = [
  "ahash 0.8.11",
+ "allocator-api2",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+dependencies = [
  "allocator-api2",
 ]
 
@@ -3323,6 +3525,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3549,6 +3760,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-batched-merkle-tree"
+version = "0.1.0"
+dependencies = [
+ "aligned-sized 1.1.0",
+ "borsh 0.10.3",
+ "light-bloom-filter",
+ "light-hasher 1.1.0",
+ "light-macros 1.1.0",
+ "light-merkle-tree-metadata",
+ "light-utils 1.1.0",
+ "light-verifier 1.1.0",
+ "light-zero-copy",
+ "solana-program",
+ "thiserror 2.0.11",
+ "zerocopy 0.8.14",
+]
+
+[[package]]
+name = "light-bloom-filter"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "fastmurmur3",
+ "num-bigint 0.4.6",
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "light-bounded-vec"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3556,6 +3796,7 @@ checksum = "47ced86d6f1b163a04d5d0be44f8bbeedb11d32f73af27812bbd144e0f1f1a42"
 dependencies = [
  "bytemuck",
  "memoffset 0.9.1",
+ "solana-program",
  "thiserror 1.0.58",
 ]
 
@@ -3568,10 +3809,10 @@ dependencies = [
  "async-trait",
  "bb8",
  "borsh 0.10.3",
- "light-concurrent-merkle-tree",
+ "light-concurrent-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-indexed-merkle-tree",
- "light-merkle-tree-reference",
+ "light-indexed-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-merkle-tree-reference 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-prover-client",
  "light-sdk 0.10.0",
  "log",
@@ -3591,6 +3832,19 @@ dependencies = [
 [[package]]
 name = "light-concurrent-merkle-tree"
 version = "1.1.0"
+dependencies = [
+ "borsh 0.10.3",
+ "light-bounded-vec",
+ "light-hasher 1.1.0",
+ "light-utils 1.1.0",
+ "memoffset 0.9.1",
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
+name = "light-concurrent-merkle-tree"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44d84ffa991f38260b12f9fb60e7087aeb2d696513936eaee249e6f3e739651a"
 dependencies = [
@@ -3604,13 +3858,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-hash-set"
+version = "1.2.0"
+dependencies = [
+ "light-heap 1.1.0",
+ "light-utils 1.1.0",
+ "num-bigint 0.4.6",
+ "num-traits",
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
+name = "light-hasher"
+version = "1.1.0"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "light-poseidon 0.3.0",
+ "sha2 0.10.8",
+ "sha3 0.10.8",
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "light-hasher"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e932ed98282fa564ff4518416de688593a0f425c81d68cfa70e98da21a17a36f"
 dependencies = [
- "ark-bn254",
- "light-poseidon",
+ "ark-bn254 0.4.0",
+ "light-poseidon 0.2.0",
  "sha2 0.10.8",
  "sha3 0.10.8",
  "solana-program",
@@ -3618,16 +3896,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "light-hasher"
+name = "light-heap"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?branch=jorrit%2Fperf-account-compression-cpi#291ccb153d8a075890260b86812df2a801ac227e"
 dependencies = [
- "ark-bn254",
- "light-poseidon",
- "sha2 0.10.8",
- "sha3 0.10.8",
- "solana-program",
- "thiserror 1.0.58",
+ "anchor-lang",
 ]
 
 [[package]]
@@ -3642,19 +3914,44 @@ dependencies = [
 [[package]]
 name = "light-indexed-merkle-tree"
 version = "1.1.0"
+dependencies = [
+ "light-bounded-vec",
+ "light-concurrent-merkle-tree 1.1.0",
+ "light-hasher 1.1.0",
+ "light-merkle-tree-reference 1.1.0",
+ "light-utils 1.1.0",
+ "num-bigint 0.4.6",
+ "num-traits",
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
+name = "light-indexed-merkle-tree"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3df875b906d10c2146c66906eef3b40b42d8f9c14b539b4ed5860c6347a3bb1"
 dependencies = [
  "borsh 0.10.3",
  "light-bounded-vec",
- "light-concurrent-merkle-tree",
+ "light-concurrent-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-merkle-tree-reference",
+ "light-merkle-tree-reference 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memoffset 0.9.1",
  "num-bigint 0.4.6",
  "num-traits",
  "thiserror 1.0.58",
+]
+
+[[package]]
+name = "light-macros"
+version = "1.1.0"
+dependencies = [
+ "bs58 0.5.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -3668,6 +3965,29 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "light-merkle-tree-metadata"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "borsh 0.10.3",
+ "bytemuck",
+ "light-utils 1.1.0",
+ "solana-program",
+ "thiserror 2.0.11",
+ "zerocopy 0.8.14",
+]
+
+[[package]]
+name = "light-merkle-tree-reference"
+version = "1.1.0"
+dependencies = [
+ "light-bounded-vec",
+ "light-hasher 1.1.0",
+ "num-bigint 0.4.6",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -3688,8 +4008,20 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c9a85a9752c549ceb7578064b4ed891179d20acd85f27318573b64d2d7ee7ee"
 dependencies = [
- "ark-bn254",
- "ark-ff",
+ "ark-bn254 0.4.0",
+ "ark-ff 0.4.2",
+ "num-bigint 0.4.6",
+ "thiserror 1.0.58",
+]
+
+[[package]]
+name = "light-poseidon"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39e3d87542063daaccbfecd78b60f988079b6ec4e089249658b9455075c78d42"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
  "num-bigint 0.4.6",
  "thiserror 1.0.58",
 ]
@@ -3700,22 +4032,22 @@ version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e109ed16bfc5faaa7aed6989f2717a76e68cd771430580b910c4a1cf3d04a20"
 dependencies = [
- "ark-bn254",
+ "ark-bn254 0.4.0",
  "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
  "ark-groth16",
  "ark-relations",
- "ark-serialize",
- "ark-std",
+ "ark-serialize 0.4.2",
+ "ark-std 0.4.0",
  "borsh 0.10.3",
  "bytemuck",
  "color-eyre",
  "env_logger 0.11.5",
  "groth16-solana",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-indexed-merkle-tree",
- "light-merkle-tree-reference",
+ "light-indexed-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-merkle-tree-reference 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "num-bigint 0.4.6",
@@ -3737,19 +4069,19 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c6c8085cb040a2f6ae36da2c58b9f8795b788a9bdd92787d1e61bda974b3685"
 dependencies = [
- "aligned-sized",
+ "aligned-sized 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "anchor-lang",
  "borsh 0.10.3",
  "bytemuck",
  "groth16-solana",
- "light-concurrent-merkle-tree",
+ "light-concurrent-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-heap",
- "light-indexed-merkle-tree",
- "light-macros",
+ "light-heap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-indexed-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-macros 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-sdk-macros 0.3.0",
  "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-verifier",
+ "light-verifier 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.4.6",
  "solana-program",
  "solana-sdk",
@@ -3758,22 +4090,15 @@ dependencies = [
 [[package]]
 name = "light-sdk"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c14007770c1de79cf9e1c8fcba6df563bd80cab959f59d7bbb1cc4e972be86f5"
 dependencies = [
- "aligned-sized",
  "anchor-lang",
  "borsh 0.10.3",
- "bytemuck",
- "groth16-solana",
- "light-concurrent-merkle-tree",
- "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-heap",
- "light-indexed-merkle-tree",
- "light-macros",
+ "light-hasher 1.1.0",
+ "light-heap 1.1.0",
+ "light-indexed-merkle-tree 1.1.0",
+ "light-macros 1.1.0",
  "light-sdk-macros 0.4.0",
- "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-verifier",
+ "light-utils 1.1.0",
  "num-bigint 0.4.6",
  "solana-program",
  "solana-sdk",
@@ -3795,14 +4120,30 @@ dependencies = [
 [[package]]
 name = "light-sdk-macros"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d91a0e4002b8250f57d7f7f25db3d059fdbb268e84024c369af1110a3df3fea9"
 dependencies = [
- "bs58 0.4.0",
- "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-hasher 1.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "light-utils"
+version = "1.1.0"
+dependencies = [
+ "anchor-lang",
+ "anyhow",
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
+ "borsh 0.10.3",
+ "bytemuck",
+ "light-hasher 1.1.0",
+ "light-zero-copy",
+ "num-bigint 0.4.6",
+ "rand 0.8.5",
+ "solana-program",
+ "thiserror 2.0.11",
+ "zerocopy 0.8.14",
 ]
 
 [[package]]
@@ -3812,8 +4153,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19e2b5a4959cb0456b483a20b4f3930920949137c00e76b5d0f9bf8d701a3c6a"
 dependencies = [
  "anyhow",
- "ark-bn254",
- "ark-ff",
+ "ark-bn254 0.4.0",
+ "ark-ff 0.4.2",
  "light-bounded-vec",
  "num-bigint 0.4.6",
  "rand 0.8.5",
@@ -3822,22 +4163,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "light-utils"
+name = "light-verifier"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?branch=jorrit%2Fperf-account-compression-cpi#291ccb153d8a075890260b86812df2a801ac227e"
 dependencies = [
- "anyhow",
- "ark-bn254",
- "ark-ff",
- "borsh 0.10.3",
- "light-bounded-vec",
- "light-hasher 1.1.0 (git+https://github.com/Lightprotocol/light-protocol?branch=jorrit%2Fperf-account-compression-cpi)",
- "light-zero-copy",
- "num-bigint 0.4.6",
- "rand 0.8.5",
+ "groth16-solana",
+ "light-utils 1.1.0",
  "solana-program",
- "thiserror 1.0.58",
- "zerocopy 0.8.14",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -3855,9 +4187,8 @@ dependencies = [
 [[package]]
 name = "light-zero-copy"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?branch=jorrit%2Fperf-account-compression-cpi#291ccb153d8a075890260b86812df2a801ac227e"
 dependencies = [
- "num-traits",
+ "solana-program",
  "thiserror 2.0.11",
  "zerocopy 0.8.14",
 ]
@@ -4635,9 +4966,10 @@ dependencies = [
 name = "photon-indexer"
 version = "0.50.0"
 dependencies = [
+ "account-compression",
  "anchor-lang",
  "anyhow",
- "ark-bn254",
+ "ark-bn254 0.4.0",
  "async-std",
  "async-stream",
  "async-trait",
@@ -4662,11 +4994,12 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "lazy_static",
+ "light-batched-merkle-tree",
  "light-client",
- "light-concurrent-merkle-tree",
- "light-poseidon",
+ "light-concurrent-merkle-tree 1.1.0",
+ "light-poseidon 0.2.0",
  "light-sdk 0.11.0",
- "light-utils 1.1.0 (git+https://github.com/Lightprotocol/light-protocol?branch=jorrit%2Fperf-account-compression-cpi)",
+ "light-utils 1.1.0",
  "log",
  "lru 0.12.4",
  "num-bigint 0.4.6",
@@ -6748,10 +7081,10 @@ version = "1.18.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb2b2c8babfae4cace1a25b6efa00418f3acd852cf55d7cecc0360d3c5050479"
 dependencies = [
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
+ "ark-bn254 0.4.0",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
  "base64 0.21.7",
  "bincode",
  "bitflags 2.5.0",
@@ -6772,7 +7105,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libsecp256k1",
- "light-poseidon",
+ "light-poseidon 0.2.0",
  "log",
  "memoffset 0.9.1",
  "num-bigint 0.4.6",
@@ -8256,7 +8589,7 @@ checksum = "911a61637386b789af998ee23f50aa30d5fd7edcec8d6d3dedae5e5815205466"
 dependencies = [
  "bincode",
  "bytes",
- "educe",
+ "educe 0.4.23",
  "futures-core",
  "futures-sink",
  "pin-project",
