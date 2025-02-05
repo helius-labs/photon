@@ -156,7 +156,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         data,
         owner: account.owner.try_into()?,
         tree: account.tree.try_into()?,
-        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
+        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
         slot_created: UnsignedInteger(account.slot_created as u64),
         seq: UnsignedInteger(account.seq as u64),

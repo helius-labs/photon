@@ -12,7 +12,7 @@ pub struct Model {
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
-    pub leaf_index: u64,
+    pub leaf_index: i64,
     pub seq: i64,
     pub slot_created: i64,
     pub spent: bool,

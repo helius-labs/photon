@@ -400,7 +400,7 @@ async fn append_output_accounts(
             data: Set(account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
-            leaf_index: Set(account.leaf_index.0 as u64),
+            leaf_index: Set(account.leaf_index.0 as i64),
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
