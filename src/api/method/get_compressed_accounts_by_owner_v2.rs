@@ -1,17 +1,20 @@
+use std::collections::HashMap;
+use lazy_static::lazy_static;
 use crate::{
-    common::typedefs::{account::AccountV1, bs58_string::Base58String},
     dao::generated::accounts,
     ingester::persist::bytes_to_sql_format,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
-use crate::api::method::utils::parse_account_model_v1;
+use crate::api::method::get_compressed_accounts_by_owner::{DataSlice, FilterInstance, GetCompressedAccountsByOwnerRequest, Memcmp};
 use super::{
     super::error::PhotonApiError,
-    utils::{Context, Limit, PAGE_LIMIT},
+    utils::{Context, PAGE_LIMIT},
 };
-use crate::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::account::AccountV2;
+use super::utils::parse_account_model_v2;
 
 // Max filters allowed constant value of 5
 const MAX_FILTERS: usize = 5;
@@ -21,80 +24,24 @@ const SOL_LAYER_ACCOUNTS: [&str; 2] = [
     "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT",
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Options {
-    pub cursor: Option<Hash>,
-    pub limit: Option<Limit>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct Memcmp {
-    pub offset: usize,
-    pub bytes: Base58String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum FilterInstance {
-    Memcmp(Memcmp),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct FilterSelector {
-    pub memcmp: Option<Memcmp>,
-}
-
-impl FilterSelector {
-    pub(crate) fn into_filter_instance(self) -> Result<FilterInstance, PhotonApiError> {
-        if let Some(memcmp) = self.memcmp {
-            Ok(FilterInstance::Memcmp(memcmp))
-        } else {
-            Err(PhotonApiError::ValidationError(
-                "Filter instance cannot be null".to_string(),
-            ))
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct DataSlice {
-    pub offset: usize,
-    pub length: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[allow(non_snake_case)]
-pub struct GetCompressedAccountsByOwnerRequest {
-    pub owner: SerializablePubkey,
-    #[serde(default)]
-    pub filters: Vec<FilterSelector>,
-    #[serde(default)]
-    pub dataSlice: Option<DataSlice>,
-    #[serde(default)]
-    pub cursor: Option<Hash>,
-    #[serde(default)]
-    pub limit: Option<Limit>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PaginatedAccountListV1 {
-    pub items: Vec<AccountV1>,
+pub struct PaginatedAccountListV2 {
+    pub items: Vec<AccountV2>,
     pub cursor: Option<Hash>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountsByOwnerResponse {
+pub struct GetCompressedAccountsByOwnerV2Response {
     pub context: Context,
-    pub value: PaginatedAccountListV1,
+    pub value: PaginatedAccountListV2,
 }
 
-pub async fn get_compressed_accounts_by_owner(
+pub async fn get_compressed_accounts_by_owner_v2(
     conn: &DatabaseConnection,
     request: GetCompressedAccountsByOwnerRequest,
-) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
+) -> Result<GetCompressedAccountsByOwnerV2Response, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let GetCompressedAccountsByOwnerRequest {
         owner,
@@ -217,14 +164,16 @@ pub async fn get_compressed_accounts_by_owner(
 
     let raw_sql = format!(
         "
-        SELECT 
+        SELECT
             hash,
             {data_column},
             data_hash,
             address,
+            queue,
             owner,
             tree,
             leaf_index,
+            queue_index,
             seq,
             slot_created,
             spent,
@@ -242,21 +191,21 @@ pub async fn get_compressed_accounts_by_owner(
         conn.get_database_backend(),
         raw_sql,
     ))
-    .all(conn)
-    .await?;
+        .all(conn)
+        .await?;
 
     let items = result
         .into_iter()
-        .map(parse_account_model_v1)
-        .collect::<Result<Vec<AccountV1>, PhotonApiError>>()?;
+        .map(parse_account_model_v2)
+        .collect::<Result<Vec<AccountV2>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|u| u.hash.clone());
     if items.len() < query_limit as usize {
         cursor = None;
     }
 
-    Ok(GetCompressedAccountsByOwnerResponse {
+    Ok(GetCompressedAccountsByOwnerV2Response {
         context,
-        value: PaginatedAccountListV1 { items, cursor },
+        value: PaginatedAccountListV2 { items, cursor },
     })
 }

@@ -107,18 +107,21 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 }
 
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
-
+    println!("Parsing historical roots for account: {:?}", account);
     let mut data = account.data.clone();
     let merkle_tree =
         BatchedMerkleTreeAccount::state_from_bytes(&mut data);
 
     if let Ok(merkle_tree) = merkle_tree {
+        println!("State batched erkle tree: {:?}", merkle_tree);
         let roots = merkle_tree
             .root_history
             .iter()
             .map(|root| Hash::from(*root))
             .collect();
         return roots;
+    } else {
+        println!("Error parsing batched merkle tree: {:?}", merkle_tree);
     }
 
     let roots = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(

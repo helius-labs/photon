@@ -1,4 +1,4 @@
-use crate::common::typedefs::account::{Account, AccountData};
+use crate::common::typedefs::account::{AccountData, AccountV1, AccountV2};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
@@ -131,7 +131,7 @@ fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
 }
 
-pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
+pub fn parse_account_model_v1(account: accounts::Model) -> Result<AccountV1, PhotonApiError> {
     let data = match (account.data, account.data_hash, account.discriminator) {
         (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
             data: Base64String(data),
@@ -146,7 +146,7 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
         }
     };
 
-    Ok(Account {
+    Ok(AccountV1 {
         hash: account.hash.try_into()?,
         address: account
             .address
@@ -162,6 +162,39 @@ pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonAp
     })
 }
 
+pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, PhotonApiError> {
+        let data = match (account.data, account.data_hash, account.discriminator) {
+            (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
+                data: Base64String(data),
+                data_hash: data_hash.try_into()?,
+                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+            }),
+            (None, None, None) => None,
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid account data".to_string(),
+                ))
+            }
+        };
+
+        Ok(AccountV2 {
+            hash: account.hash.try_into()?,
+            address: account
+                .address
+                .map(SerializablePubkey::try_from)
+                .transpose()?,
+            data,
+            owner: account.owner.try_into()?,
+            tree: account.tree.try_into()?,
+            queue: account.queue.map(SerializablePubkey::try_from).transpose()?,
+            queue_index: account.queue_index.map(|x| UnsignedInteger(x as u64)),
+            leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
+            lamports: UnsignedInteger(parse_decimal(account.lamports)?),
+            slot_created: UnsignedInteger(account.slot_created as u64),
+            seq: UnsignedInteger(account.seq as u64),
+        })
+}
+
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -172,15 +205,15 @@ pub struct TokenAccountListResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct TokenAcccount {
-    pub account: Account,
+pub struct TokenAccount {
+    pub account: AccountV1,
     pub token_data: TokenData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
-    pub items: Vec<TokenAcccount>,
+    pub items: Vec<TokenAccount>,
     pub cursor: Option<Base58String>,
 }
 
@@ -299,8 +332,8 @@ pub async fn fetch_token_accounts(
             let account = account.ok_or(PhotonApiError::RecordNotFound(
                 "Base account not found for token account".to_string(),
             ))?;
-            Ok(TokenAcccount {
-                account: parse_account_model(account)?,
+            Ok(TokenAccount {
+                account: parse_account_model_v1(account)?,
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
                     owner: token_account.owner.try_into()?,
@@ -319,7 +352,7 @@ pub async fn fetch_token_accounts(
                 },
             })
         })
-        .collect::<Result<Vec<TokenAcccount>, PhotonApiError>>()?;
+        .collect::<Result<Vec<TokenAccount>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|item| {
         Base58String({

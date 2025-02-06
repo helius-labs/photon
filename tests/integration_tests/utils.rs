@@ -2,7 +2,7 @@ use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use once_cell::sync::Lazy;
 use photon_indexer::common::typedefs::hash::Hash;
-use photon_indexer::migration::{MigractorWithCustomMigrations, MigratorTrait};
+use photon_indexer::migration::{MigratorWithCustomMigrations, MigratorTrait};
 use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
@@ -62,7 +62,7 @@ fn setup_logging() {
 }
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
-    MigractorWithCustomMigrations::fresh(db).await.unwrap();
+    MigratorWithCustomMigrations::fresh(db).await.unwrap();
 }
 
 async fn run_one_time_setup(db: &DatabaseConnection) {
@@ -71,7 +71,7 @@ async fn run_one_time_setup(db: &DatabaseConnection) {
         setup_logging();
         if db.get_database_backend() == DbBackend::Postgres {
             // We run migrations from fresh everytime for SQLite
-            MigractorWithCustomMigrations::fresh(db).await.unwrap();
+            MigratorWithCustomMigrations::fresh(db).await.unwrap();
         }
         *init = Some(())
     }

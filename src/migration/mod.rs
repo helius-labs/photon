@@ -7,7 +7,6 @@ mod model;
 
 pub struct Migrator;
 
-
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
@@ -15,11 +14,10 @@ impl MigratorTrait for Migrator {
     }
 }
 
-
-pub struct MigractorWithCustomMigrations;
+pub struct MigratorWithCustomMigrations;
 
 #[async_trait::async_trait]
-impl MigratorTrait for MigractorWithCustomMigrations {
+impl MigratorTrait for MigratorWithCustomMigrations {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         get_standard_migrations().into_iter().chain(get_custom_migrations()).collect()
     }

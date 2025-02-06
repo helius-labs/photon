@@ -1,7 +1,7 @@
 use super::{error, parser::state_update::AccountTransaction};
 use crate::{
     api::method::{get_multiple_new_address_proofs::ADDRESS_TREE_HEIGHT, utils::PAGE_LIMIT},
-    common::typedefs::{account::Account, hash::Hash, token_data::TokenData},
+    common::typedefs::{hash::Hash, token_data::TokenData},
     dao::generated::{account_transactions, state_tree_histories, state_trees, transactions},
     ingester::parser::state_update::Transaction,
     metric,
@@ -30,6 +30,8 @@ use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
+use crate::common::typedefs::account::{AccountV1, AccountV2};
+
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
@@ -192,7 +194,7 @@ async fn persist_state_tree_history(
     Ok(())
 }
 
-pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
+pub fn parse_token_data(account: &AccountV2) -> Result<Option<TokenData>, IngesterError> {
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
             let data_slice = data.data.0.as_slice();
@@ -384,7 +386,7 @@ async fn execute_account_update_query_and_update_balances(
 
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
-    out_accounts: &[Account],
+    out_accounts: &[AccountV2],
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
@@ -407,6 +409,8 @@ async fn append_output_accounts(
             slot_created: Set(account.slot_created.0 as i64),
             seq: Set(account.seq.0 as i64),
             prev_spent: Set(None),
+            queue_index: Set(None), // TODO: Implement queue index
+            queue: Default::default(),
         });
 
         if let Some(token_data) = parse_token_data(account)? {

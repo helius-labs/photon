@@ -11,12 +11,12 @@ use utoipa::ToSchema;
 
 use crate::{
     api::error::PhotonApiError,
-    common::typedefs::{account::Account, hash::Hash, serializable_pubkey::SerializablePubkey},
+    common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::state_trees,
     ingester::{error::IngesterError, parser::state_update::LeafNullification},
     metric,
 };
-
+use crate::common::typedefs::account::{AccountV1, AccountV2};
 use super::{compute_parent_hash, get_node_direct_ancestors};
 
 #[derive(Clone, Debug)]
@@ -37,8 +37,20 @@ fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
     2_i64.pow(tree_height - 1) + leaf_index as i64
 }
 
-impl From<Account> for LeafNode {
-    fn from(account: Account) -> Self {
+impl From<AccountV1> for LeafNode {
+    fn from(account: AccountV1) -> Self {
+        Self {
+            tree: account.tree,
+            leaf_index: account.leaf_index.0 as u32,
+            hash: account.hash,
+            seq: account.seq.0 as u32,
+        }
+    }
+}
+
+
+impl From<AccountV2> for LeafNode {
+    fn from(account: AccountV2) -> Self {
         Self {
             tree: account.tree,
             leaf_index: account.leaf_index.0 as u32,

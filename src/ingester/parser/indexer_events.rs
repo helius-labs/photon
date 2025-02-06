@@ -1,4 +1,4 @@
-/// Copied from the Light repo. We copy them instead of importing from the Light repo in order to
+/// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
 

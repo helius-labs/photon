@@ -4,7 +4,8 @@ use crate::api::api::PhotonApi;
 use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
-use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
+use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountListV1;
+use crate::api::method::get_compressed_accounts_by_owner_v2::PaginatedAccountListV2;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalance;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalanceList;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalancesResponse;
@@ -27,10 +28,11 @@ use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
 use crate::api::method::utils::SignatureInfoListWithError;
 use crate::api::method::utils::SignatureInfoWithError;
-use crate::api::method::utils::TokenAcccount;
+use crate::api::method::utils::TokenAccount;
 use crate::api::method::utils::TokenAccountList;
 use crate::api::method::get_leaf_info::LeafInfo;
-use crate::common::typedefs::account::Account;
+use crate::common::typedefs::account::AccountV1;
+use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::account::AccountData;
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
@@ -75,11 +77,13 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     SerializablePubkey,
     Context,
     Hash,
-    PaginatedAccountList,
-    Account,
+    PaginatedAccountListV1,
+    PaginatedAccountListV2,
+    AccountV1,
+    AccountV2,
     MerkleProofWithContext,
     TokenAccountList,
-    TokenAcccount,
+    TokenAccount,
     TokenAccountBalance,
     AccountList,
     Limit,

@@ -1,4 +1,4 @@
-use crate::common::typedefs::account::Account;
+use crate::common::typedefs::account::AccountV1;
 use crate::dao::generated::accounts;
 
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
@@ -6,14 +6,14 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
-use super::utils::{parse_account_model, AccountDataTable, CompressedAccountRequest, Context};
+use super::utils::{parse_account_model_v1, AccountDataTable, CompressedAccountRequest, Context};
 
 // We do not use generics to simply documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountResponse {
     pub context: Context,
-    pub value: Option<Account>,
+    pub value: Option<AccountV1>,
 }
 
 pub async fn get_compressed_account(
@@ -27,7 +27,7 @@ pub async fn get_compressed_account(
         .one(conn)
         .await?;
 
-    let account = account_model.map(parse_account_model).transpose()?;
+    let account = account_model.map(parse_account_model_v1).transpose()?;
 
     Ok(AccountResponse {
         value: { account },

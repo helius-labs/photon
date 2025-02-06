@@ -1,20 +1,20 @@
 use std::collections::HashMap;
 
-use crate::{common::typedefs::account::Account, dao::generated::accounts};
+use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use utoipa::{
     openapi::{RefOr, Schema},
     ToSchema,
 };
-
+use crate::api::method::utils::parse_account_model_v1;
+use crate::common::typedefs::account::AccountV1;
 use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
 };
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use super::utils::parse_account_model;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -49,7 +49,7 @@ impl GetMultipleCompressedAccountsRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountList {
-    pub items: Vec<Option<Account>>,
+    pub items: Vec<Option<AccountV1>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
@@ -147,7 +147,7 @@ pub async fn get_multiple_compressed_accounts(
         value: AccountList {
             items: accounts
                 .into_iter()
-                .map(|x| x.map(parse_account_model).transpose())
+                .map(|x| x.map(parse_account_model_v1).transpose())
                 .collect::<Result<Vec<_>, _>>()?,
         },
     })

@@ -1,13 +1,9 @@
 use std::collections::{HashMap, HashSet};
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-
-use crate::common::typedefs::account::Account;
-
+use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::hash::Hash;
-
 use super::indexer_events::RawIndexedElement;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
@@ -64,10 +60,10 @@ pub struct IndexedTreeLeafUpdate {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-/// Representation of state update of the compression system that is optimal for simple persistance.
+/// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
-    pub out_accounts: Vec<Account>,
+    pub out_accounts: Vec<AccountV2>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,

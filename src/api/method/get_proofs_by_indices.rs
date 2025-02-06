@@ -5,36 +5,39 @@ use crate::ingester::persist::persisted_state_tree::{
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
+use crate::common::typedefs::hash::Hash;
 use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
 };
-use crate::common::typedefs::hash::Hash;
 
-// We do not use generics to simplify documentation generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetProofsByIndicesRequest {
+    pub merkle_tree: Hash,
+    pub indices: Vec<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetMultipleCompressedAccountProofsResponse {
+pub struct GetProofsByIndicesResponse {
     pub context: Context,
     pub value: Vec<MerkleProofWithContext>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct HashList(pub Vec<Hash>);
-
-pub async fn get_multiple_compressed_account_proofs(
+pub async fn get_proofs_by_indices(
     conn: &DatabaseConnection,
-    request: HashList,
-) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
-    let request = request.0;
-    if request.len() > PAGE_LIMIT as usize {
+    request: GetProofsByIndicesRequest,
+) -> Result<GetProofsByIndicesResponse, PhotonApiError> {
+
+    if request.indices.len() > PAGE_LIMIT as usize {
         return Err(PhotonApiError::ValidationError(format!(
             "Too many hashes requested {}. Maximum allowed: {}",
-            request.len(),
+            request.indices.len(),
             PAGE_LIMIT
         )));
     }
+
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -44,9 +47,11 @@ pub async fn get_multiple_compressed_account_proofs(
         ))
             .await?;
     }
-    let proofs = get_multiple_compressed_leaf_proofs(&tx, Some(request), None).await?;
+
+    // TODO: get proofs by indices
+    let proofs = get_multiple_compressed_leaf_proofs(&tx, None, Some(request.indices)).await?;
     tx.commit().await?;
-    Ok(GetMultipleCompressedAccountProofsResponse {
+    Ok(GetProofsByIndicesResponse {
         value: proofs,
         context,
     })

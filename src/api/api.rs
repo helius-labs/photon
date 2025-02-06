@@ -3,8 +3,10 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
+use crate::api::method::get_compressed_accounts_by_owner_v2::{get_compressed_accounts_by_owner_v2, GetCompressedAccountsByOwnerV2Response};
 use crate::api::method::get_leaf_info::{get_leaf_info, GetLeafInfoRequest, GetLeafInfoResponse};
-use crate::api::method::get_multiple_compressed_account_proofs::GetMultipleCompressedAccountProofsRequest;
+use crate::api::method::get_multiple_compressed_account_proofs::HashList;
+use crate::api::method::get_proofs_by_indices::{get_proofs_by_indices, GetProofsByIndicesRequest, GetProofsByIndicesResponse};
 use crate::api::method::get_queue_elements::{get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse};
 use crate::api::method::get_subtrees::{get_subtrees, GetSubtreesRequest, GetSubtreesResponse};
 use crate::api::method::get_validity_proof::GetValidityProofRequestDocumentation;
@@ -139,10 +141,18 @@ impl PhotonApi {
 
     pub async fn get_multiple_compressed_account_proofs(
         &self,
-        request: GetMultipleCompressedAccountProofsRequest,
+        request: HashList,
     ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
+
+    pub async fn get_proofs_by_indices(
+        &self,
+        request: GetProofsByIndicesRequest,
+    ) -> Result<GetProofsByIndicesResponse, PhotonApiError> {
+        get_proofs_by_indices(self.db_conn.as_ref(), request).await
+    }
+
 
     pub async fn get_multiple_new_address_proofs(
         &self,
@@ -232,6 +242,13 @@ impl PhotonApi {
         request: GetCompressedAccountsByOwnerRequest,
     ) -> Result<GetCompressedAccountsByOwnerResponse, PhotonApiError> {
         get_compressed_accounts_by_owner(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_compressed_accounts_by_owner_v2(
+        &self,
+        request: GetCompressedAccountsByOwnerRequest,
+    ) -> Result<GetCompressedAccountsByOwnerV2Response, PhotonApiError> {
+        get_compressed_accounts_by_owner_v2(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_mint_token_holders(
@@ -358,6 +375,11 @@ impl PhotonApi {
                 response: GetCompressedAccountsByOwnerResponse::schema().1,
             },
             OpenApiSpec {
+                name: "getCompressedAccountsByOwnerV2".to_string(),
+                request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
+                response: GetCompressedAccountsByOwnerV2Response::schema().1,
+            },
+            OpenApiSpec {
                 name: "getCompressedMintTokenHolders".to_string(),
                 request: Some(GetCompressedMintTokenHoldersRequest::schema().1),
                 response: OwnerBalancesResponse::schema().1,
@@ -389,8 +411,13 @@ impl PhotonApi {
             },
             OpenApiSpec {
                 name: "getMultipleCompressedAccountProofs".to_string(),
-                request: Some(GetMultipleCompressedAccountProofsRequest::adjusted_schema()),
+                request: Some(HashList::schema().1),
                 response: GetMultipleCompressedAccountProofsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getProofsByIndices".to_string(),
+                request: Some(GetProofsByIndicesRequest::schema().1),
+                response: GetProofsByIndicesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getMultipleNewAddressProofs".to_string(),

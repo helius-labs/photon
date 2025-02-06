@@ -9,7 +9,7 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Account {
+pub struct AccountV1 {
     pub hash: Hash,
     pub address: Option<SerializablePubkey>,
     pub data: Option<AccountData>,
@@ -20,6 +20,23 @@ pub struct Account {
     pub seq: UnsignedInteger,
     pub slot_created: UnsignedInteger,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AccountV2 {
+    pub hash: Hash,
+    pub address: Option<SerializablePubkey>,
+    pub data: Option<AccountData>,
+    pub owner: SerializablePubkey,
+    pub lamports: UnsignedInteger,
+    pub tree: SerializablePubkey,
+    pub queue_index: Option<UnsignedInteger>,
+    pub queue: Option<SerializablePubkey>,
+    pub leaf_index: UnsignedInteger,
+    pub seq: UnsignedInteger,
+    pub slot_created: UnsignedInteger,
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
