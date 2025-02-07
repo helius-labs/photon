@@ -1224,7 +1224,7 @@ async fn test_gpa_filters(
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
             owner: owner1,
 
-            dataSlice: Some(DataSlice {
+            data_slice: Some(DataSlice {
                 offset: 0,
                 length: 2,
             }),

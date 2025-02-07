@@ -32,10 +32,7 @@ use solana_sdk::account::Account as SolanaAccount;
 
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
-use account_compression::StateMerkleTreeAccount;
-use borsh::BorshDeserialize;
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
-use light_utils::account::check_discriminator;
 
 const CHUNK_SIZE: usize = 100;
 
@@ -80,6 +77,7 @@ pub fn continously_monitor_photon(
                 }
             } else {
                 let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
+                println!("Tree roots (continously_monitor_photon): {:?}", tree_roots);
                 validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
             }
             sleep(Duration::from_millis(5000)).await;
@@ -109,11 +107,10 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
     println!("Parsing historical roots for account: {:?}", account);
     let mut data = account.data.clone();
-    let merkle_tree =
-        BatchedMerkleTreeAccount::state_from_bytes(&mut data);
-
+    let pubkey = light_utils::pubkey::Pubkey::new_from_array(account.owner.to_bytes());
+    let merkle_tree = BatchedMerkleTreeAccount::state_from_bytes(&mut data, &pubkey);
     if let Ok(merkle_tree) = merkle_tree {
-        println!("State batched erkle tree: {:?}", merkle_tree);
+        println!("State batched merkle tree: {:?}", merkle_tree);
         let roots = merkle_tree
             .root_history
             .iter()
@@ -121,7 +118,20 @@ fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
             .collect();
         return roots;
     } else {
-        println!("Error parsing batched merkle tree: {:?}", merkle_tree);
+        println!("Error parsing batched state merkle tree: {:?}", merkle_tree);
+    }
+
+    let merkle_tree = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey);
+    if let Ok(merkle_tree) = merkle_tree {
+        println!("Address batched merkle tree: {:?}", merkle_tree);
+        let roots = merkle_tree
+            .root_history
+            .iter()
+            .map(|root| Hash::from(*root))
+            .collect();
+        return roots;
+    } else {
+        println!("Error parsing batched address merkle tree: {:?}", merkle_tree);
     }
 
     let roots = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
@@ -197,7 +207,7 @@ async fn load_accounts_with_infinite_retry(
 
 async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash)>) {
     for chunk in db_roots.chunks(CHUNK_SIZE) {
-        let pubkeys = chunk.iter().map(|(pubkey, _)| pubkey.clone()).collect();
+        let pubkeys = chunk.iter().map(|(pubkey, _)| *pubkey).collect();
         let accounts = load_accounts_with_infinite_retry(rpc_client, pubkeys).await;
         for ((pubkey, db_hash), account) in chunk.iter().zip(accounts) {
             let account_roots = parse_historical_roots(account);

@@ -158,7 +158,7 @@ pub fn parse_account_model_v1(account: accounts::Model) -> Result<AccountV1, Pho
         leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
         slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: UnsignedInteger(account.seq as u64),
+        seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
     })
 }
 
@@ -186,12 +186,14 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
             data,
             owner: account.owner.try_into()?,
             tree: account.tree.try_into()?,
-            queue: account.queue.map(SerializablePubkey::try_from).transpose()?,
-            queue_index: account.queue_index.map(|x| UnsignedInteger(x as u64)),
+            in_queue: account.in_queue,
+            spent: account.spent,
+            nullifier: account.nullifier.map(Hash::try_from).transpose()?,
+            tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
             leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
             lamports: UnsignedInteger(parse_decimal(account.lamports)?),
             slot_created: UnsignedInteger(account.slot_created as u64),
-            seq: UnsignedInteger(account.seq as u64),
+            seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
         })
 }
 

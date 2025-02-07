@@ -64,7 +64,7 @@ pub fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
             .into_iter()
             .chain(HIGHEST_ADDRESS_PLUS_ONE.to_bytes_be())
             .collect(),
-        seq: 0,
+        seq: Some(0),
     }
 }
 
@@ -78,7 +78,7 @@ pub fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
             .collect(),
         next_index: 0,
         next_value: vec![0; 32],
-        seq: 0,
+        seq: Some(0),
     }
 }
 
@@ -148,7 +148,7 @@ pub async fn get_exclusion_range_with_proof(
         })?,
         leaf_index: range_node.leaf_index as u32,
         hash,
-        seq: range_node.seq as u32,
+        seq: range_node.seq.map(|x| x as u32),
     };
     let node_index = leaf_node.node_index(tree_height);
 
@@ -244,7 +244,7 @@ pub async fn update_indexed_tree_leaves(
             value: Set(x.leaf.value.to_vec()),
             next_index: Set(x.leaf.next_index as i64),
             next_value: Set(x.leaf.next_value.to_vec()),
-            seq: Set(x.seq as i64),
+            seq: Set(Some(x.seq as i64)),
         });
 
         let mut query = indexed_trees::Entity::insert_many(models)
@@ -280,7 +280,7 @@ pub async fn update_indexed_tree_leaves(
                     hash: Hash::try_from(x.hash).map_err(|e| {
                         IngesterError::DatabaseError(format!("Failed to serialize hash: {}", e))
                     })?,
-                    seq: x.seq as u32,
+                    seq: Option::from(x.seq as u32),
                 })
             })
             .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
@@ -345,7 +345,7 @@ pub async fn multi_append(
             value: value.clone(),
             next_index: 0,
             next_value: vec![],
-            seq: 0,
+            seq: Some(0),
         };
 
         let next_largest = indexed_tree
@@ -375,7 +375,7 @@ pub async fn multi_append(
             value: Set(x.value.clone()),
             next_index: Set(x.next_index),
             next_value: Set(x.next_value.clone()),
-            seq: Set(0),
+            seq: Set(Some(0)),
         });
 
     indexed_trees::Entity::insert_many(active_elements)
@@ -405,7 +405,7 @@ pub async fn multi_append(
                 })?,
                 leaf_index: x.leaf_index as u32,
                 hash: compute_range_node_hash(x)?,
-                seq: 0,
+                seq: Some(0),
             })
         })
         .collect::<Result<Vec<LeafNode>, IngesterError>>()?;

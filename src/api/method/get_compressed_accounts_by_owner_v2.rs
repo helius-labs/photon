@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use lazy_static::lazy_static;
 use crate::{
     dao::generated::accounts,
     ingester::persist::bytes_to_sql_format,
@@ -48,7 +46,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
         cursor,
         limit,
         filters,
-        dataSlice,
+        data_slice,
     } = request;
 
     if filters.len() > MAX_FILTERS {
@@ -141,7 +139,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
 
     let filters = &filters_strings.join(" AND ");
 
-    let data_column = dataSlice
+    let data_column = data_slice
         .map(|slice| {
             let DataSlice { offset, length } = slice;
             let one_based_offset = offset + 1;
@@ -169,15 +167,16 @@ pub async fn get_compressed_accounts_by_owner_v2(
             {data_column},
             data_hash,
             address,
-            queue,
             owner,
             tree,
-            leaf_index,
-            queue_index,
-            seq,
-            slot_created,
+            in_queue,
             spent,
             prev_spent,
+            nullifier,
+            tx_hash,
+            leaf_index,
+            seq,
+            slot_created,
             lamports,
             discriminator
         FROM accounts

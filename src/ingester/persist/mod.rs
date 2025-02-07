@@ -30,7 +30,7 @@ use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
-use crate::common::typedefs::account::{AccountV1, AccountV2};
+use crate::common::typedefs::account::AccountV2;
 
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
@@ -173,9 +173,16 @@ async fn persist_state_tree_history(
 ) -> Result<(), IngesterError> {
     let state_tree_history = chunk
         .into_iter()
+        .filter_map(|(leaf_node, signature)| {
+            if leaf_node.seq.is_none() {
+                None
+            } else {
+                Some((leaf_node, signature))
+            }
+        })
         .map(|(leaf_node, signature)| state_tree_histories::ActiveModel {
             tree: Set(leaf_node.tree.to_bytes_vec()),
-            seq: Set(leaf_node.seq as i64),
+            seq: Set(leaf_node.seq.unwrap() as i64),
             leaf_idx: Set(leaf_node.leaf_index as i64),
             transaction_signature: Set(Into::<[u8; 64]>::into(signature).to_vec()),
         })
@@ -403,14 +410,16 @@ async fn append_output_accounts(
             data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
             leaf_index: Set(account.leaf_index.0 as i64),
+            in_queue: Set(account.in_queue),
+            nullifier: Set(account.nullifier.as_ref().map(|x| x.to_vec())),
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),
             spent: Set(false),
             slot_created: Set(account.slot_created.0 as i64),
-            seq: Set(account.seq.0 as i64),
+            seq: Set(account.seq.map(|x| x.0 as i64)),
             prev_spent: Set(None),
-            queue_index: Set(None), // TODO: Implement queue index
             queue: Default::default(),
+            tx_hash: Default::default(),
         });
 
         if let Some(token_data) = parse_token_data(account)? {

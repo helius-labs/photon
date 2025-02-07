@@ -28,9 +28,7 @@ pub mod indexer_events;
 pub mod state_update;
 
 use solana_program::pubkey;
-use crate::api::error::PhotonApiError;
 use crate::common::typedefs::account::AccountV2;
-use crate::dao::generated::state_trees;
 use crate::ingester::parser::indexer_events::{CompressedAccountData, MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext};
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
@@ -43,14 +41,9 @@ lazy_static! {
     pub static ref QUEUE_TREE_MAPPING: HashMap<String, String> = {
         let mut m = HashMap::new();
         m.insert(
-            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(),
-            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(),
+            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(), // queue
+            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(), // tree
         );
-        // m.insert(
-            // "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148".to_string(),
-            // "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT".to_string(),
-            // "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT".to_string(),
-        // );
         m
     };
 }
@@ -59,6 +52,7 @@ fn queue_to_tree(queue: &str) -> Option<Pubkey> {
     println!("queue_to_tree: {:?}", queue);
     QUEUE_TREE_MAPPING.get(queue).map(|x| Pubkey::from_str(x.as_str()).unwrap())
 }
+
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
     let mut state_updates = Vec::new();
@@ -85,21 +79,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             );
             None::<PublicTransactionEvent>
         });
-
-        println!("tx signature: {:?}", tx.signature);
-        println!("vec_instructions_data: {:?}", vec_instructions_data);
-        println!("vec_accounts: {:#?}", vec_accounts);
-        let event = event_from_light_transaction(&vec_instructions_data, vec_accounts);
-        let event = match event {
-            Ok(event) => {
-                println!("event.0: {:?}", event.0);
-                println!("event.1: {:?}", event.1);
-                event.0
-            }
-            Err(_) => {
-                None
-            }
-        };
+        let event = parse_event_v2(&*vec_instructions_data, vec_accounts);
 
         if let Some(public_transaction_event) = event.clone() {
             let event = PublicTransactionEvent {
@@ -125,12 +105,14 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                 }).collect(),
                 relay_fee: public_transaction_event.relay_fee,
                 is_compress: public_transaction_event.is_compress,
-                compression_lamports: public_transaction_event.compress_or_decompress_lamports,
+                compression_lamports: public_transaction_event.compression_lamports,
                 pubkey_array: public_transaction_event.pubkey_array,
                 message: public_transaction_event.message,
             };
+            println!("(new event parsed) event: {:?}", event.clone());
             let state_update = parse_public_transaction_event(tx.signature, slot, event)?;
             is_compression_transaction = true;
+            println!("(new event parsed) state_update: {:?}", state_update);
             state_updates.push(state_update);
         } else {
             for (index, instruction) in ordered_instructions.iter().enumerate() {
@@ -252,7 +234,12 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             }
         }
     }
-    let mut state_update = StateUpdate::merge_updates(state_updates);
+
+
+    let mut state_update = StateUpdate::merge_updates(state_updates.clone());
+    if !state_updates.is_empty() {
+        println!("state_update (after merge): {:?}", state_update);
+    }
 
     if !is_voting_transaction(tx) || is_compression_transaction {
         state_update.transactions.insert(Transaction {
@@ -264,6 +251,54 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     }
 
     Ok(state_update)
+}
+
+fn parse_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<PublicTransactionEvent> {
+    let event = event_from_light_transaction(instructions, accounts);
+    let event = match event {
+        Ok(event) => {
+            event.0
+        }
+        Err(_) => {
+            None
+        }
+    };
+
+    match event {
+        Some(public_transaction_event) => {
+            let event = PublicTransactionEvent {
+                input_compressed_account_hashes: public_transaction_event.input_compressed_account_hashes,
+                output_compressed_account_hashes: public_transaction_event.output_compressed_account_hashes,
+                output_compressed_accounts: public_transaction_event.output_compressed_accounts.iter().map(|x| OutputCompressedAccountWithPackedContext {
+                    compressed_account: CompressedAccount {
+                        owner: x.compressed_account.owner,
+                        lamports: x.compressed_account.lamports,
+                        address: x.compressed_account.address,
+                        data: x.compressed_account.data.as_ref().map(|d| CompressedAccountData {
+                            discriminator: d.discriminator,
+                            data: d.data.clone(),
+                            data_hash: d.data_hash,
+                        }),
+                    },
+                    merkle_tree_index: x.merkle_tree_index,
+                }).collect(),
+                output_leaf_indices: public_transaction_event.output_leaf_indices,
+                sequence_numbers: public_transaction_event.sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
+                    pubkey: x.pubkey,
+                    seq: x.seq,
+                }).collect(),
+                relay_fee: public_transaction_event.relay_fee,
+                is_compress: public_transaction_event.is_compress,
+                compression_lamports: public_transaction_event.compress_or_decompress_lamports,
+                pubkey_array: public_transaction_event.pubkey_array,
+                message: public_transaction_event.message,
+            };
+            Some(event)
+        }
+        None => {
+            None
+        }
+    }
 }
 
 fn is_voting_transaction(tx: &TransactionInfo) -> bool {
@@ -279,7 +314,10 @@ fn parse_account_data(
     queue: Option<Pubkey>,
     leaf_index: u32,
     slot: u64,
-    seq: u64,
+    seq: Option<u64>,
+    in_queue: bool,
+    spent: bool,
+    nullifier: Option<Hash>,
 ) -> AccountV2 {
     info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, queue: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}", compressed_account, hash, tree, queue, leaf_index, slot, seq);
     let CompressedAccount {
@@ -295,11 +333,6 @@ fn parse_account_data(
         data_hash: Hash::from(d.data_hash),
     });
 
-    let mut queue_index = None;
-    if let Some(queue) = queue {
-        queue_index = Some(UnsignedInteger(666));
-    }
-
     AccountV2 {
         owner: owner.into(),
         lamports: UnsignedInteger(lamports),
@@ -309,9 +342,11 @@ fn parse_account_data(
         slot_created: UnsignedInteger(slot),
         leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
-        seq: UnsignedInteger(seq),
-        queue_index,
-        queue: queue.map(SerializablePubkey::from),
+        in_queue,
+        spent,
+        nullifier,
+        seq: seq.map(UnsignedInteger),
+        tx_hash: None,
     }
 }
 
@@ -334,9 +369,7 @@ fn parse_indexed_merkle_tree_update(
             .iter()
         {
             let indexed_tree_leaf_update = IndexedTreeLeafUpdate {
-                tree: Pubkey::try_from(id).map_err(|_e| {
-                    IngesterError::ParserError("Unable to parse tree pubkey".to_string())
-                })?,
+                tree: Pubkey::from(id),
                 hash: *hash,
                 leaf: *leaf,
                 seq,
@@ -369,9 +402,7 @@ fn parse_nullifier_event(
     for (i, leaf_index) in nullified_leaves_indices.iter().enumerate() {
         let leaf_nullification: LeafNullification = {
             LeafNullification {
-                tree: Pubkey::try_from(id).map_err(|_e| {
-                    IngesterError::ParserError("Unable to parse tree pubkey".to_string())
-                })?,
+                tree: Pubkey::from(id),
                 leaf_index: *leaf_index,
                 seq: seq + i as u64,
                 signature: tx,
@@ -404,14 +435,24 @@ fn parse_public_transaction_event(
     for seq in sequence_numbers.iter() {
         if let Some(tree) = queue_to_tree(&seq.pubkey.to_string()) {
             println!("tree: {:?}", tree);
-                has_batched_instructions = true;
+            has_batched_instructions = true;
+            break;
         }
     }
 
-    let mut tree_to_seq_number = sequence_numbers
-        .iter()
-        .map(|seq| (seq.pubkey, seq.seq))
-        .collect::<std::collections::HashMap<_, _>>();
+    let mut tree_to_seq_number = HashMap::new();
+    if has_batched_instructions {
+        for seq in sequence_numbers.iter() {
+            if let Some(tree) = queue_to_tree(&seq.pubkey.to_string()) {
+                tree_to_seq_number.insert(tree, seq.seq);
+            }
+        }
+    } else {
+        tree_to_seq_number = sequence_numbers
+            .iter()
+            .map(|seq| (seq.pubkey, seq.seq))
+            .collect::<std::collections::HashMap<_, _>>();
+    }
 
     for hash in input_compressed_account_hashes {
         state_update.in_accounts.insert(hash.into());
@@ -422,9 +463,20 @@ fn parse_public_transaction_event(
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
-        let tree = pubkey_array[out_account.merkle_tree_index as usize];
+        let mut tree = pubkey_array[out_account.merkle_tree_index as usize];
+        let mut seq = None;
         let in_queue = queue_to_tree(&tree.to_string()).is_some();
-        let seq = tree_to_seq_number.get_mut(&tree).ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
+        if in_queue {
+            tree = queue_to_tree(&tree.to_string()).unwrap();
+        } else {
+            println!("not in queue");
+            println!("tree: {:?}", tree);
+            println!("tree_to_seq_number: {:?}", tree_to_seq_number);
+            println!("pubkey_array: {:?}", pubkey_array);
+            let _seq = tree_to_seq_number.get(&tree).ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
+            seq = Some(*_seq);
+        }
+
         let enriched_account = parse_account_data(
             out_account.compressed_account,
             hash,
@@ -432,9 +484,13 @@ fn parse_public_transaction_event(
             if in_queue { Some(tree) } else { None },
             *leaf_index,
             slot,
-            *seq,
+            seq,
+            in_queue,
+            false,
+            None,
         );
         info!("Enriched account: {:?}", enriched_account);
+        let seq = tree_to_seq_number.get_mut(&tree).ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
         *seq += 1;
         state_update.out_accounts.push(enriched_account);
     }

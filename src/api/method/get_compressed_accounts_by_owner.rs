@@ -64,13 +64,12 @@ pub struct DataSlice {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[allow(non_snake_case)]
 pub struct GetCompressedAccountsByOwnerRequest {
     pub owner: SerializablePubkey,
     #[serde(default)]
     pub filters: Vec<FilterSelector>,
-    #[serde(default)]
-    pub dataSlice: Option<DataSlice>,
+    #[serde(default, rename = "dataSlice")]
+    pub data_slice: Option<DataSlice>,
     #[serde(default)]
     pub cursor: Option<Hash>,
     #[serde(default)]
@@ -101,7 +100,7 @@ pub async fn get_compressed_accounts_by_owner(
         cursor,
         limit,
         filters,
-        dataSlice,
+        data_slice,
     } = request;
 
     if filters.len() > MAX_FILTERS {
@@ -194,7 +193,7 @@ pub async fn get_compressed_accounts_by_owner(
 
     let filters = &filters_strings.join(" AND ");
 
-    let data_column = dataSlice
+    let data_column = data_slice
         .map(|slice| {
             let DataSlice { offset, length } = slice;
             let one_based_offset = offset + 1;

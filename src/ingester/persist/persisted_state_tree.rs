@@ -24,7 +24,7 @@ pub struct LeafNode {
     pub tree: SerializablePubkey,
     pub leaf_index: u32,
     pub hash: Hash,
-    pub seq: u32,
+    pub seq: Option<u32>,
 }
 
 impl LeafNode {
@@ -43,7 +43,7 @@ impl From<AccountV1> for LeafNode {
             tree: account.tree,
             leaf_index: account.leaf_index.0 as u32,
             hash: account.hash,
-            seq: account.seq.0 as u32,
+            seq: account.seq.map(|x| x.0 as u32),
         }
     }
 }
@@ -55,7 +55,7 @@ impl From<AccountV2> for LeafNode {
             tree: account.tree,
             leaf_index: account.leaf_index.0 as u32,
             hash: account.hash,
-            seq: account.seq.0 as u32,
+            seq: account.seq.map(|x| x.0 as u32),
         }
     }
 }
@@ -66,7 +66,7 @@ impl From<LeafNullification> for LeafNode {
             tree: SerializablePubkey::from(leaf_nullification.tree),
             leaf_index: leaf_nullification.leaf_index as u32,
             hash: Hash::from(ZERO_BYTES[0]),
-            seq: leaf_nullification.seq as u32,
+            seq: Some(leaf_nullification.seq as u32),
         }
     }
 }
@@ -106,18 +106,22 @@ pub async fn persist_leaf_nodes(
             node_idx: Set(node_idx),
             hash: Set(leaf_node.hash.to_vec()),
             leaf_idx: Set(Some(leaf_node.leaf_index as i64)),
-            seq: Set(leaf_node.seq as i64),
+            seq: Set(leaf_node.seq.map(|x| x as i64)),
         };
 
         let existing_seq = node_locations_to_hashes_and_seq
             .get(&key)
             .map(|x| x.1)
-            .unwrap_or(0);
+            .unwrap_or(Some(0));
 
-        if leaf_node.seq >= existing_seq as u32 {
-            models_to_updates.insert(key.clone(), model);
-            node_locations_to_hashes_and_seq
-                .insert(key, (leaf_node.hash.to_vec(), leaf_node.seq as i64));
+        if let Some(existing_seq) = existing_seq {
+            if let Some(leaf_node_seq) = leaf_node.seq {
+                if leaf_node_seq >= existing_seq as u32 {
+                    models_to_updates.insert(key.clone(), model);
+                    node_locations_to_hashes_and_seq
+                        .insert(key, (leaf_node.hash.to_vec(), Some(leaf_node_seq as i64)));
+                }
+            }
         }
     }
 
@@ -142,18 +146,18 @@ pub async fn persist_leaf_nodes(
         let (left_child_hash, left_child_seq) = node_locations_to_hashes_and_seq
             .get(&(tree.clone(), node_index * 2))
             .cloned()
-            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), Some(0)));
 
         let (right_child_hash, right_child_seq) = node_locations_to_hashes_and_seq
             .get(&(tree.clone(), node_index * 2 + 1))
             .cloned()
-            .unwrap_or((ZERO_BYTES[child_level].to_vec(), 0));
+            .unwrap_or((ZERO_BYTES[child_level].to_vec(), Some(0)));
 
         let level = child_level + 1;
 
         let hash = compute_parent_hash(left_child_hash.clone(), right_child_hash.clone())?;
 
-        let seq = max(left_child_seq, right_child_seq) as i64;
+        let seq = max(left_child_seq, right_child_seq);
         let model = state_trees::ActiveModel {
             tree: Set(tree.clone()),
             level: Set(level as i64),
@@ -167,6 +171,8 @@ pub async fn persist_leaf_nodes(
         models_to_updates.insert(key.clone(), model);
         node_locations_to_hashes_and_seq.insert(key, (hash, seq));
     }
+
+    println!("Persisting {} leaf nodes", models_to_updates.len());
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
@@ -230,7 +236,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                             "Leaf index not found".to_string(),
                         ))? as u32,
                         hash: Hash::try_from(x.hash.clone())?,
-                        seq: 0,
+                        seq: Some(0),
                     },
                     x.node_idx,
                 ))
@@ -258,7 +264,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                             "Leaf index not found".to_string(),
                         ))? as u32,
                         hash: Hash::try_from(x.hash.clone())?,
-                        seq: 0,
+                        seq: Some(0),
                     },
                     x.node_idx,
                 ))
@@ -362,7 +368,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                         leaf_node.tree
                     ))
                 })?
-                .seq as u64;
+                .seq;
 
             let root = proof.pop().ok_or(PhotonApiError::UnexpectedError(
                 "Root node not found in proof".to_string(),
@@ -374,7 +380,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 leafIndex: leaf_node.leaf_index,
                 hash: leaf_node.hash.clone(),
                 merkleTree: leaf_node.tree,
-                rootSeq: root_seq,
+                rootSeq: root_seq.unwrap_or(0i64) as u64,
             })
         })
         .collect();
