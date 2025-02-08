@@ -221,8 +221,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                             info!("Merkle tree event: {:?}", merkle_tree_event);
                             let state_update = match merkle_tree_event {
                                 MerkleTreeEvent::V2(nullifier_event) => {
-                                    let event = parse_nullifier_event(tx.signature, nullifier_event);
-                                    event
+                                    parse_nullifier_event(tx.signature, nullifier_event)?
                                 }
                                 MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
                                     parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
@@ -317,6 +316,7 @@ fn parse_account_data(
     compressed_account: CompressedAccount,
     hash: [u8; 32],
     tree: Pubkey,
+    queue: Option<Pubkey>,
     leaf_index: u32,
     slot: u64,
     seq: Option<u64>,
@@ -324,6 +324,7 @@ fn parse_account_data(
     spent: bool,
     nullifier: Option<Hash>,
 ) -> AccountV2 {
+    info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, queue: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}", compressed_account, hash, tree, queue, leaf_index, slot, seq);
     let CompressedAccount {
         owner,
         lamports,
@@ -485,6 +486,7 @@ fn parse_public_transaction_event(
             out_account.compressed_account,
             hash,
             tree,
+            if in_queue { Some(tree) } else { None },
             *leaf_index,
             slot,
             seq,
