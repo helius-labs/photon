@@ -92,6 +92,8 @@ pub async fn persist_state_update(
 
     let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
         .iter()
+        // HACK: filter accounts by seq, because we don't have seq for accounts which are not in the tree yet
+        .filter(|account| account.seq.is_some())
         .map(|account| {
             (
                 LeafNode::from(account.clone()),
@@ -111,6 +113,12 @@ pub async fn persist_state_update(
         }))
         .collect();
 
+    for leaf_node in &leaf_nodes_with_signatures {
+        debug!(
+            "Leaf node: {:?}, signature: {:?}",
+            leaf_node.0, leaf_node.1
+        );
+    }
     leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
 
     debug!("Persisting state nodes...");
@@ -156,7 +164,7 @@ pub async fn persist_state_update(
 
     debug!("Persisting index tree updates...");
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
-
+    debug!("Persisted index tree updates.");
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
         statsd_count!("state_update.output_accounts", output_accounts_len as u64);
@@ -418,8 +426,7 @@ async fn append_output_accounts(
             slot_created: Set(account.slot_created.0 as i64),
             seq: Set(account.seq.map(|x| x.0 as i64)),
             prev_spent: Set(None),
-            queue: Default::default(),
-            tx_hash: Default::default(),
+            tx_hash: Default::default(), // TODO: update this when we have tx_hash in the account
         });
 
         if let Some(token_data) = parse_token_data(account)? {

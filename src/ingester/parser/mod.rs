@@ -5,7 +5,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use lazy_static::lazy_static;
 use light_utils::instruction::event::event_from_light_transaction;
 use indexer_events::{IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent};
-use log::info;
+use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use state_update::{IndexedTreeLeafUpdate, LeafNullification};
 
@@ -55,6 +55,7 @@ fn queue_to_tree(queue: &str) -> Option<Pubkey> {
 
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
+    info!("Parsing transaction at slot: {}", slot);
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
@@ -79,7 +80,11 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             );
             None::<PublicTransactionEvent>
         });
-        let event = parse_event_v2(&*vec_instructions_data, vec_accounts);
+
+        debug!("Instruction data: {:?}", vec_instructions_data);
+        debug!("Accounts: {:?}", vec_accounts);
+
+        let event = parse_public_transaction_event_v2(&vec_instructions_data, vec_accounts);
 
         if let Some(public_transaction_event) = event.clone() {
             let event = PublicTransactionEvent {
@@ -216,7 +221,8 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                             info!("Merkle tree event: {:?}", merkle_tree_event);
                             let state_update = match merkle_tree_event {
                                 MerkleTreeEvent::V2(nullifier_event) => {
-                                    parse_nullifier_event(tx.signature, nullifier_event)?
+                                    let event = parse_nullifier_event(tx.signature, nullifier_event);
+                                    event
                                 }
                                 MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
                                     parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
@@ -253,7 +259,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     Ok(state_update)
 }
 
-fn parse_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<PublicTransactionEvent> {
+fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<PublicTransactionEvent> {
     let event = event_from_light_transaction(instructions, accounts);
     let event = match event {
         Ok(event) => {
@@ -311,7 +317,6 @@ fn parse_account_data(
     compressed_account: CompressedAccount,
     hash: [u8; 32],
     tree: Pubkey,
-    queue: Option<Pubkey>,
     leaf_index: u32,
     slot: u64,
     seq: Option<u64>,
@@ -319,7 +324,6 @@ fn parse_account_data(
     spent: bool,
     nullifier: Option<Hash>,
 ) -> AccountV2 {
-    info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, queue: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}", compressed_account, hash, tree, queue, leaf_index, slot, seq);
     let CompressedAccount {
         owner,
         lamports,
@@ -481,7 +485,6 @@ fn parse_public_transaction_event(
             out_account.compressed_account,
             hash,
             tree,
-            if in_queue { Some(tree) } else { None },
             *leaf_index,
             slot,
             seq,
