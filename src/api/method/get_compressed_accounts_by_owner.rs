@@ -18,9 +18,11 @@ use super::utils::parse_account_model;
 // Max filters allowed constant value of 5
 const MAX_FILTERS: usize = 5;
 const MAX_CHILD_ACCOUNTS_WITH_FILTERS: usize = 1_000_000;
-const SOL_LAYER_ACCOUNTS: [&str; 2] = [
+const SOL_LAYER_ACCOUNTS: [&str; 4] = [
     "S1ay5sk6FVkvsNFZShMw2YK3nfgJZ8tpBBGuHWDZ266",
     "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT",
+    "ARDPkhymCbfdan375FCgPnBJQvUfHeb7nHVdBfwWSxrp",
+    "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT"
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
