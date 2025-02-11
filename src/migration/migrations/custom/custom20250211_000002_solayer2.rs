@@ -41,7 +41,7 @@ impl MigrationTrait for Migration {
             execute_sql(
                 manager,
                 &format!(
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS solayer_account_index ON accounts (spent, owner, substring(data, 1, 32)) \
+                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS solayer_account_index2 ON accounts (spent, owner, substring(data, 1, 32)) \
                     WHERE owner IN ('{}');",
                     encoded_accounts
                 ),
@@ -56,7 +56,7 @@ impl MigrationTrait for Migration {
         manager
             .drop_index(
                 Index::drop()
-                    .name("solayer_account_index")
+                    .name("solayer_account_index2")
                     .table(Accounts::Table)
                     .to_owned(),
             )
