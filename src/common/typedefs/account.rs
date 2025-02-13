@@ -30,6 +30,7 @@ pub struct AccountV2 {
     pub owner: SerializablePubkey,
     pub lamports: UnsignedInteger,
     pub tree: SerializablePubkey,
+    pub queue: Option<SerializablePubkey>,
     pub in_queue: bool,
     pub spent: bool,
     pub nullifier: Option<Hash>,

@@ -1,3 +1,4 @@
+use log::info;
 use crate::ingester::persist::persisted_state_tree::{
     get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
 };
@@ -29,7 +30,10 @@ pub async fn get_proofs_by_indices(
     conn: &DatabaseConnection,
     request: GetProofsByIndicesRequest,
 ) -> Result<GetProofsByIndicesResponse, PhotonApiError> {
-
+    info!(
+        "Getting proofs for tree {} for indices {:?}",
+        request.merkle_tree, request.indices
+    );
     if request.indices.len() > PAGE_LIMIT as usize {
         return Err(PhotonApiError::ValidationError(format!(
             "Too many hashes requested {}. Maximum allowed: {}",
@@ -48,8 +52,9 @@ pub async fn get_proofs_by_indices(
             .await?;
     }
 
-    // TODO: get proofs by indices
     let proofs = get_multiple_compressed_leaf_proofs(&tx, None, Some(request.indices)).await?;
+    info!("Proofs: {:?}", proofs);
+
     tx.commit().await?;
     Ok(GetProofsByIndicesResponse {
         value: proofs,

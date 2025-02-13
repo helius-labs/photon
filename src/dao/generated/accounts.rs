@@ -12,6 +12,7 @@ pub struct Model {
     pub address: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
+    pub queue: Option<Vec<u8>>,
     pub leaf_index: i64,
     pub in_queue: bool,
     pub nullifier: Option<Vec<u8>>,

@@ -36,7 +36,11 @@ pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
+
 const TREE_HEIGHT: u32 = 27;
+
+const BATCH_STATE_TREE_HEIGHT: u32 = 32 + 1;
+
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 500;
 
@@ -417,6 +421,7 @@ async fn append_output_accounts(
             data: Set(account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.tree.to_bytes_vec()),
+            queue: Set(account.queue.as_ref().map(|x| x.to_bytes_vec())),
             leaf_index: Set(account.leaf_index.0 as i64),
             in_queue: Set(account.in_queue),
             nullifier: Set(account.nullifier.as_ref().map(|x| x.to_vec())),

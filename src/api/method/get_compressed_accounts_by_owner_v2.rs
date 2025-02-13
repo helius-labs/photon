@@ -169,6 +169,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
             address,
             owner,
             tree,
+            queue,
             in_queue,
             spent,
             prev_spent,

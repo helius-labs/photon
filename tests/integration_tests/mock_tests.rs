@@ -27,7 +27,7 @@ use photon_indexer::ingester::persist::persisted_state_tree::{
 };
 use sea_orm::{QueryFilter, TransactionTrait};
 
-use photon_indexer::common::typedefs::account::Account;
+use photon_indexer::common::typedefs::account::{AccountV1, AccountV2};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
@@ -84,7 +84,7 @@ async fn test_persist_state_update_basic(
     .unwrap();
 
     let mut state_update = StateUpdate::new();
-    let account = Account {
+    let account = AccountV1 {
         hash: Hash::new_unique(),
         address: Some(SerializablePubkey::new_unique()),
         data: Some(AccountData {
@@ -95,10 +95,8 @@ async fn test_persist_state_update_basic(
         owner: SerializablePubkey::new_unique(),
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
-        queue_index: None,
-        queue: None,
         leaf_index: UnsignedInteger(0),
-        seq: UnsignedInteger(0),
+        seq: Some(UnsignedInteger(0)),
         slot_created: UnsignedInteger(0),
     };
 

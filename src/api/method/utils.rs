@@ -93,7 +93,7 @@ impl<'__s> ToSchema<'__s> for Context {
         ("Context", RefOr::T(schema))
     }
 
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+    fn aliases() -> Vec<(&'static str, Schema)> {
         Vec::new()
     }
 }
@@ -186,6 +186,7 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
             data,
             owner: account.owner.try_into()?,
             tree: account.tree.try_into()?,
+            queue: account.queue.map(|queue| queue.try_into()).transpose()?,
             in_queue: account.in_queue,
             spent: account.spent,
             nullifier: account.nullifier.map(Hash::try_from).transpose()?,
@@ -278,7 +279,7 @@ pub struct EnrichedTokenAccountModel {
 }
 
 pub async fn fetch_token_accounts(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &DatabaseConnection,
     owner_or_delegate: Authority,
     options: GetCompressedTokenAccountsByAuthorityOptions,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
@@ -344,7 +345,7 @@ pub async fn fetch_token_accounts(
                         .delegate
                         .map(SerializablePubkey::try_from)
                         .transpose()?,
-                    state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
+                    state: AccountState::try_from(token_account.state as u8).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(
                             "Unable to parse account state {}",
                             e

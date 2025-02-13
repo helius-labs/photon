@@ -2,6 +2,7 @@ use std::{cmp::max, collections::HashMap};
 
 use cadence_macros::statsd_count;
 use itertools::Itertools;
+use log::info;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
     QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
@@ -17,7 +18,7 @@ use crate::{
     metric,
 };
 use crate::common::typedefs::account::{AccountV1, AccountV2};
-use super::{compute_parent_hash, get_node_direct_ancestors};
+use super::{compute_parent_hash, get_node_direct_ancestors, BATCH_STATE_TREE_HEIGHT, TREE_HEIGHT};
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {
@@ -76,6 +77,7 @@ pub async fn persist_leaf_nodes(
     mut leaf_nodes: Vec<LeafNode>,
     tree_height: u32,
 ) -> Result<(), IngesterError> {
+    info!("Persisting leaf nodes with tree height: {}", tree_height);
     if leaf_nodes.is_empty() {
         return Ok(());
     }
@@ -172,6 +174,7 @@ pub async fn persist_leaf_nodes(
         node_locations_to_hashes_and_seq.insert(key, (hash, seq));
     }
 
+    println!("Leaf nodes to persist: {:?}", leaf_nodes.len());
     println!("Persisting {} leaf nodes", models_to_updates.len());
 
     // We first build the query and then execute it because SeaORM has a bug where it always throws
@@ -214,97 +217,150 @@ pub async fn get_multiple_compressed_leaf_proofs(
         ));
     }
 
-    let leaf_nodes_with_node_index = if let Some(hashes) = hashes.as_ref() {
-        if hashes.is_empty() {
-            return Ok(Vec::new());
-        }
+    // TODO: add assertion that: abs(max(index from db) - max(indices)) <= BATCH_SIZE * 2
 
-        state_trees::Entity::find()
-            .filter(
-                state_trees::Column::Hash
-                    .is_in(hashes.iter().map(|x| x.to_vec()).collect::<Vec<Vec<u8>>>())
-                    .and(state_trees::Column::Level.eq(0)),
-            )
-            .all(txn)
-            .await?
-            .into_iter()
-            .map(|x| {
-                Ok((
-                    LeafNode {
-                        tree: SerializablePubkey::try_from(x.tree.clone())?,
-                        leaf_index: x.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
-                            "Leaf index not found".to_string(),
-                        ))? as u32,
-                        hash: Hash::try_from(x.hash.clone())?,
-                        seq: Some(0),
-                    },
-                    x.node_idx,
-                ))
-            })
-            .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?
-    } else if let Some(indices) = indices {
+    // Handle hash-based lookups as before
+    if let Some(hashes) = hashes.as_ref() {
+        // Existing hash lookup logic remains unchanged...
+        return handle_hash_based_proofs(txn, hashes).await;
+    }
+
+    // Handle index-based lookups with zero leaf persistence
+    if let Some(indices) = indices {
         if indices.is_empty() {
             return Ok(Vec::new());
         }
 
-        state_trees::Entity::find()
+        // Get tree info for proper tree pubkey
+        let tree_info = state_trees::Entity::find()
+            .filter(state_trees::Column::Level.eq(0))
+            .one(txn)
+            .await?
+            .ok_or(PhotonApiError::RecordNotFound(
+                "No tree information found".to_string(),
+            ))?;
+
+        let tree_pubkey = SerializablePubkey::try_from(tree_info.tree.clone())?;
+
+        // Get existing leaves
+        let existing_leaves = state_trees::Entity::find()
             .filter(
                 state_trees::Column::LeafIdx
-                    .is_in(indices)
-                    .and(state_trees::Column::Level.eq(0)),
+                    .is_in(indices.iter().map(|&x| x as i64).collect::<Vec<i64>>())
+                    .and(state_trees::Column::Level.eq(0))
+                    .and(state_trees::Column::Tree.eq(tree_info.tree.clone())),
             )
             .all(txn)
-            .await?
-            .into_iter()
-            .map(|x| {
-                Ok((
-                    LeafNode {
-                        tree: SerializablePubkey::try_from(x.tree.clone())?,
-                        leaf_index: x.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
-                            "Leaf index not found".to_string(),
-                        ))? as u32,
-                        hash: Hash::try_from(x.hash.clone())?,
-                        seq: Some(0),
-                    },
-                    x.node_idx,
-                ))
-            })
-            .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?
-    } else {
-        unreachable!()
-    };
+            .await?;
 
-    if let Some(hashes) = hashes {
-        if leaf_nodes_with_node_index.len() != hashes.len() {
-            return Err(PhotonApiError::RecordNotFound(format!(
-                "Leaf nodes not found for hashes. Got {} hashes. Expected {}.",
-                leaf_nodes_with_node_index.len(),
-                hashes.len()
-            )));
+        // Create a map of existing leaves
+        let mut index_to_leaf = existing_leaves
+            .into_iter()
+            .map(|x| (x.leaf_idx.unwrap_or_default() as u64, x))
+            .collect::<HashMap<_, _>>();
+
+        // Create leaf nodes for all requested indices
+        let mut leaf_nodes = Vec::new();
+        let mut leaves_to_persist = Vec::new();
+
+        for idx in indices {
+            if let Some(existing) = index_to_leaf.remove(&idx) {
+                // Use existing leaf
+                leaf_nodes.push((
+                    LeafNode {
+                        tree: tree_pubkey,
+                        leaf_index: idx as u32,
+                        hash: Hash::try_from(existing.hash)?,
+                        seq: existing.seq.map(|s| s as u32),
+                    },
+                    existing.node_idx,
+                ));
+            } else {
+                // Create zero leaf
+                let zero_leaf = LeafNode {
+                    tree: tree_pubkey,
+                    leaf_index: idx as u32,
+                    hash: Hash::from(ZERO_BYTES[0]),
+                    seq: None,
+                };
+                let node_idx = zero_leaf.node_index(BATCH_STATE_TREE_HEIGHT);
+                leaf_nodes.push((zero_leaf.clone(), node_idx));
+                leaves_to_persist.push(zero_leaf);
+            }
         }
 
-        let hash_to_leaf_node_with_node_index = leaf_nodes_with_node_index
-            .iter()
-            .map(|(leaf_node, node_index)| (leaf_node.hash.clone(), (leaf_node.clone(), *node_index)))
-            .collect::<HashMap<Hash, (LeafNode, i64)>>();
+        // TODO: do not persist empty leaves, predefine proof for ZERO_BYTES[0] and return it
+        // Persist new zero leaves if any exist
+        if !leaves_to_persist.is_empty() {
+            persist_leaf_nodes(txn, leaves_to_persist, BATCH_STATE_TREE_HEIGHT).await.map_err(|e| crate::api::error::PhotonApiError::UnexpectedError(format!("Failed to persist zero leaves: {}", e.to_string())))?;
+        }
 
-        let leaf_nodes_with_node_index = hashes
-            .into_iter()
-            .map(|hash| {
-                hash_to_leaf_node_with_node_index
-                    .get(&hash)
-                    .ok_or(PhotonApiError::RecordNotFound(format!(
-                        "Leaf node not found for hash: {}",
-                        hash
-                    )))
-                    .cloned()
-            })
-            .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
-
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
-    } else {
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
+        // Generate proofs using the complete set of leaves
+        return get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes).await;
     }
+
+    unreachable!()
+}
+
+async fn handle_hash_based_proofs(
+    txn: &DatabaseTransaction,
+    hashes: &[Hash],
+) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
+    if hashes.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let leaf_nodes_with_node_index = state_trees::Entity::find()
+        .filter(
+            state_trees::Column::Hash
+                .is_in(hashes.iter().map(|x| x.to_vec()).collect::<Vec<Vec<u8>>>())
+                .and(state_trees::Column::Level.eq(0)),
+        )
+        .all(txn)
+        .await?
+        .into_iter()
+        .map(|x| {
+            Ok((
+                LeafNode {
+                    tree: SerializablePubkey::try_from(x.tree.clone())?,
+                    leaf_index: x.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
+                        "Leaf index not found".to_string(),
+                    ))? as u32,
+                    hash: Hash::try_from(x.hash.clone())?,
+                    seq: Some(0),
+                },
+                x.node_idx,
+            ))
+        })
+        .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
+
+    if leaf_nodes_with_node_index.len() != hashes.len() {
+        return Err(PhotonApiError::RecordNotFound(format!(
+            "Leaf nodes not found for hashes. Got {} hashes. Expected {}.",
+            leaf_nodes_with_node_index.len(),
+            hashes.len()
+        )));
+    }
+
+    let hash_to_leaf_node_with_node_index = leaf_nodes_with_node_index
+        .iter()
+        .map(|(leaf_node, node_index)| (leaf_node.hash.clone(), (leaf_node.clone(), *node_index)))
+        .collect::<HashMap<Hash, (LeafNode, i64)>>();
+
+    let leaf_nodes_with_node_index = hashes
+        .iter()
+        .map(|hash| {
+            hash_to_leaf_node_with_node_index
+                .get(hash)
+                .ok_or(PhotonApiError::RecordNotFound(format!(
+                    "Leaf node not found for hash: {}",
+                    hash
+                )))
+                .cloned()
+        })
+        .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
+
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
 }
 
 pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
