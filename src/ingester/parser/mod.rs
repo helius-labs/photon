@@ -280,7 +280,7 @@ fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec
 
     let event = match event {
         Ok(event) => {
-            event.0
+            Some(event?.event)
         }
         Err(_) => {
             None
