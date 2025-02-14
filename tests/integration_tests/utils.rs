@@ -7,7 +7,7 @@ use photon_indexer::{
     api::{api::PhotonApi, method::utils::TokenAccountList},
     common::{
         get_rpc_client, relative_project_path,
-        typedefs::{account::Account, token_data::TokenData},
+        typedefs::{account::AccountV1, token_data::TokenData},
     },
     ingester::{
         parser::{parse_transaction, state_update::StateUpdate},
@@ -348,8 +348,8 @@ pub fn verify_response_matches_input_token_data(
     }
 }
 pub fn assert_account_response_list_matches_input(
-    account_response: &mut Vec<Account>,
-    input_accounts: &mut Vec<Account>,
+    account_response: &mut Vec<AccountV1>,
+    input_accounts: &mut Vec<AccountV1>,
 ) {
     assert_eq!(account_response.len(), input_accounts.len());
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));

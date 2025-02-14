@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::hash::Hash;
-use super::indexer_events::RawIndexedElement;
+use super::indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement};
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct PathNode {
@@ -63,7 +63,11 @@ pub struct IndexedTreeLeafUpdate {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
+    // TODO: we need associate tx_hash with in_accounts
+    pub tx_hash: Hash,
+    // TODO: replace HashSet with OrderedSet or Vec
     pub in_accounts: HashSet<Hash>,
+    pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
     pub out_accounts: Vec<AccountV2>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
@@ -81,7 +85,13 @@ impl StateUpdate {
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
+        // TODO: remove assert after tx_hash and in_seq_numbers are associated with in_accounts
+        assert!(updates.iter().filter(|update| update.tx_hash != Hash::default()).count() <= 1);
         for update in updates {
+            if merged.tx_hash == Hash::default() {
+                merged.tx_hash = update.tx_hash;
+            }
+            merged.in_seq_numbers.extend(update.in_seq_numbers);
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
             merged

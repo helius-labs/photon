@@ -29,7 +29,7 @@ pub mod state_update;
 
 use solana_program::pubkey;
 use crate::common::typedefs::account::AccountV2;
-use crate::ingester::parser::indexer_events::{CompressedAccountData, MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext};
+use crate::ingester::parser::indexer_events::{BatchPublicTransactionEvent, CompressedAccountData, MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext};
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");
@@ -85,7 +85,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 
         if let Some(event) = parse_public_transaction_event_v2(&vec_instructions_data, vec_accounts) {
             println!("(new event parsed) event: {:?}", event.clone());
-            let state_update = parse_public_transaction_event(tx.signature, slot, event)?;
+            let state_update = parse_batch_public_transaction_event(tx.signature, slot, event)?;
             is_compression_transaction = true;
             println!("(new event parsed) state_update: {:?}", state_update);
             state_updates.push(state_update);
@@ -274,13 +274,13 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     Ok(state_update)
 }
 
-fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<PublicTransactionEvent> {
+fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<BatchPublicTransactionEvent> {
     let event = event_from_light_transaction(instructions, accounts);
     info!("Event from light transaction: {:?}", event);
 
     let event = match event {
         Ok(event) => {
-            Some(event?.event)
+            event
         }
         Err(_) => {
             None
@@ -290,33 +290,45 @@ fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec
     match event {
         Some(public_transaction_event) => {
             let event = PublicTransactionEvent {
-                input_compressed_account_hashes: public_transaction_event.input_compressed_account_hashes,
-                output_compressed_account_hashes: public_transaction_event.output_compressed_account_hashes,
-                output_compressed_accounts: public_transaction_event.output_compressed_accounts.iter().map(|x| OutputCompressedAccountWithPackedContext {
-                    compressed_account: CompressedAccount {
-                        owner: x.compressed_account.owner,
-                        lamports: x.compressed_account.lamports,
-                        address: x.compressed_account.address,
-                        data: x.compressed_account.data.as_ref().map(|d| CompressedAccountData {
-                            discriminator: d.discriminator,
-                            data: d.data.clone(),
-                            data_hash: d.data_hash,
-                        }),
-                    },
-                    merkle_tree_index: x.merkle_tree_index,
-                }).collect(),
-                output_leaf_indices: public_transaction_event.output_leaf_indices,
-                sequence_numbers: public_transaction_event.sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
+                    input_compressed_account_hashes: public_transaction_event.event.input_compressed_account_hashes,
+                    output_compressed_account_hashes: public_transaction_event.event.output_compressed_account_hashes,
+                    output_compressed_accounts: public_transaction_event.event.output_compressed_accounts.iter().map(|x| OutputCompressedAccountWithPackedContext {
+                        compressed_account: CompressedAccount {
+                            owner: x.compressed_account.owner,
+                            lamports: x.compressed_account.lamports,
+                            address: x.compressed_account.address,
+                            data: x.compressed_account.data.as_ref().map(|d| CompressedAccountData {
+                                discriminator: d.discriminator,
+                                data: d.data.clone(),
+                                data_hash: d.data_hash,
+                            }),
+                        },
+                        merkle_tree_index: x.merkle_tree_index,
+                    }).collect(),
+                    output_leaf_indices: public_transaction_event.event.output_leaf_indices,
+                    sequence_numbers: public_transaction_event.event.sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
+                        pubkey: x.pubkey,
+                        seq: x.seq,
+                    }).collect(),
+                    relay_fee: public_transaction_event.event.relay_fee,
+                    is_compress: public_transaction_event.event.is_compress,
+                    compression_lamports: public_transaction_event.event.compress_or_decompress_lamports,
+                    pubkey_array: public_transaction_event.event.pubkey_array,
+                    message: public_transaction_event.event.message,
+                };
+            let batch_public_transaction_event = BatchPublicTransactionEvent {
+                event,
+                new_addresses: public_transaction_event.new_addresses,
+                input_sequence_numbers: public_transaction_event.input_sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
                     pubkey: x.pubkey,
                     seq: x.seq,
                 }).collect(),
-                relay_fee: public_transaction_event.relay_fee,
-                is_compress: public_transaction_event.is_compress,
-                compression_lamports: public_transaction_event.compress_or_decompress_lamports,
-                pubkey_array: public_transaction_event.pubkey_array,
-                message: public_transaction_event.message,
+                address_sequence_numbers: public_transaction_event.address_sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
+                    pubkey: x.pubkey,
+                    seq: x.seq,
+                }).collect(),
             };
-            Some(event)
+            Some(batch_public_transaction_event)
         }
         None => {
             None
@@ -489,6 +501,15 @@ fn parse_batch_address_append_event(
     Ok(state_update)
 }
 
+fn parse_batch_public_transaction_event(
+    tx: Signature,
+    slot: u64,
+    transaction_event: BatchPublicTransactionEvent,
+) -> Result<StateUpdate, IngesterError> {
+    let mut state_update = parse_public_transaction_event(tx, slot, transaction_event.event)?;
+    state_update.in_seq_numbers = transaction_event.input_sequence_numbers;
+    Ok(state_update)
+}
 
 fn parse_public_transaction_event(
     tx: Signature,

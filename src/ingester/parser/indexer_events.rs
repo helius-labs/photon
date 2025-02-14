@@ -1,6 +1,7 @@
 /// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
+use light_compressed_account::event::NewAddress;
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
@@ -8,7 +9,7 @@ pub struct OutputCompressedAccountWithPackedContext {
     pub merkle_tree_index: u8,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq)]
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumber {
     pub pubkey: Pubkey,
     pub seq: u64,
@@ -29,7 +30,13 @@ pub struct PublicTransactionEvent {
     pub message: Option<Vec<u8>>,
 }
 
-
+#[derive(Debug, Clone)]
+pub struct BatchPublicTransactionEvent {
+    pub event: PublicTransactionEvent,
+    pub new_addresses: Vec<NewAddress>,
+    pub input_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
+    pub address_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
+}
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct CompressedAccount {

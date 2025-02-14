@@ -2,31 +2,31 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use jsonrpsee_core::Serialize;
 use lazy_static::lazy_static;
-use sea_orm::DatabaseConnection;
+use log::info;
+use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 use serde::Deserialize;
+use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_queue_elements::{GetQueueElementsResponse, QueueElement};
 use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+use crate::ingester::persist::bytes_to_sql_format;
 
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct LeafInfo {
-    pub leaf_index: UnsignedInteger,
-    pub leaf: Hash,
-    pub tx_hash: Hash,
-}
-
-lazy_static! {
-    pub static ref LEAF_INFOS: Mutex<HashMap<Hash, Vec<LeafInfo>>> = Mutex::new(HashMap::new());
+    pub leaf_index: i64,
+    pub leaf: Vec<u8>,
+    pub tx_hash: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetLeafInfoRequest {
     pub merkle_tree: Hash,
-    pub zkp_batch_size: UnsignedInteger,
+    pub start_offset: UnsignedInteger,
+    pub end_offset: UnsignedInteger,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -41,16 +41,51 @@ pub async fn get_leaf_info(
     request: GetLeafInfoRequest,
 ) -> Result<GetLeafInfoResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
-    let merkle_tree: Hash = request.merkle_tree.clone();
-    let zkp_batch_size: usize = request.zkp_batch_size.0 as usize;
+    let merkle_tree = request.merkle_tree.to_vec();
+    let tree_pubkey = Pubkey::try_from(merkle_tree.clone())
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid tree pubkey: {:?}", e)))?;
 
-    let mut infos = LEAF_INFOS.lock().unwrap();
-    let infos = infos.entry(merkle_tree).or_default();
+    info!(
+        "get_leaf_info for merkle tree {} from {} to {}",
+        tree_pubkey.to_string(),
+        request.start_offset.0,
+        request.end_offset.0
+    );
 
-    let response = GetLeafInfoResponse {
+    let tree_string = bytes_to_sql_format(conn.get_database_backend(), merkle_tree);
+    let start_offset = request.start_offset.0;
+    let end_offset = request.end_offset.0;
+
+    // Validate offsets
+    if start_offset > end_offset {
+        return Err(PhotonApiError::ValidationError(
+            "start_offset must be less than or equal to end_offset".to_string(),
+        ));
+    }
+
+    let raw_sql = format!(
+        "
+        SELECT leaf_index, hash as leaf, tx_hash
+        FROM accounts
+        WHERE nullifier_queue_index BETWEEN {start_offset} AND {end_offset}
+        AND tree = {tree_string}
+        ORDER BY queue_position ASC
+        "
+    );
+
+    println!("raw_sql: {}", raw_sql);
+
+    let stmt = Statement::from_string(conn.get_database_backend(), raw_sql);
+
+    let result: Vec<LeafInfo> = LeafInfo::find_by_statement(stmt)
+        .all(conn)
+        .await
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e)))?;
+
+    println!("result: {:?}", result);
+
+    Ok(GetLeafInfoResponse {
         context,
-        value: infos[..std::cmp::min(zkp_batch_size, infos.len())].to_vec()
-    };
-
-    Ok(response)
+        value: result
+    })
 }
