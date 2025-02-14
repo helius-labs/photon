@@ -22,6 +22,7 @@ pub enum Accounts {
     Tree,
     LeafIndex,
     InQueue,
+    NullifierQueueIndex,
     QueuePosition,
     Queue,
     Nullifier,

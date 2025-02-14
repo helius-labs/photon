@@ -1,5 +1,3 @@
-use light_batched_merkle_tree::constants::TEST_DEFAULT_ZKP_BATCH_SIZE;
-use light_batched_merkle_tree::event::BatchAppendEvent;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
@@ -24,8 +22,13 @@ pub struct GetQueueElementsRequest {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsResponse {
     pub context: Context,
-    pub values: Vec<Hash>,
-    pub first_leaf_index: UnsignedInteger,
+    pub value: Vec<QueueElement>,
+}
+
+#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct QueueElement {
+    leaf_index: i64,
+    hash: Vec<u8>,
 }
 
 pub async fn get_queue_elements(
@@ -56,11 +59,11 @@ pub async fn get_queue_elements(
     }
 
     // Query using LIMIT/OFFSET, ordering by queue_position
-    let pagination = match conn.get_database_backend() {
-        sea_orm::DatabaseBackend::Postgres => format!("OFFSET {start_offset} LIMIT {}", end_offset - start_offset),
-        sea_orm::DatabaseBackend::Sqlite => format!("LIMIT {} OFFSET {start_offset}", end_offset - start_offset),
-        _ => panic!("Unsupported database backend"),
-    };
+    // let pagination = match conn.get_database_backend() {
+    //     sea_orm::DatabaseBackend::Postgres => format!("OFFSET {start_offset} LIMIT {}", end_offset - start_offset),
+    //     sea_orm::DatabaseBackend::Sqlite => format!("LIMIT {} OFFSET {start_offset}", end_offset - start_offset),
+    //     _ => panic!("Unsupported database backend"),
+    // };
 
     let raw_sql = format!(
         "
@@ -68,32 +71,20 @@ pub async fn get_queue_elements(
         FROM accounts
         WHERE tree = {tree_string}
         AND in_queue = true
+        AND leaf_index BETWEEN {start_offset} AND {end_offset}
         ORDER BY queue_position ASC
-        {pagination}
         "
     );
 
     let stmt = Statement::from_string(conn.get_database_backend(), raw_sql);
 
-    #[derive(FromQueryResult)]
-    struct HashResult {
-        hash: Vec<u8>,
-    }
-
-    let results: Vec<HashResult> = HashResult::find_by_statement(stmt)
+    let result: Vec<QueueElement> = QueueElement::find_by_statement(stmt)
         .all(conn)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e)))?;
 
-    let queue_elements: Vec<Hash> = results
-        .into_iter()
-        .map(|result| Hash::try_from(result.hash))
-        .collect::<Result<Vec<Hash>, _>>()
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid hash in database: {}", e)))?;
-
     Ok(GetQueueElementsResponse {
         context,
-        values: queue_elements,
-        first_leaf_index: UnsignedInteger(0), // TODO: leaf_index of first element in queue_elements
+        value: result
     })
 }

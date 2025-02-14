@@ -14,6 +14,7 @@ use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceListV2;
 use crate::api::method::get_multiple_compressed_accounts::AccountList;
+use crate::api::method::get_queue_elements::QueueElement;
 
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
@@ -116,6 +117,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OwnerBalancesResponse,
     TokenBalanceListV2,
     LeafInfo,
+    QueueElement
 )))]
 struct ApiDoc;
 

@@ -93,7 +93,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/Account'
+                        $ref: '#/components/schemas/AccountV1'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -458,7 +458,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/PaginatedAccountList'
+                        $ref: '#/components/schemas/PaginatedAccountListV1'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -3119,10 +3119,7 @@ paths:
                   - merkleTree
                   - startOffset
                   - endOffset
-                  - batch
                   properties:
-                    batch:
-                      $ref: '#/components/schemas/UnsignedInteger'
                     endOffset:
                       $ref: '#/components/schemas/UnsignedInteger'
                     merkleTree:
@@ -3170,7 +3167,7 @@ paths:
                       value:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Hash'
+                          $ref: '#/components/schemas/QueueElement'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -3566,38 +3563,6 @@ paths:
                     type: string
 components:
   schemas:
-    Account:
-      type: object
-      required:
-      - hash
-      - owner
-      - lamports
-      - tree
-      - leafIndex
-      - seq
-      - slotCreated
-      properties:
-        address:
-          $ref: '#/components/schemas/SerializablePubkey'
-        data:
-          $ref: '#/components/schemas/AccountData'
-        hash:
-          $ref: '#/components/schemas/Hash'
-        lamports:
-          $ref: '#/components/schemas/UnsignedInteger'
-        leafIndex:
-          $ref: '#/components/schemas/UnsignedInteger'
-        owner:
-          $ref: '#/components/schemas/SerializablePubkey'
-        queueIndex:
-          $ref: '#/components/schemas/UnsignedInteger'
-        seq:
-          $ref: '#/components/schemas/UnsignedInteger'
-        slotCreated:
-          $ref: '#/components/schemas/UnsignedInteger'
-        tree:
-          $ref: '#/components/schemas/SerializablePubkey'
-      additionalProperties: false
     AccountData:
       type: object
       required:
@@ -3621,7 +3586,7 @@ components:
           type: array
           items:
             allOf:
-            - $ref: '#/components/schemas/Account'
+            - $ref: '#/components/schemas/AccountV1'
             nullable: true
       additionalProperties: false
     AccountState:
@@ -3629,7 +3594,7 @@ components:
       enum:
       - initialized
       - frozen
-    AccountV2:
+    AccountV1:
       type: object
       required:
       - hash
@@ -3637,7 +3602,6 @@ components:
       - lamports
       - tree
       - leafIndex
-      - seq
       - slotCreated
       properties:
         address:
@@ -3652,8 +3616,6 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
-        queueIndex:
-          $ref: '#/components/schemas/UnsignedInteger'
         seq:
           $ref: '#/components/schemas/UnsignedInteger'
         slotCreated:
@@ -3661,13 +3623,54 @@ components:
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
+    AccountV2:
+      type: object
+      required:
+      - hash
+      - owner
+      - lamports
+      - tree
+      - inQueue
+      - spent
+      - leafIndex
+      - slotCreated
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        data:
+          $ref: '#/components/schemas/AccountData'
+        hash:
+          $ref: '#/components/schemas/Hash'
+        inQueue:
+          type: boolean
+        lamports:
+          $ref: '#/components/schemas/UnsignedInteger'
+        leafIndex:
+          $ref: '#/components/schemas/UnsignedInteger'
+        nullifier:
+          $ref: '#/components/schemas/Hash'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        queue:
+          $ref: '#/components/schemas/SerializablePubkey'
+        seq:
+          $ref: '#/components/schemas/UnsignedInteger'
+        slotCreated:
+          $ref: '#/components/schemas/UnsignedInteger'
+        spent:
+          type: boolean
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        txHash:
+          $ref: '#/components/schemas/Hash'
+      additionalProperties: false
     AccountWithOptionalTokenData:
       type: object
       required:
       - account
       properties:
         account:
-          $ref: '#/components/schemas/Account'
+          $ref: '#/components/schemas/AccountV2'
         optionalTokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
@@ -3908,7 +3911,7 @@ components:
         value:
           $ref: '#/components/schemas/OwnerBalanceList'
       additionalProperties: false
-    PaginatedAccountList:
+    PaginatedAccountListV1:
       type: object
       required:
       - items
@@ -3918,7 +3921,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/Account'
+            $ref: '#/components/schemas/AccountV1'
       additionalProperties: false
     PaginatedAccountListV2:
       type: object
@@ -3944,6 +3947,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureInfo'
+    QueueElement:
+      type: object
+      required:
+      - leaf_index
+      - hash
+      properties:
+        hash:
+          type: string
+          format: binary
+        leaf_index:
+          type: integer
+          format: int64
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
@@ -4001,14 +4016,14 @@ components:
           $ref: '#/components/schemas/SerializableSignature'
         slot:
           $ref: '#/components/schemas/UnsignedInteger'
-    TokenAcccount:
+    TokenAccount:
       type: object
       required:
       - account
       - tokenData
       properties:
         account:
-          $ref: '#/components/schemas/Account'
+          $ref: '#/components/schemas/AccountV1'
         tokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
@@ -4030,7 +4045,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/TokenAcccount'
+            $ref: '#/components/schemas/TokenAccount'
     TokenBalance:
       type: object
       required:

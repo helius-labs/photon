@@ -392,7 +392,7 @@ pub async fn get_validity_proof(
     }
 
     let account_proofs = match !request.hashes.is_empty() {
-        true => get_multiple_compressed_leaf_proofs(&tx, Some(request.hashes), None).await?,
+        true => get_multiple_compressed_leaf_proofs(&tx, request.hashes).await?,
         false => {
             vec![]
         }

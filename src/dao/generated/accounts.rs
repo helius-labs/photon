@@ -15,6 +15,7 @@ pub struct Model {
     pub queue: Option<Vec<u8>>,
     pub leaf_index: i64,
     pub in_queue: bool,
+    pub nullifier_queue_index: Option<i64>,
     pub nullifier: Option<Vec<u8>>,
     pub tx_hash: Option<Vec<u8>>,
     pub seq: Option<i64>,

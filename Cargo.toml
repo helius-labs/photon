@@ -88,7 +88,7 @@ solana-transaction-status = "1.18.0"
 
 light-concurrent-merkle-tree = { path = "../light-protocol/program-libs/concurrent-merkle-tree", features = [] }
 light-sdk = { path = "../light-protocol/sdk-libs/sdk", features = [] }
-light-utils = { path = "../light-protocol/program-libs/utils", features = [] }
+light-compressed-account = { path = "../light-protocol/program-libs/compressed-account", features = [] }
 account-compression = { path = "../light-protocol/programs/account-compression", features = [] }
 light-batched-merkle-tree = { path = "../light-protocol/program-libs/batched-merkle-tree", features = [] }
 

@@ -19,14 +19,15 @@ dependencies = [
  "aligned-sized 1.1.0",
  "anchor-lang",
  "bytemuck",
+ "light-account-checks",
  "light-batched-merkle-tree",
  "light-bounded-vec",
+ "light-compressed-account",
  "light-concurrent-merkle-tree 1.1.0",
  "light-hash-set",
  "light-hasher 1.1.0",
  "light-indexed-merkle-tree 1.1.0",
  "light-merkle-tree-metadata",
- "light-utils 1.1.0",
  "light-zero-copy",
  "num-bigint 0.4.6",
  "solana-sdk",
@@ -3760,16 +3761,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-account-checks"
+version = "0.1.0"
+dependencies = [
+ "solana-program",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "light-batched-merkle-tree"
 version = "0.1.0"
 dependencies = [
  "aligned-sized 1.1.0",
  "borsh 0.10.3",
+ "light-account-checks",
  "light-bloom-filter",
+ "light-compressed-account",
  "light-hasher 1.1.0",
  "light-macros 1.1.0",
  "light-merkle-tree-metadata",
- "light-utils 1.1.0",
  "light-verifier 1.1.0",
  "light-zero-copy",
  "solana-program",
@@ -3830,13 +3840,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-compressed-account"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anyhow",
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
+ "borsh 0.10.3",
+ "bytemuck",
+ "light-hasher 1.1.0",
+ "light-zero-copy",
+ "num-bigint 0.4.6",
+ "rand 0.8.5",
+ "solana-program",
+ "thiserror 2.0.11",
+ "zerocopy 0.8.14",
+]
+
+[[package]]
 name = "light-concurrent-merkle-tree"
 version = "1.1.0"
 dependencies = [
  "borsh 0.10.3",
  "light-bounded-vec",
  "light-hasher 1.1.0",
- "light-utils 1.1.0",
+ "light-utils",
  "memoffset 0.9.1",
  "solana-program",
  "thiserror 2.0.11",
@@ -3852,7 +3881,7 @@ dependencies = [
  "bytemuck",
  "light-bounded-vec",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-utils",
  "memoffset 0.9.1",
  "thiserror 1.0.58",
 ]
@@ -3862,7 +3891,7 @@ name = "light-hash-set"
 version = "1.2.0"
 dependencies = [
  "light-heap 1.1.0",
- "light-utils 1.1.0",
+ "light-utils",
  "num-bigint 0.4.6",
  "num-traits",
  "solana-program",
@@ -3919,7 +3948,7 @@ dependencies = [
  "light-concurrent-merkle-tree 1.1.0",
  "light-hasher 1.1.0",
  "light-merkle-tree-reference 1.1.0",
- "light-utils 1.1.0",
+ "light-utils",
  "num-bigint 0.4.6",
  "num-traits",
  "solana-program",
@@ -3937,7 +3966,7 @@ dependencies = [
  "light-concurrent-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-merkle-tree-reference 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-utils",
  "memoffset 0.9.1",
  "num-bigint 0.4.6",
  "num-traits",
@@ -3974,7 +4003,7 @@ dependencies = [
  "anchor-lang",
  "borsh 0.10.3",
  "bytemuck",
- "light-utils 1.1.0",
+ "light-compressed-account",
  "solana-program",
  "thiserror 2.0.11",
  "zerocopy 0.8.14",
@@ -4048,7 +4077,7 @@ dependencies = [
  "light-hasher 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-indexed-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-merkle-tree-reference 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-utils",
  "log",
  "num-bigint 0.4.6",
  "num-traits",
@@ -4080,7 +4109,7 @@ dependencies = [
  "light-indexed-merkle-tree 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-macros 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-sdk-macros 0.3.0",
- "light-utils 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "light-utils",
  "light-verifier 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.4.6",
  "solana-program",
@@ -4093,12 +4122,12 @@ version = "0.11.0"
 dependencies = [
  "anchor-lang",
  "borsh 0.10.3",
+ "light-compressed-account",
  "light-hasher 1.1.0",
  "light-heap 1.1.0",
  "light-indexed-merkle-tree 1.1.0",
  "light-macros 1.1.0",
  "light-sdk-macros 0.4.0",
- "light-utils 1.1.0",
  "num-bigint 0.4.6",
  "solana-program",
  "solana-sdk",
@@ -4130,25 +4159,6 @@ dependencies = [
 [[package]]
 name = "light-utils"
 version = "1.1.0"
-dependencies = [
- "anchor-lang",
- "anyhow",
- "ark-bn254 0.5.0",
- "ark-ff 0.5.0",
- "borsh 0.10.3",
- "bytemuck",
- "light-hasher 1.1.0",
- "light-zero-copy",
- "num-bigint 0.4.6",
- "rand 0.8.5",
- "solana-program",
- "thiserror 2.0.11",
- "zerocopy 0.8.14",
-]
-
-[[package]]
-name = "light-utils"
-version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19e2b5a4959cb0456b483a20b4f3930920949137c00e76b5d0f9bf8d701a3c6a"
 dependencies = [
@@ -4167,7 +4177,7 @@ name = "light-verifier"
 version = "1.1.0"
 dependencies = [
  "groth16-solana",
- "light-utils 1.1.0",
+ "light-compressed-account",
  "solana-program",
  "thiserror 2.0.11",
 ]
@@ -4996,10 +5006,10 @@ dependencies = [
  "lazy_static",
  "light-batched-merkle-tree",
  "light-client",
+ "light-compressed-account",
  "light-concurrent-merkle-tree 1.1.0",
  "light-poseidon 0.2.0",
  "light-sdk 0.11.0",
- "light-utils 1.1.0",
  "log",
  "lru 0.12.4",
  "num-bigint 0.4.6",

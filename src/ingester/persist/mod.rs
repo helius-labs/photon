@@ -16,7 +16,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
-use log::debug;
+use log::{debug, info};
 use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
@@ -31,6 +31,7 @@ use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
 use crate::common::typedefs::account::AccountV2;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
@@ -58,6 +59,8 @@ pub async fn persist_state_update(
         transactions,
         leaf_nullifications,
         indexed_merkle_tree_updates,
+        batch_append,
+        batch_nullify
     } = state_update;
 
     let input_accounts_len = in_accounts.len();
@@ -134,7 +137,7 @@ pub async fn persist_state_update(
             .map(|(leaf_node, _)| leaf_node.clone())
             .collect_vec();
 
-        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT).await?;
+        persist_leaf_nodes(txn, leaf_nodes_chunk, BATCH_STATE_TREE_HEIGHT).await?;
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
@@ -169,9 +172,69 @@ pub async fn persist_state_update(
     debug!("Persisting index tree updates...");
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
     debug!("Persisted index tree updates.");
+
+
+    for batch_append_event in batch_append {
+        let accounts = accounts::Entity::find()
+            .filter(
+                accounts::Column::LeafIndex
+                    .gte(batch_append_event.old_next_index as i64)
+                    .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
+                    // .and(accounts::Column::Spent.eq(0)
+                    .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
+            )
+            .all(txn)
+            .await?;
+        info!(
+            "Batch append event: {:?}, accounts: {:?}",
+            batch_append_event, accounts
+        );
+        persist_leaf_nodes(
+            txn,
+            accounts
+                .iter()
+                .map(|account| LeafNode {
+                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
+                    seq: Some(batch_append_event.sequence_number as u32),
+                    leaf_index: account.leaf_index as u32,
+                    hash: Hash::try_from(account.hash.clone()).unwrap(),
+                })
+                .collect(),
+            BATCH_STATE_TREE_HEIGHT,
+        ).await?;
+    }
+
+    for batch_nullify_event in batch_nullify {
+        let accounts = accounts::Entity::find()
+            .filter(
+                accounts::Column::NullifierQueueIndex
+                    .gte(batch_nullify_event.batch_index as i64 * batch_nullify_event.batch_size as i64)
+                    .and(accounts::Column::NullifierQueueIndex.lt((batch_nullify_event.batch_index + 1) as i64 * batch_nullify_event.batch_size as i64))
+            )
+            .all(txn)
+            .await?;
+        info!(
+            "Batch nullify event: {:?}, accounts: {:?}",
+            batch_nullify_event, accounts
+        );
+        persist_leaf_nodes(
+            txn,
+            accounts
+                .iter()
+                .map(|account| LeafNode {
+                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
+                    seq: Some(batch_nullify_event.sequence_number as u32),
+                    leaf_index: account.leaf_index as u32,
+                    hash: Hash::try_from(account.nullifier.clone().unwrap().clone()).unwrap(),
+                })
+                .collect(),
+            TREE_HEIGHT,
+        ).await?;
+    }
+
+
     metric! {
-        statsd_count!("state_update.input_accounts", input_accounts_len as u64);
-        statsd_count!("state_update.output_accounts", output_accounts_len as u64);
+        statsd_count!("state_update.input_accounts", input_accounts_len as u64);statsd_count!("state_update.output_accounts", output_accounts_len as u64);
         statsd_count!("state_update.leaf_nullifications", leaf_nullifications_len as u64);
         statsd_count!("state_update.indexed_merkle_tree_updates", indexed_merkle_tree_updates_len as u64);
     }
@@ -424,6 +487,7 @@ async fn append_output_accounts(
             queue: Set(account.queue.as_ref().map(|x| x.to_bytes_vec())),
             leaf_index: Set(account.leaf_index.0 as i64),
             in_queue: Set(account.in_queue),
+            nullifier_queue_index: Set(account.nullifier_queue_index.map(|x| x.0 as i64)),
             nullifier: Set(account.nullifier.as_ref().map(|x| x.to_vec())),
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),
@@ -507,7 +571,7 @@ pub async fn persist_token_accounts(
     Ok(())
 }
 
-fn get_node_direct_ancestors(leaf_index: i64) -> Vec<i64> {
+pub(crate) fn get_node_direct_ancestors(leaf_index: i64) -> Vec<i64> {
     let mut path: Vec<i64> = Vec::new();
     let mut current_index = leaf_index;
     while current_index > 1 {

@@ -44,7 +44,7 @@ pub async fn get_multiple_compressed_account_proofs(
         ))
             .await?;
     }
-    let proofs = get_multiple_compressed_leaf_proofs(&tx, Some(request), None).await?;
+    let proofs = get_multiple_compressed_leaf_proofs(&tx, request).await?;
     tx.commit().await?;
     Ok(GetMultipleCompressedAccountProofsResponse {
         value: proofs,

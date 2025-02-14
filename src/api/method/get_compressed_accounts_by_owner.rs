@@ -217,19 +217,20 @@ pub async fn get_compressed_accounts_by_owner(
     let raw_sql = format!(
         "
         SELECT 
+            SELECT
             hash,
             {data_column},
             data_hash,
             address,
             owner,
             tree,
+            spent,
+            prev_spent,
             leaf_index,
             seq,
             slot_created,
-            spent,
-            prev_spent,
             lamports,
-            discriminator
+            discriminator            
         FROM accounts
         WHERE {filters}
         ORDER BY accounts.hash ASC

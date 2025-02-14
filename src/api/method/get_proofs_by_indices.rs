@@ -1,12 +1,11 @@
 use log::info;
-use crate::ingester::persist::persisted_state_tree::{
-    get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
-};
+use crate::ingester::persist::persisted_state_tree::{get_multiple_compressed_leaf_proofs_by_indices, MerkleProofWithContext};
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
@@ -52,8 +51,28 @@ pub async fn get_proofs_by_indices(
             .await?;
     }
 
-    let proofs = get_multiple_compressed_leaf_proofs(&tx, None, Some(request.indices)).await?;
-    info!("Proofs: {:?}", proofs);
+    let proofs = get_multiple_compressed_leaf_proofs_by_indices(
+        &tx,
+        SerializablePubkey::from(request.merkle_tree.0),
+        request.indices
+    ).await?;
+    for proof in &proofs {
+        info!(
+            "Proof for index {}: {:?}",
+            proof.leafIndex, proof.proof.iter().map(|x| x.to_vec()).collect::<Vec<_>>()
+        );
+
+        // TODO: remove
+        // match validate_proof(proof) {
+        //     Ok(_) => info!("Proof for index {} is valid", proof.leafIndex),
+        //     Err(e) => {
+        //         return Err(PhotonApiError::UnexpectedError(format!(
+        //             "Proof for index {} is invalid: {}",
+        //             proof.leafIndex, e
+        //         )))
+        //     }
+        // }
+    }
 
     tx.commit().await?;
     Ok(GetProofsByIndicesResponse {

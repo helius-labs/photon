@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use borsh::{BorshDeserialize, BorshSerialize};
+use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use crate::common::typedefs::account::AccountV2;
@@ -68,6 +69,9 @@ pub struct StateUpdate {
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
+
+    pub batch_append: Vec<BatchAppendEvent>,
+    pub batch_nullify: Vec<BatchNullifyEvent>,
 }
 
 impl StateUpdate {
@@ -98,6 +102,9 @@ impl StateUpdate {
                     merged.indexed_merkle_tree_updates.insert(key, value);
                 }
             }
+
+            merged.batch_append.extend(update.batch_append);
+            merged.batch_nullify.extend(update.batch_nullify);
         }
         merged
     }

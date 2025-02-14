@@ -33,6 +33,7 @@ pub struct AccountV2 {
     pub queue: Option<SerializablePubkey>,
     pub in_queue: bool,
     pub spent: bool,
+    pub nullifier_queue_index: Option<UnsignedInteger>,
     pub nullifier: Option<Hash>,
     pub tx_hash: Option<Hash>,
     pub leaf_index: UnsignedInteger,

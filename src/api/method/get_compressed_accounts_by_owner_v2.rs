@@ -171,13 +171,15 @@ pub async fn get_compressed_accounts_by_owner_v2(
             tree,
             queue,
             in_queue,
-            spent,
-            prev_spent,
-            nullifier,
+            nullifier_queue_index,
             tx_hash,
+            nullifier,
+            queue_position,
             leaf_index,
             seq,
             slot_created,
+            spent,
+            prev_spent,
             lamports,
             discriminator
         FROM accounts

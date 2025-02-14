@@ -3,13 +3,12 @@ use std::str::FromStr;
 use borsh::BorshDeserialize;
 use byteorder::{ByteOrder, LittleEndian};
 use lazy_static::lazy_static;
-use light_utils::instruction::event::event_from_light_transaction;
 use indexer_events::{IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent};
 use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use state_update::{IndexedTreeLeafUpdate, LeafNullification};
-use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
-
+use light_batched_merkle_tree::event::{BatchAddressAppendEvent, BatchAppendEvent, BatchNullifyEvent};
+use light_compressed_account::event::event_from_light_transaction;
 use crate::common::typedefs::{
     account::AccountData,
     bs64_string::Base64String,
@@ -189,7 +188,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                             let batch_append_event = BatchAppendEvent::deserialize(&mut next_instruction.data.as_slice())
                                 .map_err(|e| {
                                     IngesterError::ParserError(format!(
-                                        "Failed to deserialize NullifierEvent: {}",
+                                        "Failed to deserialize BatchAppendEvent: {}",
                                         e
                                     ))
                                 });
@@ -202,6 +201,14 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                                     ))
                                 });
                             info!("Batch nullify event: {:?}", batch_nullify_event);
+                            let batch_address_append_event = BatchAddressAppendEvent::deserialize(&mut next_instruction.data.as_slice())
+                                .map_err(|e| {
+                                    IngesterError::ParserError(format!(
+                                        "Failed to deserialize BatchAddressAppendEvent: {}",
+                                        e
+                                    ))
+                                });
+                            info!("Batch nullify event: {:?}", batch_address_append_event);
                             let merkle_tree_event =
                                 MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice())
                                     .map_err(|e| {
@@ -211,16 +218,20 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                                         ))
                                     });
 
-                            match (batch_append_event, batch_nullify_event, merkle_tree_event) {
-                                (Ok(batch_append_event), _, _) => {
+                            match (batch_append_event, batch_nullify_event, batch_address_append_event, merkle_tree_event) {
+                                (Ok(batch_append_event), _, _, _) => {
                                     let state_update = parse_batch_append_event(tx.signature, batch_append_event)?;
                                     state_updates.push(state_update);
                                 }
-                                (_, Ok(batch_nullify_event), _) => {
+                                (_, Ok(batch_nullify_event), _, _) => {
                                     let state_update = parse_batch_nullify_event(tx.signature, batch_nullify_event)?;
                                     state_updates.push(state_update);
                                 }
-                                (_, _, Ok(merkle_tree_event)) => {
+                                (_, _, Ok(batch_address_append_event), _) => {
+                                    let state_update = parse_batch_address_append_event(tx.signature, batch_address_append_event)?;
+                                    state_updates.push(state_update);
+                                }
+                                (_, _, _, Ok(merkle_tree_event)) => {
                                     info!("Merkle tree event: {:?}", merkle_tree_event);
                                     let state_update = match merkle_tree_event {
                                         MerkleTreeEvent::V2(nullifier_event) => {
@@ -265,6 +276,8 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 
 fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<PublicTransactionEvent> {
     let event = event_from_light_transaction(instructions, accounts);
+    info!("Event from light transaction: {:?}", event);
+
     let event = match event {
         Ok(event) => {
             event.0
@@ -329,6 +342,7 @@ fn parse_account_data(
     in_queue: bool,
     spent: bool,
     nullifier: Option<Hash>,
+    nullifier_queue_index: Option<u64>,
 ) -> AccountV2 {
     info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}, in_queue: {:?}, spent: {:?}, nullifier: {:?}", compressed_account, hash, tree, leaf_index, slot, seq, in_queue, spent, nullifier);
     let CompressedAccount {
@@ -356,6 +370,7 @@ fn parse_account_data(
         queue: queue.map(SerializablePubkey::from),
         in_queue,
         spent,
+        nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
         nullifier,
         seq: seq.map(UnsignedInteger),
         tx_hash: None,
@@ -428,30 +443,29 @@ fn parse_nullifier_event(
 
 fn parse_batch_append_event(
     tx: Signature,
-    nullifier_event: BatchAppendEvent,
+    append_event: BatchAppendEvent,
 ) -> Result<StateUpdate, IngesterError> {
-    info!("Parsing nullifier event: {:?}, tx: {:?}", nullifier_event, tx);
-    //
-    // let NullifierEvent {
-    //     id,
-    //     nullified_leaves_indices,
-    //     seq,
-    // } = nullifier_event;
+    info!("Parsing BatchAppendEvent event: {:?}, tx: {:?}", append_event, tx);
+    /*INFO photon_indexer::ingester::parser:
+    Parsing BatchAppendEvent event: BatchAppendEvent {
+        discriminator: 1,
+        tree_type: 3,
+        merkle_tree_pubkey: [242, 174, 90, 229, 244, 60, 225, 10, 207, 196, 201, 136, 192, 35, 58, 9, 149, 215, 40, 149, 244, 9, 184, 209, 113, 234, 101, 91, 227, 243, 41, 254],
+        batch_index: 0,
+        zkp_batch_index: 0,
+        batch_size: 10,
+        old_next_index: 0,
+        new_next_index: 10,
+        new_root: [4, 42, 52, 168, 138, 70, 228, 252, 104, 225, 245, 179, 33, 199, 42, 211, 89, 11, 150, 73, 128, 203, 132, 213, 95, 210, 33, 49, 206, 163, 101, 120],
+        root_index: 1,
+        sequence_number: 1,
+        output_queue_pubkey: Some([79, 47, 194, 208, 90, 252, 43, 18, 216, 76, 41, 113, 8, 161, 113, 18, 188, 202, 207, 115, 125, 235, 151, 110, 167, 166, 249, 78, 75, 221, 38, 219])
+        },
+        tx: 5Yd9LjhkA5sbEm8wnT19iQQTZMQEcqfsL5iqrPaTKhbz6Rw8wDEuJepnpc4mDirSPjTUd2H3nFYx3Hqea1bFZhSR
+    */
 
-    let state_update = StateUpdate::new();
-
-    // for (i, leaf_index) in nullified_leaves_indices.iter().enumerate() {
-    //     let leaf_nullification: LeafNullification = {
-    //         LeafNullification {
-    //             tree: Pubkey::from(id),
-    //             leaf_index: *leaf_index,
-    //             seq: seq + i as u64,
-    //             signature: tx,
-    //         }
-    //     };
-    //     state_update.leaf_nullifications.insert(leaf_nullification);
-    // }
-
+    let mut state_update = StateUpdate::new();
+    state_update.batch_append.push(append_event);
     Ok(state_update)
 }
 
@@ -460,28 +474,18 @@ fn parse_batch_nullify_event(
     tx: Signature,
     nullifier_event: BatchNullifyEvent,
 ) -> Result<StateUpdate, IngesterError> {
-    info!("Parsing nullifier event: {:?}, tx: {:?}", nullifier_event, tx);
-    //
-    // let NullifierEvent {
-    //     id,
-    //     nullified_leaves_indices,
-    //     seq,
-    // } = nullifier_event;
-
+    info!("Parsing BatchNullifyEvent event: {:?}, tx: {:?}", nullifier_event, tx);
     let state_update = StateUpdate::new();
+    Ok(state_update)
+}
 
-    // for (i, leaf_index) in nullified_leaves_indices.iter().enumerate() {
-    //     let leaf_nullification: LeafNullification = {
-    //         LeafNullification {
-    //             tree: Pubkey::from(id),
-    //             leaf_index: *leaf_index,
-    //             seq: seq + i as u64,
-    //             signature: tx,
-    //         }
-    //     };
-    //     state_update.leaf_nullifications.insert(leaf_nullification);
-    // }
 
+fn parse_batch_address_append_event(
+    tx: Signature,
+    nullifier_event: BatchAddressAppendEvent,
+) -> Result<StateUpdate, IngesterError> {
+    info!("Parsing BatchAddressAppendEvent event: {:?}, tx: {:?}", nullifier_event, tx);
+    let state_update = StateUpdate::new();
     Ok(state_update)
 }
 
@@ -560,6 +564,7 @@ fn parse_public_transaction_event(
             seq,
             queue.is_some(),
             false,
+            None,
             None,
         );
         info!("Enriched account: {:?}", enriched_account);
