@@ -48,14 +48,15 @@ impl MigrationTrait for Migration {
                     nullifier BLOB,
                     tx_hash BLOB,
                     queue_position INTEGER,
-                    nullifier_queue_index INTEGER NULL
+                    nullifier_queue_index INTEGER NULL,
+                    spent_in_queue BOOLEAN NOT NULL DEFAULT FALSE
                 );
 
                 INSERT INTO accounts_new
                 SELECT
                     hash, data, data_hash, address, owner, tree, NULL as queue, leaf_index, seq,
                     slot_created, spent, prev_spent, lamports, discriminator,
-                    FALSE as in_queue, NULL as nullifier, NULL as tx_hash, NULL as queue_position, NULL as nullifier_queue_index
+                    FALSE as in_queue, NULL as nullifier, NULL as tx_hash, NULL as queue_position, NULL as nullifier_queue_index, FALSE as spent_in_queue
                 FROM accounts;
 
                 DROP TABLE accounts;
@@ -141,6 +142,15 @@ impl MigrationTrait for Migration {
                 manager,
                 "CREATE SEQUENCE IF NOT EXISTS queue_position_seq;",
             ).await?;
+
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(Accounts::Table)
+                        .add_column(ColumnDef::new(Accounts::SpentInQueue).boolean().not_null().default(false))
+                        .to_owned(),
+                )
+                .await?;
 
             manager
                 .alter_table(
@@ -361,6 +371,15 @@ impl MigrationTrait for Migration {
                 DROP SEQUENCE IF EXISTS queue_position_seq;
                 "#,
             ).await?;
+
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(Accounts::Table)
+                        .drop_column(Accounts::SpentInQueue)
+                        .to_owned(),
+                )
+                .await?;
 
             manager
                 .alter_table(

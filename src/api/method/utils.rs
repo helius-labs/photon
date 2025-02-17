@@ -189,6 +189,7 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
             queue: account.queue.map(|queue| queue.try_into()).transpose()?,
             in_queue: account.in_queue,
             spent: account.spent,
+            spent_in_queue: account.spent_in_queue,
             nullifier_queue_index: account.nullifier_queue_index.map(|index| UnsignedInteger(index as u64)),
             nullifier: account.nullifier.map(Hash::try_from).transpose()?,
             tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,

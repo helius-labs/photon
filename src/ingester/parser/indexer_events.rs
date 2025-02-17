@@ -36,6 +36,8 @@ pub struct BatchPublicTransactionEvent {
     pub new_addresses: Vec<NewAddress>,
     pub input_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
     pub address_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
+    pub tx_hash: [u8; 32],
+    pub nullifiers: Vec<[u8; 32]>,
 }
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]

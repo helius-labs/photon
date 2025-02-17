@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use borsh::{BorshDeserialize, BorshSerialize};
+use itertools::merge;
 use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -65,6 +66,7 @@ pub struct IndexedTreeLeafUpdate {
 pub struct StateUpdate {
     // TODO: we need associate tx_hash with in_accounts
     pub tx_hash: Hash,
+    pub nullifiers: Vec<Hash>,
     // TODO: replace HashSet with OrderedSet or Vec
     pub in_accounts: HashSet<Hash>,
     pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
@@ -91,6 +93,7 @@ impl StateUpdate {
             if merged.tx_hash == Hash::default() {
                 merged.tx_hash = update.tx_hash;
             }
+            merged.nullifiers.extend(update.nullifiers);
             merged.in_seq_numbers.extend(update.in_seq_numbers);
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);

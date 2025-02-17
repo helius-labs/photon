@@ -8,6 +8,7 @@ use sea_orm::{
     QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
+use solana_sdk::exit;
 use utoipa::ToSchema;
 
 use crate::{
@@ -19,6 +20,7 @@ use crate::{
 };
 use crate::common::typedefs::account::{AccountV1, AccountV2};
 use super::{compute_parent_hash, get_node_direct_ancestors, BATCH_STATE_TREE_HEIGHT};
+
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {

@@ -64,6 +64,7 @@ pub async fn persist_state_update(
         indexed_merkle_tree_updates,
         batch_append,
         batch_nullify,
+        nullifiers
     } = state_update;
 
     let input_accounts_len = in_accounts.len();
@@ -87,7 +88,7 @@ pub async fn persist_state_update(
         .collect::<Vec<_>>()
         .chunks(MAX_SQL_INSERTS)
     {
-        spend_input_accounts(txn, chunk, &in_seq_numbers, &tx_hash).await?;
+        spend_input_accounts(txn, chunk, &in_seq_numbers, &tx_hash, &nullifiers).await?;
     }
 
     let account_to_transaction = account_transactions
@@ -179,7 +180,7 @@ pub async fn persist_state_update(
                 accounts::Column::LeafIndex
                     .gte(batch_append_event.old_next_index as i64)
                     .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                    // .and(accounts::Column::Spent.eq(0)
+                    .and(accounts::Column::SpentInQueue.eq(0))
                     .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
             )
             .all(txn)
@@ -188,6 +189,7 @@ pub async fn persist_state_update(
             "Batch append event: {:?}, accounts: {:?}",
             batch_append_event, accounts
         );
+
         persist_leaf_nodes(
             txn,
             accounts
@@ -205,16 +207,18 @@ pub async fn persist_state_update(
     }
 
     for batch_nullify_event in batch_nullify {
+        info!("Filtering  accounts by batch_index: {}, batch_size: {}", batch_nullify_event.zkp_batch_index, batch_nullify_event.batch_size);
+
         let accounts = accounts::Entity::find()
             .filter(
                 accounts::Column::NullifierQueueIndex
                     .gte(
-                        batch_nullify_event.batch_index as i64
+                        batch_nullify_event.zkp_batch_index as i64
                             * batch_nullify_event.batch_size as i64,
                     )
                     .and(
                         accounts::Column::NullifierQueueIndex
-                            .lt((batch_nullify_event.batch_index + 1) as i64
+                            .lt((batch_nullify_event.zkp_batch_index + 1) as i64
                                 * batch_nullify_event.batch_size as i64),
                     ),
             )
@@ -224,6 +228,31 @@ pub async fn persist_state_update(
             "Batch nullify event: {:?}, accounts: {:?}",
             batch_nullify_event, accounts
         );
+
+        let query = accounts::Entity::update_many()
+            .col_expr(accounts::Column::SpentInQueue, Expr::value(true))
+            .filter(
+                accounts::Column::NullifierQueueIndex
+                    .gte(
+                        batch_nullify_event.zkp_batch_index as i64
+                            * batch_nullify_event.batch_size as i64,
+                    )
+                    .and(
+                        accounts::Column::NullifierQueueIndex
+                            .lt((batch_nullify_event.zkp_batch_index + 1) as i64
+                                * batch_nullify_event.batch_size as i64),
+                    ),
+            )
+            .build(txn.get_database_backend());
+        execute_account_update_query_and_update_balances(
+            txn,
+            query,
+            AccountType::Account,
+            ModificationType::Spend,
+        )
+            .await?;
+
+
         persist_leaf_nodes(
             txn,
             accounts
@@ -235,7 +264,7 @@ pub async fn persist_state_update(
                     hash: Hash::try_from(account.nullifier.clone().unwrap().clone()).unwrap(),
                 })
                 .collect(),
-            TREE_HEIGHT,
+            BATCH_STATE_TREE_HEIGHT,
         )
         .await?;
     }
@@ -301,6 +330,7 @@ async fn spend_input_accounts(
     in_accounts: &[Hash],
     seq_numbers: &[MerkleTreeSequenceNumber],
     tx_hash: &Hash,
+    nullifiers: &[Hash],
 ) -> Result<(), IngesterError> {
     println!("spent_input_accounts in_accounts: {:?} seq_numbers: {:?}", in_accounts, seq_numbers);
     // Perform the update operation on the identified records
@@ -350,8 +380,8 @@ async fn spend_input_accounts(
 
         println!("accounts_to_update: {:?}", accounts_to_update);
         // Step 2: Iterate over fetched accounts and prepare the update query.
-        for (i, account) in accounts_to_update.iter().enumerate() {
-            let nullifier_queue_index = seq.seq as i64 + i as i64; 
+        for (i, (account, nullifier)) in accounts_to_update.iter().zip(nullifiers).enumerate() {
+            let nullifier_queue_index = seq.seq as i64 + i as i64;
             println!("nullifier_queue_index: {:?}", nullifier_queue_index);
             let query = accounts::Entity::update_many()
                 .col_expr(accounts::Column::Spent, Expr::value(true)) // Mark as spent
@@ -366,6 +396,10 @@ async fn spend_input_accounts(
                 .col_expr(
                     accounts::Column::TxHash,
                     Expr::value(tx_hash.to_vec()), // Set `TxHash`
+                )
+                .col_expr(
+                    accounts::Column::Nullifier,
+                    Expr::value(nullifier.to_vec()), // Set `Nullifier`
                 )
                 .filter(accounts::Column::Hash.eq(&*account.hash)) // Specific account to update
                 .build(txn.get_database_backend());
@@ -576,6 +610,7 @@ async fn append_output_accounts(
             leaf_index: Set(account.leaf_index.0 as i64),
             in_queue: Set(account.in_queue),
             nullifier_queue_index: Set(account.nullifier_queue_index.map(|x| x.0 as i64)),
+            spent_in_queue: Set(false),
             nullifier: Set(account.nullifier.as_ref().map(|x| x.to_vec())),
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),

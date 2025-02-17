@@ -181,7 +181,8 @@ pub async fn get_compressed_accounts_by_owner_v2(
             spent,
             prev_spent,
             lamports,
-            discriminator
+            discriminator,
+            spent_in_queue
         FROM accounts
         WHERE {filters}
         ORDER BY accounts.hash ASC
