@@ -4,7 +4,7 @@ use jsonrpsee_core::Serialize;
 use lazy_static::lazy_static;
 use log::info;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
-use serde::Deserialize;
+use serde::{Deserialize, Serializer};
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 use crate::api::error::PhotonApiError;
@@ -17,8 +17,32 @@ use crate::ingester::persist::bytes_to_sql_format;
 #[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct LeafInfo {
     pub leaf_index: i64,
+    #[serde(serialize_with = "serialize_as_base58")]
     pub leaf: Vec<u8>,
+    #[serde(serialize_with = "serialize_as_base58")]
     pub tx_hash: Vec<u8>,
+}
+
+fn serialize_as_base58<S>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let hash = Hash::new(bytes).unwrap();
+    serializer.serialize_str(&hash.to_base58())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LeafInfoResponse {
+    pub leaf_index: u32,
+    pub leaf: Hash,
+    pub tx_hash: Hash,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LeafInfoList {
+    pub items: Vec<LeafInfoResponse>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -33,7 +57,7 @@ pub struct GetLeafInfoRequest {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetLeafInfoResponse {
     pub context: Context,
-    pub value: Vec<LeafInfo>,
+    pub value: LeafInfoList,
 }
 
 pub async fn get_leaf_info(
@@ -67,8 +91,9 @@ pub async fn get_leaf_info(
         "
         SELECT leaf_index, hash as leaf, tx_hash
         FROM accounts
-        WHERE nullifier_queue_index BETWEEN {start_offset} AND {end_offset}
-        AND tree = {tree_string}
+        WHERE nullifier_queue_index >= {start_offset}
+            AND nullifier_queue_index < {end_offset}
+            AND tree = {tree_string}
         ORDER BY queue_position ASC
         "
     );
@@ -82,10 +107,19 @@ pub async fn get_leaf_info(
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e)))?;
 
-    println!("result: {:?}", result);
+    let leaf_info_responses: Vec<LeafInfoResponse> = result
+        .into_iter()
+        .map(|info| LeafInfoResponse {
+            leaf_index: info.leaf_index as u32,
+            leaf: Hash::new(&info.leaf).unwrap(),
+            tx_hash: Hash::new(&info.tx_hash).unwrap(),
+        })
+        .collect();
 
     Ok(GetLeafInfoResponse {
         context,
-        value: result
+        value: LeafInfoList {
+            items: leaf_info_responses
+        }
     })
 }
