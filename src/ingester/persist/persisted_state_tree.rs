@@ -8,6 +8,7 @@ use sea_orm::{
     QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
+use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 
 use crate::{
@@ -18,7 +19,7 @@ use crate::{
     metric,
 };
 use crate::common::typedefs::account::{AccountV1, AccountV2};
-use super::{compute_parent_hash, get_node_direct_ancestors, BATCH_STATE_TREE_HEIGHT};
+use super::{compute_parent_hash, get_node_direct_ancestors, get_tree_height, BATCH_STATE_TREE_HEIGHT};
 
 
 #[derive(Clone, Debug)]
@@ -41,8 +42,8 @@ fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
 }
 
 #[allow(dead_code)]
-fn node_index_to_leaf_index(index: i64) -> i64 {
-    index - 2_i64.pow(get_level_by_node_index(index) as u32)
+fn node_index_to_leaf_index(index: i64, tree_height: u32) -> i64 {
+    index - 2_i64.pow(get_level_by_node_index(index, tree_height) as u32)
 }
 
 impl From<AccountV1> for LeafNode {
@@ -513,8 +514,8 @@ pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     indexes
 }
 
-pub fn get_level_by_node_index(index: i64) -> i64 {
-    if index >= 2_i64.pow(BATCH_STATE_TREE_HEIGHT - 2) { // If it's a leaf index (large number)
+pub fn get_level_by_node_index(index: i64, tree_height: u32) -> i64 {
+    if index >= 2_i64.pow(tree_height - 2) { // If it's a leaf index (large number)
         return 0;
     }
     let mut level = 0;
@@ -523,7 +524,6 @@ pub fn get_level_by_node_index(index: i64) -> i64 {
         idx >>= 1;
         level += 1;
     }
-    info!("index: {}, level: {}", index, level);
     level
 }
 
@@ -601,11 +601,14 @@ where
                     index
                 );
 
+                let tree_pubkey = Pubkey::try_from(tree.clone()).unwrap();
+                let tree_height = get_tree_height(&tree_pubkey);
+
                 let model = state_trees::Model {
                     tree: tree.clone(),
-                    level: get_level_by_node_index(*index),
+                    level: get_level_by_node_index(*index, tree_height),
                     node_idx: *index,
-                    hash: ZERO_BYTES[get_level_by_node_index(*index) as usize].to_vec(),
+                    hash: ZERO_BYTES[get_level_by_node_index(*index, tree_height) as usize].to_vec(),
                     leaf_idx: None, //node_index_to_leaf_index(*index),
                     seq: None,
                 };
@@ -616,6 +619,15 @@ where
     }
 
     Ok(result)
+}
+
+pub fn validate_leaf_index(leaf_index: u32, tree_height: u32) -> bool {
+    let max_leaves = 2_u64.pow(tree_height - 1);
+    (leaf_index as u64) < max_leaves
+}
+
+pub fn get_merkle_proof_length(tree_height: u32) -> usize {
+    (tree_height - 1) as usize
 }
 
 pub const MAX_HEIGHT: usize = 32;
@@ -790,19 +802,20 @@ pub const ZERO_BYTES: ZeroBytes = [
 
 #[cfg(test)]
 mod tests {
+    use crate::ingester::persist::LEGACY_TREE_HEIGHT;
     use super::*;
 
     #[test]
     fn test_get_level_by_node_index() {
         // Tree of height 3 (root level is 0, max is 3)
         // Node indices in a binary tree: [1, 2, 3, 4, 5, 6, 7]
-        assert_eq!(get_level_by_node_index(1), 0); // Root node
-        assert_eq!(get_level_by_node_index(2), 1); // Level 1, left child of root
-        assert_eq!(get_level_by_node_index(3), 1); // Level 1, right child of root
-        assert_eq!(get_level_by_node_index(4), 2); // Level 2, left child of node 2
-        assert_eq!(get_level_by_node_index(5), 2); // Level 2, right child of node 2
-        assert_eq!(get_level_by_node_index(6), 2); // Level 2, left child of node 3
-        assert_eq!(get_level_by_node_index(7), 2); // Level 2, right child of node 3
+        assert_eq!(get_level_by_node_index(1, BATCH_STATE_TREE_HEIGHT), 0); // Root node
+        assert_eq!(get_level_by_node_index(2, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, left child of root
+        assert_eq!(get_level_by_node_index(3, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, right child of root
+        assert_eq!(get_level_by_node_index(4, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 2
+        assert_eq!(get_level_by_node_index(5, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 2
+        assert_eq!(get_level_by_node_index(6, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 3
+        assert_eq!(get_level_by_node_index(7, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 3
     }
 
     // Test helper to convert byte arrays to hex strings for easier debugging
@@ -816,7 +829,7 @@ mod tests {
     // Helper to verify node index calculations
     fn verify_node_index_conversion(leaf_index: u32, tree_height: u32) -> bool {
         let node_index = leaf_index_to_node_index(leaf_index, tree_height);
-        let recovered_leaf_index = node_index_to_leaf_index(node_index);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
         recovered_leaf_index == leaf_index as i64
     }
 
@@ -845,11 +858,11 @@ mod tests {
         let leaf_index = 0u32;
         let tree_height = 32u32;
         let node_index = leaf_index_to_node_index(leaf_index, tree_height);
-        let recovered_leaf_index = node_index_to_leaf_index(node_index);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
 
         println!("leaf_index: {}", leaf_index);
         println!("node_index: {}", node_index);
-        println!("level: {}", get_level_by_node_index(node_index));
+        println!("level: {}", get_level_by_node_index(node_index, tree_height));
         println!("recovered_leaf_index: {}", recovered_leaf_index);
 
         assert_eq!(recovered_leaf_index, leaf_index as i64);
@@ -860,13 +873,13 @@ mod tests {
         let leaf_index = 4294967295u32;  // u32::MAX
         let tree_height = 32u32;
         let node_index = leaf_index_to_node_index(leaf_index, tree_height);
-        let recovered_leaf_index = node_index_to_leaf_index(node_index);
+        let recovered_leaf_index = node_index_to_leaf_index(node_index, tree_height);
 
         println!("max test:");
         println!("leaf_index: {} (u32)", leaf_index);
         println!("node_index: {} (i64)", node_index);
         println!("2^(tree_height-1): {} (i64)", 2_i64.pow(tree_height - 1));
-        println!("level: {}", get_level_by_node_index(node_index));
+        println!("level: {}", get_level_by_node_index(node_index, tree_height));
         println!("recovered_leaf_index: {} (i64)", recovered_leaf_index);
 
         assert_eq!(recovered_leaf_index, leaf_index as i64);
@@ -917,7 +930,7 @@ mod tests {
 
         // Test level calculation for proof path nodes
         for &idx in &proof_path {
-            let level = get_level_by_node_index(idx);
+            let level = get_level_by_node_index(idx, tree_height);
             println!("Node {} is at level {}", idx, level);
             assert!(level < tree_height as i64);
         }
@@ -973,5 +986,23 @@ mod tests {
         // Validate the proof
         let result = validate_proof(&proof_context);
         assert!(result.is_ok(), "Proof validation failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_validate_leaf_index() {
+        // Test for legacy tree height
+        assert!(validate_leaf_index(0, LEGACY_TREE_HEIGHT));
+        assert!(validate_leaf_index((1 << 26) - 1, LEGACY_TREE_HEIGHT));
+        assert!(!validate_leaf_index(1 << 26, LEGACY_TREE_HEIGHT));
+
+        // Test for batch state tree height
+        assert!(validate_leaf_index(0, BATCH_STATE_TREE_HEIGHT));
+        assert!(validate_leaf_index((1 << 32) - 1, BATCH_STATE_TREE_HEIGHT));
+    }
+
+    #[test]
+    fn test_merkle_proof_length() {
+        assert_eq!(get_merkle_proof_length(LEGACY_TREE_HEIGHT), 26);
+        assert_eq!(get_merkle_proof_length(BATCH_STATE_TREE_HEIGHT), 32);
     }
 }

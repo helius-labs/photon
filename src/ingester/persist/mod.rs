@@ -25,7 +25,8 @@ use sea_orm::{
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
 use std::{cmp::max, collections::HashMap};
-
+use std::str::FromStr;
+use lazy_static::lazy_static;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::indexer_events::MerkleTreeSequenceNumber;
@@ -41,6 +42,28 @@ const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6
 
 const LEGACY_TREE_HEIGHT: u32 = 27;
 const BATCH_STATE_TREE_HEIGHT: u32 = 33;
+
+lazy_static! {
+    static ref TREE_HEIGHTS: HashMap<Pubkey, u32> = {
+        let mut m = HashMap::new();
+        m.insert(Pubkey::from_str("smt7onMFkvi3RbyhQCMajudYQkB1afAFt9CDXBQTLz6").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt3AFtReRGVcrP11D6bSLEaKdUmrGfaTNowMVccJeu").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smtAvYA5UbTRyKAkAj5kHs1CmrA42t6WkVLi4c6mA1f").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt6ukQDSPPYHSshQovmiRUjG9jGFq2hW9vgrDFk5Yz").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt4vjXvdjDFzvRMUxwTWnSy4c7cKkMaHuPrGsdDH7V").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt9ReAYRF5eFjTd5gBJMn5aKwNRcmp3ub2CQr2vW7j").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt5uPaQT9n6b1qAkgyonmzRxtuazA53Rddwntqistc").unwrap(), LEGACY_TREE_HEIGHT);
+        m.insert(Pubkey::from_str("smt8TYxNy8SuhAdKJ8CeLtDkr2w6dgDmdz5ruiDw9Y9").unwrap(), LEGACY_TREE_HEIGHT);
+        m
+    };
+}
+
+pub fn get_tree_height(tree_pubkey: &Pubkey) -> u32 {
+    *TREE_HEIGHTS.get(tree_pubkey).unwrap_or(&BATCH_STATE_TREE_HEIGHT)
+
+}
 
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 500;
