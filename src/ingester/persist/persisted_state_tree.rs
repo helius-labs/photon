@@ -8,7 +8,6 @@ use sea_orm::{
     QueryFilter, QueryTrait, Set, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::exit;
 use utoipa::ToSchema;
 
 use crate::{
@@ -41,6 +40,7 @@ fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
     2_i64.pow(tree_height - 1) + leaf_index as i64
 }
 
+#[allow(dead_code)]
 fn node_index_to_leaf_index(index: i64) -> i64 {
     index - 2_i64.pow(get_level_by_node_index(index) as u32)
 }

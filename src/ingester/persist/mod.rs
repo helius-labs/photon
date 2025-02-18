@@ -39,9 +39,8 @@ pub mod persisted_state_tree;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
-const TREE_HEIGHT: u32 = 27;
-
-const BATCH_STATE_TREE_HEIGHT: u32 = 32 + 1;
+const LEGACY_TREE_HEIGHT: u32 = 27;
+const BATCH_STATE_TREE_HEIGHT: u32 = 33;
 
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 500;

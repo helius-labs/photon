@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use borsh::{BorshDeserialize, BorshSerialize};
-use itertools::merge;
 use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;

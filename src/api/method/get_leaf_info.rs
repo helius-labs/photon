@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
 use jsonrpsee_core::Serialize;
-use lazy_static::lazy_static;
 use log::info;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 use serde::{Deserialize, Serializer};
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 use crate::api::error::PhotonApiError;
-use crate::api::method::get_queue_elements::{GetQueueElementsResponse, QueueElement};
 use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;

@@ -7,7 +7,7 @@ use indexer_events::{IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent};
 use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use state_update::{IndexedTreeLeafUpdate, LeafNullification};
-use light_batched_merkle_tree::event::{BatchAddressAppendEvent, BatchAppendEvent, BatchNullifyEvent};
+use light_batched_merkle_tree::event::BatchAppendEvent;
 use light_compressed_account::event::event_from_light_transaction;
 use crate::common::typedefs::{
     account::AccountData,
