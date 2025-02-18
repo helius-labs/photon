@@ -105,44 +105,28 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 }
 
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
-    println!("Parsing historical roots for account: {:?}", account);
     let mut data = account.data.clone();
     let pubkey = light_compressed_account::pubkey::Pubkey::new_from_array(account.owner.to_bytes());
-    let merkle_tree = BatchedMerkleTreeAccount::state_from_bytes(&mut data, &pubkey);
-    if let Ok(merkle_tree) = merkle_tree {
-        println!("State batched merkle tree: {:?}", merkle_tree);
-        let roots = merkle_tree
-            .root_history
-            .iter()
-            .map(|root| Hash::from(*root))
-            .collect();
-        return roots;
-    } else {
-        println!("Error parsing batched state merkle tree: {:?}", merkle_tree);
+
+    fn extract_roots(root_history: &[[u8; 32]]) -> Vec<Hash> {
+        root_history.iter().map(|&root| Hash::from(root)).collect()
     }
 
-    let merkle_tree = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey);
-    if let Ok(merkle_tree) = merkle_tree {
-        println!("Address batched merkle tree: {:?}", merkle_tree);
-        let roots = merkle_tree
-            .root_history
-            .iter()
-            .map(|root| Hash::from(*root))
-            .collect();
-        return roots;
-    } else {
-        println!("Error parsing batched address merkle tree: {:?}", merkle_tree);
+    if let Ok(merkle_tree) = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey) {
+        return extract_roots(merkle_tree.root_history.as_slice());
     }
-    let roots = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
+
+    if let Ok(merkle_tree) = BatchedMerkleTreeAccount::address_from_bytes(&mut data, &pubkey) {
+        return extract_roots(merkle_tree.root_history.as_slice());
+    }
+
+    // fallback: legacy tree
+    let concurrent_tree = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
         &account.data[8 + mem::size_of::<MerkleTreeMetadata>()..],
     )
-    .unwrap()
-    .roots
-    .iter()
-    .map(|root| Hash::from(*root))
-    .collect();
+        .unwrap();
 
-    roots
+    extract_roots(concurrent_tree.roots.as_slice())
 }
 
 async fn load_db_tree_roots_with_infinite_retry(db: &DatabaseConnection) -> Vec<(Pubkey, Hash)> {
