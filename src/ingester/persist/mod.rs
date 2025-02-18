@@ -34,6 +34,7 @@ use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
+use crate::ingester::parser::state_update::InputContext;
 
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
@@ -76,7 +77,6 @@ pub async fn persist_state_update(
         return Ok(());
     }
     let StateUpdate {
-        tx_hash,
         in_seq_numbers,
         in_accounts,
         out_accounts,
@@ -86,7 +86,7 @@ pub async fn persist_state_update(
         indexed_merkle_tree_updates,
         batch_append,
         batch_nullify,
-        nullifiers
+        input_context
     } = state_update;
 
     let input_accounts_len = in_accounts.len();
@@ -110,7 +110,16 @@ pub async fn persist_state_update(
         .collect::<Vec<_>>()
         .chunks(MAX_SQL_INSERTS)
     {
-        spend_input_accounts(txn, chunk, &in_seq_numbers, &tx_hash, &nullifiers).await?;
+        spend_input_accounts(txn, chunk).await?;
+    }
+
+    debug!("Persisting batched  spent accounts...");
+    for context in input_context
+        .into_iter()
+        .collect::<Vec<_>>()
+        .chunks(MAX_SQL_INSERTS)
+    {
+        spend_input_accounts_batched(txn, context).await?;
     }
 
     let account_to_transaction = account_transactions
@@ -126,7 +135,7 @@ pub async fn persist_state_update(
     let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
         .iter()
         // HACK: filter accounts by seq, because we don't have seq for accounts which are not in the tree yet
-        .filter(|account| account.seq.is_some())
+        .filter(|account| account.seq.is_some() && !account.in_output_queue)
         .map(|account| {
             (
                 LeafNode::from(account.clone()),
@@ -196,6 +205,7 @@ pub async fn persist_state_update(
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
     debug!("Persisted index tree updates.");
 
+    // TODO: extract to a separate function
     for batch_append_event in batch_append {
         let accounts = accounts::Entity::find()
             .filter(
@@ -243,11 +253,11 @@ pub async fn persist_state_update(
             ModificationType::Spend,
         )
             .await?;
-        /*remove values from queues for both  input and output queues when indexing batch nullify and batch append*/
     }
 
+    // TODO: extract to a separate function
     for batch_nullify_event in batch_nullify {
-        info!("Filtering  accounts by batch_index: {}, batch_size: {}", batch_nullify_event.zkp_batch_index, batch_nullify_event.batch_size);
+        info!("Filtering accounts by batch_index: {}, batch_size: {}", batch_nullify_event.zkp_batch_index, batch_nullify_event.batch_size);
 
         let accounts = accounts::Entity::find()
             .filter(
@@ -369,11 +379,7 @@ pub fn parse_token_data(account: &AccountV2) -> Result<Option<TokenData>, Ingest
 async fn spend_input_accounts(
     txn: &DatabaseTransaction,
     in_accounts: &[Hash],
-    seq_numbers: &[MerkleTreeSequenceNumber],
-    tx_hash: &Hash,
-    nullifiers: &[Hash],
 ) -> Result<(), IngesterError> {
-    println!("spent_input_accounts in_accounts: {:?} seq_numbers: {:?}", in_accounts, seq_numbers);
     // Perform the update operation on the identified records
     let query = accounts::Entity::update_many()
         .col_expr(accounts::Column::Spent, Expr::value(true))
@@ -398,88 +404,61 @@ async fn spend_input_accounts(
     )
     .await?;
 
-    // Batch update:
-    for seq in seq_numbers {
-        // 1. Fetch accounts from the database where the hash is in the in_accounts list
-        // 2. Update the accounts to mark them as spent and set NulifierQueueIndex to the sequence number + i
-        // where i is the index of the account in in_accounts filtered by the tree
-
-        // Create an in-account list filtered by the tree
-        let accounts_to_update = accounts::Entity::find()
-            .filter(
-                accounts::Column::Hash.is_in(
-                    in_accounts
-                        .iter()
-                        .map(|account| account.to_vec())
-                        .collect::<Vec<Vec<u8>>>(),
-                )
-                    .and(accounts::Column::Tree.eq(seq.pubkey.try_to_vec().unwrap())),
-            )
-            .all(txn)
-            .await?;
-
-
-        println!("accounts_to_update: {:?}", accounts_to_update);
-        // Step 2: Iterate over fetched accounts and prepare the update query.
-        for (i, (account, nullifier)) in accounts_to_update.iter().zip(nullifiers).enumerate() {
-            let nullifier_queue_index = seq.seq as i64 + i as i64;
-            println!("nullifier_queue_index: {:?}", nullifier_queue_index);
-            let query = accounts::Entity::update_many()
-                .col_expr(accounts::Column::Spent, Expr::value(true)) // Mark as spent
-                .col_expr(
-                    accounts::Column::PrevSpent,
-                    Expr::col(accounts::Column::Spent).into(), // Update `PrevSpent`
-                )
-                .col_expr(
-                    accounts::Column::NullifierQueueIndex,
-                    Expr::value(nullifier_queue_index), // Set `NullifierQueueIndex`
-                )
-                .col_expr(
-                    accounts::Column::TxHash,
-                    Expr::value(tx_hash.to_vec()), // Set `TxHash`
-                )
-                .col_expr(
-                    accounts::Column::Nullifier,
-                    Expr::value(nullifier.to_vec()), // Set `Nullifier`
-                )
-                .filter(accounts::Column::Hash.eq(&*account.hash)) // Specific account to update
-                .build(txn.get_database_backend());
-
-            // Execute the update and update values/balances.
-            execute_account_update_query_and_update_balances(
-                txn,
-                query,
-                AccountType::Account,
-                ModificationType::Spend,
-            )
-                .await?;
-        }
-
-        let query = accounts::Entity::update_many()
-            .col_expr(accounts::Column::Spent, Expr::value(true))
-            .col_expr(
-                accounts::Column::PrevSpent,
-                Expr::col(accounts::Column::Spent).into(),
-            )
-            .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(seq.seq))
-            .filter(
-                accounts::Column::Hash.is_in(
-                    in_accounts
-                        .iter()
-                        .map(|account| account.to_vec())
-                        .collect::<Vec<Vec<u8>>>(),
-                ).and(accounts::Column::Tree.eq(seq.pubkey.try_to_vec().unwrap())),
-            )
-            .build(txn.get_database_backend());
-
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::Account,
-            ModificationType::Spend,
+    debug!("Marking token accounts as spent...",);
+    let query = token_accounts::Entity::update_many()
+        .col_expr(token_accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            token_accounts::Column::PrevSpent,
+            Expr::col(token_accounts::Column::Spent).into(),
         )
-            .await?;
-    }
+        .filter(
+            token_accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
+        )
+        .build(txn.get_database_backend());
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::TokenAccount,
+        ModificationType::Spend,
+    )
+        .await?;
+    Ok(())
+}
+
+async fn spend_input_accounts_batched(
+    txn: &DatabaseTransaction,
+    context: &InputContext,
+) -> Result<(), IngesterError> {
+    println!("spent_input_accounts in_accounts: {:?} seq_numbers: {:?}", in_accounts, seq_numbers);
+    // Perform the update operation on the identified records
+    let query = accounts::Entity::update_many()
+        .col_expr(accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            accounts::Column::PrevSpent,
+            Expr::col(accounts::Column::Spent).into(),
+        )
+        .filter(
+            accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
+        )
+        .build(txn.get_database_backend());
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::Account,
+        ModificationType::Spend,
+    )
+        .await?;
 
     debug!("Marking token accounts as spent...",);
     let query = token_accounts::Entity::update_many()
@@ -504,7 +483,92 @@ async fn spend_input_accounts(
         AccountType::TokenAccount,
         ModificationType::Spend,
     )
-    .await?;
+        .await?;
+
+
+    // Batch update:
+    for seq in seq_numbers {
+        // 1. Fetch accounts from the database where the hash is in the in_accounts list
+        // 2. Update the accounts to mark them as spent and set NulifierQueueIndex to the sequence number + i
+        // where i is the index of the account in in_accounts filtered by the tree
+
+        // Create an in-account list filtered by the tree
+        let accounts_to_update = accounts::Entity::find()
+            .filter(
+                accounts::Column::Hash.is_in(
+                    in_accounts
+                        .iter()
+                        .map(|account| account.to_vec())
+                        .collect::<Vec<Vec<u8>>>(),
+                )
+                    .and(accounts::Column::Tree.eq(seq.pubkey.try_to_vec().unwrap())),
+            )
+            .all(txn)
+            .await?;
+
+
+        println!("accounts_to_update: {:?}", accounts_to_update);
+        // Step 2: Iterate over fetched accounts and prepare the update query.
+        // TODO: prepare the query in a single step (event parse?)
+
+        for (i, (account, nullifier)) in accounts_to_update.iter().zip(nullifiers).enumerate() {
+            let nullifier_queue_index = seq.seq as i64 + i as i64;
+            println!("nullifier_queue_index: {:?}", nullifier_queue_index);
+            let query = accounts::Entity::update_many()
+                .col_expr(accounts::Column::Spent, Expr::value(true)) // Mark as spent
+                .col_expr(
+                    accounts::Column::PrevSpent,
+                    Expr::col(accounts::Column::Spent).into(), // Update `PrevSpent`
+                )
+                .col_expr(
+                    accounts::Column::NullifierQueueIndex,
+                    Expr::value(nullifier_queue_index), // Set `NullifierQueueIndex`
+                )
+                .col_expr(
+                    accounts::Column::TxHash,
+                    Expr::value(tx_hash.to_vec()), // Set `TxHash`
+                )
+                .col_expr(
+                    accounts::Column::Nullifier,
+                    Expr::value(nullifier.to_vec()), // Set `Nullifier`
+                )
+                .filter(accounts::Column::Hash.eq(&*account.hash)) // Specific account to update
+                .build(txn.get_database_backend());
+            // Execute the update and update values/balances.
+            execute_account_update_query_and_update_balances(
+                txn,
+                query,
+                AccountType::Account,
+                ModificationType::Spend,
+            )
+                .await?;
+        }
+
+        // let query = accounts::Entity::update_many()
+        //     .col_expr(accounts::Column::Spent, Expr::value(true))
+        //     .col_expr(
+        //         accounts::Column::PrevSpent,
+        //         Expr::col(accounts::Column::Spent).into(),
+        //     )
+        //     .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(seq.seq))
+        //     .filter(
+        //         accounts::Column::Hash.is_in(
+        //             in_accounts
+        //                 .iter()
+        //                 .map(|account| account.to_vec())
+        //                 .collect::<Vec<Vec<u8>>>(),
+        //         ).and(accounts::Column::Tree.eq(seq.pubkey.try_to_vec().unwrap())),
+        //     )
+        //     .build(txn.get_database_backend());
+        //
+        // execute_account_update_query_and_update_balances(
+        //     txn,
+        //     query,
+        //     AccountType::Account,
+        //     ModificationType::Spend,
+        // )
+        //     .await?;
+    }
 
     Ok(())
 }
@@ -659,7 +723,7 @@ async fn append_output_accounts(
             slot_created: Set(account.slot_created.0 as i64),
             seq: Set(account.seq.map(|x| x.0 as i64)),
             prev_spent: Set(None),
-            tx_hash: Default::default(), // TODO: update this when we have tx_hash in the account
+            tx_hash: Default::default(), // Its sets at input queue insertion for batch updates
         });
 
         if let Some(token_data) = parse_token_data(account)? {

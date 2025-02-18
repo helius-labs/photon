@@ -61,12 +61,22 @@ pub struct IndexedTreeLeafUpdate {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct AccountContext {
+    pub tx_hash: Hash,
+    pub account: Hash,
+    pub nullifier: Hash,
+    pub nullifier_queue_index: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct InputContext {
+    pub accounts: Vec<AccountContext>,
+    pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
-    // TODO: we need associate tx_hash with in_accounts
-    pub tx_hash: Hash,
-    pub nullifiers: Vec<Hash>,
-    // TODO: replace HashSet with OrderedSet or Vec
     pub in_accounts: HashSet<Hash>,
     pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
     pub out_accounts: Vec<AccountV2>,
@@ -77,7 +87,12 @@ pub struct StateUpdate {
 
     pub batch_append: Vec<BatchAppendEvent>,
     pub batch_nullify: Vec<BatchNullifyEvent>,
+
+    // TODO: switch to hashset
+    pub input_context: Vec<InputContext>,
 }
+
+
 
 impl StateUpdate {
     pub fn new() -> Self {
