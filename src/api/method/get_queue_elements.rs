@@ -70,7 +70,7 @@ pub async fn get_queue_elements(
         SELECT leaf_index, hash
         FROM accounts
         WHERE tree = {tree_string}
-        AND in_queue = true
+        AND in_output_queue = true
         AND leaf_index BETWEEN {start_offset} AND {end_offset}
         ORDER BY queue_position ASC
         "

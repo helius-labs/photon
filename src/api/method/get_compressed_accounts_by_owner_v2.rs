@@ -170,7 +170,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
             owner,
             tree,
             queue,
-            in_queue,
+            in_output_queue,
             nullifier_queue_index,
             tx_hash,
             nullifier,
@@ -182,7 +182,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
             prev_spent,
             lamports,
             discriminator,
-            spent_in_queue
+            nullified_in_tree
         FROM accounts
         WHERE {filters}
         ORDER BY accounts.hash ASC

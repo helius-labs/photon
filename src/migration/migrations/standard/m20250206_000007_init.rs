@@ -44,19 +44,19 @@ impl MigrationTrait for Migration {
                     prev_spent BOOLEAN,
                     lamports REAL,
                     discriminator REAL,
-                    in_queue BOOLEAN NOT NULL DEFAULT TRUE,
+                    in_output_queue BOOLEAN NOT NULL DEFAULT TRUE,
                     nullifier BLOB,
                     tx_hash BLOB,
-                    queue_position INTEGER,
-                    nullifier_queue_index INTEGER NULL,
-                    spent_in_queue BOOLEAN NOT NULL DEFAULT FALSE
+                    queue_position BIGINT,
+                    nullifier_queue_index BIGINT NULL,
+                    nullified_in_tree BOOLEAN NOT NULL DEFAULT FALSE
                 );
 
                 INSERT INTO accounts_new
                 SELECT
                     hash, data, data_hash, address, owner, tree, NULL as queue, leaf_index, seq,
                     slot_created, spent, prev_spent, lamports, discriminator,
-                    FALSE as in_queue, NULL as nullifier, NULL as tx_hash, NULL as queue_position, NULL as nullifier_queue_index, FALSE as spent_in_queue
+                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as queue_position, NULL as nullifier_queue_index, FALSE as nullified_in_tree
                 FROM accounts;
 
                 DROP TABLE accounts;
@@ -65,7 +65,7 @@ impl MigrationTrait for Migration {
                 -- Create trigger for auto-incrementing queue_position on INSERT
                 CREATE TRIGGER set_queue_position_on_insert
                 AFTER INSERT ON accounts
-                WHEN NEW.in_queue = 1
+                WHEN NEW.in_output_queue = 1
                 BEGIN
                     INSERT INTO queue_position_seq (id) VALUES (NULL);
                     UPDATE accounts SET queue_position = (SELECT last_insert_rowid() FROM queue_position_seq)
@@ -74,8 +74,8 @@ impl MigrationTrait for Migration {
 
                 -- Create trigger for auto-incrementing queue_position on UPDATE
                 CREATE TRIGGER set_queue_position_on_update
-                AFTER UPDATE OF in_queue ON accounts
-                WHEN NEW.in_queue = 1 AND OLD.in_queue = 0
+                AFTER UPDATE OF in_output_queue ON accounts
+                WHEN NEW.in_output_queue = 1 AND OLD.in_output_queue = 0
                 BEGIN
                     INSERT INTO queue_position_seq (id) VALUES (NULL);
                     UPDATE accounts SET queue_position = (SELECT last_insert_rowid() FROM queue_position_seq)
@@ -84,8 +84,8 @@ impl MigrationTrait for Migration {
 
                 -- Create trigger for nulling queue_position when removing from queue
                 CREATE TRIGGER null_queue_position_on_update
-                AFTER UPDATE OF in_queue ON accounts
-                WHEN NEW.in_queue = 0 AND OLD.in_queue = 1
+                AFTER UPDATE OF in_output_queue ON accounts
+                WHEN NEW.in_output_queue = 0 AND OLD.in_output_queue = 1
                 BEGIN
                     UPDATE accounts SET queue_position = NULL
                     WHERE hash = NEW.hash;
@@ -133,7 +133,7 @@ impl MigrationTrait for Migration {
                 CREATE UNIQUE INDEX state_trees_tree_leaf_idx ON state_trees (tree, leaf_idx);
                 CREATE INDEX state_trees_hash_idx ON state_trees (hash);
                 CREATE UNIQUE INDEX indexed_trees_value_idx ON indexed_trees (value);
-                CREATE INDEX accounts_queue_idx ON accounts (tree, in_queue, queue_position) WHERE in_queue = 1;
+                CREATE INDEX accounts_queue_idx ON accounts (tree, in_output_queue, queue_position) WHERE in_output_queue = 1;
                 "#,
             ).await?;
         } else {
@@ -147,7 +147,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column(ColumnDef::new(Accounts::SpentInQueue).boolean().not_null().default(false))
+                        .add_column(ColumnDef::new(Accounts::NullifiedInTree).boolean().not_null().default(false))
                         .to_owned(),
                 )
                 .await?;
@@ -165,7 +165,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column(ColumnDef::new(Accounts::InQueue).boolean().not_null().default(true))
+                        .add_column(ColumnDef::new(Accounts::InOutputQueue).boolean().not_null().default(true))
                         .to_owned(),
                 )
                 .await?;
@@ -242,13 +242,13 @@ impl MigrationTrait for Migration {
                 RETURNS TRIGGER AS $$
                 BEGIN
                     IF TG_OP = 'INSERT' THEN
-                        IF NEW.in_queue = true THEN
+                        IF NEW.in_output_queue = true THEN
                             NEW.queue_position := nextval('queue_position_seq');
                         END IF;
                     ELSIF TG_OP = 'UPDATE' THEN
-                        IF NEW.in_queue = true AND OLD.in_queue = false THEN
+                        IF NEW.in_output_queue = true AND OLD.in_output_queue = false THEN
                             NEW.queue_position := nextval('queue_position_seq');
-                        ELSIF NEW.in_queue = false AND OLD.in_queue = true THEN
+                        ELSIF NEW.in_output_queue = false AND OLD.in_output_queue = true THEN
                             NEW.queue_position := NULL;
                         END IF;
                     END IF;
@@ -258,7 +258,7 @@ impl MigrationTrait for Migration {
 
                 DROP TRIGGER IF EXISTS manage_queue_position_trigger ON accounts;
                 CREATE TRIGGER manage_queue_position_trigger
-                BEFORE INSERT OR UPDATE OF in_queue ON accounts
+                BEFORE INSERT OR UPDATE OF in_output_queue ON accounts
                 FOR EACH ROW
                 EXECUTE FUNCTION manage_queue_position();
                 "#,
@@ -272,7 +272,7 @@ impl MigrationTrait for Migration {
 
             execute_sql(
                 manager,
-                "CREATE INDEX accounts_queue_idx ON accounts (tree, in_queue, queue_position) WHERE in_queue = true;",
+                "CREATE INDEX accounts_queue_idx ON accounts (tree, in_output_queue, queue_position) WHERE in_output_queue = true;",
             ).await?;
         }
 
@@ -376,7 +376,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .drop_column(Accounts::SpentInQueue)
+                        .drop_column(Accounts::NullifiedInTree)
                         .to_owned(),
                 )
                 .await?;
@@ -394,7 +394,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .drop_column(Accounts::InQueue)
+                        .drop_column(Accounts::InOutputQueue)
                         .to_owned(),
                 )
                 .await?;

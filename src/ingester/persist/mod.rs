@@ -202,7 +202,7 @@ pub async fn persist_state_update(
                 accounts::Column::LeafIndex
                     .gte(batch_append_event.old_next_index as i64)
                     .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                    .and(accounts::Column::SpentInQueue.eq(0))
+                    .and(accounts::Column::NullifiedInTree.eq(0))
                     .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
             )
             .all(txn)
@@ -226,6 +226,24 @@ pub async fn persist_state_update(
             BATCH_STATE_TREE_HEIGHT,
         )
         .await?;
+
+        let query = accounts::Entity::update_many()
+            .col_expr(accounts::Column::InOutputQueue, Expr::value(false))
+            .filter(
+                accounts::Column::LeafIndex
+                    .gte(batch_append_event.old_next_index as i64)
+                    .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
+                    .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
+            )
+            .build(txn.get_database_backend());
+        execute_account_update_query_and_update_balances(
+            txn,
+            query,
+            AccountType::Account,
+            ModificationType::Spend,
+        )
+            .await?;
+        /*remove values from queues for both  input and output queues when indexing batch nullify and batch append*/
     }
 
     for batch_nullify_event in batch_nullify {
@@ -252,7 +270,8 @@ pub async fn persist_state_update(
         );
 
         let query = accounts::Entity::update_many()
-            .col_expr(accounts::Column::SpentInQueue, Expr::value(true))
+            .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(Option::<i64>::None))
+            .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
             .filter(
                 accounts::Column::NullifierQueueIndex
                     .gte(
@@ -630,9 +649,9 @@ async fn append_output_accounts(
             tree: Set(account.tree.to_bytes_vec()),
             queue: Set(account.queue.as_ref().map(|x| x.to_bytes_vec())),
             leaf_index: Set(account.leaf_index.0 as i64),
-            in_queue: Set(account.in_queue),
+            in_output_queue: Set(account.in_output_queue),
             nullifier_queue_index: Set(account.nullifier_queue_index.map(|x| x.0 as i64)),
-            spent_in_queue: Set(false),
+            nullified_in_tree: Set(false),
             nullifier: Set(account.nullifier.as_ref().map(|x| x.to_vec())),
             owner: Set(account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.lamports.0)),

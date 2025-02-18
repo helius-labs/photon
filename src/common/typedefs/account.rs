@@ -31,9 +31,10 @@ pub struct AccountV2 {
     pub lamports: UnsignedInteger,
     pub tree: SerializablePubkey,
     pub queue: Option<SerializablePubkey>,
-    pub in_queue: bool,
+    pub in_output_queue: bool,
     pub spent: bool,
-    pub spent_in_queue: bool,
+    pub nullified_in_tree: bool,
+    // if nullifier_queue_index is not None, then this account is in input queue
     pub nullifier_queue_index: Option<UnsignedInteger>,
     pub nullifier: Option<Hash>,
     pub tx_hash: Option<Hash>,
@@ -41,15 +42,6 @@ pub struct AccountV2 {
     pub seq: Option<UnsignedInteger>,
     pub slot_created: UnsignedInteger,
 }
-
-// output account:
-// 1. in_queue: true, spent: false
-// 2. in_queue: false, spent: false
-// 3. in_queue: true, spent: true
-// 4. in_queue: false, spent: true
-
-// 1 => 3 => 4
-// 1 => 2 => 3 => 4
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

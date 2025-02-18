@@ -351,12 +351,12 @@ fn parse_account_data(
     leaf_index: u32,
     slot: u64,
     seq: Option<u64>,
-    in_queue: bool,
+    in_output_queue: bool,
     spent: bool,
     nullifier: Option<Hash>,
     nullifier_queue_index: Option<u64>,
 ) -> AccountV2 {
-    info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}, in_queue: {:?}, spent: {:?}, nullifier: {:?}", compressed_account, hash, tree, leaf_index, slot, seq, in_queue, spent, nullifier);
+    info!("Parsing account data: {:?}, hash: {:?}, tree: {:?}, leaf_index: {:?}, slot: {:?}, seq: {:?}, in_output_queue: {:?}, spent: {:?}, nullifier: {:?}", compressed_account, hash, tree, leaf_index, slot, seq, in_output_queue, spent, nullifier);
     let CompressedAccount {
         owner,
         lamports,
@@ -380,9 +380,9 @@ fn parse_account_data(
         leaf_index: UnsignedInteger(leaf_index as u64),
         tree: SerializablePubkey::from(tree),
         queue: queue.map(SerializablePubkey::from),
-        in_queue,
+        in_output_queue,
         spent,
-        spent_in_queue: false,
+        nullified_in_tree: false,
         nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
         nullifier,
         seq: seq.map(UnsignedInteger),
