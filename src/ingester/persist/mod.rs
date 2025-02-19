@@ -13,24 +13,29 @@ use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use ark_bn254::Fr;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::{BorshDeserialize};
 use cadence_macros::statsd_count;
-use log::{debug, info};
+use log::debug;
 use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
-use sea_orm::{sea_query::{Expr, OnConflict}, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, NotSet, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement};
+use sea_orm::{sea_query::{Expr, OnConflict}, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement};
 use std::{cmp::max, collections::HashMap};
 use std::str::FromStr;
 use lazy_static::lazy_static;
 use crate::common::typedefs::account::AccountV2;
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use error::IngesterError;
 use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use sqlx::types::Decimal;
-use crate::ingester::parser::state_update::{AccountContext, InputContext};
+use crate::ingester::parser::state_update::AccountContext;
+use crate::ingester::persist::persisted_batch_append_event::persist_batch_append;
+use crate::ingester::persist::persisted_batch_nullify_event::persist_batch_nullify;
+
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
+
+mod persisted_batch_append_event;
+mod persisted_batch_nullify_event;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
@@ -70,7 +75,6 @@ pub async fn persist_state_update(
         return Ok(());
     }
     let StateUpdate {
-        in_seq_numbers,
         in_accounts,
         out_accounts,
         account_transactions,
@@ -79,7 +83,8 @@ pub async fn persist_state_update(
         indexed_merkle_tree_updates,
         batch_append,
         batch_nullify,
-        input_context
+        input_context,
+        ..
     } = state_update;
 
     let input_accounts_len = in_accounts.len();
@@ -107,12 +112,7 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting batched  spent accounts...");
-    for context in input_context
-        .into_iter()
-        .collect::<Vec<_>>()
-    {
-        spend_input_accounts_batched(txn, &context).await?;
-    }
+    spend_input_accounts_batched(txn, &input_context).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -197,120 +197,9 @@ pub async fn persist_state_update(
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates, ADDRESS_TREE_HEIGHT).await?;
     debug!("Persisted index tree updates.");
 
-    // TODO: extract to a separate function
-    for batch_append_event in batch_append {
-        let accounts = accounts::Entity::find()
-            .filter(
-                accounts::Column::LeafIndex
-                    .gte(batch_append_event.old_next_index as i64)
-                    .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                    .and(accounts::Column::NullifiedInTree.eq(0))
-                    .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
-            )
-            .all(txn)
-            .await?;
-        info!(
-            "Batch append event: {:?}, accounts: {:?}",
-            batch_append_event, accounts
-        );
+    persist_batch_append(txn, batch_append).await?;
 
-        persist_leaf_nodes(
-            txn,
-            accounts
-                .iter()
-                .map(|account| LeafNode {
-                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
-                    seq: Some(batch_append_event.sequence_number as u32),
-                    leaf_index: account.leaf_index as u32,
-                    hash: Hash::try_from(account.hash.clone()).unwrap(),
-                })
-                .collect(),
-            BATCH_STATE_TREE_HEIGHT,
-        )
-        .await?;
-
-        let query = accounts::Entity::update_many()
-            .col_expr(accounts::Column::InOutputQueue, Expr::value(false))
-            .filter(
-                accounts::Column::LeafIndex
-                    .gte(batch_append_event.old_next_index as i64)
-                    .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                    .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
-            )
-            .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::Account,
-            ModificationType::Spend,
-        )
-            .await?;
-    }
-
-    // TODO: extract to a separate function
-    for batch_nullify_event in batch_nullify {
-        info!("Filtering accounts by batch_index: {}, batch_size: {}", batch_nullify_event.zkp_batch_index, batch_nullify_event.batch_size);
-
-        let accounts = accounts::Entity::find()
-            .filter(
-                accounts::Column::NullifierQueueIndex
-                    .gte(
-                        batch_nullify_event.zkp_batch_index as i64
-                            * batch_nullify_event.batch_size as i64,
-                    )
-                    .and(
-                        accounts::Column::NullifierQueueIndex
-                            .lt((batch_nullify_event.zkp_batch_index + 1) as i64
-                                * batch_nullify_event.batch_size as i64),
-                    ),
-            )
-            .all(txn)
-            .await?;
-        info!(
-            "Batch nullify event: {:?}, accounts: {:?}",
-            batch_nullify_event, accounts
-        );
-
-        let query = accounts::Entity::update_many()
-            .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(Option::<i64>::None))
-            .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
-            .filter(
-                accounts::Column::NullifierQueueIndex
-                    .gte(
-                        batch_nullify_event.zkp_batch_index as i64
-                            * batch_nullify_event.batch_size as i64,
-                    )
-                    .and(
-                        accounts::Column::NullifierQueueIndex
-                            .lt((batch_nullify_event.zkp_batch_index + 1) as i64
-                                * batch_nullify_event.batch_size as i64),
-                    ),
-            )
-            .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::Account,
-            ModificationType::Spend,
-        )
-            .await?;
-
-
-        persist_leaf_nodes(
-            txn,
-            accounts
-                .iter()
-                .map(|account| LeafNode {
-                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
-                    seq: Some(batch_nullify_event.sequence_number as u32),
-                    leaf_index: account.leaf_index as u32,
-                    hash: Hash::try_from(account.nullifier.clone().unwrap().clone()).unwrap(),
-                })
-                .collect(),
-            BATCH_STATE_TREE_HEIGHT,
-        )
-        .await?;
-    }
+    persist_batch_nullify(txn, batch_nullify).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);statsd_count!("state_update.output_accounts", output_accounts_len as u64);
@@ -425,19 +314,18 @@ async fn spend_input_accounts(
 
 async fn spend_input_accounts_batched(
     txn: &DatabaseTransaction,
-    context: &InputContext,
+    accounts: &[AccountContext],
 ) -> Result<(), IngesterError> {
-    println!("spender_input_accounts_batched: {:?}", context);
-    if context.accounts.is_empty() {
+    println!("spender_input_accounts_batched: {:?}", accounts);
+    if accounts.is_empty() {
         return Ok(());
     }
-    let account_hashes: Vec<Vec<u8>> = context.accounts
+    let account_hashes: Vec<Vec<u8>> = accounts
         .iter()
         .map(|account| account.account.to_vec())
         .collect();
 
-    let account_context_map: HashMap<Vec<u8>, &AccountContext> = context
-        .accounts
+    let account_context_map: HashMap<Vec<u8>, &AccountContext> = accounts
         .iter()
         .map(|ctx| (ctx.account.to_vec(), ctx))
         .collect();

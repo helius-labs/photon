@@ -8,7 +8,6 @@ use log::{debug, info};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use state_update::{IndexedTreeLeafUpdate, LeafNullification};
 use light_batched_merkle_tree::event::BatchAppendEvent;
-use light_compressed_account::event::event_from_light_transaction;
 use crate::common::typedefs::{
     account::AccountData,
     bs64_string::Base64String,
@@ -33,11 +32,11 @@ use self::{
 
 pub mod indexer_events;
 pub mod state_update;
+mod batch_event_parser;
 
 use solana_program::pubkey;
 use crate::common::typedefs::account::AccountV2;
-use crate::ingester::parser::indexer_events::{BatchPublicTransactionEvent, CompressedAccountData, MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext};
-use crate::ingester::parser::state_update::{AccountContext, InputContext};
+use crate::ingester::parser::batch_event_parser::{parse_batch_public_transaction_event, parse_public_transaction_event_v2};
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");
@@ -273,71 +272,6 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     Ok(state_update)
 }
 
-fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec<Pubkey>>) -> Option<BatchPublicTransactionEvent> {
-    let event = event_from_light_transaction(instructions, accounts);
-    info!("Event from light transaction: {:?}", event);
-
-    let event = match event {
-        Ok(event) => {
-            event
-        }
-        Err(_) => {
-            None
-        }
-    };
-
-    match event {
-        Some(public_transaction_event) => {
-            let event = PublicTransactionEvent {
-                    input_compressed_account_hashes: public_transaction_event.event.input_compressed_account_hashes,
-                    output_compressed_account_hashes: public_transaction_event.event.output_compressed_account_hashes,
-                    output_compressed_accounts: public_transaction_event.event.output_compressed_accounts.iter().map(|x| OutputCompressedAccountWithPackedContext {
-                        compressed_account: CompressedAccount {
-                            owner: x.compressed_account.owner,
-                            lamports: x.compressed_account.lamports,
-                            address: x.compressed_account.address,
-                            data: x.compressed_account.data.as_ref().map(|d| CompressedAccountData {
-                                discriminator: d.discriminator,
-                                data: d.data.clone(),
-                                data_hash: d.data_hash,
-                            }),
-                        },
-                        merkle_tree_index: x.merkle_tree_index,
-                    }).collect(),
-                    output_leaf_indices: public_transaction_event.event.output_leaf_indices,
-                    sequence_numbers: public_transaction_event.event.sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
-                        pubkey: x.pubkey,
-                        seq: x.seq,
-                    }).collect(),
-                    relay_fee: public_transaction_event.event.relay_fee,
-                    is_compress: public_transaction_event.event.is_compress,
-                    compression_lamports: public_transaction_event.event.compress_or_decompress_lamports,
-                    pubkey_array: public_transaction_event.event.pubkey_array,
-                    message: public_transaction_event.event.message,
-                };
-            let batch_public_transaction_event = BatchPublicTransactionEvent {
-                event,
-                new_addresses: public_transaction_event.new_addresses,
-                input_sequence_numbers: public_transaction_event.input_sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
-                    pubkey: x.pubkey,
-                    seq: x.seq,
-                }).collect(),
-                address_sequence_numbers: public_transaction_event.address_sequence_numbers.iter().map(|x| MerkleTreeSequenceNumber {
-                    pubkey: x.pubkey,
-                    seq: x.seq,
-                }).collect(),
-                nullifier_queue_indices: public_transaction_event.nullifier_queue_indices,
-                tx_hash: public_transaction_event.tx_hash,
-                nullifiers: public_transaction_event.nullifiers,
-            };
-            Some(batch_public_transaction_event)
-        }
-        None => {
-            None
-        }
-    }
-}
-
 fn is_voting_transaction(tx: &TransactionInfo) -> bool {
     tx.instruction_groups
         .iter()
@@ -453,34 +387,6 @@ fn parse_nullifier_event(
         state_update.leaf_nullifications.insert(leaf_nullification);
     }
 
-    Ok(state_update)
-}
-
-fn parse_batch_public_transaction_event(
-    tx: Signature,
-    slot: u64,
-    transaction_event: BatchPublicTransactionEvent,
-) -> Result<StateUpdate, IngesterError> {
-    let mut state_update = parse_public_transaction_event(tx, slot, transaction_event.event)?;
-    state_update.in_seq_numbers = transaction_event.input_sequence_numbers;
-
-    let input_context = InputContext {
-        accounts: state_update
-            .in_accounts
-            .iter()
-            .zip(transaction_event.nullifiers.iter())
-            .zip(transaction_event.nullifier_queue_indices.iter())
-            .map(|((account, nullifier), nullifier_queue_index)| AccountContext {
-                account: account.clone(),
-                tx_hash: Hash::new(&transaction_event.tx_hash).unwrap(),
-                nullifier: Hash::new(nullifier).unwrap(),
-                nullifier_queue_index: *nullifier_queue_index,
-            })
-            .collect(),
-        in_seq_numbers: state_update.in_seq_numbers.clone(),
-    };
-    println!("input context: {:?}", input_context);
-    state_update.input_context.push(input_context);
     Ok(state_update)
 }
 

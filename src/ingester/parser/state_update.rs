@@ -69,12 +69,6 @@ pub struct AccountContext {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct InputContext {
-    pub accounts: Vec<AccountContext>,
-    pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
@@ -88,8 +82,7 @@ pub struct StateUpdate {
     pub batch_append: Vec<BatchAppendEvent>,
     pub batch_nullify: Vec<BatchNullifyEvent>,
 
-    // TODO: switch to hashset
-    pub input_context: Vec<InputContext>,
+    pub input_context: Vec<AccountContext>,
 }
 
 impl StateUpdate {
