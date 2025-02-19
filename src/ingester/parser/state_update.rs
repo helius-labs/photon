@@ -92,8 +92,6 @@ pub struct StateUpdate {
     pub input_context: Vec<InputContext>,
 }
 
-
-
 impl StateUpdate {
     pub fn new() -> Self {
         StateUpdate::default()
@@ -102,12 +100,9 @@ impl StateUpdate {
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
         // TODO: remove assert after tx_hash and in_seq_numbers are associated with in_accounts
-        assert!(updates.iter().filter(|update| update.tx_hash != Hash::default()).count() <= 1);
+        // assert!(updates.iter().filter(|update| update.tx_hash != Hash::default()).count() <= 1);
         for update in updates {
-            if merged.tx_hash == Hash::default() {
-                merged.tx_hash = update.tx_hash;
-            }
-            merged.nullifiers.extend(update.nullifiers);
+            // legacy
             merged.in_seq_numbers.extend(update.in_seq_numbers);
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
@@ -130,6 +125,8 @@ impl StateUpdate {
                 }
             }
 
+            // batch updates
+            merged.input_context.extend(update.input_context);
             merged.batch_append.extend(update.batch_append);
             merged.batch_nullify.extend(update.batch_nullify);
         }

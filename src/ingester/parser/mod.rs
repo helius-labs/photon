@@ -37,6 +37,7 @@ pub mod state_update;
 use solana_program::pubkey;
 use crate::common::typedefs::account::AccountV2;
 use crate::ingester::parser::indexer_events::{BatchPublicTransactionEvent, CompressedAccountData, MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext};
+use crate::ingester::parser::state_update::{AccountContext, InputContext};
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");
@@ -325,6 +326,7 @@ fn parse_public_transaction_event_v2(instructions: &[Vec<u8>], accounts: Vec<Vec
                     pubkey: x.pubkey,
                     seq: x.seq,
                 }).collect(),
+                nullifier_queue_indices: public_transaction_event.nullifier_queue_indices,
                 tx_hash: public_transaction_event.tx_hash,
                 nullifiers: public_transaction_event.nullifiers,
             };
@@ -461,9 +463,24 @@ fn parse_batch_public_transaction_event(
 ) -> Result<StateUpdate, IngesterError> {
     let mut state_update = parse_public_transaction_event(tx, slot, transaction_event.event)?;
     state_update.in_seq_numbers = transaction_event.input_sequence_numbers;
-    state_update.tx_hash = Hash::new(&transaction_event.tx_hash).unwrap();
-    state_update.nullifiers = transaction_event.nullifiers.iter().map(|x| Hash::new(x).unwrap()).collect();
 
+    let input_context = InputContext {
+        accounts: state_update
+            .in_accounts
+            .iter()
+            .zip(transaction_event.nullifiers.iter())
+            .zip(transaction_event.nullifier_queue_indices.iter())
+            .map(|((account, nullifier), nullifier_queue_index)| AccountContext {
+                account: account.clone(),
+                tx_hash: Hash::new(&transaction_event.tx_hash).unwrap(),
+                nullifier: Hash::new(nullifier).unwrap(),
+                nullifier_queue_index: *nullifier_queue_index,
+            })
+            .collect(),
+        in_seq_numbers: state_update.in_seq_numbers.clone(),
+    };
+    println!("input context: {:?}", input_context);
+    state_update.input_context.push(input_context);
     Ok(state_update)
 }
 
