@@ -81,16 +81,12 @@ solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
 
-#light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
-#light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
-#light-utils = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
-#account-compression = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
-
-light-concurrent-merkle-tree = { path = "../light-protocol/program-libs/concurrent-merkle-tree", features = [] }
-light-sdk = { path = "../light-protocol/sdk-libs/sdk", features = [] }
-light-compressed-account = { path = "../light-protocol/program-libs/compressed-account", features = [] }
-account-compression = { path = "../light-protocol/programs/account-compression", features = [] }
-light-batched-merkle-tree = { path = "../light-protocol/program-libs/batched-merkle-tree", features = [] }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+light-utils = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+account-compression = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", branch = "sergey/forester-photon-batched", features = [] }
 
 sqlx = { version = "0.6.2", features = [
   "macros",
