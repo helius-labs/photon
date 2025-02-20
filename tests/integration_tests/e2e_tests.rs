@@ -4,7 +4,9 @@ use function_name::named;
 use futures::Stream;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
-use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
+use photon_indexer::api::method::get_transaction_with_compression_info::{
+    get_transaction_helper, get_transaction_helper_v2,
+};
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
@@ -148,6 +150,22 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+
+            // V2 Test
+            let accounts_v2 = setup
+                .api
+                .get_compressed_token_accounts_by_owner_v2(GetCompressedTokenAccountsByOwner {
+                    owner: pubkey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            // TODO:
+            // assert_json_snapshot!(
+            //     format!("{}-{}-accounts-v2", name.clone(), person),
+            //     accounts_v2
+            // );
+
             let hash_list = HashList(
                 accounts
                     .value
@@ -180,6 +198,22 @@ async fn test_e2e_mint_and_transfer_transactions(
                 format!("{}-{}-validity-proof", name.clone(), person),
                 validity_proof
             );
+
+            // V2 Test for Validity Proof
+            let mut validity_proof_v2 = setup
+                .api
+                .get_validity_proof_v2(GetValidityProofRequest {
+                    hashes: hash_list.0.clone(),
+                    newAddresses: vec![],
+                    newAddressesWithTrees: vec![],
+                })
+                .await
+                .unwrap();
+            // validity_proof_v2.value.compressedProof = CompressedProof::default();
+            // assert_json_snapshot!(
+            //     format!("{}-{}-validity-proof-v2", name.clone(), person),
+            //     validity_proof_v2
+            // );
 
             let mut cursor = None;
             let limit = Limit::new(1).unwrap();
@@ -225,13 +259,22 @@ async fn test_e2e_mint_and_transfer_transactions(
         for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
             let txn =
                 cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
+            let txn_clone =
+                cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
             let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
             // Test get transaction
-            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
+            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature.clone(), txn).await.unwrap();
             assert_json_snapshot!(
                 format!("{}-{}-transaction", name.clone(), txn_name),
                 parsed_transaction
             );
+
+            // V2 Test for Transactions
+            // let parsed_transaction_v2: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponseV2 = get_transaction_helper_v2(&setup.db_conn, txn_signature, txn_clone).await.unwrap();
+            // assert_json_snapshot!(
+            //     format!("{}-{}-transaction-v2", name.clone(), txn_name),
+            //     parsed_transaction_v2
+            // );
         }
 
         let mut cursor = None;

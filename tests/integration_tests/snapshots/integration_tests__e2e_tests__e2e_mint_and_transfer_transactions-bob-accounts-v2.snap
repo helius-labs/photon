@@ -1,0 +1,67 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+assertion_line: 163
+expression: accounts_v2
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "account": {
+          "hash": "JReC6h68m3EdCKP7S35e7BE4pBPwQz1HfjUkboeQy9r",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo/IF0SuAAU/8W2JwQ9eoK7yn7i6O/dx7aXfmnaBmwIYnAUAAAAAAAAAAAAA",
+            "dataHash": "4C8Wy6GxRZhiUfR6aSDejhYhnyixhtsNUFbKdPCUcNoq"
+          },
+          "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+          "lamports": 0,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "leafIndex": 6,
+          "seq": 7,
+          "slotCreated": 0,
+          "queue": null
+        },
+        "tokenData": {
+          "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
+          "owner": "EU57rQxcmFhJ24ApVdUy3y4MxFXcTUN3uiVeWvGgtWXu",
+          "amount": 5,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      },
+      {
+        "account": {
+          "hash": "2R46QL8CSripTWvEsESL39ccripkjs9MjGtwnbJMzJET",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo/IF0SuAAU/8W2JwQ9eoK7yn7i6O/dx7aXfmnaBmwIYnGQAAAAAAAAAAAAA",
+            "dataHash": "RP7MSHC1TfribGPwba1Cs8LZYLhNNfiAeTxmcGQ5Cpk"
+          },
+          "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+          "lamports": 0,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "leafIndex": 3,
+          "seq": 4,
+          "slotCreated": 0,
+          "queue": null
+        },
+        "tokenData": {
+          "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
+          "owner": "EU57rQxcmFhJ24ApVdUy3y4MxFXcTUN3uiVeWvGgtWXu",
+          "amount": 100,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      }
+    ],
+    "cursor": null
+  }
+}

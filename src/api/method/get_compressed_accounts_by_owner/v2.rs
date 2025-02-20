@@ -3,9 +3,9 @@ use crate::api::method::get_compressed_accounts_by_owner::common::{
     validate_filters, GetCompressedAccountsByOwnerRequest, QueryBuilder,
 };
 use crate::api::method::get_compressed_accounts_by_owner::indexed_accounts::Solayer;
-use crate::api::method::utils::parse_account_model_with_context;
+use crate::api::method::utils::parse_account_model_v2;
 use crate::api::method::utils::Context;
-use crate::common::typedefs::account::AccountWithContext;
+use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
@@ -14,8 +14,8 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PaginatedAccountListWithContext {
-    pub items: Vec<AccountWithContext>,
+pub struct PaginatedAccountListV2 {
+    pub items: Vec<AccountV2>,
     pub cursor: Option<Hash>,
 }
 
@@ -23,7 +23,7 @@ pub struct PaginatedAccountListWithContext {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountsByOwnerV2Response {
     pub context: Context,
-    pub value: PaginatedAccountListWithContext,
+    pub value: PaginatedAccountListV2,
 }
 
 pub async fn get_compressed_accounts_by_owner_v2(
@@ -57,16 +57,16 @@ pub async fn get_compressed_accounts_by_owner_v2(
 
     let items = result
         .into_iter()
-        .map(parse_account_model_with_context)
-        .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
+        .map(parse_account_model_v2)
+        .collect::<Result<Vec<AccountV2>, PhotonApiError>>()?;
 
-    let mut cursor = items.last().map(|u| u.account.hash.clone());
+    let mut cursor = items.last().map(|u| u.hash.clone());
     if items.len() < query_builder.query_limit as usize {
         cursor = None;
     }
 
     Ok(GetCompressedAccountsByOwnerV2Response {
         context,
-        value: PaginatedAccountListWithContext { items, cursor },
+        value: PaginatedAccountListV2 { items, cursor },
     })
 }

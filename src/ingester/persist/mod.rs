@@ -13,7 +13,8 @@ use crate::{
 use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
-use crate::common::typedefs::account::{Account, AccountWithContext};
+use crate::common::typedefs::account::{Account, AccountV2, AccountWithContext};
+use crate::ingester::parser::state_update::AccountContext;
 use crate::ingester::persist::persisted_batch_append_event::persist_batch_append;
 use crate::ingester::persist::persisted_batch_nullify_event::persist_batch_nullify;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
@@ -51,7 +52,7 @@ mod persisted_batch_append_event;
 mod persisted_batch_nullify_event;
 mod spend;
 
-const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
+pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
 const LEGACY_TREE_HEIGHT: u32 = 27;
 const BATCH_STATE_TREE_HEIGHT: u32 = 33;
@@ -290,6 +291,19 @@ async fn persist_state_tree_history(
 }
 
 pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
+    match account.data.clone() {
+        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+            let data_slice = data.data.0.as_slice();
+            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
+            })?;
+            Ok(Some(token_data))
+        }
+        _ => Ok(None),
+    }
+}
+
+pub fn parse_token_data_v2(account: &AccountV2) -> Result<Option<TokenData>, IngesterError> {
     match account.data.clone() {
         Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
             let data_slice = data.data.0.as_slice();

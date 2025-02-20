@@ -337,5 +337,60 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         },
     )?;
 
+    module.register_async_method(
+        "getCompressedAccountV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_account_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getMultipleCompressedAccountsV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_multiple_compressed_accounts_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedTokenAccountsByOwnerV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_token_accounts_by_owner_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getCompressedTokenAccountsByDelegateV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_token_accounts_by_delegate_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getTransactionWithCompressionInfoV2",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_transaction_with_compression_info_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
     Ok(module)
 }

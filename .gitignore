@@ -9,5 +9,5 @@ test-ledger/
 
 .DS_Store
 
-minio 
+minio
 test.db
