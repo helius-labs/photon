@@ -1,0 +1,67 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+assertion_line: 163
+expression: accounts_v2
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "items": [
+      {
+        "account": {
+          "hash": "2TxrLe9HDTRDpVXmbkXUgXNksCZ7RdU4Tc2Ea1B8ADs2",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo+nxtjG3Di8aQSbzY12Qevlz6m4DW8xABfetteH8ywAxsgAAAAAAAAAAAAA",
+            "dataHash": "3mCzppQKSYcGTuLb4VPKnMohtVkoEnsFYK7yYB5Rf1Pg"
+          },
+          "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+          "lamports": 0,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "leafIndex": 4,
+          "seq": 5,
+          "slotCreated": 0,
+          "queue": null
+        },
+        "tokenData": {
+          "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
+          "owner": "CHvwuTvTiwRSNBwAnrCG14V8YTJ6wwhHQrifxdFzHzsX",
+          "amount": 200,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      },
+      {
+        "account": {
+          "hash": "2o5puhnQbtqyyrcZrsow4DSs6kafmyUTYmgdwXfMMehS",
+          "address": null,
+          "data": {
+            "discriminator": 2,
+            "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo+nxtjG3Di8aQSbzY12Qevlz6m4DW8xABfetteH8ywAxrcCAAAAAAAAAAAA",
+            "dataHash": "2CHL3b2vQV4xoxMmwxHn3jYYBKNafmpmEWsAHNmFp6iP"
+          },
+          "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+          "lamports": 0,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "leafIndex": 5,
+          "seq": 6,
+          "slotCreated": 0,
+          "queue": null
+        },
+        "tokenData": {
+          "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
+          "owner": "CHvwuTvTiwRSNBwAnrCG14V8YTJ6wwhHQrifxdFzHzsX",
+          "amount": 695,
+          "delegate": null,
+          "state": "initialized",
+          "tlv": null
+        }
+      }
+    ],
+    "cursor": null
+  }
+}

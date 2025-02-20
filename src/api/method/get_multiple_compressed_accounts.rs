@@ -4,8 +4,8 @@ use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
 };
-use crate::api::method::utils::parse_account_model;
-use crate::common::typedefs::account::Account;
+use crate::api::method::utils::{parse_account_model, parse_account_model_v2};
+use crate::common::typedefs::account::{Account, AccountV2};
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
@@ -52,12 +52,24 @@ pub struct AccountList {
     pub items: Vec<Option<Account>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+pub struct AccountListV2 {
+    pub items: Vec<Option<AccountV2>>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 // We do not use generics in order to simplify documentation generation
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountsResponse {
     pub context: Context,
     pub value: AccountList,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetMultipleCompressedAccountsResponseV2 {
+    pub context: Context,
+    pub value: AccountListV2,
 }
 
 pub async fn fetch_accounts_from_hashes(
@@ -148,6 +160,47 @@ pub async fn get_multiple_compressed_accounts(
             items: accounts
                 .into_iter()
                 .map(|x| x.map(parse_account_model).transpose())
+                .collect::<Result<Vec<_>, _>>()?,
+        },
+    })
+}
+
+pub async fn get_multiple_compressed_accounts_v2(
+    conn: &DatabaseConnection,
+    request: GetMultipleCompressedAccountsRequest,
+) -> Result<GetMultipleCompressedAccountsResponseV2, PhotonApiError> {
+    let context = Context::extract(conn).await?;
+
+    let accounts = match (request.hashes, request.addresses) {
+        (Some(hashes), None) => {
+            if hashes.len() > PAGE_LIMIT as usize {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Too many hashes requested {}. Maximum allowed: {}",
+                    hashes.len(),
+                    PAGE_LIMIT
+                )));
+            }
+            fetch_accounts_from_hashes(conn, hashes, false).await?
+        }
+        (None, Some(addresses)) => {
+            if addresses.len() > PAGE_LIMIT as usize {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Too many addresses requested {}. Maximum allowed: {}",
+                    addresses.len(),
+                    PAGE_LIMIT
+                )));
+            }
+            fetch_account_from_addresses(conn, addresses).await?
+        }
+        _ => panic!("Either hashes or addresses must be provided"),
+    };
+
+    Ok(GetMultipleCompressedAccountsResponseV2 {
+        context,
+        value: AccountListV2 {
+            items: accounts
+                .into_iter()
+                .map(|x| x.map(parse_account_model_v2).transpose())
                 .collect::<Result<Vec<_>, _>>()?,
         },
     })

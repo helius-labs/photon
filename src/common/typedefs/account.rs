@@ -28,6 +28,37 @@ pub struct Account {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AccountV2 {
+    pub hash: Hash,
+    pub address: Option<SerializablePubkey>,
+    pub data: Option<AccountData>,
+    pub owner: SerializablePubkey,
+    pub lamports: UnsignedInteger,
+    pub tree: SerializablePubkey,
+    pub leaf_index: UnsignedInteger,
+    // For legacy trees is always Some() since the user tx appends directly to the Merkle tree
+    // for batched tress:
+    // 2.1. None when is in output queue
+    // 2.2. Some once it was inserted into the Merkle tree from the output queue
+    pub seq: Option<UnsignedInteger>,
+    pub slot_created: UnsignedInteger,
+    // nullifier_queue in legacy trees, output_queue in V2 trees.
+    pub queue: Option<SerializablePubkey>,
+    // Indicates if the account is not yet provable by validity_proof. The
+    // account resides in on-chain RAM, with leaf_index mapping to its position.
+    // This allows the protocol to prove the account's validity using only the
+    // leaf_index. Consumers use this to decide if a validity proof is needed,
+    // saving one RPC roundtrip.
+    pub prove_by_index: bool,
+}
+
+/// This is currently used internally:
+/// - Internal (state_updates,..)
+/// - GetTransactionWithCompressionInfo (internally)
+/// - GetTransactionWithCompressionInfoV2 (internally)
+/// All endpoints return AccountV2.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
     pub queue: Option<SerializablePubkey>,
     pub in_output_queue: bool,

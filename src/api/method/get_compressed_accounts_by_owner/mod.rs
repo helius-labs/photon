@@ -9,5 +9,5 @@ pub use v1::{
 };
 pub use v2::{
     get_compressed_accounts_by_owner_v2, GetCompressedAccountsByOwnerV2Response,
-    PaginatedAccountListWithContext,
+    PaginatedAccountListV2,
 };

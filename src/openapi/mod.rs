@@ -5,7 +5,7 @@ use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
-use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountListWithContext;
+use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountListV2;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalance;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalanceList;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalancesResponse;
@@ -30,7 +30,9 @@ use crate::api::method::utils::SignatureInfoListWithError;
 use crate::api::method::utils::SignatureInfoWithError;
 use crate::api::method::utils::TokenAccount;
 use crate::api::method::utils::TokenAccountList;
-use crate::common::typedefs::account::{Account, AccountContext, AccountData, AccountWithContext};
+use crate::common::typedefs::account::{
+    Account, AccountContext, AccountData, AccountV2, AccountWithContext,
+};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
@@ -75,10 +77,11 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     Context,
     Hash,
     PaginatedAccountList,
-    PaginatedAccountListWithContext,
+    PaginatedAccountListV2,
     Account,
     AccountContext,
     AccountWithContext,
+    AccountV2,
     MerkleProofWithContext,
     MerkleProofWithContextV2,
     TokenAccountList,
