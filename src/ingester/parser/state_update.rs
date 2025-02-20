@@ -92,6 +92,7 @@ impl StateUpdate {
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
+
         for update in updates {
             // legacy
             merged.in_seq_numbers.extend(update.in_seq_numbers);

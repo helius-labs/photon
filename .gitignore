@@ -8,3 +8,6 @@ test-ledger/
 /.cargo
 
 .DS_Store
+
+minio 
+test.db
