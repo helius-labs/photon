@@ -77,7 +77,6 @@ pub fn continously_monitor_photon(
                 }
             } else {
                 let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
-                println!("Tree roots (continously_monitor_photon): {:?}", tree_roots);
                 validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
             }
             sleep(Duration::from_millis(5000)).await;

@@ -187,9 +187,6 @@ pub async fn persist_state_update(
         }))
         .collect();
 
-    for leaf_node in &leaf_nodes_with_signatures {
-        debug!("Leaf node: {:?}, signature: {:?}", leaf_node.0, leaf_node.1);
-    }
     leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
 
     debug!("Persisting state nodes...");

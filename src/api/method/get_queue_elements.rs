@@ -1,8 +1,4 @@
 use light_merkle_tree_metadata::queue::QueueType;
-<<<<<<< HEAD
-=======
-use log::info;
->>>>>>> d7e9eeb (refactor: add support for batched updates)
 use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement,
     TransactionTrait,
