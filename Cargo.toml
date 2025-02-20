@@ -124,8 +124,6 @@ rust-s3 = "0.34.0"
 lru = "0.12.0"
 light-client = "0.9.1"
 
-serde_yaml = "0.9"
-
 
 [dev-dependencies]
 function_name = "0.3.0"

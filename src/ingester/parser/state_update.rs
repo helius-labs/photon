@@ -92,8 +92,7 @@ impl StateUpdate {
 
     pub fn merge_updates(updates: Vec<StateUpdate>) -> StateUpdate {
         let mut merged = StateUpdate::default();
-        // TODO: remove assert after tx_hash and in_seq_numbers are associated with in_accounts
-        // assert!(updates.iter().filter(|update| update.tx_hash != Hash::default()).count() <= 1);
+
         for update in updates {
             // legacy
             merged.in_seq_numbers.extend(update.in_seq_numbers);

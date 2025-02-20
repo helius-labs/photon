@@ -5033,7 +5033,6 @@ dependencies = [
  "sea-orm-migration",
  "serde",
  "serde_json",
- "serde_yaml",
  "serial_test",
  "solana-client",
  "solana-program",
