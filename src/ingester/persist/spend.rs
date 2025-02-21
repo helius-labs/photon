@@ -1,3 +1,4 @@
+use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::{accounts, token_accounts};
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::state_update::AccountContext;
@@ -6,9 +7,65 @@ use crate::ingester::persist::{
     MAX_SQL_INSERTS,
 };
 use crate::migration::Expr;
+use log::debug;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
 use std::collections::HashMap;
+
+pub async fn spend_input_accounts(
+    txn: &DatabaseTransaction,
+    in_accounts: &[Hash],
+) -> Result<(), IngesterError> {
+    // Perform the update operation on the identified records
+    let query = accounts::Entity::update_many()
+        .col_expr(accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            accounts::Column::PrevSpent,
+            Expr::col(accounts::Column::Spent).into(),
+        )
+        .filter(
+            accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
+        )
+        .build(txn.get_database_backend());
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::Account,
+        ModificationType::Spend,
+    )
+    .await?;
+
+    debug!("Marking token accounts as spent...",);
+    let query = token_accounts::Entity::update_many()
+        .col_expr(token_accounts::Column::Spent, Expr::value(true))
+        .col_expr(
+            token_accounts::Column::PrevSpent,
+            Expr::col(token_accounts::Column::Spent).into(),
+        )
+        .filter(
+            token_accounts::Column::Hash.is_in(
+                in_accounts
+                    .iter()
+                    .map(|account| account.to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            ),
+        )
+        .build(txn.get_database_backend());
+
+    execute_account_update_query_and_update_balances(
+        txn,
+        query,
+        AccountType::TokenAccount,
+        ModificationType::Spend,
+    )
+    .await?;
+    Ok(())
+}
 
 pub async fn spend_input_accounts_batched(
     txn: &DatabaseTransaction,
