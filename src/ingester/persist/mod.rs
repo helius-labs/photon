@@ -16,7 +16,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use crate::common::typedefs::account::{Account, AccountWithContext};
 use crate::ingester::persist::persisted_batch_append_event::persist_batch_append;
 use crate::ingester::persist::persisted_batch_nullify_event::persist_batch_nullify;
-use crate::ingester::persist::spend_batch::spend_input_accounts_batched;
+use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
@@ -41,7 +41,7 @@ pub mod persisted_state_tree;
 
 mod persisted_batch_append_event;
 mod persisted_batch_nullify_event;
-mod spend_batch;
+mod spend;
 
 const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
@@ -292,61 +292,6 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
         }
         _ => Ok(None),
     }
-}
-
-async fn spend_input_accounts(
-    txn: &DatabaseTransaction,
-    in_accounts: &[Hash],
-) -> Result<(), IngesterError> {
-    // Perform the update operation on the identified records
-    let query = accounts::Entity::update_many()
-        .col_expr(accounts::Column::Spent, Expr::value(true))
-        .col_expr(
-            accounts::Column::PrevSpent,
-            Expr::col(accounts::Column::Spent).into(),
-        )
-        .filter(
-            accounts::Column::Hash.is_in(
-                in_accounts
-                    .iter()
-                    .map(|account| account.to_vec())
-                    .collect::<Vec<Vec<u8>>>(),
-            ),
-        )
-        .build(txn.get_database_backend());
-    execute_account_update_query_and_update_balances(
-        txn,
-        query,
-        AccountType::Account,
-        ModificationType::Spend,
-    )
-    .await?;
-
-    debug!("Marking token accounts as spent...",);
-    let query = token_accounts::Entity::update_many()
-        .col_expr(token_accounts::Column::Spent, Expr::value(true))
-        .col_expr(
-            token_accounts::Column::PrevSpent,
-            Expr::col(token_accounts::Column::Spent).into(),
-        )
-        .filter(
-            token_accounts::Column::Hash.is_in(
-                in_accounts
-                    .iter()
-                    .map(|account| account.to_vec())
-                    .collect::<Vec<Vec<u8>>>(),
-            ),
-        )
-        .build(txn.get_database_backend());
-
-    execute_account_update_query_and_update_balances(
-        txn,
-        query,
-        AccountType::TokenAccount,
-        ModificationType::Spend,
-    )
-    .await?;
-    Ok(())
 }
 
 pub struct EnrichedTokenAccount {
