@@ -1,6 +1,5 @@
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
-    ingester::persist::persisted_state_tree::get_multiple_compressed_leaf_proofs,
 };
 use light_prover_client::prove_utils::CircuitType;
 use reqwest::Client;
@@ -18,6 +17,7 @@ use crate::api::method::{
     },
     utils::Context,
 };
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,

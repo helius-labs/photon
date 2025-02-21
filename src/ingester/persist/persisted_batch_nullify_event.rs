@@ -2,7 +2,6 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use crate::ingester::persist::{
     execute_account_update_query_and_update_balances, AccountType, ModificationType,
 };
@@ -11,6 +10,7 @@ use light_batched_merkle_tree::event::BatchNullifyEvent;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
 };
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 
 pub async fn persist_batch_nullify(
     txn: &DatabaseTransaction,

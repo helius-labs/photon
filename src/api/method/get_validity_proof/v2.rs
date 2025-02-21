@@ -1,9 +1,7 @@
 use crate::{
     api::error::PhotonApiError,
     common::typedefs::serializable_pubkey::SerializablePubkey,
-    ingester::persist::persisted_state_tree::{
-        get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
-    },
+    ingester::persist::persisted_state_tree::MerkleProofWithContext,
 };
 use borsh::BorshSerialize;
 use light_compressed_account::hash_chain::create_two_inputs_hash_chain;
@@ -24,6 +22,7 @@ use crate::api::method::get_validity_proof::common::{
     GetValidityProofRequest, GetValidityProofResponse, GnarkProofJson, HexBatchInputsForProver,
     STATE_TREE_QUEUE_SIZE,
 };
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
 fn get_public_input_hash(
     account_proofs: &[MerkleProofWithContext],
