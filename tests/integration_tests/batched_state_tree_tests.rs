@@ -7,7 +7,9 @@ use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
 use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
-use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
+use photon_indexer::api::method::get_transaction_with_compression_info::{
+    get_transaction_helper, get_transaction_helper_v2,
+};
 use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
@@ -26,6 +28,10 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// Test:
+/// 1. get compressed account by owner
+/// 2. get compressed account proofs
+/// 3. correct root update after batch append and batch nullify events
 #[named]
 #[rstest]
 #[tokio::test]
@@ -69,7 +75,7 @@ async fn test_batched_tree_transactions(
 
             // use get_transaction_helper because get_transaction_with_compression_info requires an rpc endpoint.
             // It fetches the instruction and parses the data.
-            let accounts = get_transaction_helper(
+            let accounts = get_transaction_helper_v2(
                 &setup.db_conn,
                 SerializableSignature(Signature::from_str(signature).unwrap()),
                 transaction,
@@ -78,28 +84,23 @@ async fn test_batched_tree_transactions(
             .unwrap()
             .compressionInfo;
             for account in accounts.closedAccounts.iter() {
-                // let full_account = setup
-                //     .api
-                //     .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
-                //         owner: account.account.owner,
-                //         ..Default::default()
-                //     })
-                //     .await
-                //     .unwrap();
-                // merkle_tree
-                //     .update(
-                //         &full_account.value.items[0]
-                //             .context
-                //             .nullifier
-                //             .as_ref()
-                //             .unwrap()
-                //             .0,
-                //         account.account.leaf_index.0 as usize,
-                //     )
-                //     .unwrap();
+                merkle_tree
+                    .update(
+                        &account.account.nullifier.0,
+                        account.account.account.leaf_index.0 as usize,
+                    )
+                    .unwrap();
             }
             for account in accounts.openedAccounts.iter() {
-                merkle_tree.append(&account.account.hash.0).unwrap();
+                while merkle_tree.rightmost_index <= account.account.leaf_index.0 as usize + 2 {
+                    merkle_tree.append(&[0u8; 32]).unwrap();
+                }
+                merkle_tree
+                    .update(
+                        &account.account.hash.0,
+                        account.account.leaf_index.0 as usize,
+                    )
+                    .unwrap();
             }
         }
 
@@ -124,13 +125,12 @@ async fn test_batched_tree_transactions(
                 })
                 .await
                 .unwrap();
-            println!("accounts {:?}", accounts);
             assert_eq!(accounts.value.items.len(), 1);
             let account = &accounts.value.items[0];
-            assert_eq!(account.account.lamports.0, 1_000_000u64);
-            assert_eq!(account.account.owner.0, owner);
+            assert_eq!(account.lamports.0, 1_000_000u64);
+            assert_eq!(account.owner.0, owner);
             assert_eq!(
-                account.account.leaf_index.0,
+                account.leaf_index.0,
                 leaf_index,
                 "owner {:?} i {}",
                 owner.to_bytes(),
@@ -143,23 +143,25 @@ async fn test_batched_tree_transactions(
                 .to_vec();
             let merkle_proof = setup
                 .api
-                .get_multiple_compressed_account_proofs(HashList(vec![account
-                    .account
-                    .hash
-                    .clone()]))
+                .get_multiple_compressed_account_proofs(HashList(vec![account.hash.clone()]))
                 .await
                 .unwrap();
+            assert_eq!(merkle_proof.value[0].hash.0, account.hash.0,);
+            assert_eq!(
+                merkle_proof.value[0].hash.0,
+                merkle_tree.leaf(leaf_index as usize)
+            );
+            assert_eq!(account.hash.0, merkle_tree.leaf(leaf_index as usize));
             assert_eq!(merkle_proof.value.len(), 1);
-            // TODO: enable when nullifiers are correctly inserted into the reference tree.
-            // assert_eq!(merkle_proof.value[0].root.0, merkle_tree.root());
-            // assert_eq!(
-            //     merkle_proof.value[0]
-            //         .proof
-            //         .iter()
-            //         .map(|x| x.0)
-            //         .collect::<Vec<[u8; 32]>>(),
-            //     reference_merkle_proof
-            // );
+            assert_eq!(merkle_proof.value[0].root.0, merkle_tree.root());
+            assert_eq!(
+                merkle_proof.value[0]
+                    .proof
+                    .iter()
+                    .map(|x| x.0)
+                    .collect::<Vec<[u8; 32]>>(),
+                reference_merkle_proof
+            );
             leaf_index += 2;
         }
     }
