@@ -501,8 +501,6 @@ mod tests {
         // Test case for first non-existent leaf (index 0)
         let test_leaf_index = 0u32;
         let tree_height = 32u32;
-        let merkle_tree = SerializablePubkey::try_from(vec![0u8; 32]).unwrap();
-
         // Create proof components
         let node_index = leaf_index_to_node_index(test_leaf_index, tree_height);
         let proof_path = get_proof_path(node_index, false);

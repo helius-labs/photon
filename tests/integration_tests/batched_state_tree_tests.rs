@@ -1,12 +1,15 @@
 use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
+use light_hasher::zero_bytes::poseidon::ZERO_BYTES;
+use light_merkle_tree_metadata::queue::QueueType;
 use light_merkle_tree_reference;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
 use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
+use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
@@ -39,131 +42,355 @@ use std::sync::Arc;
 async fn test_batched_tree_transactions(
     #[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend,
 ) {
-    for index_individually in [true] {
-        let trim_test_name = trim_test_name(function_name!());
-        let name = trim_test_name;
-        let setup = setup_with_options(
-            name.clone(),
-            TestSetupOptions {
-                network: Network::Localnet,
-                db_backend,
-            },
-        )
-        .await;
-        reset_tables(setup.db_conn.as_ref()).await.unwrap();
-        let sort_by_slot = true;
-        let signatures = read_file_names(&name, sort_by_slot);
+    let trim_test_name = trim_test_name(function_name!());
+    let name = trim_test_name;
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+    reset_tables(setup.db_conn.as_ref()).await.unwrap();
+    let sort_by_slot = true;
+    let signatures = read_file_names(&name, sort_by_slot);
+    let index_individually = true;
 
-        // build tree
-        let mut merkle_tree =
-            light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
-        for signature in signatures.iter() {
-            // Index transactions.
-            index(
-                &name,
-                setup.db_conn.clone(),
-                setup.client.clone(),
-                &[signature.to_string()],
-                index_individually,
-            )
-            .await;
-            let json_str =
-                std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, signature))
-                    .unwrap();
-            let transaction: EncodedConfirmedTransactionWithStatusMeta =
-                serde_json::from_str(&json_str).unwrap();
-
-            // use get_transaction_helper because get_transaction_with_compression_info requires an rpc endpoint.
-            // It fetches the instruction and parses the data.
-            let accounts = get_transaction_helper_v2(
-                &setup.db_conn,
-                SerializableSignature(Signature::from_str(signature).unwrap()),
-                transaction,
-            )
-            .await
-            .unwrap()
-            .compressionInfo;
-            for account in accounts.closedAccounts.iter() {
-                merkle_tree
-                    .update(
-                        &account.account.nullifier.0,
-                        account.account.account.leaf_index.0 as usize,
-                    )
-                    .unwrap();
-            }
-            for account in accounts.openedAccounts.iter() {
-                while merkle_tree.rightmost_index <= account.account.leaf_index.0 as usize + 2 {
-                    merkle_tree.append(&[0u8; 32]).unwrap();
-                }
-                merkle_tree
-                    .update(
-                        &account.account.hash.0,
-                        account.account.leaf_index.0 as usize,
-                    )
-                    .unwrap();
-            }
-        }
-
-        // Reprocess the same transactions.
+    // build tree
+    let mut merkle_tree =
+        light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
+    let mut merkle_tree_pubkey = Pubkey::default();
+    let mut output_queue_len = 0;
+    let mut input_queue_len = 0;
+    let mut output_queue_elements = Vec::new();
+    let mut input_queue_elements = Vec::new();
+    let num_append_events = 10;
+    let num_nullify_events = 5;
+    for signature in
+        signatures[..signatures.len() - (num_append_events + num_nullify_events)].iter()
+    {
+        // Index transactions.
         index(
             &name,
             setup.db_conn.clone(),
             setup.client.clone(),
-            &signatures,
+            &[signature.to_string()],
             index_individually,
         )
         .await;
-        // Slot created is wrong likely because of test environment.
-        let mut leaf_index = 1;
-        for i in 0..50 {
-            let owner = Pubkey::new_unique();
-            let accounts = setup
+        let json_str =
+            std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, signature))
+                .unwrap();
+        let transaction: EncodedConfirmedTransactionWithStatusMeta =
+            serde_json::from_str(&json_str).unwrap();
+
+        // use get_transaction_helper because get_transaction_with_compression_info requires an rpc endpoint.
+        // It fetches the instruction and parses the data.
+        let accounts = get_transaction_helper_v2(
+            &setup.db_conn,
+            SerializableSignature(Signature::from_str(signature).unwrap()),
+            transaction,
+        )
+        .await
+        .unwrap()
+        .compressionInfo;
+        for account in accounts.closedAccounts.iter() {
+            input_queue_elements
+                .push((account.account.account.hash.0, account.account.nullifier.0));
+            merkle_tree
+                .update(
+                    &account.account.nullifier.0,
+                    account.account.account.leaf_index.0 as usize,
+                )
+                .unwrap();
+        }
+        for account in accounts.openedAccounts.iter() {
+            output_queue_elements.push(account.account.hash.0);
+            while merkle_tree.rightmost_index <= account.account.leaf_index.0 as usize + 2 {
+                merkle_tree.append(&[0u8; 32]).unwrap();
+            }
+            merkle_tree
+                .update(
+                    &account.account.hash.0,
+                    account.account.leaf_index.0 as usize,
+                )
+                .unwrap();
+        }
+
+        // Get output queue elements
+        if !accounts.openedAccounts.is_empty() {
+            output_queue_len += accounts.openedAccounts.len();
+            merkle_tree_pubkey = accounts.openedAccounts[0].account.tree.0;
+            let get_queue_elements_result = setup
                 .api
-                .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
-                    owner: SerializablePubkey::from(owner.to_bytes()),
-                    ..Default::default()
+                .get_queue_elements(GetQueueElementsRequest {
+                    merkle_tree: merkle_tree_pubkey.to_bytes(),
+                    start_offset: None,
+                    queue_type: QueueType::BatchedOutput as u8,
+                    num_elements: 100,
                 })
                 .await
                 .unwrap();
-            assert_eq!(accounts.value.items.len(), 1);
-            let account = &accounts.value.items[0];
-            assert_eq!(account.lamports.0, 1_000_000u64);
-            assert_eq!(account.owner.0, owner);
-            assert_eq!(
-                account.leaf_index.0,
-                leaf_index,
-                "owner {:?} i {}",
-                owner.to_bytes(),
-                i
-            );
-
-            let reference_merkle_proof = merkle_tree
-                .get_proof_of_leaf(leaf_index as usize, true)
-                .unwrap()
-                .to_vec();
-            let merkle_proof = setup
+            assert_eq!(get_queue_elements_result.value.len(), output_queue_len);
+            for (i, element) in get_queue_elements_result.value.iter().enumerate() {
+                assert_eq!(element.account_hash.0, output_queue_elements[i]);
+                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
+                assert_eq!(proof, ZERO_BYTES[..proof.len()].to_vec());
+            }
+        }
+        // Get input queue elements
+        if !accounts.closedAccounts.is_empty() {
+            input_queue_len += accounts.closedAccounts.len();
+            merkle_tree_pubkey = accounts.closedAccounts[0].account.account.tree.0;
+            let get_queue_elements_result = setup
                 .api
-                .get_multiple_compressed_account_proofs(HashList(vec![account.hash.clone()]))
+                .get_queue_elements(GetQueueElementsRequest {
+                    merkle_tree: merkle_tree_pubkey.to_bytes(),
+                    start_offset: None,
+                    queue_type: QueueType::BatchedInput as u8,
+                    num_elements: 100,
+                })
                 .await
                 .unwrap();
-            assert_eq!(merkle_proof.value[0].hash.0, account.hash.0,);
-            assert_eq!(
-                merkle_proof.value[0].hash.0,
-                merkle_tree.leaf(leaf_index as usize)
-            );
-            assert_eq!(account.hash.0, merkle_tree.leaf(leaf_index as usize));
-            assert_eq!(merkle_proof.value.len(), 1);
-            assert_eq!(merkle_proof.value[0].root.0, merkle_tree.root());
-            assert_eq!(
-                merkle_proof.value[0]
-                    .proof
-                    .iter()
-                    .map(|x| x.0)
-                    .collect::<Vec<[u8; 32]>>(),
-                reference_merkle_proof
-            );
-            leaf_index += 2;
+            assert_eq!(get_queue_elements_result.value.len(), input_queue_len);
+            for (i, element) in get_queue_elements_result.value.iter().enumerate() {
+                assert_eq!(element.account_hash.0, input_queue_elements[i].0);
+                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
+                assert_eq!(proof, ZERO_BYTES[..proof.len()].to_vec());
+            }
         }
+    }
+    // Merkle tree which is created along side indexing the event transactions.
+    let mut event_merkle_tree =
+        light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
+    // Init all 100 elements so that we can just update.
+    for _ in 0..100 {
+        event_merkle_tree.append(&[0u8; 32]).unwrap();
+    }
+    // Index and assert the batch events.
+    // 10 append events and 5 nullify events.
+    // The order is:
+    // append, nullify, append, nullify, append, nullify, append, nullify, append, append, append, append, append, append, nullify
+    for (i, signature) in signatures[signatures.len() - (num_append_events + num_nullify_events)..]
+        .iter()
+        .take(15)
+        .enumerate()
+    {
+        let pre_output_queue_elements = setup
+            .api
+            .get_queue_elements(GetQueueElementsRequest {
+                merkle_tree: merkle_tree_pubkey.to_bytes(),
+                start_offset: None,
+                queue_type: QueueType::BatchedOutput as u8,
+                num_elements: 100,
+            })
+            .await
+            .unwrap();
+        let pre_input_queue_elements = setup
+            .api
+            .get_queue_elements(GetQueueElementsRequest {
+                merkle_tree: merkle_tree_pubkey.to_bytes(),
+                start_offset: None,
+                queue_type: QueueType::BatchedInput as u8,
+                num_elements: 100,
+            })
+            .await
+            .unwrap();
+        // Index transactions.
+        index(
+            &name,
+            setup.db_conn.clone(),
+            setup.client.clone(),
+            &[signature.to_string()],
+            index_individually,
+        )
+        .await;
+        let post_output_queue_elements = setup
+            .api
+            .get_queue_elements(GetQueueElementsRequest {
+                merkle_tree: merkle_tree_pubkey.to_bytes(),
+                start_offset: None,
+                queue_type: QueueType::BatchedOutput as u8,
+                num_elements: 100,
+            })
+            .await
+            .unwrap();
+        let post_input_queue_elements = setup
+            .api
+            .get_queue_elements(GetQueueElementsRequest {
+                merkle_tree: merkle_tree_pubkey.to_bytes(),
+                start_offset: None,
+                queue_type: QueueType::BatchedInput as u8,
+                num_elements: 100,
+            })
+            .await
+            .unwrap();
+        let is_nullify_event = i % 2 == 1 && i < 9 || i == 14;
+        if is_nullify_event {
+            assert_eq!(
+                post_output_queue_elements.value.len(),
+                pre_output_queue_elements.value.len(),
+                "Nullify event should not change the length of the output queue."
+            );
+            assert_eq!(
+                post_input_queue_elements.value.len(),
+                pre_input_queue_elements.value.len() - 10,
+                "Nullify event should decrease the length of the input queue by 10."
+            );
+            // Insert 1 batch.
+            for element in pre_input_queue_elements.value[..10].iter() {
+                println!("nullify leaf index {}", element.leaf_index);
+                let nullifier = input_queue_elements
+                    .iter()
+                    .find(|x| x.0 == element.account_hash.0)
+                    .unwrap()
+                    .1;
+                event_merkle_tree
+                    .update(&nullifier, element.leaf_index as usize)
+                    .unwrap();
+            }
+            for element in post_input_queue_elements.value.iter() {
+                let proof_result = event_merkle_tree
+                    .get_proof_of_leaf(element.leaf_index as usize, true)
+                    .unwrap()
+                    .to_vec();
+                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
+                assert_eq!(proof, proof_result);
+            }
+        } else {
+            assert_eq!(
+                post_output_queue_elements.value.len(),
+                pre_output_queue_elements.value.len().saturating_sub(10),
+                "Append event should decrease the length of the output queue by 10."
+            );
+            assert_eq!(
+                post_input_queue_elements.value.len(),
+                pre_input_queue_elements.value.len(),
+                "Append event should not change the length of the input queue."
+            );
+            println!(
+                "post input queue len {}",
+                post_input_queue_elements.value.len(),
+            );
+            println!(
+                "pre input queue len {}",
+                pre_input_queue_elements.value.len(),
+            );
+            // Insert 1 batch.
+            for element in pre_output_queue_elements.value[..10].iter() {
+                let leaf = event_merkle_tree.leaf(element.leaf_index as usize);
+                if leaf == [0u8; 32] {
+                    event_merkle_tree
+                        .update(&element.account_hash.0, element.leaf_index as usize)
+                        .unwrap();
+                    println!("append leaf index {}", element.leaf_index);
+                }
+            }
+            for element in post_output_queue_elements.value.iter() {
+                let proof_result = event_merkle_tree
+                    .get_proof_of_leaf(element.leaf_index as usize, true)
+                    .unwrap()
+                    .to_vec();
+                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
+                assert_eq!(proof, proof_result);
+            }
+        }
+    }
+    assert_eq!(event_merkle_tree.root(), merkle_tree.root());
+    assert_eq!(output_queue_len, 100);
+    assert_eq!(input_queue_len, 50);
+    let get_queue_elements_result = setup
+        .api
+        .get_queue_elements(GetQueueElementsRequest {
+            merkle_tree: merkle_tree_pubkey.to_bytes(),
+            start_offset: None,
+            queue_type: QueueType::BatchedOutput as u8,
+            num_elements: 100,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        get_queue_elements_result.value.len(),
+        0,
+        "Batched append events not indexed correctly."
+    );
+
+    let get_queue_elements_result = setup
+        .api
+        .get_queue_elements(GetQueueElementsRequest {
+            merkle_tree: merkle_tree_pubkey.to_bytes(),
+            start_offset: None,
+            queue_type: QueueType::BatchedInput as u8,
+            num_elements: 100,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        get_queue_elements_result.value.len(),
+        0,
+        "Batched nullify events not indexed correctly."
+    );
+
+    // Reprocess the same transactions.
+    index(
+        &name,
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        &signatures,
+        index_individually,
+    )
+    .await;
+    // Slot created is wrong likely because of test environment.
+    let mut leaf_index = 1;
+    for i in 0..50 {
+        let owner = Pubkey::new_unique();
+        let accounts = setup
+            .api
+            .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
+                owner: SerializablePubkey::from(owner.to_bytes()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(accounts.value.items.len(), 1);
+        let account = &accounts.value.items[0];
+        assert_eq!(account.lamports.0, 1_000_000u64);
+        assert_eq!(account.owner.0, owner);
+        assert_eq!(
+            account.leaf_index.0,
+            leaf_index,
+            "owner {:?} i {}",
+            owner.to_bytes(),
+            i
+        );
+
+        let reference_merkle_proof = merkle_tree
+            .get_proof_of_leaf(leaf_index as usize, true)
+            .unwrap()
+            .to_vec();
+        let merkle_proof = setup
+            .api
+            .get_multiple_compressed_account_proofs(HashList(vec![account.hash.clone()]))
+            .await
+            .unwrap();
+        assert_eq!(merkle_proof.value[0].hash.0, account.hash.0,);
+        assert_eq!(
+            merkle_proof.value[0].hash.0,
+            merkle_tree.leaf(leaf_index as usize)
+        );
+        assert_eq!(account.hash.0, merkle_tree.leaf(leaf_index as usize));
+        assert_eq!(merkle_proof.value.len(), 1);
+        assert_eq!(merkle_proof.value[0].root.0, merkle_tree.root());
+        assert_eq!(
+            merkle_proof.value[0]
+                .proof
+                .iter()
+                .map(|x| x.0)
+                .collect::<Vec<[u8; 32]>>(),
+            reference_merkle_proof
+        );
+        leaf_index += 2;
     }
 }
 
