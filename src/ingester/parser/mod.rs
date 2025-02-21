@@ -1,9 +1,4 @@
-use crate::common::typedefs::{
-    account::AccountData, bs64_string::Base64String, hash::Hash,
-    serializable_pubkey::SerializablePubkey, unsigned_integer::UnsignedInteger,
-};
 use borsh::BorshDeserialize;
-use byteorder::{ByteOrder, LittleEndian};
 use indexer_events::{IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent};
 use lazy_static::lazy_static;
 use light_batched_merkle_tree::event::BatchAppendEvent;
@@ -21,7 +16,7 @@ use light_batched_merkle_tree::event::{
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::{
-    indexer_events::{CompressedAccount, PublicTransactionEvent},
+    indexer_events::PublicTransactionEvent,
     state_update::{AccountTransaction, StateUpdate, Transaction},
 };
 
@@ -29,7 +24,7 @@ mod batch_event_parser;
 pub mod indexer_events;
 pub mod state_update;
 
-use crate::common::typedefs::account::{Account, AccountContext, AccountWithContext};
+use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::parser::batch_event_parser::{
     parse_batch_public_transaction_event, parse_public_transaction_event_v2,
 };
@@ -250,57 +245,6 @@ fn is_voting_transaction(tx: &TransactionInfo) -> bool {
         .any(|group| group.outer_instruction.program_id == VOTE_PROGRAM_ID)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn parse_account_data(
-    compressed_account: CompressedAccount,
-    hash: [u8; 32],
-    tree: Pubkey,
-    queue: Option<Pubkey>,
-    leaf_index: u32,
-    slot: u64,
-    seq: Option<u64>,
-    in_output_queue: bool,
-    spent: bool,
-    nullifier: Option<Hash>,
-    nullifier_queue_index: Option<u64>,
-) -> AccountWithContext {
-    let CompressedAccount {
-        owner,
-        lamports,
-        address,
-        data,
-    } = compressed_account;
-
-    let data = data.map(|d| AccountData {
-        discriminator: UnsignedInteger(LittleEndian::read_u64(&d.discriminator)),
-        data: Base64String(d.data),
-        data_hash: Hash::from(d.data_hash),
-    });
-
-    AccountWithContext {
-        account: Account {
-            owner: owner.into(),
-            lamports: UnsignedInteger(lamports),
-            address: address.map(SerializablePubkey::from),
-            data,
-            hash: hash.into(),
-            slot_created: UnsignedInteger(slot),
-            leaf_index: UnsignedInteger(leaf_index as u64),
-            tree: SerializablePubkey::from(tree),
-            seq: seq.map(UnsignedInteger),
-        },
-        context: AccountContext {
-            queue: queue.map(SerializablePubkey::from),
-            in_output_queue,
-            spent,
-            nullified_in_tree: false,
-            nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
-            nullifier,
-            tx_hash: None,
-        },
-    }
-}
-
 fn parse_indexed_merkle_tree_update(
     indexed_merkle_tree_event: IndexedMerkleTreeEvent,
 ) -> Result<StateUpdate, IngesterError> {
@@ -424,7 +368,7 @@ fn parse_public_transaction_event(
                 IngesterError::ParserError("Missing sequence number".to_string())
             })?);
         }
-        let enriched_account = parse_account_data(
+        let enriched_account = AccountWithContext::new(
             out_account.compressed_account,
             hash,
             tree,
