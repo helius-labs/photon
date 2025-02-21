@@ -1,10 +1,12 @@
 use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
+use light_merkle_tree_reference;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
+use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
 use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -14,10 +16,9 @@ use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-use solana_client::nonblocking::rpc_client::RpcClient;
-
 use sea_orm::DatabaseConnection;
 use serial_test::serial;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Signature;
 
 use solana_sdk::pubkey::Pubkey;
@@ -29,7 +30,7 @@ use std::sync::Arc;
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_state_batched_transactions(
+async fn test_batched_tree_transactions(
     #[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend,
 ) {
     for index_individually in [true] {
@@ -47,15 +48,61 @@ async fn test_state_batched_transactions(
         let sort_by_slot = true;
         let signatures = read_file_names(&name, sort_by_slot);
 
-        // Index transactions.
-        index(
-            &name,
-            setup.db_conn.clone(),
-            setup.client.clone(),
-            &signatures,
-            index_individually,
-        )
-        .await;
+        // build tree
+        let mut merkle_tree =
+            light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
+        for signature in signatures.iter() {
+            // Index transactions.
+            index(
+                &name,
+                setup.db_conn.clone(),
+                setup.client.clone(),
+                &[signature.to_string()],
+                index_individually,
+            )
+            .await;
+            let json_str =
+                std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, signature))
+                    .unwrap();
+            let transaction: EncodedConfirmedTransactionWithStatusMeta =
+                serde_json::from_str(&json_str).unwrap();
+
+            // use get_transaction_helper because get_transaction_with_compression_info requires an rpc endpoint.
+            // It fetches the instruction and parses the data.
+            let accounts = get_transaction_helper(
+                &setup.db_conn,
+                SerializableSignature(Signature::from_str(signature).unwrap()),
+                transaction,
+            )
+            .await
+            .unwrap()
+            .compressionInfo;
+            for account in accounts.closedAccounts.iter() {
+                // let full_account = setup
+                //     .api
+                //     .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
+                //         owner: account.account.owner,
+                //         ..Default::default()
+                //     })
+                //     .await
+                //     .unwrap();
+                // merkle_tree
+                //     .update(
+                //         &full_account.value.items[0]
+                //             .context
+                //             .nullifier
+                //             .as_ref()
+                //             .unwrap()
+                //             .0,
+                //         account.account.leaf_index.0 as usize,
+                //     )
+                //     .unwrap();
+            }
+            for account in accounts.openedAccounts.iter() {
+                merkle_tree.append(&account.account.hash.0).unwrap();
+            }
+        }
+
         // Reprocess the same transactions.
         index(
             &name,
@@ -89,6 +136,30 @@ async fn test_state_batched_transactions(
                 owner.to_bytes(),
                 i
             );
+
+            let reference_merkle_proof = merkle_tree
+                .get_proof_of_leaf(leaf_index as usize, true)
+                .unwrap()
+                .to_vec();
+            let merkle_proof = setup
+                .api
+                .get_multiple_compressed_account_proofs(HashList(vec![account
+                    .account
+                    .hash
+                    .clone()]))
+                .await
+                .unwrap();
+            assert_eq!(merkle_proof.value.len(), 1);
+            // TODO: enable when nullifiers are correctly inserted into the reference tree.
+            // assert_eq!(merkle_proof.value[0].root.0, merkle_tree.root());
+            // assert_eq!(
+            //     merkle_proof.value[0]
+            //         .proof
+            //         .iter()
+            //         .map(|x| x.0)
+            //         .collect::<Vec<[u8; 32]>>(),
+            //     reference_merkle_proof
+            // );
             leaf_index += 2;
         }
     }
@@ -98,7 +169,9 @@ async fn test_state_batched_transactions(
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_batched_token(#[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend) {
+async fn test_batched_tree_token_transactions(
+    #[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend,
+) {
     for index_individually in [true] {
         let trim_test_name = trim_test_name(function_name!());
         let name = trim_test_name;

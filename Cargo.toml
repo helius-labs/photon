@@ -138,7 +138,8 @@ light-client = "0.9.1"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-
+light-merkle-tree-reference = "1.1.0"
+light-hasher = "1.1.0"
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.
