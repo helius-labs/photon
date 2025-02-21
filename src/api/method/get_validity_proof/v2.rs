@@ -115,12 +115,26 @@ pub async fn get_validity_proof_v2(
     let state_tree_height = if account_proofs.is_empty() {
         0
     } else {
-        account_proofs[0].proof.len() as u32
+        let height = account_proofs[0].proof.len();
+        if account_proofs.iter().all(|x| x.proof.len() == height) {
+            height as u32
+        } else {
+            return Err(PhotonApiError::ValidationError(
+                "Inclusion proofs have different heights".to_string(),
+            ));
+        }
     };
     let address_tree_height = if new_address_proofs.is_empty() {
         0
     } else {
-        new_address_proofs[0].proof.len() as u32
+        let height = new_address_proofs[0].proof.len();
+        if new_address_proofs.iter().all(|x| x.proof.len() == height) {
+            height as u32
+        } else {
+            return Err(PhotonApiError::ValidationError(
+                "Non-inclusion proofs have different heights".to_string(),
+            ));
+        }
     };
     let circuit_type = if state_tree_height != 0 && address_tree_height != 0 {
         "combined".to_string()
