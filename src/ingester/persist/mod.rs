@@ -24,7 +24,6 @@ use error::IngesterError;
 use lazy_static::lazy_static;
 use log::debug;
 use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
-use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
@@ -37,6 +36,16 @@ use std::{cmp::max, collections::HashMap};
 
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
+
+mod leaf_node_proof;
+mod leaf_node;
+
+pub use self::leaf_node::{persist_leaf_nodes, LeafNode};
+pub use self::leaf_node_proof::{
+    get_multiple_compressed_leaf_proofs,
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info,
+    get_multiple_compressed_leaf_proofs_by_indices
+};
 
 mod persisted_batch_append_event;
 mod persisted_batch_nullify_event;

@@ -1,10 +1,4 @@
-use borsh::BorshDeserialize;
-use indexer_events::IndexedMerkleTreeEvent;
-use lazy_static::lazy_static;
 use solana_sdk::pubkey::Pubkey;
-use state_update::IndexedTreeLeafUpdate;
-use std::collections::HashMap;
-use std::str::FromStr;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 

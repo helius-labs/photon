@@ -1,6 +1,4 @@
-use crate::ingester::persist::persisted_state_tree::{
-    get_multiple_compressed_leaf_proofs, MerkleProofWithContext,
-};
+use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
@@ -11,6 +9,7 @@ use super::{
     utils::{Context, PAGE_LIMIT},
 };
 use crate::common::typedefs::hash::Hash;
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
