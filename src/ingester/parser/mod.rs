@@ -28,6 +28,7 @@ use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::parser::batch_event_parser::{
     parse_batch_public_transaction_event, parse_public_transaction_event_v2,
 };
+use crate::ingester::typedefs::block_info::Instruction;
 use solana_program::pubkey;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
@@ -58,8 +59,6 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
-    let mut logged_transaction = false;
-
     for instruction_group in tx.clone().instruction_groups {
         let mut ordered_instructions = Vec::new();
         ordered_instructions.push(instruction_group.outer_instruction.clone());
@@ -85,8 +84,130 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
-            for (index, instruction) in ordered_instructions.iter().enumerate() {
-                // Check if there are enough instructions left to potentially find a pattern
+            parse_legacy_instructions(
+                &ordered_instructions,
+                tx,
+                slot,
+                &mut state_updates,
+                &mut is_compression_transaction,
+            )?;
+        }
+    }
+
+    let mut state_update = StateUpdate::merge_updates(state_updates.clone());
+    if !is_voting_transaction(tx) || is_compression_transaction {
+        state_update.transactions.insert(Transaction {
+            signature: tx.signature,
+            slot,
+            uses_compression: is_compression_transaction,
+            error: tx.error.clone(),
+        });
+    }
+
+    Ok(state_update)
+}
+
+fn parse_legacy_public_transaction_event(
+    tx: &TransactionInfo,
+    slot: u64,
+    instruction: &Instruction,
+    next_instruction: &Instruction,
+    next_next_instruction: &Instruction,
+) -> Result<Option<StateUpdate>, IngesterError> {
+    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+        && next_instruction.program_id == SYSTEM_PROGRAM
+        && next_next_instruction.program_id == NOOP_PROGRAM_ID
+        && tx.error.is_none()
+    {
+        info!(
+            "Indexing transaction with slot {} and id {}",
+            slot, tx.signature
+        );
+
+        let public_transaction_event =
+            PublicTransactionEvent::deserialize(&mut next_next_instruction.data.as_slice())
+                .map_err(|e| {
+                    IngesterError::ParserError(format!(
+                        "Failed to deserialize PublicTransactionEvent: {}",
+                        e
+                    ))
+                })?;
+
+        parse_public_transaction_event(tx.signature, slot, public_transaction_event).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn parse_batch_merkle_tree_event(
+    instruction: &Instruction,
+    next_instruction: &Instruction,
+    tx: &TransactionInfo,
+) -> Result<Option<StateUpdate>, IngesterError> {
+    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+        && next_instruction.program_id == NOOP_PROGRAM_ID
+        && tx.error.is_none()
+    {
+        info!("Parsing tx with signature: {}", tx.signature);
+
+        // Try to parse as batch append/nullify event first
+        if let Ok(batch_event) =
+            BatchAppendEvent::deserialize(&mut next_instruction.data.as_slice())
+        {
+            let mut state_update = StateUpdate::new();
+
+            match batch_event.discriminator {
+                BATCH_APPEND_EVENT_DISCRIMINATOR => {
+                    state_update.batch_append.push(batch_event);
+                }
+                BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
+                    state_update.batch_nullify.push(batch_event);
+                }
+                BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
+                    // TODO: implement address append
+                }
+                _ => unimplemented!(),
+            }
+
+            return Ok(Some(state_update));
+        }
+
+        // If not batch event, try legacy events
+        parse_legacy_merkle_tree_events(tx.signature, next_instruction).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn parse_legacy_merkle_tree_events(
+    signature: Signature,
+    instruction: &Instruction,
+) -> Result<StateUpdate, IngesterError> {
+    let merkle_tree_event = MerkleTreeEvent::deserialize(&mut instruction.data.as_slice())
+        .map_err(|e| {
+            IngesterError::ParserError(format!("Failed to deserialize MerkleTreeEvent: {}", e))
+        })?;
+
+    match merkle_tree_event {
+        MerkleTreeEvent::V2(nullifier_event) => parse_nullifier_event(signature, nullifier_event),
+        MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
+            parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
+        }
+        _ => Err(IngesterError::ParserError(
+            "Expected nullifier event or merkle tree update".to_string(),
+        )),
+    }
+}
+
+fn parse_legacy_instructions(
+    ordered_instructions: &[Instruction],
+    tx: &TransactionInfo,
+    slot: u64,
+    state_updates: &mut Vec<StateUpdate>,
+    is_compression_transaction: &mut bool,
+) -> Result<(), IngesterError> {
+    for (index, _) in ordered_instructions.iter().enumerate() {
+        // Check if there are enough instructions left to potentially find a pattern
                 if ordered_instructions.len() - index > 1 {
                     // Check if the current instruction is from the account compression program
                     if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id {
@@ -149,94 +270,9 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         }
                     }
                 }
-
-               
-                if ordered_instructions.len() - index > 1 {
-                    let next_instruction = &ordered_instructions[index + 1];
-                    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
-                        && next_instruction.program_id == NOOP_PROGRAM_ID
-                    {
-                        is_compression_transaction = true;
-                        if tx.error.is_none() {
-                            // try to deserialize 3 types of events: BatchAppendEvent, BatchNullifyEvent, MerkleTreeEvent
-                            // if any of them is deserialized successfully, then we can parse the event
-                            // if batch append event is deserialized, then we can parse the event and skip the next instruction
-                            // if batch nullify event is deserialized, then we can parse the event and skip the next instruction
-
-                            let batch_event = BatchAppendEvent::deserialize(
-                                &mut next_instruction.data.as_slice(),
-                            )
-                            .map_err(|e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to deserialize BatchAppendEvent: {}",
-                                    e
-                                ))
-                            });
-
-                            if let Ok(batch_event) = batch_event {
-                                let mut state_update = StateUpdate::new();
-                                let discriminator = batch_event.discriminator;
-
-                                match discriminator {
-                                    BATCH_APPEND_EVENT_DISCRIMINATOR => {
-                                        state_update.batch_append.push(batch_event);
-                                        state_updates.push(state_update);
-                                    }
-                                    BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
-                                        state_update.batch_nullify.push(batch_event);
-                                        state_updates.push(state_update);
-                                    }
-                                    BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
-                                        // TODO: implement
-                                    }
-                                    _ => {
-                                        unimplemented!()
-                                    }
-                                }
-                            } else {
-                                let merkle_tree_event = MerkleTreeEvent::deserialize(
-                                    &mut next_instruction.data.as_slice(),
-                                )
-                                .map_err(|e| {
-                                    IngesterError::ParserError(format!(
-                                        "Failed to deserialize NullifierEvent: {}",
-                                        e
-                                    ))
-                                })?;
-                                let state_update = match merkle_tree_event {
-                                    MerkleTreeEvent::V2(nullifier_event) => {
-                                        parse_nullifier_event(tx.signature, nullifier_event)
-                                    }
-                                    MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                                        parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
-                                    }
-                                    _ => {
-                                        return Err(IngesterError::ParserError(
-                                            "Expected nullifier event or merkle tree update"
-                                                .to_string(),
-                                        ))
-                                    }
-                                };
-                                state_updates.push(state_update?);
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
-    let mut state_update = StateUpdate::merge_updates(state_updates.clone());
-    if !is_voting_transaction(tx) || is_compression_transaction {
-        state_update.transactions.insert(Transaction {
-            signature: tx.signature,
-            slot,
-            uses_compression: is_compression_transaction,
-            error: tx.error.clone(),
-        });
-    }
-
-    Ok(state_update)
+    Ok(())
 }
 
 fn is_voting_transaction(tx: &TransactionInfo) -> bool {
