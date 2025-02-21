@@ -26,9 +26,8 @@ use log::debug;
 use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
 use persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait, Order,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
+    sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
+    EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
 use solana_program::pubkey;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
