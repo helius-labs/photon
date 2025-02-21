@@ -4,11 +4,60 @@ use crate::ingester::parser::indexer_events::{
     BatchPublicTransactionEvent, CompressedAccount, CompressedAccountData,
     MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
 };
-use crate::ingester::parser::parse_public_transaction_event;
+use crate::ingester::parser::legacy::parse_legacy_merkle_tree_events;
 use crate::ingester::parser::state_update::{AccountContext, StateUpdate};
+use crate::ingester::parser::tx_event_parser::parse_public_transaction_event;
+use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
+use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
+use borsh::BorshDeserialize;
+use light_batched_merkle_tree::event::{
+    BatchAppendEvent, BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR, BATCH_APPEND_EVENT_DISCRIMINATOR,
+    BATCH_NULLIFY_EVENT_DISCRIMINATOR,
+};
 use light_compressed_account::event::event_from_light_transaction;
+use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+
+pub fn parse_batch_merkle_tree_event(
+    instruction: &Instruction,
+    next_instruction: &Instruction,
+    tx: &TransactionInfo,
+) -> Result<Option<StateUpdate>, IngesterError> {
+    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+        && next_instruction.program_id == NOOP_PROGRAM_ID
+        && tx.error.is_none()
+    {
+        info!("Parsing tx with signature: {}", tx.signature);
+
+        // Try to parse as batch append/nullify event first
+        if let Ok(batch_event) =
+            BatchAppendEvent::deserialize(&mut next_instruction.data.as_slice())
+        {
+            let mut state_update = StateUpdate::new();
+
+            match batch_event.discriminator {
+                BATCH_APPEND_EVENT_DISCRIMINATOR => {
+                    state_update.batch_append.push(batch_event);
+                }
+                BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
+                    state_update.batch_nullify.push(batch_event);
+                }
+                BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
+                    // TODO: implement address append
+                }
+                _ => unimplemented!(),
+            }
+
+            return Ok(Some(state_update));
+        }
+
+        // If not batch event, try legacy events
+        parse_legacy_merkle_tree_events(tx.signature, next_instruction).map(Some)
+    } else {
+        Ok(None)
+    }
+}
 
 pub fn parse_public_transaction_event_v2(
     instructions: &[Vec<u8>],
