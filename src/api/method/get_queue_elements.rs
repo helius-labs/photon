@@ -12,15 +12,15 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::ingester::persist::{bytes_to_sql_format, get_multiple_compressed_leaf_proofs_by_indices};
+use crate::ingester::persist::bytes_to_sql_format;
+use crate::ingester::persist::persisted_state_tree::get_multiple_compressed_leaf_proofs_by_indices;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
-    pub merkle_tree: Hash,
-    pub start_offset: Option<UnsignedInteger>,
-    pub num_elements: UnsignedInteger,
+    pub merkle_tree: [u8; 32],
+    pub start_offset: Option<u64>,
+    pub num_elements: u16,
     pub queue_type: u8,
 }
 
@@ -60,7 +60,7 @@ pub async fn get_queue_elements(
     let merkle_tree_pubkey_str =
         bytes_to_sql_format(conn.get_database_backend(), merkle_tree_pubkey_vec);
     let queue_type = QueueType::from(request.queue_type as u64);
-    let num_elements = request.num_elements.0;
+    let num_elements = request.num_elements;
 
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
@@ -73,7 +73,7 @@ pub async fn get_queue_elements(
     }
 
     let leaf_indices_filter = if let Some(start_offset) = request.start_offset {
-        format!("AND leaf_index >= {}", start_offset.0)
+        format!("AND leaf_index >= {}", start_offset)
     } else {
         "".to_string()
     };
@@ -116,7 +116,7 @@ pub async fn get_queue_elements(
     let proofs = if !indices.is_empty() {
         get_multiple_compressed_leaf_proofs_by_indices(
             &tx,
-            SerializablePubkey::from(request.merkle_tree.0),
+            SerializablePubkey::from(request.merkle_tree),
             indices,
         )
         .await?
