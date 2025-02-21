@@ -1,11 +1,12 @@
-use serde::Serialize;
-
-use utoipa::ToSchema;
-
 use super::{
     bs64_string::Base64String, hash::Hash, serializable_pubkey::SerializablePubkey,
     unsigned_integer::UnsignedInteger,
 };
+use crate::ingester::parser::indexer_events::CompressedAccount;
+use byteorder::{ByteOrder, LittleEndian};
+use serde::Serialize;
+use solana_program::pubkey::Pubkey;
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -52,6 +53,59 @@ pub struct AccountContext {
 pub struct AccountWithContext {
     pub account: Account,
     pub context: AccountContext,
+}
+
+impl AccountWithContext {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        compressed_account: CompressedAccount,
+        hash: [u8; 32],
+        tree: Pubkey,
+        queue: Option<Pubkey>,
+        leaf_index: u32,
+        slot: u64,
+        seq: Option<u64>,
+        in_output_queue: bool,
+        spent: bool,
+        nullifier: Option<Hash>,
+        nullifier_queue_index: Option<u64>,
+    ) -> Self {
+        let CompressedAccount {
+            owner,
+            lamports,
+            address,
+            data,
+        } = compressed_account;
+
+        let data = data.map(|d| AccountData {
+            discriminator: UnsignedInteger(LittleEndian::read_u64(&d.discriminator)),
+            data: Base64String(d.data),
+            data_hash: Hash::from(d.data_hash),
+        });
+
+        Self {
+            account: Account {
+                owner: owner.into(),
+                lamports: UnsignedInteger(lamports),
+                address: address.map(SerializablePubkey::from),
+                data,
+                hash: hash.into(),
+                slot_created: UnsignedInteger(slot),
+                leaf_index: UnsignedInteger(leaf_index as u64),
+                tree: SerializablePubkey::from(tree),
+                seq: seq.map(UnsignedInteger),
+            },
+            context: AccountContext {
+                queue: queue.map(SerializablePubkey::from),
+                in_output_queue,
+                spent,
+                nullified_in_tree: false,
+                nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
+                nullifier,
+                tx_hash: None,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
