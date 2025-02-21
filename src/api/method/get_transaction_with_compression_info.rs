@@ -4,6 +4,7 @@ use super::{
 use crate::api::method::utils::parse_account_model_with_context;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::account::AccountWithContext;
+use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::{account::Account, serializable_signature::SerializableSignature};
 use crate::dao::generated::accounts::Model;
@@ -102,8 +103,16 @@ pub struct AccountWithOptionalTokenDataV2 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
+pub struct ClosedAccountWithOptionalTokenData {
+    pub account: ClosedAccount,
+    pub optionalTokenData: Option<TokenData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct CompressionInfoV2 {
-    pub closedAccounts: Vec<AccountWithOptionalTokenDataV2>,
+    pub closedAccounts: Vec<ClosedAccountWithOptionalTokenData>,
     pub openedAccounts: Vec<AccountWithOptionalTokenDataV2>,
 }
 
@@ -245,6 +254,30 @@ fn parse_optional_token_data_v2(
     })
 }
 
+fn parse_optional_token_data_for_multiple_accounts_closed_account(
+    accounts: Vec<ClosedAccount>,
+) -> Result<Vec<ClosedAccountWithOptionalTokenData>, PhotonApiError> {
+    accounts
+        .into_iter()
+        .map(parse_optional_token_data_closed_account)
+        .collect()
+}
+
+fn parse_optional_token_data_closed_account(
+    account: ClosedAccount,
+) -> Result<ClosedAccountWithOptionalTokenData, PhotonApiError> {
+    let hash = account.account.hash.clone();
+    Ok(ClosedAccountWithOptionalTokenData {
+        optionalTokenData: parse_token_data_v2(&account.account).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!(
+                "Failed to parse token data for account {}: {}",
+                hash, e
+            ))
+        })?,
+        account,
+    })
+}
+
 fn parse_optional_token_data_for_multiple_accounts_v2(
     accounts: Vec<AccountV2>,
 ) -> Result<Vec<AccountWithOptionalTokenDataV2>, PhotonApiError> {
@@ -252,6 +285,14 @@ fn parse_optional_token_data_for_multiple_accounts_v2(
         .into_iter()
         .map(parse_optional_token_data_v2)
         .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ClosedAccount {
+    pub account: AccountV2,
+    pub nullifier: Hash,
+    pub tx_hash: Hash,
 }
 
 pub async fn get_transaction_helper_v2(
@@ -297,22 +338,33 @@ pub async fn get_transaction_helper_v2(
 
     println!("closed_accounts: {:?}", closed_accounts);
 
-    let closed_accounts = closed_accounts
-        .into_iter()
-        .map(|x| AccountV2 {
-            hash: x.account.hash,
-            address: x.account.address,
-            data: x.account.data,
-            owner: x.account.owner,
-            lamports: x.account.lamports,
-            tree: x.account.tree,
-            leaf_index: x.account.leaf_index,
-            seq: x.account.seq,
-            slot_created: x.account.slot_created,
-            queue: x.context.queue,
-            prove_by_index: x.context.in_output_queue,
-        })
-        .collect::<Vec<AccountV2>>();
+    let closed_accounts =
+        closed_accounts
+            .into_iter()
+            .map(|x| -> Result<ClosedAccount, PhotonApiError> {
+                Ok(ClosedAccount {
+                    account: AccountV2 {
+                        hash: x.account.hash,
+                        address: x.account.address,
+                        data: x.account.data,
+                        owner: x.account.owner,
+                        lamports: x.account.lamports,
+                        tree: x.account.tree,
+                        leaf_index: x.account.leaf_index,
+                        seq: x.account.seq,
+                        slot_created: x.account.slot_created,
+                        queue: x.context.queue,
+                        prove_by_index: x.context.in_output_queue,
+                    },
+                    nullifier: x.context.nullifier.ok_or(PhotonApiError::UnexpectedError(
+                        String::from("Nullifier does not exist for closed account."),
+                    ))?,
+                    tx_hash: x.context.tx_hash.ok_or(PhotonApiError::UnexpectedError(
+                        String::from("Nullifier does not exist for closed account."),
+                    ))?,
+                })
+            })
+            .collect::<Result<Vec<ClosedAccount>, PhotonApiError>>()?;
 
     let out_accounts = status_update
         .out_accounts
@@ -335,7 +387,9 @@ pub async fn get_transaction_helper_v2(
     Ok(GetTransactionResponseV2 {
         transaction: txn,
         compressionInfo: CompressionInfoV2 {
-            closedAccounts: parse_optional_token_data_for_multiple_accounts_v2(closed_accounts)?,
+            closedAccounts: parse_optional_token_data_for_multiple_accounts_closed_account(
+                closed_accounts,
+            )?,
             openedAccounts: parse_optional_token_data_for_multiple_accounts_v2(out_accounts)?,
         },
     })
