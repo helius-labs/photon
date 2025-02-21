@@ -5,8 +5,10 @@ use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
+use borsh::BorshSerialize;
 use jsonrpsee_core::Serialize;
 use lazy_static::lazy_static;
+use light_compressed_account::hash_chain::create_two_inputs_hash_chain;
 use num_bigint::BigUint;
 use num_traits::identities::Zero;
 use serde::Deserialize;
@@ -66,11 +68,35 @@ pub struct GetValidityProofRequestDocumentation {
     pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetValidityProofResponse {
     pub value: CompressedProofWithContext,
     pub context: Context,
+}
+
+#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetValidityProofResponseV2 {
+    pub value: CompressedProofWithContextV2,
+    pub context: Context,
+}
+
+impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
+    fn from(response: GetValidityProofResponse) -> Self {
+        GetValidityProofResponseV2 {
+            value: CompressedProofWithContextV2 {
+                compressedProof: response.value.compressedProof,
+                roots: response.value.roots,
+                rootIndices: response.value.rootIndices.into_iter().map(Some).collect(),
+                leafIndices: response.value.leafIndices,
+                leaves: response.value.leaves,
+                merkleTrees: response.value.merkleTrees,
+                queues: Vec::new(),
+            },
+            context: response.context,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -153,7 +179,7 @@ fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
     format!("0x{}", hex)
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct CompressedProofWithContext {
@@ -163,6 +189,19 @@ pub struct CompressedProofWithContext {
     pub leafIndices: Vec<u32>,
     pub leaves: Vec<String>,
     pub merkleTrees: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
+pub struct CompressedProofWithContextV2 {
+    pub compressedProof: CompressedProof,
+    pub roots: Vec<String>,
+    pub rootIndices: Vec<Option<u64>>,
+    pub leafIndices: Vec<u32>,
+    pub leaves: Vec<String>,
+    pub merkleTrees: Vec<String>,
+    pub queues: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -179,7 +218,7 @@ pub struct ProofABC {
     c: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Default)]
+#[derive(Serialize, Deserialize, ToSchema, Default, Debug)]
 pub struct CompressedProof {
     a: Vec<u8>,
     b: Vec<u8>,
@@ -273,5 +312,38 @@ pub fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
         a: a_x_element.clone(),
         b: b_x_element.clone(),
         c: c_x_element.clone(),
+    }
+}
+
+pub fn get_public_input_hash(
+    account_proofs: &[MerkleProofWithContext],
+    new_address_proofs: &[MerkleContextWithNewAddressProof],
+) -> [u8; 32] {
+    let account_hashes: Vec<[u8; 32]> = account_proofs
+        .iter()
+        .map(|x| x.hash.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let account_roots: Vec<[u8; 32]> = account_proofs
+        .iter()
+        .map(|x| x.root.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let inclusion_hash_chain: [u8; 32] =
+        create_two_inputs_hash_chain(&account_roots, &account_hashes).unwrap();
+    let new_address_hashes: Vec<[u8; 32]> = new_address_proofs
+        .iter()
+        .map(|x| x.address.try_to_vec().unwrap().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let new_address_roots: Vec<[u8; 32]> = new_address_proofs
+        .iter()
+        .map(|x| x.root.to_vec().clone().try_into().unwrap())
+        .collect::<Vec<[u8; 32]>>();
+    let non_inclusion_hash_chain =
+        create_two_inputs_hash_chain(&new_address_roots, &new_address_hashes).unwrap();
+    if non_inclusion_hash_chain != [0u8; 32] {
+        non_inclusion_hash_chain
+    } else if inclusion_hash_chain != [0u8; 32] {
+        inclusion_hash_chain
+    } else {
+        create_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain]).unwrap()
     }
 }

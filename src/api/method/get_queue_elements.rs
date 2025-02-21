@@ -12,8 +12,9 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::persist::bytes_to_sql_format;
-use crate::ingester::persist::persisted_state_tree::get_multiple_compressed_leaf_proofs_by_indices;
+use crate::ingester::persist::{
+    bytes_to_sql_format, get_multiple_compressed_leaf_proofs_by_indices,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

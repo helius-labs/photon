@@ -23,22 +23,18 @@ use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::dao::generated::{indexed_trees, state_trees};
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
-use photon_indexer::ingester::persist::persisted_state_tree::{
-    get_multiple_compressed_leaf_proofs, ZERO_BYTES,
-};
+use photon_indexer::ingester::persist::persisted_state_tree::ZERO_BYTES;
 use sea_orm::{QueryFilter, TransactionTrait};
 
-use photon_indexer::common::typedefs::account::{
-    Account, AccountContext, AccountV2, AccountWithContext,
-};
+use photon_indexer::common::typedefs::account::{Account, AccountContext, AccountWithContext};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
-use photon_indexer::ingester::persist::persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use photon_indexer::ingester::persist::{
-    compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
+    compute_parent_hash, get_multiple_compressed_leaf_proofs, persist_leaf_nodes,
+    persist_token_accounts, EnrichedTokenAccount, LeafNode,
 };
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
