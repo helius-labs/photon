@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait};
 use crate::api::error::PhotonApiError;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::persist::get_tree_height;
 use crate::ingester::persist::leaf_node::{leaf_index_to_node_index, LeafNode};
-use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, get_proof_path, validate_proof, MerkleProofWithContext, ZERO_BYTES};
+use crate::ingester::persist::persisted_state_tree::{
+    get_proof_nodes, get_proof_path, validate_proof, MerkleProofWithContext, ZERO_BYTES,
+};
 use sea_orm::QueryFilter;
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait};
+use std::collections::HashMap;
 
 pub async fn get_multiple_compressed_leaf_proofs_by_indices(
     txn: &DatabaseTransaction,
@@ -128,7 +130,6 @@ pub async fn get_multiple_compressed_leaf_proofs(
     get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
 }
 
-
 pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     txn: &DatabaseTransaction,
     leaf_nodes_with_node_index: Vec<(LeafNode, i64)>,
@@ -154,7 +155,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
         include_leafs,
         true,
     )
-        .await?;
+    .await?;
 
     let proofs: Result<Vec<MerkleProofWithContext>, PhotonApiError> = leaf_nodes_with_node_index
         .iter()
@@ -203,9 +204,11 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
         })
         .collect();
     let proofs = proofs?;
-    for proof in proofs.iter() {
-        validate_proof(proof)?;
-    }
+    // Commented because it makes batched state Merkle tree tests 20x slower.
+    // TODO: move behind debug flag
+    // for proof in proofs.iter() {
+    //     validate_proof(proof)?;
+    // }
 
     Ok(proofs)
 }

@@ -77,7 +77,7 @@ impl<'de> Deserialize<'de> for Limit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
     pub slot: u64,

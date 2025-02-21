@@ -14,7 +14,6 @@ use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 
 use crate::common::typedefs::account::{Account, AccountV2, AccountWithContext};
-use crate::ingester::parser::state_update::AccountContext;
 use crate::ingester::persist::persisted_batch_append_event::persist_batch_append;
 use crate::ingester::persist::persisted_batch_nullify_event::persist_batch_nullify;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
@@ -38,14 +37,13 @@ use std::{cmp::max, collections::HashMap};
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
-mod leaf_node_proof;
 mod leaf_node;
+mod leaf_node_proof;
 
 pub use self::leaf_node::{persist_leaf_nodes, LeafNode};
 pub use self::leaf_node_proof::{
-    get_multiple_compressed_leaf_proofs,
+    get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
-    get_multiple_compressed_leaf_proofs_by_indices
 };
 
 mod persisted_batch_append_event;

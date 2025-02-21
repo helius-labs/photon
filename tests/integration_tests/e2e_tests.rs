@@ -4,9 +4,7 @@ use function_name::named;
 use futures::Stream;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
-use photon_indexer::api::method::get_transaction_with_compression_info::{
-    get_transaction_helper, get_transaction_helper_v2,
-};
+use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
 use photon_indexer::api::method::get_validity_proof::CompressedProof;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;

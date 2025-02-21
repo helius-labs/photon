@@ -19,6 +19,8 @@ use crate::api::method::{
 };
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
+use super::common::{get_public_input_hash, hash_to_hex};
+
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     prover_url: &str,
@@ -73,7 +75,47 @@ pub async fn get_validity_proof(
         }
     };
     tx.commit().await?;
+    let state_tree_height = if account_proofs.is_empty() {
+        0
+    } else {
+        account_proofs[0].proof.len()
+    };
+    let all_state_trees_height_is_equal = account_proofs
+        .iter()
+        .all(|x| x.proof.len() == state_tree_height);
+    if !all_state_trees_height_is_equal {
+        return Err(PhotonApiError::ValidationError(
+            "All state trees must have the same height".to_string(),
+        ));
+    }
 
+    let address_tree_height = if new_address_proofs.is_empty() {
+        0
+    } else {
+        new_address_proofs[0].proof.len()
+    };
+    log::debug!("state tree height {}", state_tree_height);
+    log::debug!("address tree height {}", address_tree_height);
+    let all_address_trees_height_is_equal = new_address_proofs
+        .iter()
+        .all(|x| x.proof.len() == address_tree_height);
+    if !all_address_trees_height_is_equal {
+        return Err(PhotonApiError::ValidationError(
+            "All address trees must have the same height".to_string(),
+        ));
+    }
+
+    if state_tree_height != address_tree_height
+        && address_tree_height != 0
+        && state_tree_height != 0
+    {
+        // TODO: change error msg and if condition once batched address Merkle trees are supported
+        return Err(PhotonApiError::ValidationError(
+            "State tree height must be equal to address tree height (height 26).
+               Address creation with batched Merkle trees is not supported at this time."
+                .to_string(),
+        ));
+    }
     let circuit_type = match (account_proofs.is_empty(), new_address_proofs.is_empty()) {
         (false, true) => CircuitType::Inclusion,
         (true, false) => CircuitType::NonInclusion,
@@ -84,12 +126,20 @@ pub async fn get_validity_proof(
             ))
         }
     };
+    let public_input_hash = if state_tree_height == 32 {
+        hash_to_hex(&crate::common::typedefs::hash::Hash(get_public_input_hash(
+            &account_proofs,
+            &new_address_proofs,
+        )))
+    } else {
+        String::new()
+    };
 
     let batch_inputs = HexBatchInputsForProver {
         circuit_type: circuit_type.to_string(),
-        state_tree_height: 26,
-        address_tree_height: 26,
-        public_input_hash: "".to_string(),
+        state_tree_height: state_tree_height as u32,
+        address_tree_height: address_tree_height as u32,
+        public_input_hash,
         input_compressed_accounts: convert_inclusion_proofs_to_hex(account_proofs.clone()),
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(new_address_proofs.clone()),
     };

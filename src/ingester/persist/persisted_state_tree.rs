@@ -3,22 +3,19 @@ use std::collections::HashMap;
 use cadence_macros::statsd_count;
 use itertools::Itertools;
 use log::info;
-use sea_orm::{
-    ConnectionTrait, DbErr, EntityTrait,
-    Statement, TransactionTrait, Value,
-};
+use sea_orm::{ConnectionTrait, DbErr, EntityTrait, Statement, TransactionTrait, Value};
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
 
 use super::{compute_parent_hash, get_tree_height};
+use crate::ingester::persist::leaf_node::leaf_index_to_node_index;
 use crate::{
     api::error::PhotonApiError,
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::state_trees,
     metric,
 };
-use crate::ingester::persist::leaf_node::leaf_index_to_node_index;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -31,7 +28,6 @@ pub struct MerkleProofWithContext {
     pub merkleTree: SerializablePubkey,
     pub rootSeq: u64,
 }
-
 
 pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
     info!(
@@ -522,7 +518,7 @@ mod tests {
         // Manually compute root hash using proof path
         let mut current_hash = ZERO_BYTES[0].to_vec(); // Start with leaf level zero bytes
 
-        for (idx, proof_node_index) in proof_path.iter().enumerate() {
+        for (idx, _) in proof_path.iter().enumerate() {
             let is_left = (node_index >> idx) & 1 == 0;
             let sibling_hash = ZERO_BYTES[idx].to_vec();
 

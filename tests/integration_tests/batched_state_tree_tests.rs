@@ -8,12 +8,14 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressed
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
-use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
 use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
 use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
+use photon_indexer::api::method::{
+    get_multiple_compressed_account_proofs::HashList, get_validity_proof::GetValidityProofRequest,
+};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
@@ -35,6 +37,7 @@ use std::sync::Arc;
 /// 1. get compressed account by owner
 /// 2. get compressed account proofs
 /// 3. correct root update after batch append and batch nullify events
+/// 4. get_validity_proof_v2
 #[named]
 #[rstest]
 #[tokio::test]
@@ -61,6 +64,7 @@ async fn test_batched_tree_transactions(
     let mut merkle_tree =
         light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
     let mut merkle_tree_pubkey = Pubkey::default();
+    let mut queue_pubkey = Pubkey::default();
     let mut output_queue_len = 0;
     let mut input_queue_len = 0;
     let mut output_queue_elements = Vec::new();
@@ -122,6 +126,7 @@ async fn test_batched_tree_transactions(
         if !accounts.openedAccounts.is_empty() {
             output_queue_len += accounts.openedAccounts.len();
             merkle_tree_pubkey = accounts.openedAccounts[0].account.tree.0;
+            queue_pubkey = accounts.openedAccounts[0].account.queue.as_ref().unwrap().0;
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
@@ -161,6 +166,42 @@ async fn test_batched_tree_transactions(
             }
         }
     }
+    let filtered_outputs = output_queue_elements
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, x)| x)
+        .collect::<Vec<&[u8; 32]>>();
+    for (i, chunk) in filtered_outputs.chunks(4).enumerate() {
+        let validity_proof = setup
+            .api
+            .get_validity_proof_v2(GetValidityProofRequest {
+                hashes: chunk
+                    .iter()
+                    .map(|x| photon_indexer::common::typedefs::hash::Hash::new(&x[..]).unwrap())
+                    .collect::<Vec<_>>(),
+                newAddressesWithTrees: vec![],
+                newAddresses: vec![],
+            })
+            .await
+            .unwrap();
+        println!("i {}, validity_proof {:?}", i, validity_proof.value);
+
+        // No value has been inserted into the tree yet -> all proof by index.
+        assert!(validity_proof.value.rootIndices.iter().all(|x| x.is_none()));
+        assert!(validity_proof
+            .value
+            .merkleTrees
+            .iter()
+            .all(|x| *x == merkle_tree_pubkey.to_string()));
+        assert!(validity_proof
+            .value
+            .queues
+            .iter()
+            .all(|x| *x == queue_pubkey.to_string()));
+        assert!(validity_proof.value.roots.iter().all(|x| x.is_empty()));
+    }
+
     // Merkle tree which is created along side indexing the event transactions.
     let mut event_merkle_tree =
         light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
@@ -168,6 +209,7 @@ async fn test_batched_tree_transactions(
     for _ in 0..100 {
         event_merkle_tree.append(&[0u8; 32]).unwrap();
     }
+    let mut last_inserted_index = 0;
     // Index and assert the batch events.
     // 10 append events and 5 nullify events.
     // The order is:
@@ -259,6 +301,7 @@ async fn test_batched_tree_transactions(
                 assert_eq!(proof, proof_result);
             }
         } else {
+            last_inserted_index += 10;
             assert_eq!(
                 post_output_queue_elements.value.len(),
                 pre_output_queue_elements.value.len().saturating_sub(10),
@@ -295,6 +338,51 @@ async fn test_batched_tree_transactions(
                 let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
                 assert_eq!(proof, proof_result);
             }
+        }
+        for (j, chunk) in filtered_outputs.chunks(4).enumerate() {
+            let validity_proof = setup
+                .api
+                .get_validity_proof_v2(GetValidityProofRequest {
+                    hashes: chunk
+                        .iter()
+                        .map(|x| photon_indexer::common::typedefs::hash::Hash::new(&x[..]).unwrap())
+                        .collect::<Vec<_>>(),
+                    newAddressesWithTrees: vec![],
+                    newAddresses: vec![],
+                })
+                .await
+                .unwrap();
+            println!("j {}, validity_proof {:?}", j, validity_proof.value);
+
+            // No value has been inserted into the tree yet -> all proof by index.
+            let mut base_index = j * 8;
+            for (z, (root_index, root)) in validity_proof
+                .value
+                .rootIndices
+                .iter()
+                .zip(validity_proof.value.roots.iter())
+                .enumerate()
+            {
+                println!("z + base index {} {}", z, base_index);
+                println!("last inserted index {}", last_inserted_index);
+                if base_index < last_inserted_index {
+                    assert!(root_index.is_some());
+                } else {
+                    assert!(root_index.is_none());
+                    assert_eq!(root, "");
+                }
+                base_index += 2;
+            }
+            assert!(validity_proof
+                .value
+                .merkleTrees
+                .iter()
+                .all(|x| *x == merkle_tree_pubkey.to_string()));
+            assert!(validity_proof
+                .value
+                .queues
+                .iter()
+                .all(|x| *x == queue_pubkey.to_string()));
         }
     }
     assert_eq!(event_merkle_tree.root(), merkle_tree.root());
