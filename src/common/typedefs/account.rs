@@ -75,7 +75,7 @@ pub struct AccountContext {
     pub nullifier: Option<Hash>,
     // tx_hash is:
     // Legacy: None
-    // Batched: None if not inserted into input queue or inserted in tree from input queue, else Some(nullifier)
+    // Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
     pub tx_hash: Option<Hash>,
 }
 
