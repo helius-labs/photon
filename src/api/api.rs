@@ -482,7 +482,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getValidityProofV2".to_string(),
                 request: Some(GetValidityProofRequestDocumentation::schema().1),
-                response: GetValidityProofResponse::schema().1,
+                response: GetValidityProofResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressionSignaturesForAccount".to_string(),

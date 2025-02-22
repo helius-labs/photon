@@ -92,7 +92,7 @@ pub async fn get_validity_proof_v2(
                 .to_string(),
         );
         // proof by index has no root.
-        v2_response.value.rootIndices.insert(index, None);
+        v2_response.value.rootIndices.insert(index, None.into());
         v2_response.value.roots.insert(index, "".to_string());
     }
     Ok(v2_response)

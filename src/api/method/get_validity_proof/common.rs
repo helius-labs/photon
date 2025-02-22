@@ -88,7 +88,7 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
             value: CompressedProofWithContextV2 {
                 compressedProof: response.value.compressedProof,
                 roots: response.value.roots,
-                rootIndices: response.value.rootIndices.into_iter().map(Some).collect(),
+                rootIndices: response.value.rootIndices.into_iter().map(|x| RootIndex { root_index: x, in_tree: true}).collect(),
                 leafIndices: response.value.leafIndices,
                 leaves: response.value.leaves,
                 merkleTrees: response.value.merkleTrees,
@@ -194,10 +194,42 @@ pub struct CompressedProofWithContext {
 #[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
+pub struct RootIndex {
+    pub root_index: u64,
+    pub in_tree: bool,
+}
+
+impl From<RootIndex> for Option<u64> {
+    fn from(val: RootIndex) -> Option<u64> {
+        match val.in_tree {
+            true => Some(val.root_index),
+            false => None,
+        }
+    }
+}
+
+impl From<Option<u64>> for RootIndex {
+    fn from(val: Option<u64>) -> RootIndex {
+        match val {
+            Some(root_index) => RootIndex {
+                root_index,
+                in_tree: true,
+            },
+            None => RootIndex {
+                root_index: 0,
+                in_tree: false,
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct CompressedProofWithContextV2 {
     pub compressedProof: CompressedProof,
     pub roots: Vec<String>,
-    pub rootIndices: Vec<Option<u64>>,
+    pub rootIndices: Vec<RootIndex>,
     pub leafIndices: Vec<u32>,
     pub leaves: Vec<String>,
     pub merkleTrees: Vec<String>,
