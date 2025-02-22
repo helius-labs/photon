@@ -3,7 +3,7 @@ mod v1;
 mod v2;
 
 pub use common::{
-    CompressedProof, CompressedProofWithContext, GetValidityProofRequest,
+    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, RootIndex, GetValidityProofRequest,
     GetValidityProofRequestDocumentation, GetValidityProofResponse, GetValidityProofResponseV2,
 };
 pub use v1::get_validity_proof;

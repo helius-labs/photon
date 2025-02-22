@@ -19,8 +19,7 @@ use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_queue_elements::MerkleProofWithContextV2;
 use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
-use crate::api::method::get_validity_proof::CompressedProof;
-use crate::api::method::get_validity_proof::CompressedProofWithContext;
+use crate::api::method::get_validity_proof::{CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, RootIndex};
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -105,6 +104,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     UnsignedInteger,
     CompressedProof,
     CompressedProofWithContext,
+    CompressedProofWithContextV2,
+    RootIndex,
     MerkleContextWithNewAddressProof,
     SignatureInfoListWithError,
     SignatureInfoWithError,

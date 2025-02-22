@@ -5,7 +5,7 @@ use crate::dao::generated::state_trees;
 use crate::ingester::persist::get_tree_height;
 use crate::ingester::persist::leaf_node::{leaf_index_to_node_index, LeafNode};
 use crate::ingester::persist::persisted_state_tree::{
-    get_proof_nodes, get_proof_path, validate_proof, MerkleProofWithContext, ZERO_BYTES,
+    get_proof_nodes, get_proof_path, MerkleProofWithContext, ZERO_BYTES,
 };
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait};
