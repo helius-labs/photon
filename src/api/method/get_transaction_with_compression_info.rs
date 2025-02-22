@@ -335,9 +335,6 @@ pub async fn get_transaction_helper_v2(
     .into_iter()
     .map(parse_account_model_with_context)
     .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
-
-    println!("closed_accounts: {:?}", closed_accounts);
-
     let closed_accounts =
         closed_accounts
             .into_iter()
