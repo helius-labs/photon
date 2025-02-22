@@ -75,7 +75,7 @@ pub struct GetValidityProofResponse {
     pub context: Context,
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetValidityProofResponseV2 {
     pub value: CompressedProofWithContextV2,
@@ -88,7 +88,15 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
             value: CompressedProofWithContextV2 {
                 compressedProof: response.value.compressedProof,
                 roots: response.value.roots,
-                rootIndices: response.value.rootIndices.into_iter().map(|x| RootIndex { root_index: x, in_tree: true}).collect(),
+                rootIndices: response
+                    .value
+                    .rootIndices
+                    .into_iter()
+                    .map(|x| RootIndex {
+                        root_index: x,
+                        in_tree: true,
+                    })
+                    .collect(),
                 leafIndices: response.value.leafIndices,
                 leaves: response.value.leaves,
                 merkleTrees: response.value.merkleTrees,
