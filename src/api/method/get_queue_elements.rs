@@ -4,8 +4,6 @@ use sea_orm::{
     TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey::Pubkey;
-use std::collections::HashMap;
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
@@ -19,7 +17,7 @@ use crate::ingester::persist::{
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
-    pub merkle_tree: [u8; 32],
+    pub merkle_tree: Hash,
     pub start_offset: Option<u64>,
     pub num_elements: u16,
     pub queue_type: u8,
@@ -55,11 +53,8 @@ pub async fn get_queue_elements(
     conn: &DatabaseConnection,
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
-    let merkle_tree_pubkey_vec = request.merkle_tree.to_vec();
-    let _merkle_tree_pubkey = Pubkey::try_from(merkle_tree_pubkey_vec.clone())
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid tree pubkey: {:?}", e)))?;
     let merkle_tree_pubkey_str =
-        bytes_to_sql_format(conn.get_database_backend(), merkle_tree_pubkey_vec);
+        bytes_to_sql_format(conn.get_database_backend(), request.merkle_tree.to_vec());
     let queue_type = QueueType::from(request.queue_type as u64);
     let num_elements = request.num_elements;
 
@@ -78,10 +73,13 @@ pub async fn get_queue_elements(
     } else {
         "".to_string()
     };
-
     let queue_type_filter = match queue_type {
-        QueueType::BatchedInput => Ok("AND nullifier_queue_index IS NOT NULL".to_string()),
-        QueueType::BatchedOutput => Ok("AND in_output_queue = TRUE".to_string()),
+        QueueType::BatchedInput => Ok(
+            "AND nullifier_queue_index IS NOT NULL ORDER BY nullifier_queue_index ASC".to_string(),
+        ),
+        QueueType::BatchedOutput => {
+            Ok("AND in_output_queue = TRUE ORDER BY leaf_index ASC".to_string())
+        }
         _ => Err(PhotonApiError::ValidationError(format!(
             "Invalid queue type: {:?}",
             queue_type
@@ -95,7 +93,6 @@ pub async fn get_queue_elements(
         WHERE tree = {merkle_tree_pubkey_str}
         {leaf_indices_filter}
         {queue_type_filter}
-        ORDER BY leaf_index ASC
         LIMIT {num_elements}
         ",
     );
@@ -107,17 +104,12 @@ pub async fn get_queue_elements(
             PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
         })?;
 
-    let queue_element_map: HashMap<u64, &QueueElement> = queue_elements
-        .iter()
-        .map(|e| (e.leaf_index as u64, e))
-        .collect();
-
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
 
     let proofs = if !indices.is_empty() {
         get_multiple_compressed_leaf_proofs_by_indices(
             &tx,
-            SerializablePubkey::from(request.merkle_tree),
+            SerializablePubkey::from(request.merkle_tree.0),
             indices,
         )
         .await?
@@ -129,30 +121,29 @@ pub async fn get_queue_elements(
 
     let result: Vec<MerkleProofWithContextV2> = proofs
         .into_iter()
-        .filter_map(|proof| {
-            queue_element_map
-                .get(&(proof.leafIndex as u64))
-                .map(|queue_element| {
-                    let tx_hash = queue_element
-                        .tx_hash
-                        .as_ref()
-                        .map(|tx_hash| Hash::try_from(tx_hash.clone()).unwrap());
-                    let account_hash = Hash::try_from(queue_element.hash.clone()).unwrap();
-
-                    Ok(MerkleProofWithContextV2 {
-                        proof: proof.proof,
-                        root: proof.root,
-                        leaf_index: proof.leafIndex as u64,
-                        leaf: proof.hash,
-                        merkle_tree: Hash::from(proof.merkleTree.0.to_bytes()),
-                        root_seq: proof.rootSeq,
-                        tx_hash,
-                        account_hash,
-                    })
-                })
+        .zip(queue_elements.iter())
+        .map(|(proof, queue_element)| {
+            assert_eq!(
+                proof.leafIndex as u64, queue_element.leaf_index as u64,
+                "Leaf index mismatch debug."
+            );
+            let tx_hash = queue_element
+                .tx_hash
+                .as_ref()
+                .map(|tx_hash| Hash::new(tx_hash.as_slice()).unwrap());
+            let account_hash = Hash::new(queue_element.hash.as_slice()).unwrap();
+            Ok(MerkleProofWithContextV2 {
+                proof: proof.proof,
+                root: proof.root,
+                leaf_index: proof.leafIndex as u64,
+                leaf: proof.hash,
+                merkle_tree: Hash::from(proof.merkleTree.0.to_bytes()),
+                root_seq: proof.rootSeq,
+                tx_hash,
+                account_hash,
+            })
         })
         .collect::<Result<_, PhotonApiError>>()?;
-
     Ok(GetQueueElementsResponse {
         context,
         value: result,
