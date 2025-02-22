@@ -188,7 +188,7 @@ async fn test_batched_tree_transactions(
         println!("i {}, validity_proof {:?}", i, validity_proof.value);
 
         // No value has been inserted into the tree yet -> all proof by index.
-        assert!(validity_proof.value.rootIndices.iter().all(|x| x.is_none()));
+        assert!(validity_proof.value.rootIndices.iter().all(|x| !x.in_tree));
         assert!(validity_proof
             .value
             .merkleTrees
@@ -366,9 +366,9 @@ async fn test_batched_tree_transactions(
                 println!("z + base index {} {}", z, base_index);
                 println!("last inserted index {}", last_inserted_index);
                 if base_index < last_inserted_index {
-                    assert!(root_index.is_some());
+                    assert!(root_index.in_tree);
                 } else {
-                    assert!(root_index.is_none());
+                    assert!(!root_index.in_tree);
                     assert_eq!(root, "");
                 }
                 base_index += 2;
