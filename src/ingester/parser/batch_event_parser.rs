@@ -19,7 +19,7 @@ use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
-pub fn parse_batch_merkle_tree_event(
+pub fn parse_merkle_tree_event(
     instruction: &Instruction,
     next_instruction: &Instruction,
     tx: &TransactionInfo,
@@ -45,10 +45,14 @@ pub fn parse_batch_merkle_tree_event(
                     info!("found batch nullify event: {:?}", batch_event);
                     state_update.batch_nullify.push(batch_event);
                 }
-                BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
-                    // TODO: implement address append
+                // TODO: implement address append (in different PR)
+                _ => {
+                    log::info!(
+                        "Unsupported batch event discriminator: {} batch address discriminator: {}",
+                        batch_event.discriminator,
+                        BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR
+                    );
                 }
-                _ => unimplemented!(),
             }
 
             return Ok(Some(state_update));

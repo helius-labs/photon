@@ -1,3 +1,5 @@
+use batch_event_parser::parse_merkle_tree_event;
+use legacy::parse_legacy_public_transaction_event;
 use solana_sdk::pubkey::Pubkey;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
@@ -16,7 +18,6 @@ mod tx_event_parser;
 use crate::ingester::parser::batch_event_parser::{
     parse_batch_public_transaction_event, parse_public_transaction_event_v2,
 };
-use crate::ingester::parser::legacy::parse_legacy_instructions;
 use solana_program::pubkey;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
@@ -55,13 +56,29 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             log::info!("batched state update {:?}", state_update);
             state_updates.push(state_update);
         } else {
-            parse_legacy_instructions(
-                &ordered_instructions,
-                tx,
-                slot,
-                &mut state_updates,
-                &mut is_compression_transaction,
-            )?;
+            for (index, _) in ordered_instructions.iter().enumerate() {
+                if ordered_instructions.len() - index > 3 {
+                    if let Some(state_update) = parse_legacy_public_transaction_event(
+                        tx,
+                        slot,
+                        &ordered_instructions[index],
+                        &ordered_instructions[index + 1],
+                        &ordered_instructions[index + 2],
+                    )? {
+                        is_compression_transaction = true;
+                        state_updates.push(state_update);
+                    }
+                } else if ordered_instructions.len() - index > 1 {
+                    if let Some(state_update) = parse_merkle_tree_event(
+                        &ordered_instructions[index],
+                        &ordered_instructions[index + 1],
+                        tx,
+                    )? {
+                        is_compression_transaction = true;
+                        state_updates.push(state_update);
+                    }
+                }
+            }
         }
     }
 
