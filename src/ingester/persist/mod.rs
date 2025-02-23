@@ -12,10 +12,9 @@ use crate::{
 };
 use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
+use persisted_batch_event::persist_batch_events;
 
 use crate::common::typedefs::account::{Account, AccountV2, AccountWithContext};
-use crate::ingester::persist::persisted_batch_append_event::persist_batch_append;
-use crate::ingester::persist::persisted_batch_nullify_event::persist_batch_nullify;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
@@ -46,8 +45,8 @@ pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
 };
 
-mod persisted_batch_append_event;
-mod persisted_batch_nullify_event;
+mod persisted_batch_event;
+
 mod spend;
 
 pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
@@ -241,8 +240,8 @@ pub async fn persist_state_update(
     debug!("Persisting index tree updates...");
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates).await?;
 
-    persist_batch_append(txn, batch_append).await?;
-    persist_batch_nullify(txn, batch_nullify).await?;
+    persist_batch_events(txn, batch_append, batch_nullify).await?;
+    // persist_batch_nullify(txn, batch_nullify).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
