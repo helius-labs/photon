@@ -4,10 +4,12 @@ use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::batch_event_parser::{BatchEvent, IndexedBatchEvents};
 use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
+use crate::ingester::persist::MAX_SQL_INSERTS;
 use crate::migration::Expr;
 use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
+    QueryTrait,
 };
 
 /// We need to find the events of the same tree:
@@ -18,24 +20,37 @@ pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: IndexedBatchEvents,
 ) -> Result<(), IngesterError> {
-    let mut leaf_nodes = Vec::new();
     log::info!("events {:?}", events);
     for (_, events) in events.iter_mut() {
         events.sort_by(|a, b| a.0.cmp(&b.0));
-        match &events.first().as_ref().unwrap().1 {
-            BatchEvent::BatchNullify(batch_nullify_event) => {
-                log::info!("batch_nullify_event {:?}", batch_nullify_event);
-                persist_batch_nullify_event(txn, batch_nullify_event, &mut leaf_nodes).await
+        if let Some((_, event)) = events.first() {
+            // Batch size is 500 for batched State Merkle trees.
+            let mut leaf_nodes = Vec::with_capacity(500);
+            match event {
+                BatchEvent::BatchNullify(batch_nullify_event) => {
+                    log::info!("batch_nullify_event {:?}", batch_nullify_event);
+                    persist_batch_nullify_event(txn, batch_nullify_event, &mut leaf_nodes).await
+                }
+                BatchEvent::BatchAppend(batch_append_event) => {
+                    log::info!("persist_batch_append_event {:?}", event);
+                    persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
+                }
+                _ => {
+                    return Err(IngesterError::EmptyBatchEvent);
+                }
+            }?;
+            if leaf_nodes.len() <= MAX_SQL_INSERTS {
+                persist_leaf_nodes(txn, leaf_nodes).await?;
+            } else {
+                // Currently not used but a safeguard in case the batch size changes.
+                for leaf_nodes_chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
+                    persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec()).await?;
+                }
             }
-            BatchEvent::BatchAppend(batch_append_event) => {
-                persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
-            }
-            _ => {
-                return Err(IngesterError::EmptyBatchEvent);
-            }
-        }?;
+        } else {
+            return Err(IngesterError::EmptyBatchEvent);
+        }
     }
-    persist_leaf_nodes(txn, leaf_nodes).await?;
     Ok(())
 }
 
@@ -59,6 +74,7 @@ async fn persist_batch_append_event<'a>(
                 .and(accounts::Column::NullifiedInTree.eq(false))
                 .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
         )
+        .order_by_asc(accounts::Column::LeafIndex)
         .all(txn)
         .await?;
     accounts.iter().for_each(|account| {
@@ -96,7 +112,7 @@ async fn persist_batch_nullify_event<'a>(
     log::info!("sequence number {}", batch_nullify_event.sequence_number);
     log::info!("zkp_batch_index {}", batch_nullify_event.zkp_batch_index);
     // 1. Create leaf nodes with nullifier as leaf.
-    //      Nullifier queue index is continously incremented by 1
+    //      Nullifier queue index is continuously incremented by 1
     //      with each element insertion into the nullifier queue.
     let accounts = accounts::Entity::find()
         .filter(
@@ -104,6 +120,7 @@ async fn persist_batch_nullify_event<'a>(
                 .gte(batch_nullify_event.old_next_index)
                 .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index)),
         )
+        .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
         .await?;
     accounts.iter().for_each(|account| {

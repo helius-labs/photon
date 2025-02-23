@@ -709,8 +709,9 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
     reset_tables(setup.db_conn.as_ref()).await.unwrap();
     let sort_by_slot = true;
     let signatures = read_file_names(&name, sort_by_slot);
-    let index_individually = true;
-
+    let index_individually = false;
+    // left: Hash(3TiXqGbJdXrBtyGSe5Xsq4LJjuqSBDizdioQN4JGQ3qr)
+    //  right: Hash(PFjDTsC3g8kbsu41HRe1d1vyYoiS6B64cLf8jUriF9E)
     let merkle_tree_pubkey =
         Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap();
 
@@ -724,7 +725,7 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
         index_individually,
     )
     .await;
-    for signature in signatures.iter() {
+    for (i, signature) in signatures.iter().enumerate() {
         // Index transactions.
         index(
             &name,
@@ -750,9 +751,13 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
             get_queue_elements_result
                 .value
                 .iter()
-                .map(|x| x.leaf_index)
+                .map(|x| (x.leaf_index, x.account_hash.0))
                 .collect::<Vec<_>>()
         );
+
+        if !get_queue_elements_result.value.is_empty() {
+            println!("root {} : {:?}", i, get_queue_elements_result.value[0].root);
+        }
     }
 
     let get_queue_elements_result = setup
@@ -765,8 +770,33 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
         })
         .await
         .unwrap();
-    println!("{:?}", get_queue_elements_result.value[0].root.0);
-
+    println!(
+        "output queue elements {:?}",
+        get_queue_elements_result
+            .value
+            .iter()
+            .map(|x| x.leaf_index)
+            .collect::<Vec<_>>()
+    );
+    let input_get_queue_elements_result = setup
+        .api
+        .get_queue_elements(GetQueueElementsRequest {
+            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+            start_offset: None,
+            queue_type: QueueType::BatchedInput as u8,
+            num_elements: 1000,
+        })
+        .await
+        .unwrap();
+    println!(
+        "input queue elements {:?}",
+        input_get_queue_elements_result
+            .value
+            .iter()
+            .map(|x| x.leaf_index)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(get_queue_elements_result.value[0].root_seq, 7);
     assert_eq!(
         get_queue_elements_result.value[0].root,
         Hash::from([
@@ -774,7 +804,6 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
             246, 144, 171, 204, 44, 195, 19, 151, 127, 235, 253, 170, 45
         ])
     );
-    assert_eq!(get_queue_elements_result.value[0].root_seq, 7);
 }
 /// Reset table
 /// Index transactions individually or in one batch

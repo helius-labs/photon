@@ -5,6 +5,7 @@ use super::{
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
+use light_compressed_account::event::BatchNullifyContext;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
@@ -82,7 +83,7 @@ pub struct StateUpdate {
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 
     pub batch_events: IndexedBatchEvents,
-    pub input_context: Vec<AccountContext>,
+    pub input_context: Vec<BatchNullifyContext>,
 }
 
 impl StateUpdate {

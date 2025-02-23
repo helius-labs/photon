@@ -1,11 +1,11 @@
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::{accounts, token_accounts};
 use crate::ingester::error::IngesterError;
-use crate::ingester::parser::state_update::AccountContext;
 use crate::ingester::persist::{
     execute_account_update_query_and_update_balances, AccountType, ModificationType,
 };
 use crate::migration::Expr;
+use light_compressed_account::event::BatchNullifyContext;
 use log::debug;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
@@ -72,14 +72,18 @@ pub async fn spend_input_accounts(
 /// Update the nullifier queue index and nullifier of the input accounts in batched trees.
 pub async fn spend_input_accounts_batched(
     txn: &DatabaseTransaction,
-    accounts: &[AccountContext],
+    accounts: &[BatchNullifyContext],
 ) -> Result<(), IngesterError> {
     if accounts.is_empty() {
         return Ok(());
     }
     for account in accounts {
+        log::info!(
+            "Updating nullifier queue index and nullifier for account {:?} ",
+            account
+        );
         accounts::Entity::update_many()
-            .filter(accounts::Column::Hash.eq(account.account.to_vec()))
+            .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
             .col_expr(
                 accounts::Column::NullifierQueueIndex,
                 Expr::value(account.nullifier_queue_index as i64),

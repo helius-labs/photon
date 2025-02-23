@@ -1,7 +1,7 @@
 /// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
-use light_compressed_account::event::NewAddress;
+use light_compressed_account::event::{BatchNullifyContext, NewAddress};
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
@@ -36,9 +36,8 @@ pub struct BatchPublicTransactionEvent {
     pub new_addresses: Vec<NewAddress>,
     pub input_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
     pub address_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
-    pub nullifier_queue_indices: Vec<u64>,
     pub tx_hash: [u8; 32],
-    pub nullifiers: Vec<[u8; 32]>,
+    pub batch_input_accounts: Vec<BatchNullifyContext>,
 }
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]

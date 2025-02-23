@@ -240,7 +240,6 @@ pub async fn persist_state_update(
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates).await?;
 
     persist_batch_events(txn, batch_events).await?;
-    // persist_batch_nullify(txn, batch_nullify).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
