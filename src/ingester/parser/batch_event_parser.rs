@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use crate::common::typedefs::hash::Hash;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
     BatchPublicTransactionEvent, CompressedAccount, CompressedAccountData,
     MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
 };
 use crate::ingester::parser::legacy::parse_legacy_merkle_tree_events;
-use crate::ingester::parser::state_update::{AccountContext, StateUpdate};
+use crate::ingester::parser::state_update::StateUpdate;
 use crate::ingester::parser::tx_event_parser::parse_public_transaction_event;
 use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
@@ -28,6 +27,7 @@ pub enum BatchEvent {
     Empty,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for BatchEvent {
     fn default() -> Self {
         BatchEvent::Empty
@@ -104,6 +104,17 @@ pub fn parse_public_transaction_event_v2(
 
     match event {
         Some(public_transaction_event) => {
+            info!(
+                "batch_input_accounts {:?}",
+                public_transaction_event.batch_input_accounts
+            );
+
+            info!(
+                "input_compressed_account_hashes: {:?}",
+                public_transaction_event
+                    .event
+                    .input_compressed_account_hashes
+            );
             let event = PublicTransactionEvent {
                 input_compressed_account_hashes: public_transaction_event
                     .event
@@ -168,9 +179,8 @@ pub fn parse_public_transaction_event_v2(
                         seq: x.seq,
                     })
                     .collect(),
-                nullifier_queue_indices: public_transaction_event.nullifier_queue_indices,
+                batch_input_accounts: public_transaction_event.batch_input_accounts,
                 tx_hash: public_transaction_event.tx_hash,
-                nullifiers: public_transaction_event.nullifiers,
             };
             Some(batch_public_transaction_event)
         }
@@ -187,20 +197,8 @@ pub fn parse_batch_public_transaction_event(
     state_update.in_seq_numbers = transaction_event.input_sequence_numbers;
 
     // Context required for nullifier queue insertions of batched trees.
-    let input_context = state_update
-        .in_accounts
-        .iter()
-        .zip(transaction_event.nullifiers.iter())
-        .zip(transaction_event.nullifier_queue_indices.iter())
-        .map(
-            |((account, nullifier), nullifier_queue_index)| AccountContext {
-                account: account.clone(),
-                tx_hash: Hash::new(&transaction_event.tx_hash).unwrap(),
-                nullifier: Hash::new(nullifier).unwrap(),
-                nullifier_queue_index: *nullifier_queue_index,
-            },
-        )
-        .collect::<Vec<_>>();
-    state_update.input_context.extend(input_context);
+    state_update
+        .input_context
+        .extend(transaction_event.batch_input_accounts);
     Ok(state_update)
 }

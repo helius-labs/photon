@@ -1,16 +1,16 @@
-use std::cmp::max;
-use std::collections::HashMap;
-use itertools::Itertools;
-use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set};
 use crate::common::typedefs::account::{Account, AccountWithContext};
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::state_update::LeafNullification;
-use crate::ingester::persist::{compute_parent_hash, get_node_direct_ancestors, get_tree_height};
 use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, ZERO_BYTES};
+use crate::ingester::persist::{compute_parent_hash, get_node_direct_ancestors, get_tree_height};
 use crate::migration::OnConflict;
+use itertools::Itertools;
+use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set};
+use std::cmp::max;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {
@@ -105,6 +105,7 @@ pub async fn persist_leaf_nodes(
             leaf_idx: Set(Some(leaf_node.leaf_index as i64)),
             seq: Set(leaf_node.seq.map(|x| x as i64)),
         };
+        log::info!("model {:?}", model);
 
         let existing_seq = node_locations_to_hashes_and_seq
             .get(&key)

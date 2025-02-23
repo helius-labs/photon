@@ -4,10 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
-use self::{
-    indexer_events::PublicTransactionEvent,
-    state_update::{StateUpdate, Transaction},
-};
+use self::state_update::{StateUpdate, Transaction};
 
 pub mod batch_event_parser;
 pub mod indexer_events;
@@ -43,10 +40,9 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         instruction_group
             .inner_instructions
             .iter()
-            .find_map(|inner_instruction| {
+            .for_each(|inner_instruction| {
                 vec_instructions_data.push(inner_instruction.data.clone());
                 vec_accounts.push(inner_instruction.accounts.clone());
-                None::<PublicTransactionEvent>
             });
 
         if let Some(event) = parse_public_transaction_event_v2(&vec_instructions_data, vec_accounts)
