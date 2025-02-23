@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use crate::{
     api::{error::PhotonApiError, method::get_validity_proof::get_validity_proof},
     common::typedefs::serializable_pubkey::SerializablePubkey,

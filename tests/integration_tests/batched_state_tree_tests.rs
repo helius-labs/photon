@@ -15,6 +15,7 @@ use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
 use photon_indexer::api::method::{
     get_multiple_compressed_account_proofs::HashList, get_validity_proof::GetValidityProofRequest,
 };
+use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
@@ -25,9 +26,8 @@ use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::DatabaseConnection;
 use serial_test::serial;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::signature::Signature;
-
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -515,7 +515,7 @@ async fn test_batched_tree_token_transactions(
         .await;
 
         let mint = SerializablePubkey::from(
-            Pubkey::from_str("4HV5oEidH1QGY55kNTHb1yqjcHmKyT7gTgNSCL8TiWe9").unwrap(),
+            Pubkey::from_str("753LWB3Vz9Zsj8uyiMRFyNHuiMdFtu7Ku6x4cyKnSWe3").unwrap(),
         );
         let recipients = [
             Pubkey::from_str("DyRWDm81iYePWsdw1Yn2ue8CPcp7Lba6XsB8DVSGM7HK").unwrap(),
@@ -754,6 +754,27 @@ async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 .collect::<Vec<_>>()
         );
     }
+
+    let get_queue_elements_result = setup
+        .api
+        .get_queue_elements(GetQueueElementsRequest {
+            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+            start_offset: None,
+            queue_type: QueueType::BatchedOutput as u8,
+            num_elements: 1000,
+        })
+        .await
+        .unwrap();
+    println!("{:?}", get_queue_elements_result.value[0].root.0);
+
+    assert_eq!(
+        get_queue_elements_result.value[0].root,
+        Hash::from([
+            5, 179, 110, 61, 105, 239, 248, 251, 134, 208, 10, 32, 75, 187, 81, 206, 233, 75, 32,
+            246, 144, 171, 204, 44, 195, 19, 151, 127, 235, 253, 170, 45
+        ])
+    );
+    assert_eq!(get_queue_elements_result.value[0].root_seq, 7);
 }
 /// Reset table
 /// Index transactions individually or in one batch

@@ -1,8 +1,10 @@
-use super::indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement};
+use super::{
+    batch_event_parser::IndexedBatchEvents,
+    indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement},
+};
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
-use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
@@ -79,9 +81,7 @@ pub struct StateUpdate {
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 
-    pub batch_append: Vec<BatchAppendEvent>,
-    pub batch_nullify: Vec<BatchNullifyEvent>,
-
+    pub batch_events: IndexedBatchEvents,
     pub input_context: Vec<AccountContext>,
 }
 
@@ -119,8 +119,7 @@ impl StateUpdate {
 
             // batch updates
             merged.input_context.extend(update.input_context);
-            merged.batch_append.extend(update.batch_append);
-            merged.batch_nullify.extend(update.batch_nullify);
+            merged.batch_events.extend(update.batch_events);
         }
         merged
     }
