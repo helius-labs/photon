@@ -1,5 +1,4 @@
 use crate::ingester::error::IngesterError;
-use crate::ingester::parser::batch_event_parser::parse_batch_merkle_tree_event;
 use crate::ingester::parser::indexer_events::{
     IndexedMerkleTreeEvent, MerkleTreeEvent, NullifierEvent, PublicTransactionEvent,
 };
@@ -24,7 +23,9 @@ pub fn parse_legacy_merkle_tree_events(
         })?;
 
     match merkle_tree_event {
-        MerkleTreeEvent::V2(nullifier_event) => parse_nullifier_event(signature, nullifier_event),
+        MerkleTreeEvent::V2(nullifier_event) => {
+            parse_legacy_nullifier_event(signature, nullifier_event)
+        }
         MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
             parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
         }
@@ -34,7 +35,7 @@ pub fn parse_legacy_merkle_tree_events(
     }
 }
 
-fn parse_legacy_public_transaction_event(
+pub fn parse_legacy_public_transaction_event(
     tx: &TransactionInfo,
     slot: u64,
     instruction: &Instruction,
@@ -66,43 +67,8 @@ fn parse_legacy_public_transaction_event(
     }
 }
 
-pub fn parse_legacy_instructions(
-    ordered_instructions: &[Instruction],
-    tx: &TransactionInfo,
-    slot: u64,
-    state_updates: &mut Vec<StateUpdate>,
-    is_compression_transaction: &mut bool,
-) -> Result<(), IngesterError> {
-    for (index, _) in ordered_instructions.iter().enumerate() {
-        if ordered_instructions.len() - index > 3 {
-            if let Some(state_update) = parse_legacy_public_transaction_event(
-                tx,
-                slot,
-                &ordered_instructions[index],
-                &ordered_instructions[index + 1],
-                &ordered_instructions[index + 2],
-            )? {
-                *is_compression_transaction = true;
-                state_updates.push(state_update);
-            }
-        }
-
-        if ordered_instructions.len() - index > 1 {
-            if let Some(state_update) = parse_batch_merkle_tree_event(
-                &ordered_instructions[index],
-                &ordered_instructions[index + 1],
-                tx,
-            )? {
-                *is_compression_transaction = true;
-                state_updates.push(state_update);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn parse_nullifier_event(
+/// Parse legacy state tree nullifier event.
+fn parse_legacy_nullifier_event(
     tx: Signature,
     nullifier_event: NullifierEvent,
 ) -> Result<StateUpdate, IngesterError> {
