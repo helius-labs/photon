@@ -8,10 +8,12 @@ use crate::ingester::persist::{
 use crate::migration::Expr;
 use log::debug;
 use sea_orm::QueryFilter;
-use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Value};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
 
-/// Mark the input accounts as spent.
-/// (From both legacy and batched trees)
+/// 1. Mark the input accounts as spent.
+///     (From both legacy and batched trees)
+/// 2. Update account compressed sol balances.
+/// 3. Update compressed token account balances.
 pub async fn spend_input_accounts(
     txn: &DatabaseTransaction,
     in_accounts: &[Hash],

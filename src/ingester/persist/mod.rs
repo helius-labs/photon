@@ -129,8 +129,7 @@ pub async fn persist_state_update(
         transactions,
         leaf_nullifications,
         indexed_merkle_tree_updates,
-        batch_append,
-        batch_nullify,
+        batch_events,
         input_context,
         ..
     } = state_update;
@@ -240,7 +239,7 @@ pub async fn persist_state_update(
     debug!("Persisting index tree updates...");
     update_indexed_tree_leaves(txn, indexed_merkle_tree_updates).await?;
 
-    persist_batch_events(txn, batch_append, batch_nullify).await?;
+    persist_batch_events(txn, batch_events).await?;
     // persist_batch_nullify(txn, batch_nullify).await?;
 
     metric! {

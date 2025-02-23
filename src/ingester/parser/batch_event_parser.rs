@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
@@ -11,13 +13,28 @@ use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
 use light_batched_merkle_tree::event::{
-    BatchAppendEvent, BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR, BATCH_APPEND_EVENT_DISCRIMINATOR,
-    BATCH_NULLIFY_EVENT_DISCRIMINATOR,
+    BatchAppendEvent, BatchNullifyEvent, BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR,
+    BATCH_APPEND_EVENT_DISCRIMINATOR, BATCH_NULLIFY_EVENT_DISCRIMINATOR,
 };
 use light_compressed_account::event::event_from_light_transaction;
 use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum BatchEvent {
+    BatchAppend(BatchAppendEvent),
+    BatchNullify(BatchNullifyEvent),
+    Empty,
+}
+
+impl Default for BatchEvent {
+    fn default() -> Self {
+        BatchEvent::Empty
+    }
+}
+
+pub type IndexedBatchEvents = HashMap<[u8; 32], Vec<(u64, BatchEvent)>>;
 
 pub fn parse_merkle_tree_event(
     instruction: &Instruction,
@@ -39,11 +56,25 @@ pub fn parse_merkle_tree_event(
             match batch_event.discriminator {
                 BATCH_APPEND_EVENT_DISCRIMINATOR => {
                     info!("found batch append event: {:?}", batch_event);
-                    state_update.batch_append.push(batch_event);
+                    state_update
+                        .batch_events
+                        .entry(batch_event.merkle_tree_pubkey)
+                        .or_default()
+                        .push((
+                            batch_event.sequence_number,
+                            BatchEvent::BatchAppend(batch_event),
+                        ));
                 }
                 BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
                     info!("found batch nullify event: {:?}", batch_event);
-                    state_update.batch_nullify.push(batch_event);
+                    state_update
+                        .batch_events
+                        .entry(batch_event.merkle_tree_pubkey)
+                        .or_default()
+                        .push((
+                            batch_event.sequence_number,
+                            BatchEvent::BatchNullify(batch_event),
+                        ));
                 }
                 // TODO: implement address append (in different PR)
                 _ => {

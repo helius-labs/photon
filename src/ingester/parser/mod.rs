@@ -9,7 +9,7 @@ use self::{
     state_update::{StateUpdate, Transaction},
 };
 
-mod batch_event_parser;
+pub mod batch_event_parser;
 pub mod indexer_events;
 mod legacy;
 pub mod state_update;
