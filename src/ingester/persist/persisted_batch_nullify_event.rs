@@ -2,15 +2,12 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::{
-    execute_account_update_query_and_update_balances, AccountType, ModificationType,
-};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::migration::Expr;
 use light_batched_merkle_tree::event::BatchNullifyEvent;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
 };
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 
 pub async fn persist_batch_nullify(
     txn: &DatabaseTransaction,
@@ -35,6 +32,20 @@ pub async fn persist_batch_nullify(
             .all(txn)
             .await?;
 
+        persist_leaf_nodes(
+            txn,
+            accounts
+                .iter()
+                .map(|account| LeafNode {
+                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
+                    seq: Some(batch_nullify_event.sequence_number as u32),
+                    leaf_index: account.leaf_index as u32,
+                    hash: Hash::try_from(account.nullifier.clone().unwrap().clone()).unwrap(),
+                })
+                .collect(),
+        )
+        .await?;
+
         let query = accounts::Entity::update_many()
             .col_expr(
                 accounts::Column::NullifierQueueIndex,
@@ -56,27 +67,7 @@ pub async fn persist_batch_nullify(
                     ),
             )
             .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::Account,
-            ModificationType::Spend,
-        )
-        .await?;
-
-        persist_leaf_nodes(
-            txn,
-            accounts
-                .iter()
-                .map(|account| LeafNode {
-                    tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
-                    seq: Some(batch_nullify_event.sequence_number as u32),
-                    leaf_index: account.leaf_index as u32,
-                    hash: Hash::try_from(account.nullifier.clone().unwrap().clone()).unwrap(),
-                })
-                .collect(),
-        )
-        .await?;
+        txn.execute(query).await?;
     }
     Ok(())
 }

@@ -2,16 +2,15 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::{
-    execute_account_update_query_and_update_balances, AccountType, ModificationType,
-};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::migration::Expr;
 use light_batched_merkle_tree::event::BatchAppendEvent;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
 };
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 
+/// We need to find the events of the same tree:
+/// - order them by sequence number and execute them in order
 pub async fn persist_batch_append(
     txn: &DatabaseTransaction,
     batch_append: Vec<BatchAppendEvent>,
@@ -51,13 +50,7 @@ pub async fn persist_batch_append(
                     .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
             )
             .build(txn.get_database_backend());
-        execute_account_update_query_and_update_balances(
-            txn,
-            query,
-            AccountType::Account,
-            ModificationType::Spend,
-        )
-        .await?;
+        txn.execute(query).await?;
     }
     Ok(())
 }
