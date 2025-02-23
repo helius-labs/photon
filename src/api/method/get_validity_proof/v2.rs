@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use crate::{
     api::{error::PhotonApiError, method::get_validity_proof::get_validity_proof},
     common::typedefs::serializable_pubkey::SerializablePubkey,
@@ -37,15 +39,24 @@ pub async fn get_validity_proof_v2(
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::Hash
-                .is_in(hashes)
+                .is_in(hashes.to_vec())
                 .and(accounts::Column::Spent.eq(false)),
         )
         .all(&tx)
         .await?;
     if accounts.len() != hashes_len {
-        return Err(PhotonApiError::ValidationError(
-            "Not all hashes exist. (Might be spent)".to_string(),
-        ));
+        let all_accounts = accounts::Entity::find().all(&tx).await?;
+        all_accounts
+            .iter()
+            .for_each(|x| tracing::info!("account {:?}", x));
+        return Err(PhotonApiError::ValidationError(format!(
+            "Not all hashes exist. (Might be spent) input hashes {:?} found hashes {:?} with leaf indices {:?}",
+           hashes, accounts
+                .iter()
+                .map(|x| x.hash.clone())
+                .collect::<Vec<Vec<u8>>>(),
+            accounts.iter().map(|x| x.leaf_index).collect::<Vec<i64>>(),
+        )));
     }
 
     for (num_removed, (index, _)) in accounts

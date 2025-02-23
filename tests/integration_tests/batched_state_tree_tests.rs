@@ -691,6 +691,70 @@ async fn test_batched_tree_token_transactions(
     }
 }
 
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend) {
+    let trim_test_name = trim_test_name(function_name!());
+    let name = trim_test_name;
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+    reset_tables(setup.db_conn.as_ref()).await.unwrap();
+    let sort_by_slot = true;
+    let signatures = read_file_names(&name, sort_by_slot);
+    let index_individually = true;
+
+    let merkle_tree_pubkey =
+        Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap();
+
+    println!("signatures {:?}", signatures);
+    let (appends, signatures) = signatures.split_at(50);
+    index(
+        &name,
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        appends,
+        index_individually,
+    )
+    .await;
+    for signature in signatures.iter() {
+        // Index transactions.
+        index(
+            &name,
+            setup.db_conn.clone(),
+            setup.client.clone(),
+            &[signature.to_string()],
+            index_individually,
+        )
+        .await;
+        // get queue elements
+        let get_queue_elements_result = setup
+            .api
+            .get_queue_elements(GetQueueElementsRequest {
+                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                start_offset: None,
+                queue_type: QueueType::BatchedInput as u8,
+                num_elements: 1000,
+            })
+            .await
+            .unwrap();
+        println!(
+            "queue elements {:?}",
+            get_queue_elements_result
+                .value
+                .iter()
+                .map(|x| x.leaf_index)
+                .collect::<Vec<_>>()
+        );
+    }
+}
 /// Reset table
 /// Index transactions individually or in one batch
 pub async fn index(

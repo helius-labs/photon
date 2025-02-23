@@ -38,9 +38,11 @@ pub fn parse_batch_merkle_tree_event(
 
             match batch_event.discriminator {
                 BATCH_APPEND_EVENT_DISCRIMINATOR => {
+                    info!("found batch append event: {:?}", batch_event);
                     state_update.batch_append.push(batch_event);
                 }
                 BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
+                    info!("found batch nullify event: {:?}", batch_event);
                     state_update.batch_nullify.push(batch_event);
                 }
                 BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR => {
@@ -64,6 +66,7 @@ pub fn parse_public_transaction_event_v2(
     accounts: Vec<Vec<Pubkey>>,
 ) -> Option<BatchPublicTransactionEvent> {
     let event = event_from_light_transaction(instructions, accounts).ok()?;
+
     match event {
         Some(public_transaction_event) => {
             let event = PublicTransactionEvent {
