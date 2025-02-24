@@ -197,9 +197,10 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
         seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
         queue: account.queue.clone().try_into()?,
         prove_by_index: account.in_output_queue,
-        tree_type: map_tree_and_queue_accounts(solana_sdk::pubkey::Pubkey::try_from(account.queue).unwrap().to_string())
-            .map(|x| x.tree_type as u16)
-            .ok_or(PhotonApiError::UnexpectedError("Invalid tree type".to_string()))?,
+        tree_type: account.tree_type as u16,
+        // map_tree_and_queue_accounts(solana_sdk::pubkey::Pubkey::try_from(account.queue).unwrap().to_string())
+        //     .map(|x| x.tree_type as u16)
+        //     .ok_or(PhotonApiError::UnexpectedError("Invalid tree type".to_string()))?,
     })
 }
 
