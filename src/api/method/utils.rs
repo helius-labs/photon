@@ -10,6 +10,8 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
+use light_compressed_account::pubkey::Pubkey;
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
@@ -27,6 +29,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
+use crate::ingester::parser::map_tree_and_queue_accounts;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
@@ -192,8 +195,11 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
         lamports: UnsignedInteger(parse_decimal(account.lamports)?),
         slot_created: UnsignedInteger(account.slot_created as u64),
         seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
-        queue: account.queue.map(|queue| queue.try_into()).transpose()?,
+        queue: account.queue.clone().try_into()?,
         prove_by_index: account.in_output_queue,
+        tree_type: map_tree_and_queue_accounts(solana_sdk::pubkey::Pubkey::try_from(account.queue).unwrap().to_string())
+            .map(|x| x.tree_type as u16)
+            .ok_or(PhotonApiError::UnexpectedError("Invalid tree type".to_string()))?,
     })
 }
 
@@ -230,7 +236,7 @@ pub fn parse_account_model_with_context(
             seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
         },
         context: AccountContext {
-            queue: account.queue.map(|queue| queue.try_into()).transpose()?,
+            queue: account.queue.try_into()?,
             in_output_queue: account.in_output_queue,
             spent: account.spent,
             nullified_in_tree: account.nullified_in_tree,
@@ -239,6 +245,7 @@ pub fn parse_account_model_with_context(
                 .map(|index| UnsignedInteger(index as u64)),
             nullifier: account.nullifier.map(Hash::try_from).transpose()?,
             tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
+            tree_type: account.tree_type as u16,
         },
     })
 }

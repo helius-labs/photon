@@ -72,14 +72,16 @@ pub async fn get_validity_proof_v2(
         } else {
             get_validity_proof(conn, prover_url, request).await?.into()
         };
-    v2_response.value.queues = accounts
+    accounts
         .iter()
-        .map(|x| {
-            SerializablePubkey::try_from_slice(x.queue.as_ref().unwrap().as_slice())
-                .unwrap()
-                .to_string()
-        })
-        .collect::<Vec<String>>();
+        .try_for_each(|x| -> Result<(), PhotonApiError> {
+            v2_response.value.queues.push(
+                 SerializablePubkey::try_from_slice(x.queue.as_slice()).map_err(|e|
+                     PhotonApiError::ValidationError(format!("Error converting queue pubkey to SerializablePubkey: {:?}", e))
+                 )?.to_string()
+            );
+            Ok(())
+        })?;
     // Add data of skipped accounts.
     for (index, account) in accounts
         .iter()
@@ -92,13 +94,11 @@ pub async fn get_validity_proof_v2(
             .insert(index, account.leaf_index as u32);
         v2_response.value.leaves.insert(
             index,
-            Hash::new(account.hash.as_slice()).unwrap().to_string(),
+            Hash::new(account.hash.as_slice())?.to_string(),
         );
         v2_response.value.merkleTrees.insert(
             index,
-            SerializablePubkey::try_from_slice(account.tree.as_slice())
-                .unwrap()
-                .to_string(),
+            SerializablePubkey::try_from_slice(account.tree.as_slice()).unwrap_or(SerializablePubkey::default()).to_string(),
         );
         // proof by index has no root.
         v2_response.value.rootIndices.insert(index, None.into());

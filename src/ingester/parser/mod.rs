@@ -16,6 +16,7 @@ use crate::ingester::parser::batch_event_parser::{
     parse_batch_public_transaction_event, parse_public_transaction_event_v2,
 };
 use solana_program::pubkey;
+pub use tx_event_parser::map_tree_and_queue_accounts;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");

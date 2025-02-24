@@ -352,6 +352,7 @@ pub async fn get_transaction_helper_v2(
                         slot_created: x.account.slot_created,
                         queue: x.context.queue,
                         prove_by_index: x.context.in_output_queue,
+                        tree_type: x.context.tree_type,
                     },
                     nullifier: x.context.nullifier.ok_or(PhotonApiError::UnexpectedError(
                         String::from("Nullifier does not exist for closed account."),
@@ -378,6 +379,7 @@ pub async fn get_transaction_helper_v2(
             slot_created: x.account.slot_created,
             queue: x.context.queue,
             prove_by_index: x.context.in_output_queue,
+            tree_type: x.context.tree_type,
         })
         .collect::<Vec<AccountV2>>();
 

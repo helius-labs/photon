@@ -24,6 +24,7 @@ pub enum Accounts {
     InOutputQueue,
     NullifierQueueIndex,
     NullifiedInTree,
+    TreeType,
     Queue,
     Nullifier,
     TxHash,

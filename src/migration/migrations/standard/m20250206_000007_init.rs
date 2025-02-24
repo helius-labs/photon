@@ -33,7 +33,7 @@ impl MigrationTrait for Migration {
                     address BLOB,
                     owner BLOB NOT NULL,
                     tree BLOB NOT NULL,
-                    queue BLOB NULL,
+                    queue BLOB NOT NULL,
                     leaf_index BIGINT NOT NULL,
                     seq BIGINT,
                     slot_created BIGINT NOT NULL,
@@ -45,14 +45,15 @@ impl MigrationTrait for Migration {
                     nullifier BLOB,
                     tx_hash BLOB,
                     nullifier_queue_index BIGINT NULL,
-                    nullified_in_tree BOOLEAN NOT NULL DEFAULT FALSE
+                    nullified_in_tree BOOLEAN NOT NULL DEFAULT FALSE,
+                    tree_type INTEGER NULL,
                 );
 
                 INSERT INTO accounts_new
                 SELECT
                     hash, data, data_hash, address, owner, tree, NULL as queue, leaf_index, seq,
                     slot_created, spent, prev_spent, lamports, discriminator,
-                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index, FALSE as nullified_in_tree
+                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index, FALSE as nullified_in_tree NULL as tree_type
                 FROM accounts;
 
                 DROP TABLE accounts;
@@ -104,6 +105,20 @@ impl MigrationTrait for Migration {
                 "#,
             ).await?;
         } else {
+
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(Accounts::Table)
+                        .add_column(
+                            ColumnDef::new(Accounts::TreeType)
+                                .integer()
+                                .null()
+                        )
+                        .to_owned(),
+                )
+                .await?;
+
             manager
                 .alter_table(
                     Table::alter()
@@ -149,7 +164,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column(ColumnDef::new(Accounts::Queue).binary().null())
+                        .add_column(ColumnDef::new(Accounts::Queue).binary().not_null())
                         .to_owned(),
                 )
                 .await?;
@@ -287,6 +302,16 @@ impl MigrationTrait for Migration {
             )
             .await?;
         } else {
+
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(Accounts::Table)
+                        .drop_column(Accounts::TreeType)
+                        .to_owned(),
+                )
+                .await?;
+
             manager
                 .alter_table(
                     Table::alter()
