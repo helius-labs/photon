@@ -10,7 +10,6 @@ pub async fn get_indexer_slot(
     conn: &DatabaseConnection,
 ) -> Result<UnsignedInteger, PhotonApiError> {
     let slot = Context::extract(conn).await?.slot;
-    info!("get_indexer_slot {}", slot);
-    
+
     Ok(UnsignedInteger(slot))
 }

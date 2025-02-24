@@ -192,7 +192,9 @@ pub async fn get_multiple_compressed_accounts_v2(
             }
             fetch_account_from_addresses(conn, addresses).await?
         }
-        _ => panic!("Either hashes or addresses must be provided"),
+        _ => Err(PhotonApiError::ValidationError(
+            "Either hashes or addresses must be provided".to_string(),
+        ))?,
     };
 
     Ok(GetMultipleCompressedAccountsResponseV2 {
