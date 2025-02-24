@@ -406,7 +406,7 @@ pub fn compare_account_with_account_v2(account: &Account, account_v2: &AccountV2
     assert_eq!(account.leaf_index, account_v2.leaf_index);
     assert_eq!(account.seq, account_v2.seq);
     assert_eq!(account.slot_created, account_v2.slot_created);
-    assert_eq!(account_v2.queue, None);
+    assert_eq!(account_v2.queue, account_v2.queue);
 }
 
 pub fn compare_token_account_with_token_account_v2(
