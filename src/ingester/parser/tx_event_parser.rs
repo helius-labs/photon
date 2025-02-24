@@ -3,11 +3,11 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use lazy_static::lazy_static;
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 use std::str::FromStr;
-use light_merkle_tree_metadata::merkle_tree::TreeType;
 
 pub struct TreeAndQueue {
     tree: Pubkey,
@@ -18,67 +18,75 @@ pub struct TreeAndQueue {
 
 // TODO: add a table which stores tree metadata: tree_pubkey | queue_pubkey | type | ...
 lazy_static! {
-
     pub static ref QUEUE_TREE_MAPPING: HashMap<String, TreeAndQueue> = {
         let mut m = HashMap::new();
 
-        m.insert("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(),
+        m.insert(
+            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap(),
                 queue: Pubkey::from_str("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU").unwrap(),
                 height: 32,
-                tree_type: TreeType::BatchedState}
+                tree_type: TreeType::BatchedState,
+            },
         );
 
-         m.insert("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT".to_string(),
+        m.insert(
+            "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT").unwrap(),
                 queue: Pubkey::from_str("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148").unwrap(),
                 height: 26,
-                tree_type: TreeType::State
-            }
+                tree_type: TreeType::State,
+            },
         );
 
-         m.insert("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho".to_string(),
+        m.insert(
+            "smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho").unwrap(),
                 queue: Pubkey::from_str("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X").unwrap(),
                 height: 26,
-                tree_type: TreeType::State
-            }
+                tree_type: TreeType::State,
+            },
         );
 
-         m.insert("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(),
+        m.insert(
+            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap(),
                 queue: Pubkey::from_str("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU").unwrap(),
                 height: 32,
-                tree_type: TreeType::BatchedState}
+                tree_type: TreeType::BatchedState,
+            },
         );
 
-         m.insert("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148".to_string(),
+        m.insert(
+            "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT").unwrap(),
                 queue: Pubkey::from_str("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148").unwrap(),
                 height: 26,
-                tree_type: TreeType::State
-            }
+                tree_type: TreeType::State,
+            },
         );
 
-         m.insert("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X".to_string(),
+        m.insert(
+            "nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X".to_string(),
             TreeAndQueue {
                 tree: Pubkey::from_str("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho").unwrap(),
                 queue: Pubkey::from_str("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X").unwrap(),
                 height: 26,
-                tree_type: TreeType::State
-            }
+                tree_type: TreeType::State,
+            },
         );
 
         m
     };
 }
 
-pub fn map_tree_and_queue_accounts<'a>(pubkey: String) -> Option<&'a TreeAndQueue> { //(tree, queue)
+pub fn map_tree_and_queue_accounts<'a>(pubkey: String) -> Option<&'a TreeAndQueue> {
+    //(tree, queue)
     // input 1: smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT  => (smt1, nfq1)
     // input 2: 6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU => (HLKs, 6L7S)
     QUEUE_TREE_MAPPING.get(pubkey.as_str())
@@ -105,7 +113,9 @@ pub fn parse_public_transaction_event(
 
     for seq in sequence_numbers.iter() {
         if let Some(queue_to_tree) = map_tree_and_queue_accounts(seq.pubkey.to_string()) {
-            if queue_to_tree.tree_type == TreeType::BatchedState || queue_to_tree.tree_type == TreeType::BatchedAddress {
+            if queue_to_tree.tree_type == TreeType::BatchedState
+                || queue_to_tree.tree_type == TreeType::BatchedAddress
+            {
                 tree_to_seq_number.insert(queue_to_tree.tree, seq.seq);
                 has_batched_instructions = true;
             }
@@ -129,7 +139,9 @@ pub fn parse_public_transaction_event(
         .zip(transaction_event.output_leaf_indices.iter())
     {
         let tree = pubkey_array[out_account.merkle_tree_index as usize];
-        let tree_and_queue = map_tree_and_queue_accounts(tree.clone().to_string().as_str().parse().unwrap()).ok_or(IngesterError::ParserError("Missing queue".to_string()))?;
+        let tree_and_queue =
+            map_tree_and_queue_accounts(tree.clone().to_string().as_str().parse().unwrap())
+                .ok_or(IngesterError::ParserError("Missing queue".to_string()))?;
 
         let mut seq = None;
         if tree_and_queue.tree_type == TreeType::State {

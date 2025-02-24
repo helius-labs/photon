@@ -335,34 +335,29 @@ pub async fn get_transaction_helper_v2(
     .into_iter()
     .map(parse_account_model_with_context)
     .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
-    let closed_accounts =
-        closed_accounts
-            .into_iter()
-            .map(|x| -> Result<ClosedAccount, PhotonApiError> {
-                Ok(ClosedAccount {
-                    account: AccountV2 {
-                        hash: x.account.hash,
-                        address: x.account.address,
-                        data: x.account.data,
-                        owner: x.account.owner,
-                        lamports: x.account.lamports,
-                        tree: x.account.tree,
-                        leaf_index: x.account.leaf_index,
-                        seq: x.account.seq,
-                        slot_created: x.account.slot_created,
-                        queue: x.context.queue,
-                        prove_by_index: x.context.in_output_queue,
-                        tree_type: x.context.tree_type,
-                    },
-                    nullifier: x.context.nullifier.ok_or(PhotonApiError::UnexpectedError(
-                        String::from("Nullifier does not exist for closed account."),
-                    ))?,
-                    tx_hash: x.context.tx_hash.ok_or(PhotonApiError::UnexpectedError(
-                        String::from("Nullifier does not exist for closed account."),
-                    ))?,
-                })
+    let closed_accounts = closed_accounts
+        .into_iter()
+        .map(|x| -> Result<ClosedAccount, PhotonApiError> {
+            Ok(ClosedAccount {
+                account: AccountV2 {
+                    hash: x.account.hash,
+                    address: x.account.address,
+                    data: x.account.data,
+                    owner: x.account.owner,
+                    lamports: x.account.lamports,
+                    tree: x.account.tree,
+                    leaf_index: x.account.leaf_index,
+                    seq: x.account.seq,
+                    slot_created: x.account.slot_created,
+                    queue: x.context.queue,
+                    prove_by_index: x.context.in_output_queue,
+                    tree_type: x.context.tree_type,
+                },
+                nullifier: x.context.nullifier.unwrap_or_default(),
+                tx_hash: x.context.tx_hash.unwrap_or_default(),
             })
-            .collect::<Result<Vec<ClosedAccount>, PhotonApiError>>()?;
+        })
+        .collect::<Result<Vec<ClosedAccount>, PhotonApiError>>()?;
 
     let out_accounts = status_update
         .out_accounts

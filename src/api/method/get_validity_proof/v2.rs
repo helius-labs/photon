@@ -67,7 +67,7 @@ pub async fn get_validity_proof_v2(
     }
 
     let mut v2_response: GetValidityProofResponseV2 =
-        if request.hashes.is_empty() && request.newAddresses.is_empty() {
+        if request.hashes.is_empty() && request.newAddresses.is_empty() && request.newAddressesWithTrees.is_empty() {
             GetValidityProofResponseV2::default()
         } else {
             get_validity_proof(conn, prover_url, request).await?.into()

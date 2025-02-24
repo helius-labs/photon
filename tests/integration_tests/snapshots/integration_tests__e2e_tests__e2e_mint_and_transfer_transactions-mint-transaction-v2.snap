@@ -194,7 +194,9 @@ expression: parsed_transaction_v2
           "leafIndex": 0,
           "seq": 1,
           "slotCreated": 40,
-          "queue": null
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "proveByIndex": false,
+          "treeType": 1
         },
         "optionalTokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
