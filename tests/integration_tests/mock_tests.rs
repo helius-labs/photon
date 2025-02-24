@@ -51,6 +51,7 @@ use photon_indexer::api::method::utils::Limit;
 use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -193,7 +194,10 @@ async fn test_multiple_accounts(
                 seq: Some(UnsignedInteger(1)),
                 slot_created: UnsignedInteger(0),
             },
-            context: AccountContext::default(),
+            context: AccountContext {
+                tree_type: TreeType::State as u16,
+                ..AccountContext::default()
+            }
         },
         AccountWithContext {
             account: Account {
@@ -211,7 +215,10 @@ async fn test_multiple_accounts(
                 seq: Some(UnsignedInteger(2)),
                 slot_created: UnsignedInteger(0),
             },
-            context: AccountContext::default(),
+            context: AccountContext {
+                tree_type: TreeType::State as u16,
+                ..AccountContext::default()
+            }
         },
         AccountWithContext {
             account: Account {
@@ -229,7 +236,10 @@ async fn test_multiple_accounts(
                 seq: Some(UnsignedInteger(3)),
                 slot_created: UnsignedInteger(1),
             },
-            context: AccountContext::default(),
+            context: AccountContext {
+                tree_type: TreeType::State as u16,
+                ..AccountContext::default()
+            }
         },
         AccountWithContext {
             account: Account {
@@ -247,7 +257,10 @@ async fn test_multiple_accounts(
                 seq: Some(UnsignedInteger(1)),
                 slot_created: UnsignedInteger(0),
             },
-            context: AccountContext::default(),
+            context: AccountContext {
+                tree_type: TreeType::State as u16,
+                ..AccountContext::default()
+            }
         },
     ];
     state_update.out_accounts = accounts.clone();
