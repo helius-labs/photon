@@ -46,14 +46,14 @@ impl MigrationTrait for Migration {
                     tx_hash BLOB,
                     nullifier_queue_index BIGINT NULL,
                     nullified_in_tree BOOLEAN NOT NULL DEFAULT FALSE,
-                    tree_type INTEGER NULL,
+                    tree_type INTEGER NULL
                 );
 
                 INSERT INTO accounts_new
                 SELECT
                     hash, data, data_hash, address, owner, tree, NULL as queue, leaf_index, seq,
                     slot_created, spent, prev_spent, lamports, discriminator,
-                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index, FALSE as nullified_in_tree NULL as tree_type
+                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index, FALSE as nullified_in_tree, NULL as tree_type
                 FROM accounts;
 
                 DROP TABLE accounts;
