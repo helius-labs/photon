@@ -125,7 +125,7 @@ async fn test_batched_tree_transactions(
         if !accounts.openedAccounts.is_empty() {
             output_queue_len += accounts.openedAccounts.len();
             merkle_tree_pubkey = accounts.openedAccounts[0].account.tree.0;
-            queue_pubkey = accounts.openedAccounts[0].account.queue.as_ref().unwrap().0;
+            queue_pubkey = accounts.openedAccounts[0].account.queue.0;
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {

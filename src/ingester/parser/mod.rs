@@ -54,7 +54,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             state_updates.push(state_update);
         } else {
             for (index, _) in ordered_instructions.iter().enumerate() {
-                if ordered_instructions.len() - index > 3 {
+                if ordered_instructions.len() - index > 2 {
                     if let Some(state_update) = parse_legacy_public_transaction_event(
                         tx,
                         slot,
