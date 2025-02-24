@@ -1,7 +1,7 @@
 ---
 source: tests/integration_tests/mock_tests.rs
-assertion_line: 1124
-expression: validity_proof
+assertion_line: 1157
+expression: validity_proof_v2
 ---
 {
   "value": {
@@ -14,7 +14,10 @@ expression: validity_proof
       "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY"
     ],
     "rootIndices": [
-      3
+      {
+        "rootIndex": 3,
+        "inTree": true
+      }
     ],
     "leafIndices": [
       0
@@ -24,7 +27,8 @@ expression: validity_proof
     ],
     "merkleTrees": [
       "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2"
-    ]
+    ],
+    "queues": []
   },
   "context": {
     "slot": 0

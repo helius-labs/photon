@@ -4,7 +4,6 @@ use super::{
 };
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
-use light_merkle_tree_metadata::merkle_tree::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;

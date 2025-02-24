@@ -1,8 +1,8 @@
-use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
-use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
+use super::common::{get_public_input_hash, hash_to_hex};
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
+use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
 use light_prover_client::prove_utils::CircuitType;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
@@ -20,8 +20,6 @@ use crate::api::method::{
     utils::Context,
 };
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
-
-use super::common::{get_public_input_hash, hash_to_hex};
 
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
@@ -51,7 +49,6 @@ pub async fn get_validity_proof(
             })
             .collect();
     }
-
     let context = Context::extract(conn).await?;
     let client = Client::new();
     let tx = conn.begin().await?;
@@ -77,6 +74,7 @@ pub async fn get_validity_proof(
         }
     };
     tx.commit().await?;
+
     let state_tree_height = if account_proofs.is_empty() {
         0
     } else {
@@ -137,7 +135,11 @@ pub async fn get_validity_proof(
         String::new()
     };
 
-    let queue_size = if state_tree_height == 26 { STATE_TREE_QUEUE_SIZE } else { BatchedMerkleTreeMetadata::default().root_history_capacity as u64 };
+    let queue_size = if state_tree_height == 26 {
+        STATE_TREE_QUEUE_SIZE
+    } else {
+        BatchedMerkleTreeMetadata::default().root_history_capacity as u64
+    };
 
     let batch_inputs = HexBatchInputsForProver {
         circuit_type: circuit_type.to_string(),

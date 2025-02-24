@@ -10,8 +10,6 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, blocks, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
-use light_compressed_account::pubkey::Pubkey;
-use light_merkle_tree_metadata::merkle_tree::TreeType;
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
@@ -29,7 +27,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
 use sea_orm_migration::sea_query::Expr;
-use crate::ingester::parser::map_tree_and_queue_accounts;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
@@ -198,9 +195,6 @@ pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, Pho
         queue: account.queue.clone().try_into()?,
         prove_by_index: account.in_output_queue,
         tree_type: account.tree_type as u16,
-        // map_tree_and_queue_accounts(solana_sdk::pubkey::Pubkey::try_from(account.queue).unwrap().to_string())
-        //     .map(|x| x.tree_type as u16)
-        //     .ok_or(PhotonApiError::UnexpectedError("Invalid tree type".to_string()))?,
     })
 }
 

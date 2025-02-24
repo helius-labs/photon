@@ -1167,7 +1167,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     // The Gnark prover has some randomness.
     validity_proof_v2.value.compressedProof = CompressedProof::default();
 
-    insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof_v2);
+    insta::assert_json_snapshot!(format!("{}-validity-proof-v2", name), validity_proof_v2);
 }
 
 #[named]

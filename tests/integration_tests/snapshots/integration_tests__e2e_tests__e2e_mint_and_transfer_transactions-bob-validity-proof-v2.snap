@@ -15,8 +15,14 @@ expression: validity_proof_v2
       "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7"
     ],
     "rootIndices": [
-      7,
-      7
+      {
+        "rootIndex": 7,
+        "inTree": true
+      },
+      {
+        "rootIndex": 7,
+        "inTree": true
+      }
     ],
     "leafIndices": [
       6,
@@ -29,6 +35,10 @@ expression: validity_proof_v2
     "merkleTrees": [
       "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
       "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT"
+    ],
+    "queues": [
+      "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+      "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148"
     ]
   },
   "context": {

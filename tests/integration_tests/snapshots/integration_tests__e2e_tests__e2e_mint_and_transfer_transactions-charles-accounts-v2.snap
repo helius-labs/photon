@@ -1,6 +1,6 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
-assertion_line: 163
+assertion_line: 164
 expression: accounts_v2
 ---
 {
@@ -24,7 +24,9 @@ expression: accounts_v2
           "leafIndex": 4,
           "seq": 5,
           "slotCreated": 0,
-          "queue": null
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "proveByIndex": false,
+          "treeType": 1
         },
         "tokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
@@ -50,7 +52,9 @@ expression: accounts_v2
           "leafIndex": 5,
           "seq": 6,
           "slotCreated": 0,
-          "queue": null
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "proveByIndex": false,
+          "treeType": 1
         },
         "tokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",

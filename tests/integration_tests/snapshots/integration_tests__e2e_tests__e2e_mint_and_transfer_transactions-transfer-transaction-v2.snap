@@ -165,20 +165,26 @@ expression: parsed_transaction_v2
     "closedAccounts": [
       {
         "account": {
-          "hash": "38eTBdRT4kdFELvNfbJbFZNvGWUvXbn3DdJn3PzMtsqJ",
-          "address": null,
-          "data": {
-            "discriminator": 2,
-            "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo/IF0SuAAU/8W2JwQ9eoK7yn7i6O/dx7aXfmnaBmwIYnOgDAAAAAAAAAAAA",
-            "dataHash": "4D9BW6ThazKaSy7U91cnSWF9E9pCtTFkomd25Pt6CL7k"
+          "account": {
+            "hash": "38eTBdRT4kdFELvNfbJbFZNvGWUvXbn3DdJn3PzMtsqJ",
+            "address": null,
+            "data": {
+              "discriminator": 2,
+              "data": "Fci4U9QOCVoeSJNu52uQTHTZkN+jGh5G5VqySLzUdo/IF0SuAAU/8W2JwQ9eoK7yn7i6O/dx7aXfmnaBmwIYnOgDAAAAAAAAAAAA",
+              "dataHash": "4D9BW6ThazKaSy7U91cnSWF9E9pCtTFkomd25Pt6CL7k"
+            },
+            "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+            "lamports": 0,
+            "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+            "leafIndex": 0,
+            "seq": 1,
+            "slotCreated": 0,
+            "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+            "proveByIndex": false,
+            "treeType": 1
           },
-          "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
-          "lamports": 0,
-          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
-          "leafIndex": 0,
-          "seq": 1,
-          "slotCreated": 0,
-          "queue": null
+          "nullifier": "11111111111111111111111111111111",
+          "txHash": "11111111111111111111111111111111"
         },
         "optionalTokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
@@ -206,7 +212,9 @@ expression: parsed_transaction_v2
           "leafIndex": 1,
           "seq": 2,
           "slotCreated": 41,
-          "queue": null
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "proveByIndex": false,
+          "treeType": 1
         },
         "optionalTokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
@@ -232,7 +240,9 @@ expression: parsed_transaction_v2
           "leafIndex": 2,
           "seq": 3,
           "slotCreated": 41,
-          "queue": null
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "proveByIndex": false,
+          "treeType": 1
         },
         "optionalTokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",
