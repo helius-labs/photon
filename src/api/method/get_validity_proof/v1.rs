@@ -1,3 +1,5 @@
+use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
+use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
@@ -135,6 +137,8 @@ pub async fn get_validity_proof(
         String::new()
     };
 
+    let queue_size = if state_tree_height == 26 { STATE_TREE_QUEUE_SIZE } else { BatchedMerkleTreeMetadata::default().root_history_capacity as u64 };
+
     let batch_inputs = HexBatchInputsForProver {
         circuit_type: circuit_type.to_string(),
         state_tree_height: state_tree_height as u32,
@@ -196,7 +200,7 @@ pub async fn get_validity_proof(
             .iter()
             .map(|x| x.rootSeq)
             .chain(new_address_proofs.iter().map(|x| x.rootSeq))
-            .map(|x| x % STATE_TREE_QUEUE_SIZE)
+            .map(|x| x % queue_size)
             .collect(),
         leafIndices: account_proofs
             .iter()
