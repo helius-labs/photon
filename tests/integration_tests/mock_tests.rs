@@ -571,6 +571,8 @@ async fn test_persist_token_data(
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            queue: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            tree_type: Set(TreeType::State as i32),
             seq: Set(Some(0)),
             ..Default::default()
         };
