@@ -1,3 +1,4 @@
+use log::info;
 use sea_orm::DatabaseConnection;
 
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -8,5 +9,8 @@ use super::utils::Context;
 pub async fn get_indexer_slot(
     conn: &DatabaseConnection,
 ) -> Result<UnsignedInteger, PhotonApiError> {
-    Ok(UnsignedInteger(Context::extract(conn).await?.slot))
+    let slot = Context::extract(conn).await?.slot;
+    info!("get_indexer_slot {}", slot);
+    
+    Ok(UnsignedInteger(slot))
 }

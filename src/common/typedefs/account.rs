@@ -4,6 +4,7 @@ use super::{
 };
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
@@ -43,13 +44,14 @@ pub struct AccountV2 {
     pub seq: Option<UnsignedInteger>,
     pub slot_created: UnsignedInteger,
     // nullifier_queue in legacy trees, output_queue in V2 trees.
-    pub queue: Option<SerializablePubkey>,
+    pub queue: SerializablePubkey,
     // Indicates if the account is not yet provable by validity_proof. The
     // account resides in on-chain RAM, with leaf_index mapping to its position.
     // This allows the protocol to prove the account's validity using only the
     // leaf_index. Consumers use this to decide if a validity proof is needed,
     // saving one RPC roundtrip.
     pub prove_by_index: bool,
+    pub tree_type: u16,
 }
 
 /// This is currently used internally:
@@ -60,7 +62,7 @@ pub struct AccountV2 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
-    pub queue: Option<SerializablePubkey>,
+    pub queue: SerializablePubkey,
     pub in_output_queue: bool,
     pub spent: bool,
     pub nullified_in_tree: bool,
@@ -77,6 +79,7 @@ pub struct AccountContext {
     // Legacy: None
     // Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
     pub tx_hash: Option<Hash>,
+    pub tree_type: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -92,7 +95,7 @@ impl AccountWithContext {
         compressed_account: CompressedAccount,
         hash: [u8; 32],
         tree: Pubkey,
-        queue: Option<Pubkey>,
+        queue: Pubkey,
         leaf_index: u32,
         slot: u64,
         seq: Option<u64>,
@@ -100,6 +103,7 @@ impl AccountWithContext {
         spent: bool,
         nullifier: Option<Hash>,
         nullifier_queue_index: Option<u64>,
+        tree_type: u16,
     ) -> Self {
         let CompressedAccount {
             owner,
@@ -127,13 +131,14 @@ impl AccountWithContext {
                 seq: seq.map(UnsignedInteger),
             },
             context: AccountContext {
-                queue: queue.map(SerializablePubkey::from),
+                queue: queue.into(),
                 in_output_queue,
                 spent,
                 nullified_in_tree: false,
                 nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
                 nullifier,
                 tx_hash: None,
+                tree_type,
             },
         }
     }

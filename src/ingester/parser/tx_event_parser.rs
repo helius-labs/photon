@@ -7,23 +7,81 @@ use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 use std::str::FromStr;
+use light_merkle_tree_metadata::merkle_tree::TreeType;
+
+pub struct TreeAndQueue {
+    tree: Pubkey,
+    queue: Pubkey,
+    height: u16,
+    pub(crate) tree_type: TreeType,
+}
 
 // TODO: add a table which stores tree metadata: tree_pubkey | queue_pubkey | type | ...
 lazy_static! {
-    pub static ref QUEUE_TREE_MAPPING: HashMap<String, String> = {
+
+    pub static ref QUEUE_TREE_MAPPING: HashMap<String, TreeAndQueue> = {
         let mut m = HashMap::new();
-        m.insert(
-            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(), // queue
-            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(), // tree
+
+        m.insert("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap(),
+                queue: Pubkey::from_str("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU").unwrap(),
+                height: 32,
+                tree_type: TreeType::BatchedState}
         );
+
+         m.insert("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT").unwrap(),
+                queue: Pubkey::from_str("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148").unwrap(),
+                height: 26,
+                tree_type: TreeType::State
+            }
+        );
+
+         m.insert("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho").unwrap(),
+                queue: Pubkey::from_str("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X").unwrap(),
+                height: 26,
+                tree_type: TreeType::State
+            }
+        );
+
+         m.insert("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap(),
+                queue: Pubkey::from_str("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU").unwrap(),
+                height: 32,
+                tree_type: TreeType::BatchedState}
+        );
+
+         m.insert("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT").unwrap(),
+                queue: Pubkey::from_str("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148").unwrap(),
+                height: 26,
+                tree_type: TreeType::State
+            }
+        );
+
+         m.insert("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X".to_string(),
+            TreeAndQueue {
+                tree: Pubkey::from_str("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho").unwrap(),
+                queue: Pubkey::from_str("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X").unwrap(),
+                height: 26,
+                tree_type: TreeType::State
+            }
+        );
+
         m
     };
 }
 
-fn queue_to_tree(queue: &str) -> Option<Pubkey> {
-    QUEUE_TREE_MAPPING
-        .get(queue)
-        .map(|x| Pubkey::from_str(x.as_str()).unwrap())
+pub fn map_tree_and_queue_accounts<'a>(pubkey: String) -> Option<&'a TreeAndQueue> { //(tree, queue)
+    // input 1: smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT  => (smt1, nfq1)
+    // input 2: 6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU => (HLKs, 6L7S)
+    QUEUE_TREE_MAPPING.get(pubkey.as_str())
 }
 
 pub fn parse_public_transaction_event(
@@ -43,21 +101,18 @@ pub fn parse_public_transaction_event(
     let mut state_update = StateUpdate::new();
 
     let mut has_batched_instructions = false;
+    let mut tree_to_seq_number = HashMap::new();
+
     for seq in sequence_numbers.iter() {
-        if queue_to_tree(&seq.pubkey.to_string()).is_some() {
-            has_batched_instructions = true;
-            break;
+        if let Some(queue_to_tree) = map_tree_and_queue_accounts(seq.pubkey.to_string()) {
+            if queue_to_tree.tree_type == TreeType::BatchedState || queue_to_tree.tree_type == TreeType::BatchedAddress {
+                tree_to_seq_number.insert(queue_to_tree.tree, seq.seq);
+                has_batched_instructions = true;
+            }
         }
     }
 
-    let mut tree_to_seq_number = HashMap::new();
-    if has_batched_instructions {
-        for seq in sequence_numbers.iter() {
-            if let Some(tree) = queue_to_tree(&seq.pubkey.to_string()) {
-                tree_to_seq_number.insert(tree, seq.seq);
-            }
-        }
-    } else {
+    if !has_batched_instructions {
         tree_to_seq_number = sequence_numbers
             .iter()
             .map(|seq| (seq.pubkey, seq.seq))
@@ -73,41 +128,36 @@ pub fn parse_public_transaction_event(
         .zip(output_compressed_account_hashes)
         .zip(transaction_event.output_leaf_indices.iter())
     {
-        let mut tree = pubkey_array[out_account.merkle_tree_index as usize];
-        let mut queue = queue_to_tree(&tree.to_string());
-        if let Some(q) = queue {
-            // swap tree and q
-            let temp = tree;
-            tree = q;
-            queue = Some(temp);
-        };
+        let tree = pubkey_array[out_account.merkle_tree_index as usize];
+        let tree_and_queue = map_tree_and_queue_accounts(tree.clone().to_string().as_str().parse().unwrap()).ok_or(IngesterError::ParserError("Missing queue".to_string()))?;
 
         let mut seq = None;
-        if queue.is_none() {
+        if tree_and_queue.tree_type == TreeType::State {
             seq = Some(*tree_to_seq_number.get(&tree).ok_or_else(|| {
                 IngesterError::ParserError("Missing sequence number".to_string())
             })?);
-        }
-        let enriched_account = AccountWithContext::new(
-            out_account.compressed_account,
-            hash,
-            tree,
-            queue,
-            *leaf_index,
-            slot,
-            seq,
-            queue.is_some(),
-            false,
-            None,
-            None,
-        );
 
-        if queue.is_none() {
             let seq = tree_to_seq_number
                 .get_mut(&tree)
                 .ok_or_else(|| IngesterError::ParserError("Missing sequence number".to_string()))?;
             *seq += 1;
         }
+
+        let in_output_queue = tree_and_queue.tree_type == TreeType::BatchedState;
+        let enriched_account = AccountWithContext::new(
+            out_account.compressed_account,
+            hash,
+            tree_and_queue.tree,
+            tree_and_queue.queue,
+            *leaf_index,
+            slot,
+            seq,
+            in_output_queue,
+            false,
+            None,
+            None,
+            tree_and_queue.tree_type as u16,
+        );
 
         state_update.out_accounts.push(enriched_account);
     }

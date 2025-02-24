@@ -49,6 +49,7 @@ struct QueueElement {
     leaf_index: i64,
     hash: Vec<u8>,
     tx_hash: Option<Vec<u8>>,
+    nullifier_queue_index: Option<i64>,
 }
 
 pub async fn get_queue_elements(
@@ -95,7 +96,7 @@ pub async fn get_queue_elements(
 
     let raw_sql = format!(
         "
-        SELECT leaf_index, hash, tx_hash
+        SELECT leaf_index, hash, tx_hash, nullifier_queue_index
         FROM accounts
         WHERE tree = {merkle_tree_pubkey_str}
         {leaf_indices_filter}
@@ -188,14 +189,16 @@ pub async fn get_queue_elements(
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
 
     let (proofs, first_value_queue_index) = if !indices.is_empty() {
-        // let first_value_queue_index = match queue_type {
-        //     QueueType::BatchedInput => Ok(queue_elements[0].input_queue_index.unwrap() as u64),
-        //     QueueType::BatchedOutput => Ok(queue_elements[0].leaf_index as u64),
-        //     _ => Err(PhotonApiError::ValidationError(format!(
-        //         "Invalid queue type: {:?}",
-        //         queue_type
-        //     ))),
-        // }?;
+        let first_value_queue_index = match queue_type {
+            QueueType::BatchedInput => Ok(queue_elements[0].nullifier_queue_index.ok_or(
+                PhotonApiError::ValidationError("Nullifier queue index is missing".to_string()),
+            )? as u64),
+            QueueType::BatchedOutput => Ok(queue_elements[0].leaf_index as u64),
+            _ => Err(PhotonApiError::ValidationError(format!(
+                "Invalid queue type: {:?}",
+                queue_type
+            ))),
+        }?;
         (
             get_multiple_compressed_leaf_proofs_by_indices(
                 &tx,
@@ -203,7 +206,7 @@ pub async fn get_queue_elements(
                 indices,
             )
             .await?,
-            0,
+            first_value_queue_index,
         )
     } else {
         (vec![], 0)

@@ -13,11 +13,12 @@ pub struct Model {
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
     /// Queue pubkey, for batched trees output queue pubkey
-    pub queue: Option<Vec<u8>>,
+    pub queue: Vec<u8>,
     pub leaf_index: i64,
     pub in_output_queue: bool,
     pub nullifier_queue_index: Option<i64>,
     pub nullified_in_tree: bool,
+    pub tree_type: i32,
     pub nullifier: Option<Vec<u8>>,
     pub tx_hash: Option<Vec<u8>>,
     pub seq: Option<i64>,
