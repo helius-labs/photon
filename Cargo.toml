@@ -79,25 +79,18 @@ solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
 
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "289dfd247e0f5b5beebdbf6bd192122c8fb15a2c", features = [
+light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
 ] }
-# light-merkle-tree-metadata = { path = "../light-protocol/program-libs/merkle-tree-metadata" }
-# light-concurrent-merkle-tree = { path = "../light-protocol/program-libs/concurrent-merkle-tree" }
-# light-sdk = { path = "../light-protocol/sdk-libs/sdk" }
-# light-compressed-account = { path = "../light-protocol/program-libs/compressed-account" }
-# light-batched-merkle-tree = { path = "../light-protocol/program-libs/batched-merkle-tree" }
-# light-prover-client = { path = "../light-protocol/prover/client" }
-
 
 sqlx = { version = "0.6.2", features = [
     "macros",
