@@ -1,7 +1,7 @@
 use crate::api::method::get_compressed_accounts_by_owner::{
     get_compressed_accounts_by_owner, get_compressed_accounts_by_owner_v2,
     GetCompressedAccountsByOwnerRequest, GetCompressedAccountsByOwnerResponse,
-    GetCompressedAccountsByOwnerV2Response,
+    GetCompressedAccountsByOwnerResponseV2,
 };
 use crate::api::method::get_multiple_compressed_account_proofs::{
     get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse, HashList,
@@ -262,7 +262,7 @@ impl PhotonApi {
     pub async fn get_compressed_accounts_by_owner_v2(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
-    ) -> Result<GetCompressedAccountsByOwnerV2Response, PhotonApiError> {
+    ) -> Result<GetCompressedAccountsByOwnerResponseV2, PhotonApiError> {
         get_compressed_accounts_by_owner_v2(self.db_conn.as_ref(), request).await
     }
 
@@ -408,7 +408,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedAccountsByOwnerV2".to_string(),
                 request: Some(GetCompressedAccountsByOwnerRequest::schema().1),
-                response: GetCompressedAccountsByOwnerV2Response::schema().1,
+                response: GetCompressedAccountsByOwnerResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedMintTokenHolders".to_string(),
