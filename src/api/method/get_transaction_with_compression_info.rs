@@ -124,6 +124,39 @@ pub struct GetTransactionResponseV2 {
     pub compressionInfo: CompressionInfoV2,
 }
 
+
+impl<'__s> ToSchema<'__s> for GetTransactionResponseV2 {
+    fn schema() -> (&'__s str, RefOr<Schema>) {
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .schema_type(SchemaType::Object)
+                .description(Some(
+                    "A Solana transaction with additional compression information",
+                ))
+                // TODO: Improve OpenAPI documentation here.
+                .property(
+                    "transaction",
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::Object)
+                        .description(Some(
+                            "An encoded confirmed transaction with status meta".to_string(),
+                        ))
+                        .build(),
+                )
+                .property("compression_info", CompressionInfoV2::schema().1)
+                .build(),
+        );
+
+        ("GetTransactionResponseV2", RefOr::T(schema))
+    }
+
+    fn aliases() -> Vec<(&'static str, Schema)> {
+        Vec::new()
+    }
+}
+
+
+
 fn parse_optional_token_data(
     account: Account,
 ) -> Result<AccountWithOptionalTokenData, PhotonApiError> {
