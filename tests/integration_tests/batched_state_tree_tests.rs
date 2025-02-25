@@ -7,14 +7,13 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressed
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
+use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
 use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
+use photon_indexer::api::method::get_validity_proof::GetValidityProofRequestV2;
 use photon_indexer::api::method::utils::GetCompressedTokenAccountsByOwner;
-use photon_indexer::api::method::{
-    get_multiple_compressed_account_proofs::HashList, get_validity_proof::GetValidityProofRequest,
-};
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
@@ -174,13 +173,12 @@ async fn test_batched_tree_transactions(
     for (i, chunk) in filtered_outputs.chunks(4).enumerate() {
         let validity_proof = setup
             .api
-            .get_validity_proof_v2(GetValidityProofRequest {
+            .get_validity_proof_v2(GetValidityProofRequestV2 {
                 hashes: chunk
                     .iter()
-                    .map(|x| photon_indexer::common::typedefs::hash::Hash::new(&x[..]).unwrap())
+                    .map(|x| Hash::new(&x[..]).unwrap())
                     .collect::<Vec<_>>(),
                 newAddressesWithTrees: vec![],
-                newAddresses: vec![],
             })
             .await
             .unwrap();
@@ -341,13 +339,12 @@ async fn test_batched_tree_transactions(
         for (j, chunk) in filtered_outputs.chunks(4).enumerate() {
             let validity_proof = setup
                 .api
-                .get_validity_proof_v2(GetValidityProofRequest {
+                .get_validity_proof_v2(GetValidityProofRequestV2 {
                     hashes: chunk
                         .iter()
-                        .map(|x| photon_indexer::common::typedefs::hash::Hash::new(&x[..]).unwrap())
+                        .map(|x| Hash::new(&x[..]).unwrap())
                         .collect::<Vec<_>>(),
                     newAddressesWithTrees: vec![],
-                    newAddresses: vec![],
                 })
                 .await
                 .unwrap();
@@ -845,7 +842,7 @@ pub async fn index(
 
             if index_transactions_individually {
                 for tx in txs {
-                    index_transaction(test_name, db_conn.clone(), rpc_client.clone(), &tx).await;
+                    index_transaction(test_name, db_conn.clone(), rpc_client.clone(), tx).await;
                 }
             } else {
                 index_multiple_transactions(

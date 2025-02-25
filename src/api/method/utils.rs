@@ -26,6 +26,7 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
+use crate::dao::generated::accounts::Model;
 use sea_orm_migration::sea_query::Expr;
 
 pub const PAGE_LIMIT: u64 = 1000;
@@ -127,122 +128,59 @@ pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
     discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
 }
 
-fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
+pub(crate) fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
 }
 
-pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
-    let data = match (account.data, account.data_hash, account.discriminator) {
-        (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
-            data: Base64String(data),
-            data_hash: data_hash.try_into()?,
-            discriminator: UnsignedInteger(parse_decimal(discriminator)?),
-        }),
-        (None, None, None) => None,
-        _ => {
-            return Err(PhotonApiError::UnexpectedError(
-                "Invalid account data".to_string(),
-            ))
-        }
-    };
+impl TryFrom<accounts::Model> for AccountWithContext {
+    type Error = PhotonApiError;
 
-    Ok(Account {
-        hash: account.hash.try_into()?,
-        address: account
-            .address
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
-        data,
-        owner: account.owner.try_into()?,
-        tree: account.tree.try_into()?,
-        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
-        lamports: UnsignedInteger(parse_decimal(account.lamports)?),
-        slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
-    })
-}
+    fn try_from(account: Model) -> Result<Self, Self::Error> {
+        let data = match (account.data, account.data_hash, account.discriminator) {
+            (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
+                data: Base64String(data),
+                data_hash: data_hash.try_into()?,
+                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+            }),
+            (None, None, None) => None,
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid account data".to_string(),
+                ))
+            }
+        };
 
-pub fn parse_account_model_v2(account: accounts::Model) -> Result<AccountV2, PhotonApiError> {
-    let data = match (account.data, account.data_hash, account.discriminator) {
-        (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
-            data: Base64String(data),
-            data_hash: data_hash.try_into()?,
-            discriminator: UnsignedInteger(parse_decimal(discriminator)?),
-        }),
-        (None, None, None) => None,
-        _ => {
-            return Err(PhotonApiError::UnexpectedError(
-                "Invalid account data".to_string(),
-            ))
-        }
-    };
-
-    Ok(AccountV2 {
-        hash: account.hash.try_into()?,
-        address: account
-            .address
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
-        data,
-        owner: account.owner.try_into()?,
-        tree: account.tree.try_into()?,
-        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
-        lamports: UnsignedInteger(parse_decimal(account.lamports)?),
-        slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
-        queue: account.queue.clone().try_into()?,
-        prove_by_index: account.in_output_queue,
-        tree_type: account.tree_type as u16,
-    })
-}
-
-pub fn parse_account_model_with_context(
-    account: accounts::Model,
-) -> Result<AccountWithContext, PhotonApiError> {
-    let data = match (account.data, account.data_hash, account.discriminator) {
-        (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
-            data: Base64String(data),
-            data_hash: data_hash.try_into()?,
-            discriminator: UnsignedInteger(parse_decimal(discriminator)?),
-        }),
-        (None, None, None) => None,
-        _ => {
-            return Err(PhotonApiError::UnexpectedError(
-                "Invalid account data".to_string(),
-            ))
-        }
-    };
-
-    Ok(AccountWithContext {
-        account: Account {
-            hash: account.hash.try_into()?,
-            address: account
-                .address
-                .map(SerializablePubkey::try_from)
-                .transpose()?,
-            data,
-            owner: account.owner.try_into()?,
-            tree: account.tree.try_into()?,
-            leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index.try_into().unwrap())?),
-            lamports: UnsignedInteger(parse_decimal(account.lamports)?),
-            slot_created: UnsignedInteger(account.slot_created as u64),
-            seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
-        },
-        context: AccountContext {
-            queue: account.queue.try_into()?,
-            in_output_queue: account.in_output_queue,
-            spent: account.spent,
-            nullified_in_tree: account.nullified_in_tree,
-            nullifier_queue_index: account
-                .nullifier_queue_index
-                .map(|index| UnsignedInteger(index as u64)),
-            nullifier: account.nullifier.map(Hash::try_from).transpose()?,
-            tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
-            tree_type: account.tree_type as u16,
-        },
-    })
+        Ok(AccountWithContext {
+            account: Account {
+                hash: account.hash.try_into()?,
+                address: account
+                    .address
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?,
+                data,
+                owner: account.owner.try_into()?,
+                tree: account.tree.try_into()?,
+                leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index as u64)?),
+                lamports: UnsignedInteger(parse_decimal(account.lamports)?),
+                slot_created: UnsignedInteger(account.slot_created as u64),
+                seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
+            },
+            context: AccountContext {
+                queue: account.queue.try_into()?,
+                in_output_queue: account.in_output_queue,
+                spent: account.spent,
+                nullified_in_tree: account.nullified_in_tree,
+                nullifier_queue_index: account
+                    .nullifier_queue_index
+                    .map(|index| UnsignedInteger(index as u64)),
+                nullifier: account.nullifier.map(Hash::try_from).transpose()?,
+                tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
+                tree_type: account.tree_type as u16,
+            },
+        })
+    }
 }
 
 // We do not use generics to simplify documentation generation.
@@ -383,7 +321,7 @@ pub async fn fetch_token_accounts(
                 "Base account not found for token account".to_string(),
             ))?;
             Ok(TokenAccount {
-                account: parse_account_model(account)?,
+                account: account.try_into()?,
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
                     owner: token_account.owner.try_into()?,
@@ -920,7 +858,7 @@ pub async fn fetch_token_accounts_v2(
                 "Base account not found for token account".to_string(),
             ))?;
             Ok(TokenAccountV2 {
-                account: parse_account_model_v2(account)?,
+                account: account.try_into()?,
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
                     owner: token_account.owner.try_into()?,

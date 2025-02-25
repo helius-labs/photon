@@ -3,7 +3,6 @@ use crate::api::method::get_compressed_accounts_by_owner::common::{
     validate_filters, GetCompressedAccountsByOwnerRequest, QueryBuilder,
 };
 use crate::api::method::get_compressed_accounts_by_owner::indexed_accounts::Solayer;
-use crate::api::method::utils::parse_account_model_v2;
 use crate::api::method::utils::Context;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::hash::Hash;
@@ -57,7 +56,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
 
     let items = result
         .into_iter()
-        .map(parse_account_model_v2)
+        .map(TryFrom::try_from)
         .collect::<Result<Vec<AccountV2>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|u| u.hash.clone());

@@ -6,8 +6,7 @@ use borsh::BorshDeserialize;
 
 use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
-use super::common::GetValidityProofResponseV2;
-use crate::api::method::get_validity_proof::common::GetValidityProofRequest;
+use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2};
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
@@ -15,7 +14,7 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 pub async fn get_validity_proof_v2(
     conn: &DatabaseConnection,
     prover_url: &str,
-    mut request: GetValidityProofRequest,
+    mut request: GetValidityProofRequestV2,
 ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -57,6 +56,8 @@ pub async fn get_validity_proof_v2(
         )));
     }
 
+    // Skip accounts that are in the output queue but not in batched merkle tree yet.
+    // users prove inclusion of skipped accounts by index, not zkp.
     for (num_removed, (index, _)) in accounts
         .iter()
         .enumerate()
@@ -67,21 +68,29 @@ pub async fn get_validity_proof_v2(
     }
 
     let mut v2_response: GetValidityProofResponseV2 =
-        if request.hashes.is_empty() && request.newAddresses.is_empty() && request.newAddressesWithTrees.is_empty() {
+        if request.hashes.is_empty() && request.newAddressesWithTrees.is_empty() {
             GetValidityProofResponseV2::default()
         } else {
-            get_validity_proof(conn, prover_url, request).await?.into()
+            get_validity_proof(conn, prover_url, request.into())
+                .await?
+                .into()
         };
     accounts
         .iter()
         .try_for_each(|x| -> Result<(), PhotonApiError> {
             v2_response.value.queues.push(
-                 SerializablePubkey::try_from_slice(x.queue.as_slice()).map_err(|e|
-                     PhotonApiError::ValidationError(format!("Error converting queue pubkey to SerializablePubkey: {:?}", e))
-                 )?.to_string()
+                SerializablePubkey::try_from_slice(x.queue.as_slice())
+                    .map_err(|e| {
+                        PhotonApiError::ValidationError(format!(
+                            "Error converting queue pubkey to SerializablePubkey: {:?}",
+                            e
+                        ))
+                    })?
+                    .to_string(),
             );
             Ok(())
         })?;
+
     // Add data of skipped accounts.
     for (index, account) in accounts
         .iter()
@@ -92,13 +101,15 @@ pub async fn get_validity_proof_v2(
             .value
             .leafIndices
             .insert(index, account.leaf_index as u32);
-        v2_response.value.leaves.insert(
-            index,
-            Hash::new(account.hash.as_slice())?.to_string(),
-        );
+        v2_response
+            .value
+            .leaves
+            .insert(index, Hash::new(account.hash.as_slice())?.to_string());
         v2_response.value.merkleTrees.insert(
             index,
-            SerializablePubkey::try_from_slice(account.tree.as_slice()).unwrap_or(SerializablePubkey::default()).to_string(),
+            SerializablePubkey::try_from_slice(account.tree.as_slice())
+                .unwrap_or(SerializablePubkey::default())
+                .to_string(),
         );
         // proof by index has no root.
         v2_response.value.rootIndices.insert(index, None.into());

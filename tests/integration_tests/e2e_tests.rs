@@ -7,7 +7,7 @@ use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
-use photon_indexer::api::method::get_validity_proof::CompressedProof;
+use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidityProofRequestV2};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -201,9 +201,8 @@ async fn test_e2e_mint_and_transfer_transactions(
             // V2 Test for Validity Proof
             let mut validity_proof_v2 = setup
                 .api
-                .get_validity_proof_v2(GetValidityProofRequest {
+                .get_validity_proof_v2(GetValidityProofRequestV2 {
                     hashes: hash_list.0.clone(),
-                    newAddresses: vec![],
                     newAddressesWithTrees: vec![],
                 })
                 .await

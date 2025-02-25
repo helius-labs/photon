@@ -6,7 +6,6 @@ use crate::ingester::persist::{
 };
 use crate::migration::Expr;
 use light_compressed_account::event::BatchNullifyContext;
-use log::debug;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
 
@@ -42,7 +41,6 @@ pub async fn spend_input_accounts(
     )
     .await?;
 
-    debug!("Marking token accounts as spent...",);
     let query = token_accounts::Entity::update_many()
         .col_expr(token_accounts::Column::Spent, Expr::value(true))
         .col_expr(
@@ -78,10 +76,6 @@ pub async fn spend_input_accounts_batched(
         return Ok(());
     }
     for account in accounts {
-        log::info!(
-            "Updating nullifier queue index and nullifier for account {:?} ",
-            account
-        );
         accounts::Entity::update_many()
             .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
             .col_expr(

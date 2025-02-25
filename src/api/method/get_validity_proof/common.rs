@@ -60,6 +60,26 @@ pub struct GetValidityProofRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
+pub struct GetValidityProofRequestV2 {
+    #[serde(default)]
+    pub hashes: Vec<Hash>,
+    #[serde(default)]
+    pub newAddressesWithTrees: Vec<AddressWithTree>,
+}
+
+impl From<GetValidityProofRequestV2> for GetValidityProofRequest {
+    fn from(value: GetValidityProofRequestV2) -> Self {
+        GetValidityProofRequest {
+            hashes: value.hashes,
+            newAddresses: vec![],
+            newAddressesWithTrees: value.newAddressesWithTrees,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
 // Create to hide the deprecated newAddresses field from the documentation
 pub struct GetValidityProofRequestDocumentation {
     #[serde(default)]

@@ -105,16 +105,11 @@ impl MigrationTrait for Migration {
                 "#,
             ).await?;
         } else {
-
             manager
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column(
-                            ColumnDef::new(Accounts::TreeType)
-                                .integer()
-                                .null()
-                        )
+                        .add_column(ColumnDef::new(Accounts::TreeType).integer().null())
                         .to_owned(),
                 )
                 .await?;
@@ -302,7 +297,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
         } else {
-
             manager
                 .alter_table(
                     Table::alter()

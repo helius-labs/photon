@@ -2,8 +2,10 @@ use super::common::{get_public_input_hash, hash_to_hex};
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
+use light_batched_merkle_tree::constants::DEFAULT_BATCH_STATE_TREE_HEIGHT;
 use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
 use light_prover_client::prove_utils::CircuitType;
+use light_sdk::STATE_MERKLE_TREE_HEIGHT;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
@@ -94,8 +96,7 @@ pub async fn get_validity_proof(
     } else {
         new_address_proofs[0].proof.len()
     };
-    log::debug!("state tree height {}", state_tree_height);
-    log::debug!("address tree height {}", address_tree_height);
+
     let all_address_trees_height_is_equal = new_address_proofs
         .iter()
         .all(|x| x.proof.len() == address_tree_height);
@@ -126,7 +127,7 @@ pub async fn get_validity_proof(
             ))
         }
     };
-    let public_input_hash = if state_tree_height == 32 {
+    let public_input_hash = if state_tree_height == DEFAULT_BATCH_STATE_TREE_HEIGHT as usize {
         hash_to_hex(&crate::common::typedefs::hash::Hash(get_public_input_hash(
             &account_proofs,
             &new_address_proofs,
@@ -135,7 +136,7 @@ pub async fn get_validity_proof(
         String::new()
     };
 
-    let queue_size = if state_tree_height == 26 {
+    let queue_size = if state_tree_height == STATE_MERKLE_TREE_HEIGHT {
         STATE_TREE_QUEUE_SIZE
     } else {
         BatchedMerkleTreeMetadata::default().root_history_capacity as u64
