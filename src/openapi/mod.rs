@@ -13,15 +13,16 @@ use crate::api::method::get_compressed_token_account_balance::TokenAccountBalanc
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceListV2;
-use crate::api::method::get_multiple_compressed_accounts::AccountList;
+use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountListV2};
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_queue_elements::MerkleProofWithContextV2;
-use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
+use crate::api::method::get_transaction_with_compression_info::{AccountWithOptionalTokenData, ClosedAccount, ClosedAccountWithOptionalTokenData, AccountWithOptionalTokenDataV2};
 use crate::api::method::get_validity_proof::{
     CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, RootIndex,
 };
+use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -29,8 +30,8 @@ use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
 use crate::api::method::utils::SignatureInfoListWithError;
 use crate::api::method::utils::SignatureInfoWithError;
-use crate::api::method::utils::TokenAccount;
-use crate::api::method::utils::TokenAccountList;
+use crate::api::method::utils::{TokenAccount, TokenAccountV2};
+use crate::api::method::utils::{TokenAccountList, TokenAccountListV2};
 use crate::common::typedefs::account::{
     Account, AccountContext, AccountData, AccountV2, AccountWithContext,
 };
@@ -77,6 +78,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     SerializablePubkey,
     Context,
     Hash,
+    CompressionInfoV2,
     PaginatedAccountList,
     PaginatedAccountListV2,
     Account,
@@ -86,9 +88,12 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     MerkleProofWithContext,
     MerkleProofWithContextV2,
     TokenAccountList,
+    TokenAccountListV2,
     TokenAccount,
+    TokenAccountV2,
     TokenAccountBalance,
     AccountList,
+    AccountListV2,
     Limit,
     Base58String,
     Base64String,
@@ -102,6 +107,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     AccountData,
     AccountState,
     AccountWithOptionalTokenData,
+    ClosedAccountWithOptionalTokenData,
+    ClosedAccount,
+    AccountWithOptionalTokenDataV2,
     UnixTimestamp,
     UnsignedInteger,
     CompressedProof,

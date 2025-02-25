@@ -452,7 +452,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/Account'
+                        $ref: '#/components/schemas/AccountV2'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -1317,7 +1317,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/TokenAccountList'
+                        $ref: '#/components/schemas/TokenAccountListV2'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -1567,7 +1567,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/TokenAccountList'
+                        $ref: '#/components/schemas/TokenAccountListV2'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -3089,7 +3089,7 @@ paths:
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
-                        $ref: '#/components/schemas/AccountList'
+                        $ref: '#/components/schemas/AccountListV2'
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
@@ -3384,8 +3384,7 @@ paths:
                   - queueType
                   properties:
                     merkleTree:
-                      type: string
-                      format: binary
+                      $ref: '#/components/schemas/Hash'
                     numElements:
                       type: integer
                       format: uint16
@@ -3434,9 +3433,14 @@ paths:
                     required:
                     - context
                     - value
+                    - firstValueQueueIndex
                     properties:
                       context:
                         $ref: '#/components/schemas/Context'
+                      firstValueQueueIndex:
+                        type: integer
+                        format: uint64
+                        minimum: 0
                       value:
                         type: array
                         items:
@@ -3681,11 +3685,11 @@ paths:
                           closedAccounts:
                             type: array
                             items:
-                              $ref: '#/components/schemas/AccountWithOptionalTokenData'
+                              $ref: '#/components/schemas/ClosedAccountWithOptionalTokenData'
                           openedAccounts:
                             type: array
                             items:
-                              $ref: '#/components/schemas/AccountWithOptionalTokenData'
+                              $ref: '#/components/schemas/AccountWithOptionalTokenDataV2'
                         additionalProperties: false
                       transaction:
                         type: object
@@ -4000,9 +4004,11 @@ components:
         - GetTransactionWithCompressionInfoV2 (internally)
         All endpoints return AccountV2.
       required:
+      - queue
       - inOutputQueue
       - spent
       - nullifiedInTree
+      - treeType
       properties:
         inOutputQueue:
           type: boolean
@@ -4016,6 +4022,10 @@ components:
           $ref: '#/components/schemas/SerializablePubkey'
         spent:
           type: boolean
+        treeType:
+          type: integer
+          format: uint16
+          minimum: 0
         txHash:
           $ref: '#/components/schemas/Hash'
       additionalProperties: false
@@ -4045,6 +4055,17 @@ components:
             - $ref: '#/components/schemas/Account'
             nullable: true
       additionalProperties: false
+    AccountListV2:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/AccountV2'
+            nullable: true
     AccountState:
       type: string
       enum:
@@ -4059,6 +4080,9 @@ components:
       - tree
       - leafIndex
       - slotCreated
+      - queue
+      - proveByIndex
+      - treeType
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -4072,6 +4096,8 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
+        proveByIndex:
+          type: boolean
         queue:
           $ref: '#/components/schemas/SerializablePubkey'
         seq:
@@ -4080,6 +4106,10 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
+        treeType:
+          type: integer
+          format: uint16
+          minimum: 0
       additionalProperties: false
     AccountWithContext:
       type: object
@@ -4099,6 +4129,16 @@ components:
       properties:
         account:
           $ref: '#/components/schemas/Account'
+        optionalTokenData:
+          $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
+    AccountWithOptionalTokenDataV2:
+      type: object
+      required:
+      - account
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountV2'
         optionalTokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
@@ -4127,6 +4167,30 @@ components:
       description: A base 64 encoded string.
       default: SGVsbG8sIFdvcmxkIQ==
       example: SGVsbG8sIFdvcmxkIQ==
+    ClosedAccount:
+      type: object
+      required:
+      - account
+      - nullifier
+      - txHash
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountV2'
+        nullifier:
+          $ref: '#/components/schemas/Hash'
+        txHash:
+          $ref: '#/components/schemas/Hash'
+      additionalProperties: false
+    ClosedAccountWithOptionalTokenData:
+      type: object
+      required:
+      - account
+      properties:
+        account:
+          $ref: '#/components/schemas/ClosedAccount'
+        optionalTokenData:
+          $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
     CompressedProof:
       type: object
       required:
@@ -4218,6 +4282,21 @@ components:
           type: array
           items:
             type: string
+    CompressionInfoV2:
+      type: object
+      required:
+      - closedAccounts
+      - openedAccounts
+      properties:
+        closedAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClosedAccountWithOptionalTokenData'
+        openedAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountWithOptionalTokenDataV2'
+      additionalProperties: false
     Context:
       type: object
       required:
@@ -4533,6 +4612,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TokenAccount'
+    TokenAccountListV2:
+      type: object
+      required:
+      - items
+      properties:
+        cursor:
+          $ref: '#/components/schemas/Base58String'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenAccountV2'
+    TokenAccountV2:
+      type: object
+      required:
+      - account
+      - tokenData
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountV2'
+        tokenData:
+          $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
     TokenBalance:
       type: object
       required:

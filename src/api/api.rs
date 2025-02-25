@@ -373,7 +373,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedAccountV2".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
-                response: AccountResponse::schema().1,
+                response: AccountResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedAccountBalance".to_string(),
@@ -423,7 +423,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getMultipleCompressedAccountsV2".to_string(),
                 request: Some(GetMultipleCompressedAccountsRequest::adjusted_schema()),
-                response: GetMultipleCompressedAccountsResponse::schema().1,
+                response: GetMultipleCompressedAccountsResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByOwner".to_string(),
@@ -433,7 +433,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByOwnerV2".to_string(),
                 request: Some(GetCompressedTokenAccountsByOwner::schema().1),
-                response: TokenAccountListResponse::schema().1,
+                response: TokenAccountListResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByDelegate".to_string(),
@@ -443,7 +443,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getCompressedTokenAccountsByDelegateV2".to_string(),
                 request: Some(GetCompressedTokenAccountsByDelegate::schema().1),
-                response: TokenAccountListResponse::schema().1,
+                response: TokenAccountListResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getTransactionWithCompressionInfo".to_string(),
@@ -453,7 +453,7 @@ impl PhotonApi {
             OpenApiSpec {
                 name: "getTransactionWithCompressionInfoV2".to_string(),
                 request: Some(GetTransactionRequest::schema().1),
-                response: GetTransactionResponse::schema().1,
+                response: GetTransactionResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedAccountProof".to_string(),
