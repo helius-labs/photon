@@ -20,7 +20,7 @@ pub struct PaginatedAccountListV2 {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetCompressedAccountsByOwnerV2Response {
+pub struct GetCompressedAccountsByOwnerResponseV2 {
     pub context: Context,
     pub value: PaginatedAccountListV2,
 }
@@ -28,7 +28,7 @@ pub struct GetCompressedAccountsByOwnerV2Response {
 pub async fn get_compressed_accounts_by_owner_v2(
     conn: &DatabaseConnection,
     request: GetCompressedAccountsByOwnerRequest,
-) -> Result<GetCompressedAccountsByOwnerV2Response, PhotonApiError> {
+) -> Result<GetCompressedAccountsByOwnerResponseV2, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
     validate_filters(&request.filters)?;
@@ -64,7 +64,7 @@ pub async fn get_compressed_accounts_by_owner_v2(
         cursor = None;
     }
 
-    Ok(GetCompressedAccountsByOwnerV2Response {
+    Ok(GetCompressedAccountsByOwnerResponseV2 {
         context,
         value: PaginatedAccountListV2 { items, cursor },
     })

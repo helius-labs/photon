@@ -8,6 +8,6 @@ pub use v1::{
     get_compressed_accounts_by_owner, GetCompressedAccountsByOwnerResponse, PaginatedAccountList,
 };
 pub use v2::{
-    get_compressed_accounts_by_owner_v2, GetCompressedAccountsByOwnerV2Response,
+    get_compressed_accounts_by_owner_v2, GetCompressedAccountsByOwnerResponseV2,
     PaginatedAccountListV2,
 };
