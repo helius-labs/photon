@@ -1,4 +1,3 @@
-use log::info;
 use sea_orm::DatabaseConnection;
 
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;

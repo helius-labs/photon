@@ -1,8 +1,9 @@
 use light_merkle_tree_metadata::queue::QueueType;
 use sea_orm::{
-    ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement,
-    TransactionTrait,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, TransactionTrait,
 };
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -11,9 +12,7 @@ use crate::api::method::utils::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
-use crate::ingester::persist::{
-    bytes_to_sql_format, get_multiple_compressed_leaf_proofs_by_indices,
-};
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -44,7 +43,7 @@ pub struct MerkleProofWithContextV2 {
     pub account_hash: Hash,
 }
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug)]
 struct QueueElement {
     leaf_index: i64,
     hash: Vec<u8>,
@@ -56,16 +55,8 @@ pub async fn get_queue_elements(
     conn: &DatabaseConnection,
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
-    let merkle_tree_pubkey_str =
-        bytes_to_sql_format(conn.get_database_backend(), request.merkle_tree.to_vec());
     let queue_type = QueueType::from(request.queue_type as u64);
     let num_elements = request.num_elements;
-    log::info!(
-        "Fetching {} elements from queue {:?} for tree {}",
-        num_elements,
-        queue_type,
-        merkle_tree_pubkey_str
-    );
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -76,117 +67,70 @@ pub async fn get_queue_elements(
         .await?;
     }
 
-    let leaf_indices_filter = if let Some(start_offset) = request.start_offset {
-        format!("AND leaf_index >= {}", start_offset)
-    } else {
-        "".to_string()
-    };
-    let queue_type_filter = match queue_type {
-        QueueType::BatchedInput => Ok(
-            "AND nullifier_queue_index IS NOT NULL ORDER BY nullifier_queue_index ASC".to_string(),
-        ),
-        QueueType::BatchedOutput => {
-            Ok("AND in_output_queue = TRUE ORDER BY leaf_index ASC".to_string())
-        }
-        _ => Err(PhotonApiError::ValidationError(format!(
-            "Invalid queue type: {:?}",
-            queue_type
-        ))),
-    }?;
+    let mut query_condition =
+        Condition::all().add(accounts::Column::Tree.eq(request.merkle_tree.to_vec()));
 
-    let raw_sql = format!(
-        "
-        SELECT leaf_index, hash, tx_hash, nullifier_queue_index
-        FROM accounts
-        WHERE tree = {merkle_tree_pubkey_str}
-        {leaf_indices_filter}
-        {queue_type_filter}
-        LIMIT {num_elements}
-        ",
-    );
-    let stmt = Statement::from_string(tx.get_database_backend(), raw_sql);
-    let queue_elements = QueueElement::find_by_statement(stmt)
+    match queue_type {
+        QueueType::BatchedInput => {
+            query_condition =
+                query_condition.add(accounts::Column::NullifierQueueIndex.is_not_null());
+            if let Some(start_offset) = request.start_offset {
+                query_condition = query_condition
+                    .add(accounts::Column::NullifierQueueIndex.gte(start_offset as i64));
+            }
+        }
+        QueueType::BatchedOutput => {
+            query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
+            if let Some(start_offset) = request.start_offset {
+                query_condition =
+                    query_condition.add(accounts::Column::LeafIndex.gte(start_offset as i64));
+            }
+        }
+        _ => {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid queue type: {:?}",
+                queue_type
+            )))
+        }
+    }
+
+    let query = match queue_type {
+        QueueType::BatchedInput => accounts::Entity::find()
+            .filter(query_condition)
+            .order_by_asc(accounts::Column::NullifierQueueIndex),
+        QueueType::BatchedOutput => accounts::Entity::find()
+            .filter(query_condition)
+            .order_by_asc(accounts::Column::LeafIndex),
+        _ => {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid queue type: {:?}",
+                queue_type
+            )))
+        }
+    };
+
+    let sql = query.build(conn.get_database_backend()).sql;
+    let values = query.build(conn.get_database_backend()).values;
+    println!("sql: {:?}", sql);
+    println!("values: {:?}", values);
+
+    let queue_elements: Vec<_> = query.clone().all(&tx).await?;
+    println!("0 queue_elements: {:?}", queue_elements);
+
+    let queue_elements: Vec<QueueElement> = query
+        .limit(num_elements as u64)
+        .into_model::<QueueElement>()
         .all(&tx)
         .await
         .map_err(|e| {
             PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
         })?;
-    {
-        let raw_sql = format!(
-            "
-        SELECT * FROM accounts
-        WHERE tree = {merkle_tree_pubkey_str}
-        LIMIT {num_elements}
-        ",
-        );
-        // let columns = format!(
-        //     "hash, {}, data_hash, address, owner, tree, queue, in_output_queue, nullifier_queue_index, tx_hash, nullifier, leaf_index, seq, slot_created, spent, prev_spent, lamports, discriminator, nullified_in_tree",
-        //     query_builder.data_column
-        // );
 
-        // let raw_sql = query_builder.get_query(&columns);
+    println!("queue_elements: {:?}", queue_elements);
 
-        let stmt = Statement::from_string(tx.get_database_backend(), raw_sql);
-        let all_accounts_elements = accounts::Model::find_by_statement(stmt)
-            .all(&tx)
-            .await
-            .map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
-            })?;
-        log::info!(
-            "all accounts nullifier queue indices {:?}",
-            all_accounts_elements
-                .iter()
-                .map(|e| e.nullifier_queue_index)
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts Some nullifier queue indices, leaf_indices {:?}",
-            all_accounts_elements
-                .iter()
-                .map(|e| (e.nullifier_queue_index, e.leaf_index))
-                .filter(|e| e.0.is_some())
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts spent leaves {:?}",
-            all_accounts_elements
-                .iter()
-                .filter(|e| e.spent)
-                .map(|e| e.leaf_index)
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts spent in tree leaves {:?}",
-            all_accounts_elements
-                .iter()
-                .filter(|e| e.nullified_in_tree)
-                .map(|e| e.leaf_index)
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts leaf indices {:?}",
-            all_accounts_elements
-                .iter()
-                .map(|e| e.leaf_index)
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts spent {:?}",
-            all_accounts_elements
-                .iter()
-                .map(|e| e.spent)
-                .collect::<Vec<_>>()
-        );
-        log::info!(
-            "all accounts in_output_queue {:?}",
-            all_accounts_elements
-                .iter()
-                .map(|e| e.in_output_queue)
-                .collect::<Vec<_>>()
-        );
-    }
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
+
+    println!("indices: {:?}", indices);
 
     let (proofs, first_value_queue_index) = if !indices.is_empty() {
         let first_value_queue_index = match queue_type {
@@ -218,10 +162,6 @@ pub async fn get_queue_elements(
         .into_iter()
         .zip(queue_elements.iter())
         .map(|(proof, queue_element)| {
-            assert_eq!(
-                proof.leafIndex as u64, queue_element.leaf_index as u64,
-                "Leaf index mismatch debug."
-            );
             let tx_hash = queue_element
                 .tx_hash
                 .as_ref()
@@ -239,6 +179,7 @@ pub async fn get_queue_elements(
             })
         })
         .collect::<Result<_, PhotonApiError>>()?;
+
     Ok(GetQueueElementsResponse {
         context,
         value: result,

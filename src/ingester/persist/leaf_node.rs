@@ -105,7 +105,6 @@ pub async fn persist_leaf_nodes(
             leaf_idx: Set(Some(leaf_node.leaf_index as i64)),
             seq: Set(leaf_node.seq.map(|x| x as i64)),
         };
-        log::info!("model {:?}", model);
 
         let existing_seq = node_locations_to_hashes_and_seq
             .get(&key)

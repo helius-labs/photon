@@ -106,8 +106,7 @@ pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
     let mut data = account.data.clone();
     let pubkey = light_compressed_account::pubkey::Pubkey::new_from_array(account.owner.to_bytes());
-    info!("Parsing historical roots for pubkey: {:?}", pubkey);
-    
+
     fn extract_roots(root_history: &[[u8; 32]]) -> Vec<Hash> {
         root_history.iter().map(|&root| Hash::from(root)).collect()
     }
@@ -117,7 +116,6 @@ fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
     }
 
     if let Ok(merkle_tree) = BatchedMerkleTreeAccount::state_from_bytes(&mut data, &pubkey) {
-        info!("Found BatchedMerkleTreeAccount");
         return extract_roots(merkle_tree.root_history.as_slice());
     }
 
@@ -126,7 +124,7 @@ fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
         &account.data[8 + mem::size_of::<MerkleTreeMetadata>()..],
     )
     .unwrap();
-    
+
     extract_roots(concurrent_tree.roots.as_slice())
 }
 

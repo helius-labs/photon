@@ -20,7 +20,6 @@ pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: IndexedBatchEvents,
 ) -> Result<(), IngesterError> {
-    log::info!("events {:?}", events);
     for (_, events) in events.iter_mut() {
         events.sort_by(|a, b| a.0.cmp(&b.0));
         if let Some((_, event)) = events.first() {
@@ -28,15 +27,10 @@ pub async fn persist_batch_events(
             let mut leaf_nodes = Vec::with_capacity(500);
             match event {
                 BatchEvent::BatchNullify(batch_nullify_event) => {
-                    log::info!("batch_nullify_event {:?}", batch_nullify_event);
                     persist_batch_nullify_event(txn, batch_nullify_event, &mut leaf_nodes).await
                 }
                 BatchEvent::BatchAppend(batch_append_event) => {
-                    log::info!("persist_batch_append_event {:?}", event);
                     persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
-                }
-                _ => {
-                    return Err(IngesterError::EmptyBatchEvent);
                 }
             }?;
             if leaf_nodes.len() <= MAX_SQL_INSERTS {
@@ -77,14 +71,24 @@ async fn persist_batch_append_event<'a>(
         .order_by_asc(accounts::Column::LeafIndex)
         .all(txn)
         .await?;
-    accounts.iter().for_each(|account| {
-        leaf_nodes.push(LeafNode {
-            tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
-            seq: Some(batch_append_event.sequence_number as u32),
-            leaf_index: account.leaf_index as u32,
-            hash: Hash::try_from(account.hash.clone()).unwrap(),
-        })
-    });
+    accounts
+        .iter()
+        .try_for_each(|account| -> Result<(), IngesterError> {
+            leaf_nodes.push(LeafNode {
+                tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
+                    IngesterError::ParserError(
+                        "Failed to convert tree to SerializablePubkey".to_string(),
+                    )
+                })?,
+                seq: Some(batch_append_event.sequence_number as u32),
+                leaf_index: account.leaf_index as u32,
+                hash: Hash::new(account.hash.as_slice()).map_err(|_| {
+                    IngesterError::ParserError("Failed to convert nullifier to Hash".to_string())
+                })?,
+            });
+
+            Ok(())
+        })?;
 
     // 2. Remove inserted elements from the output queue.
     let query = accounts::Entity::update_many()
@@ -109,8 +113,6 @@ async fn persist_batch_nullify_event<'a>(
     batch_nullify_event: &'a BatchNullifyEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
-    log::info!("sequence number {}", batch_nullify_event.sequence_number);
-    log::info!("zkp_batch_index {}", batch_nullify_event.zkp_batch_index);
     // 1. Create leaf nodes with nullifier as leaf.
     //      Nullifier queue index is continuously incremented by 1
     //      with each element insertion into the nullifier queue.
@@ -123,14 +125,33 @@ async fn persist_batch_nullify_event<'a>(
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
         .await?;
-    accounts.iter().for_each(|account| {
-        leaf_nodes.push(LeafNode {
-            tree: SerializablePubkey::try_from(account.tree.clone()).unwrap(),
-            seq: Some(batch_nullify_event.sequence_number as u32),
-            leaf_index: account.leaf_index as u32,
-            hash: Hash::new(account.nullifier.as_ref().unwrap().as_slice()).unwrap(),
-        })
-    });
+    accounts
+        .iter()
+        .try_for_each(|account| -> Result<(), IngesterError> {
+            leaf_nodes.push(LeafNode {
+                tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
+                    IngesterError::ParserError(
+                        "Failed to convert tree to SerializablePubkey".to_string(),
+                    )
+                })?,
+                seq: Some(batch_nullify_event.sequence_number as u32),
+                leaf_index: account.leaf_index as u32,
+                hash: Hash::new(
+                    account
+                        .nullifier
+                        .as_ref()
+                        .ok_or(IngesterError::ParserError(
+                            "Nullifier is missing".to_string(),
+                        ))?
+                        .as_slice(),
+                )
+                .map_err(|_| {
+                    IngesterError::ParserError("Failed to convert nullifier to Hash".to_string())
+                })?,
+            });
+
+            Ok(())
+        })?;
 
     // 2. Mark elements as nullified in tree and
     //      remove them from the database nullifier queue.

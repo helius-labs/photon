@@ -9,7 +9,7 @@ use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedB
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::get_validity_proof::{
-    get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
+    get_validity_proof, get_validity_proof_v2, GetValidityProofRequest, GetValidityProofRequestV2,
 };
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
@@ -47,11 +47,11 @@ use std::collections::{HashMap, HashSet};
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 use photon_indexer::api::method::utils::Limit;
 use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
-use light_merkle_tree_metadata::merkle_tree::TreeType;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct Person {
@@ -197,7 +197,7 @@ async fn test_multiple_accounts(
             context: AccountContext {
                 tree_type: TreeType::State as u16,
                 ..AccountContext::default()
-            }
+            },
         },
         AccountWithContext {
             account: Account {
@@ -218,7 +218,7 @@ async fn test_multiple_accounts(
             context: AccountContext {
                 tree_type: TreeType::State as u16,
                 ..AccountContext::default()
-            }
+            },
         },
         AccountWithContext {
             account: Account {
@@ -239,7 +239,7 @@ async fn test_multiple_accounts(
             context: AccountContext {
                 tree_type: TreeType::State as u16,
                 ..AccountContext::default()
-            }
+            },
         },
         AccountWithContext {
             account: Account {
@@ -260,7 +260,7 @@ async fn test_multiple_accounts(
             context: AccountContext {
                 tree_type: TreeType::State as u16,
                 ..AccountContext::default()
-            }
+            },
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -389,7 +389,7 @@ async fn test_multiple_accounts(
 
     for account in accounts.iter() {
         let request = CompressedAccountRequest {
-            address: account.account.address.clone(),
+            address: account.account.address,
             hash: Some(account.account.hash.clone()),
         };
 
@@ -656,7 +656,7 @@ async fn test_persist_token_data(
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
                     owner,
                     cursor: cursor.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
                 })
                 .await
@@ -747,7 +747,7 @@ async fn test_persist_token_data(
                 .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
                     delegate,
                     cursor: cursor.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
                 })
                 .await
@@ -767,7 +767,7 @@ async fn test_persist_token_data(
         let res_v2 = setup
             .api
             .get_compressed_token_accounts_by_delegate_v2(GetCompressedTokenAccountsByDelegate {
-                delegate: delegate.clone(),
+                delegate,
                 ..Default::default()
             })
             .await
@@ -783,7 +783,7 @@ async fn test_persist_token_data(
                     GetCompressedTokenAccountsByDelegate {
                         delegate,
                         cursor: cursor.clone(),
-                        limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                        limit: Some(Limit::new(1).unwrap()),
                         ..Default::default()
                     },
                 )
@@ -809,8 +809,8 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_mint_token_holders(GetCompressedMintTokenHoldersRequest {
-                    mint: mint.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    mint: *mint,
+                    limit: Some(Limit::new(1).unwrap()),
                     cursor,
                 })
                 .await
@@ -849,9 +849,9 @@ async fn test_persist_token_data(
 
         loop {
             let request = GetCompressedTokenBalancesByOwnerRequest {
-                owner: owner.clone(),
+                owner: *owner,
                 cursor,
-                limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                limit: Some(Limit::new(1).unwrap()),
                 ..Default::default()
             };
             let res = setup
@@ -1158,10 +1158,9 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof_v2 = get_validity_proof_v2(
         &setup.db_conn,
         &setup.prover_url,
-        GetValidityProofRequest {
+        GetValidityProofRequestV2 {
             newAddressesWithTrees: addresses_with_trees.clone(),
             hashes: vec![],
-            newAddresses: vec![],
         },
     )
     .await
@@ -1305,7 +1304,6 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     ];
     let leaf_node_chunks = vec![leaf_nodes_1, leaf_nodes_2];
 
-    let tree_height = 33; // prev. 3
     for chunk in leaf_node_chunks {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         persist_leaf_nodes(&txn, chunk.clone()).await.unwrap();
@@ -1614,7 +1612,6 @@ async fn test_update_indexed_merkle_tree(
     let name = trim_test_name(function_name!());
     let setup = setup(name.clone(), db_backend).await;
     let tree = Pubkey::new_unique();
-    let tree_height = 33; // prev. 10
     let index = 1;
     let value = [1; 32];
     let index_element_1 = RawIndexedElement {
@@ -1629,8 +1626,8 @@ async fn test_update_indexed_merkle_tree(
         next_value: [7; 32],
         index,
     };
-    let paramaeters = vec![(index_element_1, 0), (index_element_2, 1)];
-    for permutation in paramaeters.iter().permutations(2) {
+    let parameters = [(index_element_1, 0), (index_element_2, 1)];
+    for permutation in parameters.iter().permutations(2) {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         for (indexed_element, seq) in permutation {
             let mut indexed_leaf_updates = HashMap::new();
@@ -1638,7 +1635,7 @@ async fn test_update_indexed_merkle_tree(
                 (tree, index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
-                    leaf: indexed_element.clone(),
+                    leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,
                 },

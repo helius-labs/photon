@@ -50,7 +50,6 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         {
             let state_update = parse_batch_public_transaction_event(tx.signature, slot, event)?;
             is_compression_transaction = true;
-            log::info!("batched state update {:?}", state_update);
             state_updates.push(state_update);
         } else {
             for (index, _) in ordered_instructions.iter().enumerate() {

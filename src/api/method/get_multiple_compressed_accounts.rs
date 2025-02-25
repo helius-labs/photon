@@ -4,7 +4,6 @@ use super::{
     super::error::PhotonApiError,
     utils::{Context, PAGE_LIMIT},
 };
-use crate::api::method::utils::{parse_account_model, parse_account_model_v2};
 use crate::common::typedefs::account::{Account, AccountV2};
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -159,7 +158,7 @@ pub async fn get_multiple_compressed_accounts(
         value: AccountList {
             items: accounts
                 .into_iter()
-                .map(|x| x.map(parse_account_model).transpose())
+                .map(|x| x.map(TryFrom::try_from).transpose())
                 .collect::<Result<Vec<_>, _>>()?,
         },
     })
@@ -202,7 +201,7 @@ pub async fn get_multiple_compressed_accounts_v2(
         value: AccountListV2 {
             items: accounts
                 .into_iter()
-                .map(|x| x.map(parse_account_model_v2).transpose())
+                .map(|x| x.map(TryFrom::try_from).transpose())
                 .collect::<Result<Vec<_>, _>>()?,
         },
     })

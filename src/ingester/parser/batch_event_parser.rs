@@ -16,7 +16,6 @@ use light_batched_merkle_tree::event::{
     BATCH_APPEND_EVENT_DISCRIMINATOR, BATCH_NULLIFY_EVENT_DISCRIMINATOR,
 };
 use light_compressed_account::event::event_from_light_transaction;
-use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
@@ -24,14 +23,6 @@ use solana_sdk::signature::Signature;
 pub enum BatchEvent {
     BatchAppend(BatchAppendEvent),
     BatchNullify(BatchNullifyEvent),
-    Empty,
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for BatchEvent {
-    fn default() -> Self {
-        BatchEvent::Empty
-    }
 }
 
 pub type IndexedBatchEvents = HashMap<[u8; 32], Vec<(u64, BatchEvent)>>;
@@ -45,8 +36,6 @@ pub fn parse_merkle_tree_event(
         && next_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
-        info!("Parsing tx with signature: {}", tx.signature);
-
         // Try to parse as batch append/nullify event first
         if let Ok(batch_event) =
             BatchAppendEvent::deserialize(&mut next_instruction.data.as_slice())
@@ -55,7 +44,6 @@ pub fn parse_merkle_tree_event(
 
             match batch_event.discriminator {
                 BATCH_APPEND_EVENT_DISCRIMINATOR => {
-                    info!("found batch append event: {:?}", batch_event);
                     state_update
                         .batch_events
                         .entry(batch_event.merkle_tree_pubkey)
@@ -66,7 +54,6 @@ pub fn parse_merkle_tree_event(
                         ));
                 }
                 BATCH_NULLIFY_EVENT_DISCRIMINATOR => {
-                    info!("found batch nullify event: {:?}", batch_event);
                     state_update
                         .batch_events
                         .entry(batch_event.merkle_tree_pubkey)
@@ -78,7 +65,7 @@ pub fn parse_merkle_tree_event(
                 }
                 // TODO: implement address append (in different PR)
                 _ => {
-                    log::info!(
+                    log::warn!(
                         "Unsupported batch event discriminator: {} batch address discriminator: {}",
                         batch_event.discriminator,
                         BATCH_ADDRESS_APPEND_EVENT_DISCRIMINATOR
@@ -104,17 +91,6 @@ pub fn parse_public_transaction_event_v2(
 
     match event {
         Some(public_transaction_event) => {
-            info!(
-                "batch_input_accounts {:?}",
-                public_transaction_event.batch_input_accounts
-            );
-
-            info!(
-                "input_compressed_account_hashes: {:?}",
-                public_transaction_event
-                    .event
-                    .input_compressed_account_hashes
-            );
             let event = PublicTransactionEvent {
                 input_compressed_account_hashes: public_transaction_event
                     .event

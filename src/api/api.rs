@@ -11,7 +11,8 @@ use crate::api::method::get_queue_elements::{
 };
 use crate::api::method::get_validity_proof::{
     get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
-    GetValidityProofRequestDocumentation, GetValidityProofResponse, GetValidityProofResponseV2,
+    GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
+    GetValidityProofResponseV2,
 };
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
@@ -339,7 +340,7 @@ impl PhotonApi {
 
     pub async fn get_validity_proof_v2(
         &self,
-        request: GetValidityProofRequest,
+        request: GetValidityProofRequestV2,
     ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
         get_validity_proof_v2(self.db_conn.as_ref(), &self.prover_url, request).await
     }

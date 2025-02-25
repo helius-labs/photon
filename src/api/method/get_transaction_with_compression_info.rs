@@ -1,7 +1,6 @@
 use super::{
     super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
 };
-use crate::api::method::utils::parse_account_model_with_context;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
@@ -18,6 +17,7 @@ use solana_client::rpc_config::RpcTransactionConfig;
 use solana_client::rpc_request::RpcRequest;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use std::convert::TryFrom;
 use utoipa::{
     openapi::{ObjectBuilder, RefOr, Schema, SchemaType},
     ToSchema,
@@ -196,7 +196,7 @@ pub async fn get_transaction_helper(
     })
     .collect::<Result<Vec<Model>, PhotonApiError>>()?
     .into_iter()
-    .map(parse_account_model_with_context)
+    .map(TryFrom::try_from)
     .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
 
     let closed_accounts = closed_accounts
@@ -333,7 +333,7 @@ pub async fn get_transaction_helper_v2(
     })
     .collect::<Result<Vec<Model>, PhotonApiError>>()?
     .into_iter()
-    .map(parse_account_model_with_context)
+    .map(TryFrom::try_from)
     .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
     let closed_accounts = closed_accounts
         .into_iter()

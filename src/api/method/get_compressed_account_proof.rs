@@ -1,8 +1,8 @@
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
+use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
-use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 
 use super::{
     super::error::PhotonApiError,
