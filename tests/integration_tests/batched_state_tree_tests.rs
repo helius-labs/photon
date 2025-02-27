@@ -688,6 +688,62 @@ async fn test_batched_tree_token_transactions(
     }
 }
 
+/// Test indexes a transaction which creates
+/// 4 compressed accounts in 4 cpis that create a transaction event each
+/// in one outer instruction.
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_four_cpi_events(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBackend) {
+    let trim_test_name = trim_test_name(function_name!());
+    let name = trim_test_name;
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Localnet,
+            db_backend,
+        },
+    )
+    .await;
+    reset_tables(setup.db_conn.as_ref()).await.unwrap();
+    let sort_by_slot = true;
+    let signatures = read_file_names(&name, sort_by_slot);
+    let index_individually = false;
+    let owner = Pubkey::from_str("FNt7byTHev1k5x2cXZLBr8TdWiC3zoP5vcnZR4P682Uy").unwrap();
+
+    index(
+        &name,
+        setup.db_conn.clone(),
+        setup.client.clone(),
+        &signatures,
+        index_individually,
+    )
+    .await;
+    let mut leaf_index = 0;
+    let accounts = setup
+        .api
+        .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
+            owner: SerializablePubkey::from(owner.to_bytes()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(accounts.value.items.len(), 4);
+    for (i, account) in accounts.value.items.iter().enumerate() {
+        assert_eq!(account.lamports.0, 0u64);
+        assert_eq!(account.owner.0, owner);
+        assert_eq!(
+            account.leaf_index.0,
+            leaf_index,
+            "owner {:?} i {}",
+            owner.to_bytes(),
+            i
+        );
+        leaf_index += 1;
+    }
+}
+
 #[named]
 #[rstest]
 #[tokio::test]
