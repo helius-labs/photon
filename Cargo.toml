@@ -79,17 +79,17 @@ solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
 
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
-light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e80e0c21e82b260fff17f77538a1cd85920c1a8f", features = [
+light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9d3cc26f06e31b614dc1393977925de9e99f37f5", features = [
 ] }
 
 sqlx = { version = "0.6.2", features = [

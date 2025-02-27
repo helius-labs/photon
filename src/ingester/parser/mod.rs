@@ -1,4 +1,4 @@
-use batch_event_parser::parse_merkle_tree_event;
+use batch_event_parser::{create_state_update, parse_merkle_tree_event};
 use legacy::parse_legacy_public_transaction_event;
 use solana_sdk::pubkey::Pubkey;
 
@@ -12,9 +12,7 @@ mod legacy;
 pub mod state_update;
 mod tx_event_parser;
 
-use crate::ingester::parser::batch_event_parser::{
-    parse_batch_public_transaction_event, parse_public_transaction_event_v2,
-};
+use crate::ingester::parser::batch_event_parser::parse_public_transaction_event_v2;
 use solana_program::pubkey;
 pub use tx_event_parser::map_tree_and_queue_accounts;
 
@@ -35,20 +33,18 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
 
         let mut vec_accounts = Vec::<Vec<Pubkey>>::new();
         let mut vec_instructions_data = Vec::new();
-        vec_instructions_data.push(instruction_group.outer_instruction.data);
-        vec_accounts.push(instruction_group.outer_instruction.accounts.clone());
+        let mut program_ids = Vec::new();
 
-        instruction_group
-            .inner_instructions
-            .iter()
-            .for_each(|inner_instruction| {
-                vec_instructions_data.push(inner_instruction.data.clone());
-                vec_accounts.push(inner_instruction.accounts.clone());
-            });
+        ordered_instructions.iter().for_each(|inner_instruction| {
+            vec_instructions_data.push(inner_instruction.data.clone());
+            vec_accounts.push(inner_instruction.accounts.clone());
+            program_ids.push(inner_instruction.program_id);
+        });
 
-        if let Some(event) = parse_public_transaction_event_v2(&vec_instructions_data, vec_accounts)
+        if let Some(event) =
+            parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
-            let state_update = parse_batch_public_transaction_event(tx.signature, slot, event)?;
+            let state_update = create_state_update(tx.signature, slot, event)?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
