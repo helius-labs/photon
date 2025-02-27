@@ -3,19 +3,29 @@ use crate::{
     common::typedefs::serializable_pubkey::SerializablePubkey,
 };
 use borsh::BorshDeserialize;
-
-use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use itertools::Itertools;
+use sea_orm::{DatabaseBackend, DatabaseConnection, QueryOrder, Statement, TransactionTrait};
 
 use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2};
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
+const MAX_ALLOWED_HASHES: usize = 8;
+
 pub async fn get_validity_proof_v2(
     conn: &DatabaseConnection,
     prover_url: &str,
     mut request: GetValidityProofRequestV2,
 ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
+
+    if request.hashes.len() > MAX_ALLOWED_HASHES {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many hashes. Max allowed: {}",
+            MAX_ALLOWED_HASHES
+        )));
+    }
+
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
         tx.execute(Statement::from_string(
@@ -33,6 +43,7 @@ pub async fn get_validity_proof_v2(
         .map(|h| h.to_vec())
         .collect::<Vec<Vec<u8>>>();
     let hashes_len = hashes.len();
+
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::Hash
@@ -41,6 +52,14 @@ pub async fn get_validity_proof_v2(
         )
         .all(&tx)
         .await?;
+
+    // It's fine because we can't have more than 8 elements in request.hashes
+    let accounts = accounts.iter().sorted_by(|a, b| {
+        let hash_index_a = request.hashes.iter().position(|x| x.0.as_slice() == a.hash).unwrap();
+        let hash_index_b = request.hashes.iter().position(|x| x.0.as_slice() == b.hash).unwrap();
+        hash_index_a.cmp(&hash_index_b)
+    }).collect::<Vec<_>>();
+
     if accounts.len() != hashes_len {
         let all_accounts = accounts::Entity::find().all(&tx).await?;
         all_accounts
@@ -56,15 +75,13 @@ pub async fn get_validity_proof_v2(
         )));
     }
 
-    // Skip accounts that are in the output queue but not in batched merkle tree yet.
-    // users prove inclusion of skipped accounts by index, not zkp.
-    for (num_removed, (index, _)) in accounts
-        .iter()
-        .enumerate()
-        .filter(|(_, x)| x.in_output_queue)
-        .enumerate()
-    {
-        request.hashes.remove(index - num_removed);
+    let mut removed_indices = 0;
+
+    for (index, account) in accounts.iter().enumerate() {
+        if account.in_output_queue {
+            request.hashes.remove(index - removed_indices);
+            removed_indices += 1;
+        }
     }
 
     let mut v2_response: GetValidityProofResponseV2 =
