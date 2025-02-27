@@ -309,15 +309,16 @@ async fn test_batched_tree_transactions(
         } else {
             last_inserted_index += 10;
             assert_eq!(
-                post_output_queue_elements.value.len(),
-                pre_output_queue_elements.value.len().saturating_sub(10),
-                "Append event should decrease the length of the output queue by 10."
-            );
-            assert_eq!(
                 post_input_queue_elements.value.len(),
                 pre_input_queue_elements.value.len(),
                 "Append event should not change the length of the input queue."
             );
+            assert_eq!(
+                post_output_queue_elements.value.len(),
+                pre_output_queue_elements.value.len().saturating_sub(10),
+                "Append event should decrease the length of the output queue by 10."
+            );
+
             println!(
                 "post input queue len {}",
                 post_input_queue_elements.value.len(),

@@ -1,18 +1,19 @@
-use batch_event_parser::{create_state_update, parse_merkle_tree_event};
-use legacy::parse_legacy_public_transaction_event;
+use merkle_tree_events_parser::parse_merkle_tree_event;
 use solana_sdk::pubkey::Pubkey;
+use tx_event_parser::parse_legacy_public_transaction_event;
+use tx_event_parser_v2::create_state_update;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::state_update::{StateUpdate, Transaction};
 
-pub mod batch_event_parser;
 pub mod indexer_events;
-mod legacy;
+pub mod merkle_tree_events_parser;
 pub mod state_update;
 mod tx_event_parser;
+pub mod tx_event_parser_v2;
 
-use crate::ingester::parser::batch_event_parser::parse_public_transaction_event_v2;
+use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_v2;
 use solana_program::pubkey;
 pub use tx_event_parser::map_tree_and_queue_accounts;
 
