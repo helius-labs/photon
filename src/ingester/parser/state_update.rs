@@ -1,6 +1,6 @@
 use super::{
-    batch_event_parser::IndexedBatchEvents,
     indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement},
+    merkle_tree_events_parser::IndexedBatchEvents,
 };
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
@@ -81,7 +81,6 @@ pub struct StateUpdate {
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
-
     pub batch_events: IndexedBatchEvents,
     pub input_context: Vec<BatchNullifyContext>,
 }

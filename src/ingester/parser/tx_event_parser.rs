@@ -2,12 +2,17 @@ use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
+use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
+use anchor_lang::AnchorDeserialize;
 use lazy_static::lazy_static;
 use light_merkle_tree_metadata::merkle_tree::TreeType;
+use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
+
+use super::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
 
 pub struct TreeAndQueue {
     tree: Pubkey,
@@ -87,6 +92,38 @@ lazy_static! {
 
 pub fn map_tree_and_queue_accounts<'a>(pubkey: String) -> Option<&'a TreeAndQueue> {
     QUEUE_TREE_MAPPING.get(pubkey.as_str())
+}
+
+pub fn parse_legacy_public_transaction_event(
+    tx: &TransactionInfo,
+    slot: u64,
+    instruction: &Instruction,
+    next_instruction: &Instruction,
+    next_next_instruction: &Instruction,
+) -> Result<Option<StateUpdate>, IngesterError> {
+    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+        && next_instruction.program_id == SYSTEM_PROGRAM
+        && next_next_instruction.program_id == NOOP_PROGRAM_ID
+        && tx.error.is_none()
+    {
+        info!(
+            "Indexing transaction with slot {} and id {}",
+            slot, tx.signature
+        );
+
+        let public_transaction_event =
+            PublicTransactionEvent::deserialize(&mut next_next_instruction.data.as_slice())
+                .map_err(|e| {
+                    IngesterError::ParserError(format!(
+                        "Failed to deserialize PublicTransactionEvent: {}",
+                        e
+                    ))
+                })?;
+
+        parse_public_transaction_event(tx.signature, slot, public_transaction_event).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn parse_public_transaction_event(
