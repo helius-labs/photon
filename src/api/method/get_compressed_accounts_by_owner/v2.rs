@@ -53,7 +53,6 @@ pub async fn get_compressed_accounts_by_owner_v2(
     ))
     .all(conn)
     .await?;
-
     let items = result
         .into_iter()
         .map(TryFrom::try_from)
