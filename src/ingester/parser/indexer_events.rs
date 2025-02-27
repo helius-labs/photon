@@ -1,7 +1,7 @@
 /// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
-use light_compressed_account::event::{BatchNullifyContext, NewAddress};
+use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
 
 #[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
