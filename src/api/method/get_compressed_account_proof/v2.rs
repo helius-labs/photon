@@ -74,6 +74,12 @@ pub async fn get_compressed_account_proof_v2(
         .one(&tx)
         .await?;
 
+    if account.is_none() {
+        return Err(PhotonApiError::RecordNotFound(
+            "Account not found".to_string(),
+        ));
+    }
+
     let leaf_node = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
