@@ -18,11 +18,15 @@ use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_queue_elements::MerkleProofWithContextV2;
-use crate::api::method::get_transaction_with_compression_info::{AccountWithOptionalTokenData, ClosedAccount, ClosedAccountWithOptionalTokenData, AccountWithOptionalTokenDataV2};
-use crate::api::method::get_validity_proof::{
-    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, RootIndex,
-};
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
+use crate::api::method::get_transaction_with_compression_info::{
+    AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccount,
+    ClosedAccountWithOptionalTokenData,
+};
+use crate::api::method::get_validity_proof::{
+    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, ContextInfo,
+    MerkleContextV2, RootIndex, SerializableTreeType,
+};
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
@@ -128,6 +132,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OwnerBalanceList,
     OwnerBalancesResponse,
     TokenBalanceListV2,
+    MerkleContextV2,
+    ContextInfo,
+    SerializableTreeType
 )))]
 struct ApiDoc;
 

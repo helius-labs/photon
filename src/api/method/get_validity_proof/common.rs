@@ -106,7 +106,7 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
     fn from(response: GetValidityProofResponse) -> Self {
         GetValidityProofResponseV2 {
             value: CompressedProofWithContextV2 {
-                compressedProof: response.value.compressedProof,
+                compressedProof: Some(response.value.compressedProof),
                 roots: response.value.roots,
                 rootIndices: response
                     .value
@@ -114,13 +114,23 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                     .into_iter()
                     .map(|x| RootIndex {
                         root_index: x,
-                        in_tree: true,
+                        prove_by_index: false,
                     })
                     .collect(),
                 leafIndices: response.value.leafIndices,
                 leaves: response.value.leaves,
-                merkleTrees: response.value.merkleTrees,
-                queues: Vec::new(),
+                merkle_context: response
+                    .value
+                    .merkleTrees
+                    .iter()
+                    .map(|x| MerkleContextV2 {
+                        tree_type: SerializableTreeType::Unknown,
+                        tree: SerializablePubkey::try_from(x.as_str()).unwrap(), // TODO: handle error
+                        queue: SerializablePubkey::default(),
+                        cpi_context: None,
+                        next_context: None,
+                    })
+                    .collect(),
             },
             context: response.context,
         }
@@ -224,14 +234,15 @@ pub struct CompressedProofWithContext {
 #[allow(non_snake_case)]
 pub struct RootIndex {
     pub root_index: u64,
-    pub in_tree: bool,
+    // if prove_by_index is true, ignore root_index and use 0
+    pub prove_by_index: bool,
 }
 
 impl From<RootIndex> for Option<u64> {
     fn from(val: RootIndex) -> Option<u64> {
-        match val.in_tree {
-            true => Some(val.root_index),
-            false => None,
+        match val.prove_by_index {
+            true => None,
+            false => Some(val.root_index),
         }
     }
 }
@@ -241,27 +252,72 @@ impl From<Option<u64>> for RootIndex {
         match val {
             Some(root_index) => RootIndex {
                 root_index,
-                in_tree: true,
+                prove_by_index: false,
             },
             None => RootIndex {
                 root_index: 0,
-                in_tree: false,
+                prove_by_index: true,
             },
         }
     }
+}
+
+#[repr(u64)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, PartialEq, Clone, Copy, Eq)]
+pub enum SerializableTreeType {
+    State = 1,
+    Address = 2,
+    BatchedState = 3,
+    BatchedAddress = 4,
+    Unknown = 0, // TODO: remove this
+}
+
+// from u64
+impl From<u16> for SerializableTreeType {
+    fn from(value: u16) -> Self {
+        match value {
+            0 => SerializableTreeType::Unknown,
+            1 => SerializableTreeType::State,
+            2 => SerializableTreeType::Address,
+            3 => SerializableTreeType::BatchedState,
+            4 => SerializableTreeType::BatchedAddress,
+            _ => panic!("Invalid TreeType"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
+pub struct MerkleContextV2 {
+    pub tree_type: SerializableTreeType,
+    pub tree: SerializablePubkey,
+    // nullifier_queue in legacy trees, output_queue in V2 trees.
+    pub queue: SerializablePubkey,
+    pub cpi_context: Option<SerializablePubkey>,
+    pub next_context: Option<ContextInfo>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Debug, Default, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
+pub struct ContextInfo {
+    pub tree_type: u16,
+    pub merkle_tree: SerializablePubkey,
+    pub queue: SerializablePubkey,
+    pub cpi_context: Option<SerializablePubkey>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct CompressedProofWithContextV2 {
-    pub compressedProof: CompressedProof,
+    pub compressedProof: Option<CompressedProof>,
     pub roots: Vec<String>,
     pub rootIndices: Vec<RootIndex>,
     pub leafIndices: Vec<u32>,
     pub leaves: Vec<String>,
-    pub merkleTrees: Vec<String>,
-    pub queues: Vec<String>,
+    pub merkle_context: Vec<MerkleContextV2>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

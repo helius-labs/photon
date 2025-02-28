@@ -164,7 +164,7 @@ pub fn parse_public_transaction_event(
             false,
             None,
             None,
-            tree_and_queue.tree_type as u16,
+            tree_and_queue.tree_type,
         );
 
         state_update.out_accounts.push(enriched_account);

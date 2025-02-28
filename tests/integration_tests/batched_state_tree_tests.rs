@@ -123,8 +123,8 @@ async fn test_batched_tree_transactions(
         // Get output queue elements
         if !accounts.openedAccounts.is_empty() {
             output_queue_len += accounts.openedAccounts.len();
-            merkle_tree_pubkey = accounts.openedAccounts[0].account.tree.0;
-            queue_pubkey = accounts.openedAccounts[0].account.queue.0;
+            merkle_tree_pubkey = accounts.openedAccounts[0].account.merkle_context.tree.0;
+            queue_pubkey = accounts.openedAccounts[0].account.merkle_context.queue.0;
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
@@ -145,7 +145,7 @@ async fn test_batched_tree_transactions(
         // Get input queue elements
         if !accounts.closedAccounts.is_empty() {
             input_queue_len += accounts.closedAccounts.len();
-            merkle_tree_pubkey = accounts.closedAccounts[0].account.account.tree.0;
+            merkle_tree_pubkey = accounts.closedAccounts[0].account.account.merkle_context.tree.0;
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
@@ -185,17 +185,21 @@ async fn test_batched_tree_transactions(
         println!("i {}, validity_proof {:?}", i, validity_proof.value);
 
         // No value has been inserted into the tree yet -> all proof by index.
-        assert!(validity_proof.value.rootIndices.iter().all(|x| !x.in_tree));
         assert!(validity_proof
             .value
-            .merkleTrees
+            .rootIndices
             .iter()
-            .all(|x| *x == merkle_tree_pubkey.to_string()));
+            .all(|x| x.prove_by_index));
         assert!(validity_proof
             .value
-            .queues
+            .merkle_context
             .iter()
-            .all(|x| *x == queue_pubkey.to_string()));
+            .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
+        assert!(validity_proof
+            .value
+            .merkle_context
+            .iter()
+            .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
         assert!(validity_proof.value.roots.iter().all(|x| x.is_empty()));
     }
 
@@ -362,23 +366,23 @@ async fn test_batched_tree_transactions(
                 println!("z + base index {} {}", z, base_index);
                 println!("last inserted index {}", last_inserted_index);
                 if base_index < last_inserted_index {
-                    assert!(root_index.in_tree);
+                    assert!(!root_index.prove_by_index);
                 } else {
-                    assert!(!root_index.in_tree);
+                    assert!(root_index.prove_by_index);
                     assert_eq!(root, "");
                 }
                 base_index += 2;
             }
             assert!(validity_proof
                 .value
-                .merkleTrees
+                .merkle_context
                 .iter()
-                .all(|x| *x == merkle_tree_pubkey.to_string()));
+                .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
             assert!(validity_proof
                 .value
-                .queues
+                .merkle_context
                 .iter()
-                .all(|x| *x == queue_pubkey.to_string()));
+                .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
         }
     }
     assert_eq!(event_merkle_tree.root(), merkle_tree.root());

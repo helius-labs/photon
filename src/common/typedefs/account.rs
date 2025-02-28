@@ -3,11 +3,13 @@ use super::{
     unsigned_integer::UnsignedInteger,
 };
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_validity_proof::{MerkleContextV2, SerializableTreeType};
 use crate::api::method::utils::parse_decimal;
 use crate::dao::generated::accounts;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
+use light_merkle_tree_metadata::merkle_tree::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
@@ -30,7 +32,7 @@ pub struct Account {
     pub slot_created: UnsignedInteger,
 }
 
-impl TryFrom<accounts::Model> for Account {
+impl TryFrom<Model> for Account {
     type Error = PhotonApiError;
 
     fn try_from(account: accounts::Model) -> Result<Self, Self::Error> {
@@ -67,7 +69,7 @@ impl TryFrom<accounts::Model> for Account {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountV2 {
     pub hash: Hash,
@@ -75,7 +77,6 @@ pub struct AccountV2 {
     pub data: Option<AccountData>,
     pub owner: SerializablePubkey,
     pub lamports: UnsignedInteger,
-    pub tree: SerializablePubkey,
     pub leaf_index: UnsignedInteger,
     // For legacy trees is always Some() since the user tx appends directly to the Merkle tree
     // for batched tress:
@@ -83,15 +84,13 @@ pub struct AccountV2 {
     // 2.2. Some once it was inserted into the Merkle tree from the output queue
     pub seq: Option<UnsignedInteger>,
     pub slot_created: UnsignedInteger,
-    // nullifier_queue in legacy trees, output_queue in V2 trees.
-    pub queue: SerializablePubkey,
     // Indicates if the account is not yet provable by validity_proof. The
     // account resides in on-chain RAM, with leaf_index mapping to its position.
     // This allows the protocol to prove the account's validity using only the
     // leaf_index. Consumers use this to decide if a validity proof is needed,
     // saving one RPC roundtrip.
     pub prove_by_index: bool,
-    pub tree_type: u16,
+    pub merkle_context: MerkleContextV2,
 }
 
 impl TryFrom<accounts::Model> for AccountV2 {
@@ -120,16 +119,20 @@ impl TryFrom<accounts::Model> for AccountV2 {
                 .transpose()?,
             data,
             owner: account.owner.try_into()?,
-            tree: account.tree.try_into()?,
             leaf_index: UnsignedInteger(crate::api::method::utils::parse_leaf_index(
                 account.leaf_index.try_into().unwrap(),
             )?),
             lamports: UnsignedInteger(parse_decimal(account.lamports)?),
             slot_created: UnsignedInteger(account.slot_created as u64),
             seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
-            queue: account.queue.clone().try_into()?,
             prove_by_index: account.in_output_queue,
-            tree_type: account.tree_type as u16,
+            merkle_context: MerkleContextV2 {
+                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree: account.tree.try_into()?,
+                queue: account.queue.clone().try_into()?,
+                cpi_context: None,
+                next_context: None,
+            },
         })
     }
 }
@@ -139,7 +142,7 @@ impl TryFrom<accounts::Model> for AccountV2 {
 /// - GetTransactionWithCompressionInfo (internally)
 /// - GetTransactionWithCompressionInfoV2 (internally)
 /// All endpoints return AccountV2.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
     pub queue: SerializablePubkey,
@@ -159,10 +162,10 @@ pub struct AccountContext {
     // Legacy: None
     // Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
     pub tx_hash: Option<Hash>,
-    pub tree_type: u16,
+    pub tree_type: SerializableTreeType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountWithContext {
     pub account: Account,
@@ -183,7 +186,7 @@ impl AccountWithContext {
         spent: bool,
         nullifier: Option<Hash>,
         nullifier_queue_index: Option<u64>,
-        tree_type: u16,
+        tree_type: TreeType,
     ) -> Self {
         let CompressedAccount {
             owner,
@@ -218,7 +221,7 @@ impl AccountWithContext {
                 nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
                 nullifier,
                 tx_hash: None,
-                tree_type,
+                tree_type: SerializableTreeType::from(tree_type as u16),
             },
         }
     }

@@ -4023,9 +4023,7 @@ components:
         spent:
           type: boolean
         treeType:
-          type: integer
-          format: uint16
-          minimum: 0
+          $ref: '#/components/schemas/SerializableTreeType'
         txHash:
           $ref: '#/components/schemas/Hash'
       additionalProperties: false
@@ -4077,12 +4075,10 @@ components:
       - hash
       - owner
       - lamports
-      - tree
       - leafIndex
       - slotCreated
-      - queue
       - proveByIndex
-      - treeType
+      - merkleContext
       properties:
         address:
           $ref: '#/components/schemas/SerializablePubkey'
@@ -4094,22 +4090,16 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
         leafIndex:
           $ref: '#/components/schemas/UnsignedInteger'
+        merkleContext:
+          $ref: '#/components/schemas/MerkleContextV2'
         owner:
           $ref: '#/components/schemas/SerializablePubkey'
         proveByIndex:
           type: boolean
-        queue:
-          $ref: '#/components/schemas/SerializablePubkey'
         seq:
           $ref: '#/components/schemas/UnsignedInteger'
         slotCreated:
           $ref: '#/components/schemas/UnsignedInteger'
-        tree:
-          $ref: '#/components/schemas/SerializablePubkey'
-        treeType:
-          type: integer
-          format: uint16
-          minimum: 0
       additionalProperties: false
     AccountWithContext:
       type: object
@@ -4246,13 +4236,11 @@ components:
     CompressedProofWithContextV2:
       type: object
       required:
-      - compressedProof
       - roots
       - rootIndices
       - leafIndices
       - leaves
-      - merkleTrees
-      - queues
+      - merkleContext
       properties:
         compressedProof:
           $ref: '#/components/schemas/CompressedProof'
@@ -4266,14 +4254,10 @@ components:
           type: array
           items:
             type: string
-        merkleTrees:
+        merkleContext:
           type: array
           items:
-            type: string
-        queues:
-          type: array
-          items:
-            type: string
+            $ref: '#/components/schemas/MerkleContextV2'
         rootIndices:
           type: array
           items:
@@ -4307,6 +4291,23 @@ components:
           format: uint64
           default: 100
           example: 100
+    ContextInfo:
+      type: object
+      required:
+      - treeType
+      - merkleTree
+      - queue
+      properties:
+        cpiContext:
+          $ref: '#/components/schemas/SerializablePubkey'
+        merkleTree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        queue:
+          $ref: '#/components/schemas/SerializablePubkey'
+        treeType:
+          type: integer
+          format: uint16
+          minimum: 0
     DataSlice:
       type: object
       required:
@@ -4343,6 +4344,23 @@ components:
         offset:
           type: integer
           minimum: 0
+    MerkleContextV2:
+      type: object
+      required:
+      - treeType
+      - tree
+      - queue
+      properties:
+        cpiContext:
+          $ref: '#/components/schemas/SerializablePubkey'
+        nextContext:
+          $ref: '#/components/schemas/ContextInfo'
+        queue:
+          $ref: '#/components/schemas/SerializablePubkey'
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        treeType:
+          $ref: '#/components/schemas/SerializableTreeType'
     MerkleContextWithNewAddressProof:
       type: object
       required:
@@ -4517,9 +4535,9 @@ components:
       type: object
       required:
       - rootIndex
-      - inTree
+      - proveByIndex
       properties:
-        inTree:
+        proveByIndex:
           type: boolean
         rootIndex:
           type: integer
@@ -4535,6 +4553,14 @@ components:
       description: A Solana transaction signature.
       default: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
       example: 5J8H5sTvEhnGcB4R8K1n7mfoiWUD9RzPVGES7e3WxC7c
+    SerializableTreeType:
+      type: string
+      enum:
+      - State
+      - Address
+      - BatchedState
+      - BatchedAddress
+      - Unknown
     SignatureInfo:
       type: object
       required:

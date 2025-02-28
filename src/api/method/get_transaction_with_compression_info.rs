@@ -1,6 +1,7 @@
 use super::{
     super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
 };
+use crate::api::method::get_validity_proof::MerkleContextV2;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
@@ -124,7 +125,6 @@ pub struct GetTransactionResponseV2 {
     pub compressionInfo: CompressionInfoV2,
 }
 
-
 impl<'__s> ToSchema<'__s> for GetTransactionResponseV2 {
     fn schema() -> (&'__s str, RefOr<Schema>) {
         let schema = Schema::Object(
@@ -154,8 +154,6 @@ impl<'__s> ToSchema<'__s> for GetTransactionResponseV2 {
         Vec::new()
     }
 }
-
-
 
 fn parse_optional_token_data(
     account: Account,
@@ -320,7 +318,7 @@ fn parse_optional_token_data_for_multiple_accounts_v2(
         .collect()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ClosedAccount {
     pub account: AccountV2,
@@ -378,13 +376,17 @@ pub async fn get_transaction_helper_v2(
                     data: x.account.data,
                     owner: x.account.owner,
                     lamports: x.account.lamports,
-                    tree: x.account.tree,
                     leaf_index: x.account.leaf_index,
                     seq: x.account.seq,
                     slot_created: x.account.slot_created,
-                    queue: x.context.queue,
                     prove_by_index: x.context.in_output_queue,
-                    tree_type: x.context.tree_type,
+                    merkle_context: MerkleContextV2 {
+                        tree_type: x.context.tree_type,
+                        tree: x.account.tree,
+                        queue: x.context.queue,
+                        cpi_context: None,
+                        next_context: None,
+                    },
                 },
                 nullifier: x.context.nullifier.unwrap_or_default(),
                 tx_hash: x.context.tx_hash.unwrap_or_default(),
@@ -401,13 +403,17 @@ pub async fn get_transaction_helper_v2(
             data: x.account.data,
             owner: x.account.owner,
             lamports: x.account.lamports,
-            tree: x.account.tree,
             leaf_index: x.account.leaf_index,
             seq: x.account.seq,
             slot_created: x.account.slot_created,
-            queue: x.context.queue,
             prove_by_index: x.context.in_output_queue,
-            tree_type: x.context.tree_type,
+            merkle_context: MerkleContextV2 {
+                tree_type: x.context.tree_type,
+                tree: x.account.tree,
+                queue: x.context.queue,
+                cpi_context: None,
+                next_context: None,
+            },
         })
         .collect::<Vec<AccountV2>>();
 
