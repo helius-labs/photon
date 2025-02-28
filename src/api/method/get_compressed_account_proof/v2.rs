@@ -1,4 +1,5 @@
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_validity_proof::ContextInfo;
 use crate::api::method::utils::HashRequest;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
@@ -30,11 +31,9 @@ pub struct GetCompressedAccountProofResponseValueV2 {
     pub root: Hash,
     pub leaf_index: u32,
     pub hash: Hash,
-    pub merkle_tree: SerializablePubkey,
-    pub queue: SerializablePubkey,
     pub root_seq: u64,
     pub prove_by_index: bool,
-    pub tree_type: u16,
+    pub context: ContextInfo,
 }
 
 impl From<MerkleProofWithContext> for GetCompressedAccountProofResponseValueV2 {
@@ -44,12 +43,15 @@ impl From<MerkleProofWithContext> for GetCompressedAccountProofResponseValueV2 {
             root: proof.root,
             leaf_index: proof.leaf_index,
             hash: proof.hash,
-            merkle_tree: proof.merkle_tree,
             root_seq: proof.root_seq,
-            // Default values to be overridden as needed
             prove_by_index: false,
-            tree_type: 0,
-            queue: SerializablePubkey::default(),
+            // Default values to be overridden as needed
+            context: ContextInfo {
+                tree_type: 0,
+                merkle_tree: proof.merkle_tree,
+                queue: Default::default(),
+                cpi_context: None,
+            },
         }
     }
 }
@@ -125,8 +127,8 @@ pub async fn get_compressed_account_proof_v2(
 
     // Enrich with account data if available
     if let Some(account) = account {
-        result.tree_type = account.tree_type as u16;
-        result.queue = SerializablePubkey::try_from(account.queue)?;
+        result.context.tree_type = account.tree_type as u16;
+        result.context.queue = SerializablePubkey::try_from(account.queue)?;
     }
 
     let response = GetCompressedAccountProofResponseV2 {
