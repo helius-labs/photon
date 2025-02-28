@@ -25,7 +25,7 @@ use crate::api::method::get_transaction_with_compression_info::{
 };
 use crate::api::method::get_validity_proof::{
     CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, ContextInfo,
-    MerkleContextV2, RootIndex, SerializableTreeType,
+    MerkleContextV2, RootIndex,
 };
 use crate::api::method::utils::Context;
 use crate::api::method::utils::Limit;
@@ -134,7 +134,6 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenBalanceListV2,
     MerkleContextV2,
     ContextInfo,
-    SerializableTreeType
 )))]
 struct ApiDoc;
 

@@ -26,7 +26,6 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
-use crate::api::method::get_validity_proof::SerializableTreeType;
 use crate::dao::generated::accounts::Model;
 use sea_orm_migration::sea_query::Expr;
 

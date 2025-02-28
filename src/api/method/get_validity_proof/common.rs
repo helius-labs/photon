@@ -262,7 +262,8 @@ impl From<Option<u64>> for RootIndex {
     }
 }
 
-#[repr(u64)]
+// TODO: Keep in here for API doc generation?
+#[repr(u16)]
 #[derive(Serialize, Deserialize, ToSchema, Debug, PartialEq, Clone, Copy, Eq)]
 pub enum SerializableTreeType {
     State = 1,
@@ -271,20 +272,6 @@ pub enum SerializableTreeType {
     BatchedAddress = 4,
     Unknown = 0, // TODO: remove this
 }
-
-// from u64
-// impl From<u16> for SerializableTreeType {
-//     fn from(value: u16) -> Self {
-//         match value {
-//             0 => SerializableTreeType::Unknown,
-//             1 => SerializableTreeType::State,
-//             2 => SerializableTreeType::Address,
-//             3 => SerializableTreeType::BatchedState,
-//             4 => SerializableTreeType::BatchedAddress,
-//             _ => panic!("Invalid TreeType"),
-//         }
-//     }
-// }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
