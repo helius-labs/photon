@@ -1,29 +1,3 @@
-use crate::api::method::get_compressed_accounts_by_owner::{
-    get_compressed_accounts_by_owner, get_compressed_accounts_by_owner_v2,
-    GetCompressedAccountsByOwnerRequest, GetCompressedAccountsByOwnerResponse,
-    GetCompressedAccountsByOwnerResponseV2,
-};
-use crate::api::method::get_multiple_compressed_account_proofs::{get_multiple_compressed_account_proofs, get_multiple_compressed_account_proofs_v2, GetMultipleCompressedAccountProofsResponse, GetMultipleCompressedAccountProofsResponseV2, HashList};
-use crate::api::method::get_queue_elements::{
-    get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
-};
-use crate::api::method::get_validity_proof::{
-    get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
-    GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
-    GetValidityProofResponseV2,
-};
-use crate::api::method::utils::{
-    AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
-    GetNonPaginatedSignaturesResponseWithError, GetPaginatedSignaturesResponse, HashRequest,
-    TokenAccountListResponse, TokenAccountListResponseV2,
-};
-use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use std::sync::Arc;
-use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
-use utoipa::ToSchema;
-use crate::api::method::get_compressed_account_proof::{get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2};
 use super::method::get_compressed_account::{
     get_compressed_account, get_compressed_account_v2, AccountResponse, AccountResponseV2,
 };
@@ -87,6 +61,38 @@ use super::{
         get_indexer_slot::get_indexer_slot,
     },
 };
+use crate::api::method::get_compressed_account_proof::{
+    get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2,
+};
+use crate::api::method::get_compressed_accounts_by_owner::{
+    get_compressed_accounts_by_owner, get_compressed_accounts_by_owner_v2,
+    GetCompressedAccountsByOwnerRequest, GetCompressedAccountsByOwnerResponse,
+    GetCompressedAccountsByOwnerResponseV2,
+};
+use crate::api::method::get_multiple_compressed_account_proofs::{
+    get_multiple_compressed_account_proofs, get_multiple_compressed_account_proofs_v2,
+    GetMultipleCompressedAccountProofsResponse, GetMultipleCompressedAccountProofsResponseV2,
+    HashList,
+};
+use crate::api::method::get_queue_elements::{
+    get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
+};
+use crate::api::method::get_validity_proof::{
+    get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
+    GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
+    GetValidityProofResponseV2,
+};
+use crate::api::method::utils::{
+    AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
+    GetNonPaginatedSignaturesResponseWithError, GetPaginatedSignaturesResponse, HashRequest,
+    TokenAccountListResponse, TokenAccountListResponseV2,
+};
+use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use std::sync::Arc;
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
+use utoipa::ToSchema;
 
 pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,

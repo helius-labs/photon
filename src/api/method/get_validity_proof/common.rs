@@ -126,7 +126,6 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                     .iter()
                     .map(|tree| {
                         let tree_info = TreeInfo::get(tree.as_str()).unwrap(); // TODO: remove unwrap
-                        println!("tree_info: {:?}", tree_info);
                         MerkleContextV2 {
                             tree_type: tree_info.tree_type as u16,
                             tree: SerializablePubkey::from(tree_info.tree),

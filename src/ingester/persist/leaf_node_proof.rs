@@ -63,7 +63,6 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                     merkle_tree_pubkey
                 )))?
                 .height;
-            println!("tree_height: {}", tree_height);
             let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, (tree_height + 1) as u32);
             leaf_nodes.push((zero_leaf.clone(), node_idx));
         }
