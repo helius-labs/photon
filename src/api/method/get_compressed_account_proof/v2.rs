@@ -97,7 +97,7 @@ pub async fn get_compressed_account_proof_v2(
         response.prove_by_index = false;
         response
     } else if let Some(account) = account.clone() {
-        // Use index-based proof if we found the account but not in state_trees
+        // Use index-based proof if we found the account in a queue but not in state_trees
         let leaf_index = account.leaf_index as u64;
         let merkle_tree = SerializablePubkey::try_from(account.tree.clone())?;
         let mut response: GetCompressedAccountProofResponseValueV2 =
