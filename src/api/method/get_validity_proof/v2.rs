@@ -4,9 +4,10 @@ use crate::{
 };
 use borsh::BorshDeserialize;
 use itertools::Itertools;
-use sea_orm::{DatabaseBackend, DatabaseConnection, QueryOrder, Statement, TransactionTrait};
+use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
-use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2};
+use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2, MerkleContextV2};
+use crate::api::method::get_validity_proof::SerializableTreeType;
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
@@ -18,14 +19,6 @@ pub async fn get_validity_proof_v2(
     prover_url: &str,
     mut request: GetValidityProofRequestV2,
 ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
-
-    if request.hashes.len() > MAX_ALLOWED_HASHES {
-        return Err(PhotonApiError::ValidationError(format!(
-            "Too many hashes. Max allowed: {}",
-            MAX_ALLOWED_HASHES
-        )));
-    }
-
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
         tx.execute(Statement::from_string(
@@ -54,11 +47,22 @@ pub async fn get_validity_proof_v2(
         .await?;
 
     // It's fine because we can't have more than 8 elements in request.hashes
-    let accounts = accounts.iter().sorted_by(|a, b| {
-        let hash_index_a = request.hashes.iter().position(|x| x.0.as_slice() == a.hash).unwrap();
-        let hash_index_b = request.hashes.iter().position(|x| x.0.as_slice() == b.hash).unwrap();
-        hash_index_a.cmp(&hash_index_b)
-    }).collect::<Vec<_>>();
+    let accounts = accounts
+        .iter()
+        .sorted_by(|a, b| {
+            let hash_index_a = request
+                .hashes
+                .iter()
+                .position(|x| x.0.as_slice() == a.hash)
+                .unwrap();
+            let hash_index_b = request
+                .hashes
+                .iter()
+                .position(|x| x.0.as_slice() == b.hash)
+                .unwrap();
+            hash_index_a.cmp(&hash_index_b)
+        })
+        .collect::<Vec<_>>();
 
     if accounts.len() != hashes_len {
         let all_accounts = accounts::Entity::find().all(&tx).await?;
@@ -92,21 +96,6 @@ pub async fn get_validity_proof_v2(
                 .await?
                 .into()
         };
-    accounts
-        .iter()
-        .try_for_each(|x| -> Result<(), PhotonApiError> {
-            v2_response.value.queues.push(
-                SerializablePubkey::try_from_slice(x.queue.as_slice())
-                    .map_err(|e| {
-                        PhotonApiError::ValidationError(format!(
-                            "Error converting queue pubkey to SerializablePubkey: {:?}",
-                            e
-                        ))
-                    })?
-                    .to_string(),
-            );
-            Ok(())
-        })?;
 
     // Add data of skipped accounts.
     for (index, account) in accounts
@@ -122,15 +111,24 @@ pub async fn get_validity_proof_v2(
             .value
             .leaves
             .insert(index, Hash::new(account.hash.as_slice())?.to_string());
-        v2_response.value.merkleTrees.insert(
+        v2_response.value.merkle_context.insert(
             index,
-            SerializablePubkey::try_from_slice(account.tree.as_slice())
-                .unwrap_or(SerializablePubkey::default())
-                .to_string(),
+            MerkleContextV2 {
+                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree: SerializablePubkey::try_from_slice(account.tree.as_slice())
+                    .unwrap_or(SerializablePubkey::default()),
+                queue: SerializablePubkey::try_from_slice(account.queue.as_slice())
+                    .unwrap_or(SerializablePubkey::default()),
+                cpi_context: None,
+                next_context: None,
+            },
         );
         // proof by index has no root.
         v2_response.value.rootIndices.insert(index, None.into());
         v2_response.value.roots.insert(index, "".to_string());
     }
+
+    // TODO: add correct tree type for every merkle context
+
     Ok(v2_response)
 }

@@ -26,6 +26,7 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::super::error::PhotonApiError;
+use crate::api::method::get_validity_proof::SerializableTreeType;
 use crate::dao::generated::accounts::Model;
 use sea_orm_migration::sea_query::Expr;
 
@@ -177,7 +178,7 @@ impl TryFrom<accounts::Model> for AccountWithContext {
                     .map(|index| UnsignedInteger(index as u64)),
                 nullifier: account.nullifier.map(Hash::try_from).transpose()?,
                 tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
-                tree_type: account.tree_type as u16,
+                tree_type: SerializableTreeType::from(account.tree_type as u16),
             },
         })
     }
@@ -785,7 +786,7 @@ pub struct TokenAccountListResponseV2 {
     pub value: TokenAccountListV2,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TokenAccountV2 {
     pub account: AccountV2,
