@@ -37,10 +37,6 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
 }
 
-pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
-    discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
-}
-
 pub(crate) fn parse_leaf_index(leaf_index: i64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
