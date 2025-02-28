@@ -1,7 +1,9 @@
-use super::{super::error::PhotonApiError, utils::HashRequest};
+use crate::api::error::PhotonApiError;
+use crate::api::method::utils::HashRequest;
 use crate::common::typedefs::context::Context;
-use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
-use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::ingester::persist::{get_multiple_compressed_leaf_proofs, MerkleProofWithContext};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -10,7 +12,32 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountProofResponse {
     pub context: Context,
-    pub value: MerkleProofWithContext,
+    pub value: GetCompressedAccountProofResponseValueV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(non_snake_case)]
+pub struct GetCompressedAccountProofResponseValueV1 {
+    pub proof: Vec<Hash>,
+    pub root: Hash,
+    pub leaf_index: u32,
+    pub hash: Hash,
+    pub merkle_tree: SerializablePubkey,
+    pub root_seq: u64,
+}
+
+impl From<MerkleProofWithContext> for GetCompressedAccountProofResponseValueV1 {
+    fn from(proof: MerkleProofWithContext) -> Self {
+        GetCompressedAccountProofResponseValueV1 {
+            proof: proof.proof,
+            root: proof.root,
+            leaf_index: proof.leaf_index,
+            hash: proof.hash,
+            merkle_tree: proof.merkle_tree,
+            root_seq: proof.root_seq,
+        }
+    }
 }
 
 pub async fn get_compressed_account_proof(
@@ -32,7 +59,7 @@ pub async fn get_compressed_account_proof(
         .into_iter()
         .next()
         .map(|account| GetCompressedAccountProofResponse {
-            value: account,
+            value: account.into(),
             context,
         })
         .ok_or(PhotonApiError::RecordNotFound(

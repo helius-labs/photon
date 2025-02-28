@@ -1,7 +1,7 @@
 use light_merkle_tree_metadata::queue::QueueType;
 use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, TransactionTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
 };
 
 use serde::{Deserialize, Serialize};
@@ -27,12 +27,12 @@ pub struct GetQueueElementsRequest {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsResponse {
     pub context: Context,
-    pub value: Vec<MerkleProofWithContextV2>,
+    pub value: Vec<GetQueueElementsResponseValue>,
     pub first_value_queue_index: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct MerkleProofWithContextV2 {
+pub struct GetQueueElementsResponseValue {
     pub proof: Vec<Hash>,
     pub root: Hash,
     pub leaf_index: u64,
@@ -109,14 +109,6 @@ pub async fn get_queue_elements(
         }
     };
 
-    let sql = query.build(conn.get_database_backend()).sql;
-    let values = query.build(conn.get_database_backend()).values;
-    println!("sql: {:?}", sql);
-    println!("values: {:?}", values);
-
-    let queue_elements: Vec<_> = query.clone().all(&tx).await?;
-    println!("0 queue_elements: {:?}", queue_elements);
-
     let queue_elements: Vec<QueueElement> = query
         .limit(num_elements as u64)
         .into_model::<QueueElement>()
@@ -125,13 +117,7 @@ pub async fn get_queue_elements(
         .map_err(|e| {
             PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
         })?;
-
-    println!("queue_elements: {:?}", queue_elements);
-
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
-
-    println!("indices: {:?}", indices);
-
     let (proofs, first_value_queue_index) = if !indices.is_empty() {
         let first_value_queue_index = match queue_type {
             QueueType::BatchedInput => Ok(queue_elements[0].nullifier_queue_index.ok_or(
@@ -158,7 +144,7 @@ pub async fn get_queue_elements(
 
     tx.commit().await?;
 
-    let result: Vec<MerkleProofWithContextV2> = proofs
+    let result: Vec<GetQueueElementsResponseValue> = proofs
         .into_iter()
         .zip(queue_elements.iter())
         .map(|(proof, queue_element)| {
@@ -167,13 +153,13 @@ pub async fn get_queue_elements(
                 .as_ref()
                 .map(|tx_hash| Hash::new(tx_hash.as_slice()).unwrap());
             let account_hash = Hash::new(queue_element.hash.as_slice()).unwrap();
-            Ok(MerkleProofWithContextV2 {
+            Ok(GetQueueElementsResponseValue {
                 proof: proof.proof,
                 root: proof.root,
-                leaf_index: proof.leafIndex as u64,
+                leaf_index: proof.leaf_index as u64,
                 leaf: proof.hash,
-                merkle_tree: Hash::from(proof.merkleTree.0.to_bytes()),
-                root_seq: proof.rootSeq,
+                merkle_tree: Hash::from(proof.merkle_tree.0.to_bytes()),
+                root_seq: proof.root_seq,
                 tx_hash,
                 account_hash,
             })

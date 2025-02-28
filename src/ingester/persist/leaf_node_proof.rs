@@ -2,11 +2,10 @@ use crate::api::error::PhotonApiError;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
-use crate::ingester::persist::get_tree_height;
+use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::leaf_node::{leaf_index_to_node_index, LeafNode};
-use crate::ingester::persist::persisted_state_tree::{
-    get_proof_nodes, get_proof_path, MerkleProofWithContext, ZERO_BYTES,
-};
+use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, get_proof_path, ZERO_BYTES};
+use crate::ingester::persist::MerkleProofWithContext;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait};
 use std::collections::HashMap;
@@ -58,10 +57,14 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                 hash: Hash::from(ZERO_BYTES[0]),
                 seq: None,
             };
-            let node_idx = leaf_index_to_node_index(
-                zero_leaf.leaf_index,
-                get_tree_height(&merkle_tree_pubkey.0),
-            );
+            let tree_height = TreeInfo::get(&merkle_tree_pubkey.to_string())
+                .ok_or(PhotonApiError::RecordNotFound(format!(
+                    "Tree info not found for tree: {}",
+                    merkle_tree_pubkey
+                )))?
+                .height;
+            println!("tree_height: {}", tree_height);
+            let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, (tree_height + 1) as u32);
             leaf_nodes.push((zero_leaf.clone(), node_idx));
         }
     }
@@ -94,7 +97,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
                         "Leaf index not found".to_string(),
                     ))? as u32,
                     hash: Hash::try_from(x.hash.clone())?,
-                    seq: Some(0),
+                    seq: x.seq.map(|x| x as u32),
                 },
                 x.node_idx,
             ))
@@ -196,10 +199,10 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             Ok(MerkleProofWithContext {
                 proof,
                 root,
-                leafIndex: leaf_node.leaf_index,
+                leaf_index: leaf_node.leaf_index,
                 hash: leaf_node.hash.clone(),
-                merkleTree: leaf_node.tree,
-                rootSeq: root_seq.unwrap_or(0i64) as u64,
+                merkle_tree: leaf_node.tree,
+                root_seq: root_seq.unwrap_or(0i64) as u64,
             })
         })
         .collect();

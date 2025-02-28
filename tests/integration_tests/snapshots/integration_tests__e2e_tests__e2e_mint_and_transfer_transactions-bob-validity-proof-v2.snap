@@ -17,11 +17,11 @@ expression: validity_proof_v2
     "rootIndices": [
       {
         "rootIndex": 7,
-        "inTree": true
+        "proveByIndex": false
       },
       {
         "rootIndex": 7,
-        "inTree": true
+        "proveByIndex": false
       }
     ],
     "leafIndices": [
@@ -32,13 +32,21 @@ expression: validity_proof_v2
       "JReC6h68m3EdCKP7S35e7BE4pBPwQz1HfjUkboeQy9r",
       "2R46QL8CSripTWvEsESL39ccripkjs9MjGtwnbJMzJET"
     ],
-    "merkleTrees": [
-      "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
-      "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT"
-    ],
-    "queues": [
-      "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
-      "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148"
+    "merkleContext": [
+      {
+        "treeType": 1,
+        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+        "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+        "cpiContext": null,
+        "nextContext": null
+      },
+      {
+        "treeType": 1,
+        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+        "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+        "cpiContext": null,
+        "nextContext": null
+      }
     ]
   },
   "context": {

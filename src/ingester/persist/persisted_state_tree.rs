@@ -1,78 +1,13 @@
 use std::collections::HashMap;
 
-use cadence_macros::statsd_count;
 use itertools::Itertools;
-use log::info;
 use sea_orm::{ConnectionTrait, DbErr, EntityTrait, Statement, TransactionTrait, Value};
-use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
-use utoipa::ToSchema;
 
-use super::{compute_parent_hash, get_tree_height};
-use crate::ingester::persist::leaf_node::leaf_index_to_node_index;
+use crate::ingester::parser::tree_info::{TreeInfo, DEFAULT_TREE_HEIGHT};
 use crate::{
-    api::error::PhotonApiError,
-    common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
-    dao::generated::state_trees,
-    metric,
+    common::typedefs::serializable_pubkey::SerializablePubkey, dao::generated::state_trees,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[allow(non_snake_case)]
-pub struct MerkleProofWithContext {
-    pub proof: Vec<Hash>,
-    pub root: Hash,
-    pub leafIndex: u32,
-    pub hash: Hash,
-    pub merkleTree: SerializablePubkey,
-    pub rootSeq: u64,
-}
-
-pub fn validate_proof(proof: &MerkleProofWithContext) -> Result<(), PhotonApiError> {
-    info!(
-        "Validating proof for leaf index: {} tree: {}",
-        proof.leafIndex, proof.merkleTree
-    );
-    let leaf_index = proof.leafIndex;
-    let tree_height = (proof.proof.len() + 1) as u32;
-    let node_index = leaf_index_to_node_index(leaf_index, tree_height);
-    let mut computed_root = proof.hash.to_vec();
-    info!("leaf_index: {}, node_index: {}", leaf_index, node_index);
-
-    for (idx, node) in proof.proof.iter().enumerate() {
-        let is_left = (node_index >> idx) & 1 == 0;
-        computed_root = compute_parent_hash(
-            if is_left {
-                computed_root.clone()
-            } else {
-                node.to_vec()
-            },
-            if is_left {
-                node.to_vec()
-            } else {
-                computed_root.clone()
-            },
-        )
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to compute parent hash for proof: {}",
-                e
-            ))
-        })?;
-    }
-    if computed_root != proof.root.to_vec() {
-        metric! {
-            statsd_count!("invalid_proof", 1);
-        }
-        return Err(PhotonApiError::UnexpectedError(format!(
-            "Computed root does not match the provided root. Proof; {:?}",
-            proof
-        )));
-    }
-
-    Ok(())
-}
 
 pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     let mut indexes = vec![];
@@ -170,8 +105,8 @@ where
                 );
 
                 let tree_pubkey = Pubkey::try_from(tree.clone()).unwrap();
-                let tree_height = get_tree_height(&tree_pubkey);
-                println!("tree_height: {}", tree_height);
+                let tree_height =
+                    TreeInfo::height(&tree_pubkey.to_string()).unwrap_or(DEFAULT_TREE_HEIGHT); // TODO: handle error
                 let model = state_trees::Model {
                     tree: tree.clone(),
                     level: get_level_by_node_index(*index, tree_height),
@@ -371,7 +306,9 @@ pub const ZERO_BYTES: ZeroBytes = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ingester::persist::{BATCH_STATE_TREE_HEIGHT, LEGACY_TREE_HEIGHT};
+    use crate::common::typedefs::hash::Hash;
+    use crate::ingester::persist::leaf_node::leaf_index_to_node_index;
+    use crate::ingester::persist::{compute_parent_hash, MerkleProofWithContext};
 
     fn node_index_to_leaf_index(index: i64, tree_height: u32) -> i64 {
         index - 2_i64.pow(get_level_by_node_index(index, tree_height) as u32)
@@ -381,13 +318,13 @@ mod tests {
     fn test_get_level_by_node_index() {
         // Tree of height 3 (root level is 0, max is 3)
         // Node indices in a binary tree: [1, 2, 3, 4, 5, 6, 7]
-        assert_eq!(get_level_by_node_index(1, BATCH_STATE_TREE_HEIGHT), 0); // Root node
-        assert_eq!(get_level_by_node_index(2, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, left child of root
-        assert_eq!(get_level_by_node_index(3, BATCH_STATE_TREE_HEIGHT), 1); // Level 1, right child of root
-        assert_eq!(get_level_by_node_index(4, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 2
-        assert_eq!(get_level_by_node_index(5, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 2
-        assert_eq!(get_level_by_node_index(6, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, left child of node 3
-        assert_eq!(get_level_by_node_index(7, BATCH_STATE_TREE_HEIGHT), 2); // Level 2, right child of node 3
+        assert_eq!(get_level_by_node_index(1, 33), 0); // Root node
+        assert_eq!(get_level_by_node_index(2, 33), 1); // Level 1, left child of root
+        assert_eq!(get_level_by_node_index(3, 33), 1); // Level 1, right child of root
+        assert_eq!(get_level_by_node_index(4, 33), 2); // Level 2, left child of node 2
+        assert_eq!(get_level_by_node_index(5, 33), 2); // Level 2, right child of node 2
+        assert_eq!(get_level_by_node_index(6, 33), 2); // Level 2, left child of node 3
+        assert_eq!(get_level_by_node_index(7, 33), 2); // Level 2, right child of node 3
     }
 
     // Test helper to convert byte arrays to hex strings for easier debugging
@@ -565,32 +502,28 @@ mod tests {
         let proof_context = MerkleProofWithContext {
             proof,
             root: Hash::try_from(ZERO_BYTES[31].to_vec()).unwrap(),
-            leafIndex: test_leaf_index,
+            leaf_index: test_leaf_index,
             hash: Hash::try_from(ZERO_BYTES[0].to_vec()).unwrap(),
-            merkleTree: merkle_tree,
-            rootSeq: 0,
+            merkle_tree: merkle_tree,
+            root_seq: 0,
         };
 
         // Validate the proof
-        let result = validate_proof(&proof_context);
+        let result = proof_context.validate();
         assert!(result.is_ok(), "Proof validation failed: {:?}", result);
     }
 
     #[test]
     fn test_validate_leaf_index() {
-        // Test for legacy tree height
-        assert!(validate_leaf_index(0, LEGACY_TREE_HEIGHT));
-        assert!(validate_leaf_index((1 << 26) - 1, LEGACY_TREE_HEIGHT));
-        assert!(!validate_leaf_index(1 << 26, LEGACY_TREE_HEIGHT));
-
-        // Test for batch state tree height
-        assert!(validate_leaf_index(0, BATCH_STATE_TREE_HEIGHT));
-        // assert!(validate_leaf_index((1 << 32) - 1, BATCH_STATE_TREE_HEIGHT));
+        assert!(validate_leaf_index(0, 27));
+        assert!(validate_leaf_index((1 << 26) - 1, 27));
+        assert!(!validate_leaf_index(1 << 26, 27));
+        assert!(validate_leaf_index(0, 33));
     }
 
     #[test]
     fn test_merkle_proof_length() {
-        assert_eq!(get_merkle_proof_length(LEGACY_TREE_HEIGHT), 26);
-        assert_eq!(get_merkle_proof_length(BATCH_STATE_TREE_HEIGHT), 32);
+        assert_eq!(get_merkle_proof_length(27), 26);
+        assert_eq!(get_merkle_proof_length(33), 32);
     }
 }

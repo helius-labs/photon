@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
 use crate::api::api::PhotonApi;
+use crate::api::method::get_compressed_account_proof::{
+    GetCompressedAccountProofResponseValueV1, GetCompressedAccountProofResponseValueV2,
+};
 use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
@@ -13,11 +16,12 @@ use crate::api::method::get_compressed_token_account_balance::TokenAccountBalanc
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceListV2;
+use crate::api::method::get_multiple_compressed_account_proofs::GetMultipleCompressedAccountProofsResponseValue;
 use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountListV2};
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
-use crate::api::method::get_queue_elements::MerkleProofWithContextV2;
+use crate::api::method::get_queue_elements::GetQueueElementsResponseValue;
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
     AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccount,
@@ -48,7 +52,6 @@ use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use dirs;
 use utoipa::openapi::Components;
 use utoipa::openapi::Response;
@@ -89,8 +92,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     AccountContext,
     AccountWithContext,
     AccountV2,
-    MerkleProofWithContext,
-    MerkleProofWithContextV2,
+    GetQueueElementsResponseValue,
     TokenAccountList,
     TokenAccountListV2,
     TokenAccount,
@@ -134,6 +136,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenBalanceListV2,
     MerkleContextV2,
     ContextInfo,
+    GetCompressedAccountProofResponseValueV1,
+    GetCompressedAccountProofResponseValueV2,
+    GetMultipleCompressedAccountProofsResponseValue
 )))]
 struct ApiDoc;
 

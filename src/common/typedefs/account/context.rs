@@ -1,24 +1,24 @@
+use crate::api::error::PhotonApiError;
+use crate::api::method::utils::{parse_decimal, parse_leaf_index};
 use crate::common::typedefs::account::{Account, AccountData};
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+use crate::dao::generated::accounts::Model;
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
 use light_merkle_tree_metadata::merkle_tree::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
-use crate::api::error::PhotonApiError;
-use crate::api::method::utils::{parse_decimal, parse_leaf_index};
-use crate::dao::generated::accounts::Model;
 
 /// This is currently used internally:
 /// - Internal (state_updates,..)
 /// - GetTransactionWithCompressionInfo (internally)
 /// - GetTransactionWithCompressionInfoV2 (internally)
 /// All endpoints return AccountV2.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
     pub queue: SerializablePubkey,
@@ -103,7 +103,6 @@ impl AccountWithContext {
     }
 }
 
-
 impl TryFrom<Model> for AccountWithContext {
     type Error = PhotonApiError;
 
@@ -152,4 +151,3 @@ impl TryFrom<Model> for AccountWithContext {
         })
     }
 }
-

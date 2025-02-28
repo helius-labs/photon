@@ -190,13 +190,17 @@ expression: parsed_transaction_v2
           },
           "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
           "lamports": 0,
-          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
           "leafIndex": 0,
           "seq": 1,
           "slotCreated": 40,
-          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
           "proveByIndex": false,
-          "treeType": 1
+          "merkleContext": {
+            "treeType": 1,
+            "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+            "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+            "cpiContext": null,
+            "nextContext": null
+          }
         },
         "optionalTokenData": {
           "mint": "2U35cKS3Cj2xs5EBdByXYU7LaKAitqjSZc1Jnvu4iPf4",

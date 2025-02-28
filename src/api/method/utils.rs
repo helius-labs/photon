@@ -1,6 +1,4 @@
-use crate::common::typedefs::account::{
-    Account, AccountV2,
-};
+use crate::common::typedefs::account::{Account, AccountV2};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;

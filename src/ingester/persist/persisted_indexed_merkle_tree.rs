@@ -16,8 +16,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use super::{
     compute_parent_hash, get_multiple_compressed_leaf_proofs_from_full_leaf_info,
-    persisted_state_tree::{validate_proof, MerkleProofWithContext, ZERO_BYTES},
-    MAX_SQL_INSERTS,
+    persisted_state_tree::ZERO_BYTES, MerkleProofWithContext, MAX_SQL_INSERTS,
 };
 use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::{
@@ -122,15 +121,15 @@ pub async fn get_exclusion_range_with_proof(
             root: Hash::try_from(root).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
             })?,
-            leafIndex: 0,
+            leaf_index: 0,
             hash: zeroeth_element_hash,
-            merkleTree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
+            merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
             })?,
             // HACK: Fixed value while not supporting forester.
-            rootSeq: 3,
+            root_seq: 3,
         };
-        validate_proof(&merkle_proof)?;
+        merkle_proof.validate()?;
         return Ok((zeroeth_element, merkle_proof));
     }
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
