@@ -9,6 +9,9 @@ use light_merkle_tree_metadata::merkle_tree::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
+use crate::api::error::PhotonApiError;
+use crate::api::method::utils::{parse_decimal, parse_leaf_index};
+use crate::dao::generated::accounts::Model;
 
 /// This is currently used internally:
 /// - Internal (state_updates,..)
@@ -99,3 +102,54 @@ impl AccountWithContext {
         }
     }
 }
+
+
+impl TryFrom<Model> for AccountWithContext {
+    type Error = PhotonApiError;
+
+    fn try_from(account: Model) -> Result<Self, Self::Error> {
+        let data = match (account.data, account.data_hash, account.discriminator) {
+            (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
+                data: Base64String(data),
+                data_hash: data_hash.try_into()?,
+                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+            }),
+            (None, None, None) => None,
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid account data".to_string(),
+                ))
+            }
+        };
+
+        Ok(AccountWithContext {
+            account: Account {
+                hash: account.hash.try_into()?,
+                address: account
+                    .address
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?,
+                data,
+                owner: account.owner.try_into()?,
+                tree: account.tree.try_into()?,
+                leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)?),
+                lamports: UnsignedInteger(parse_decimal(account.lamports)?),
+                slot_created: UnsignedInteger(account.slot_created as u64),
+                seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
+            },
+            context: AccountContext {
+                queue: account.queue.try_into()?,
+                in_output_queue: account.in_output_queue,
+                spent: account.spent,
+                nullified_in_tree: account.nullified_in_tree,
+                nullifier_queue_index: account
+                    .nullifier_queue_index
+                    .map(|index| UnsignedInteger(index as u64)),
+                nullifier: account.nullifier.map(Hash::try_from).transpose()?,
+                tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
+                tree_type: account.tree_type as u16,
+            },
+        })
+    }
+}
+
