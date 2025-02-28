@@ -1,4 +1,5 @@
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_compressed_account_proof::GetCompressedAccountProofResponseValueV2;
 use crate::api::method::get_validity_proof::ContextInfo;
 use crate::api::method::utils::PAGE_LIMIT;
 use crate::common::typedefs::context::Context;
@@ -7,7 +8,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::{accounts, state_trees};
 use crate::ingester::persist::{
     get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
-    MerkleProofWithContext,
 };
 use jsonrpsee_core::Serialize;
 use sea_orm::{
@@ -22,40 +22,14 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountProofsResponseV2 {
     pub context: Context,
-    pub value: Vec<GetMultipleCompressedAccountProofsResponseValueV2>,
+    #[serde(flatten)]
+    pub value: GetMultipleCompressedAccountProofsResponseValueV2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountProofsResponseValueV2 {
-    pub proof: Vec<Hash>,
-    pub root: Hash,
-    pub leaf_index: u32,
-    pub hash: Hash,
-    pub prove_by_index: bool,
-    pub root_seq: u64,
-    pub context: ContextInfo,
-}
-
-impl From<MerkleProofWithContext> for GetMultipleCompressedAccountProofsResponseValueV2 {
-    fn from(proof: MerkleProofWithContext) -> Self {
-        GetMultipleCompressedAccountProofsResponseValueV2 {
-            proof: proof.proof,
-            root: proof.root,
-            leaf_index: proof.leaf_index,
-            hash: proof.hash,
-            root_seq: proof.root_seq,
-            prove_by_index: false,
-            context: {
-                ContextInfo {
-                    tree_type: 0,
-                    merkle_tree: proof.merkle_tree,
-                    queue: Default::default(),
-                    cpi_context: None,
-                }
-            },
-        }
-    }
+    pub value: Vec<GetCompressedAccountProofResponseValueV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -143,8 +117,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
             .await?
             .into_iter()
             .map(|proof| {
-                let mut response_value: GetMultipleCompressedAccountProofsResponseValueV2 =
-                    proof.into();
+                let mut response_value: GetCompressedAccountProofResponseValueV2 = proof.into();
                 response_value.prove_by_index = false;
                 response_value
             })
@@ -167,8 +140,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
             get_multiple_compressed_leaf_proofs_by_indices(&tx, merkle_tree, indices).await?;
 
         for proof in proofs {
-            let mut response_value: GetMultipleCompressedAccountProofsResponseValueV2 =
-                proof.into();
+            let mut response_value: GetCompressedAccountProofResponseValueV2 = proof.into();
             response_value.prove_by_index = true;
             index_based_result.push(response_value);
         }
@@ -208,7 +180,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     tx.commit().await?;
 
     Ok(GetMultipleCompressedAccountProofsResponseV2 {
-        value: result,
+        value: GetMultipleCompressedAccountProofsResponseValueV2 { value: result },
         context,
     })
 }
