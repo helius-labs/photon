@@ -61,9 +61,7 @@ impl TryFrom<Model> for Account {
             data,
             owner: account.owner.try_into()?,
             tree: account.tree.try_into()?,
-            leaf_index: UnsignedInteger(crate::api::method::utils::parse_leaf_index(
-                account.leaf_index as u64,
-            )?),
+            leaf_index: UnsignedInteger(crate::api::method::utils::parse_leaf_index(account.leaf_index)?),
             lamports: UnsignedInteger(parse_decimal(account.lamports)?),
             slot_created: UnsignedInteger(account.slot_created as u64),
             seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),

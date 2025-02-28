@@ -42,7 +42,7 @@ pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
     discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
 }
 
-pub(crate) fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
+pub(crate) fn parse_leaf_index(leaf_index: i64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
@@ -76,7 +76,7 @@ impl TryFrom<Model> for AccountWithContext {
                 data,
                 owner: account.owner.try_into()?,
                 tree: account.tree.try_into()?,
-                leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index as u64)?),
+                leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)?),
                 lamports: UnsignedInteger(parse_decimal(account.lamports)?),
                 slot_created: UnsignedInteger(account.slot_created as u64),
                 seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
