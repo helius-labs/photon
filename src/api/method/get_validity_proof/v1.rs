@@ -9,18 +9,16 @@ use light_sdk::STATE_MERKLE_TREE_HEIGHT;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
+use crate::api::method::get_multiple_new_address_proofs::{
+    get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_ADDRESS,
+};
 use crate::api::method::get_validity_proof::common::{
     convert_inclusion_proofs_to_hex, convert_non_inclusion_merkle_proof_to_hex,
     negate_and_compress_proof, proof_from_json_struct, CompressedProofWithContext,
     GetValidityProofRequest, GetValidityProofResponse, GnarkProofJson, HexBatchInputsForProver,
     STATE_TREE_QUEUE_SIZE,
 };
-use crate::api::method::{
-    get_multiple_new_address_proofs::{
-        get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_ADDRESS,
-    },
-    utils::Context,
-};
+use crate::common::typedefs::context::Context;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
 pub async fn get_validity_proof(

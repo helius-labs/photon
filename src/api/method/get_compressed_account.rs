@@ -1,12 +1,12 @@
 use crate::common::typedefs::account::{Account, AccountV2};
 use crate::dao::generated::accounts;
 
+use super::super::error::PhotonApiError;
+use super::utils::{AccountDataTable, CompressedAccountRequest};
+use crate::common::typedefs::context::Context;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Serialize;
 use utoipa::ToSchema;
-
-use super::super::error::PhotonApiError;
-use super::utils::{AccountDataTable, CompressedAccountRequest, Context};
 
 // We do not use generics to simply documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]

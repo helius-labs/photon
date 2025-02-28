@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
-use crate::api::method::utils::Context;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;

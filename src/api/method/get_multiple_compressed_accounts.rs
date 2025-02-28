@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use super::{
-    super::error::PhotonApiError,
-    utils::{Context, PAGE_LIMIT},
-};
+use super::{super::error::PhotonApiError, utils::PAGE_LIMIT};
 use crate::common::typedefs::account::{Account, AccountV2};
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;

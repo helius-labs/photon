@@ -1,6 +1,7 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_compressed_accounts_by_owner::indexed_accounts::IndexedAccounts;
-use crate::api::method::utils::{Limit, PAGE_LIMIT};
+use crate::api::method::utils::PAGE_LIMIT;
+use crate::common::typedefs::limit::Limit;
 use crate::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use crate::{common::typedefs::bs58_string::Base58String, ingester::persist::bytes_to_sql_format};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};

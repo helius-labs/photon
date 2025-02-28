@@ -3,7 +3,7 @@ use crate::api::method::get_compressed_accounts_by_owner::common::{
     validate_filters, GetCompressedAccountsByOwnerRequest, QueryBuilder,
 };
 use crate::api::method::get_compressed_accounts_by_owner::indexed_accounts::Solayer;
-use crate::api::method::utils::Context;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::{common::typedefs::account::Account, dao::generated::accounts};
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};

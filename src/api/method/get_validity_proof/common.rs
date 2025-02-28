@@ -1,7 +1,7 @@
 use crate::api::method::get_multiple_new_address_proofs::{
     AddressWithTree, MerkleContextWithNewAddressProof,
 };
-use crate::api::method::utils::Context;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;

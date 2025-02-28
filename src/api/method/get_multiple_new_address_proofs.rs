@@ -8,6 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
@@ -15,8 +16,6 @@ use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range
 pub const ADDRESS_TREE_HEIGHT: u32 = 27;
 pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 pub const MAX_ADDRESSES: usize = 50;
-
-use super::utils::Context;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
