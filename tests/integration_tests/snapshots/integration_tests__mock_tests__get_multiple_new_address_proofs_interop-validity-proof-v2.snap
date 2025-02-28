@@ -1,6 +1,6 @@
 ---
 source: tests/integration_tests/mock_tests.rs
-assertion_line: 1157
+assertion_line: 1171
 expression: validity_proof_v2
 ---
 {
@@ -16,7 +16,7 @@ expression: validity_proof_v2
     "rootIndices": [
       {
         "rootIndex": 3,
-        "inTree": true
+        "proveByIndex": false
       }
     ],
     "leafIndices": [
@@ -25,10 +25,15 @@ expression: validity_proof_v2
     "leaves": [
       "12nCKqGG85jHxbTeA8i2Z7D4vnNUUrQ4r5e8dv2o16X"
     ],
-    "merkleTrees": [
-      "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2"
-    ],
-    "queues": []
+    "merkleContext": [
+      {
+        "treeType": 2,
+        "tree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
+        "queue": "aq1S9z4reTSQAdgWHGD2zDaS39sjGrAxbR31vxJ2F4F",
+        "cpiContext": null,
+        "nextContext": null
+      }
+    ]
   },
   "context": {
     "slot": 0

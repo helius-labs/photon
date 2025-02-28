@@ -87,7 +87,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             proof: proof.proof,
             lowElementLeafIndex: model.leaf_index as u32,
             merkleTree: tree,
-            rootSeq: proof.rootSeq,
+            rootSeq: proof.root_seq,
         };
         new_address_proofs.push(new_address_proof);
     }

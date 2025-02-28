@@ -4,7 +4,8 @@ use crate::api::method::get_multiple_new_address_proofs::{
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
+use crate::ingester::parser::tree_info::TreeInfo;
+use crate::ingester::persist::MerkleProofWithContext;
 use borsh::BorshSerialize;
 use jsonrpsee_core::Serialize;
 use lazy_static::lazy_static;
@@ -123,12 +124,16 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                     .value
                     .merkleTrees
                     .iter()
-                    .map(|x| MerkleContextV2 {
-                        tree_type: 0,                                            // TODO: check
-                        tree: SerializablePubkey::try_from(x.as_str()).unwrap(), // TODO: handle error
-                        queue: SerializablePubkey::default(),
-                        cpi_context: None,
-                        next_context: None,
+                    .map(|tree| {
+                        let tree_info = TreeInfo::get(tree.as_str()).unwrap(); // TODO: remove unwrap
+                        println!("tree_info: {:?}", tree_info);
+                        MerkleContextV2 {
+                            tree_type: tree_info.tree_type as u16,
+                            tree: SerializablePubkey::from(tree_info.tree),
+                            queue: SerializablePubkey::from(tree_info.queue),
+                            cpi_context: None,
+                            next_context: None,
+                        }
                     })
                     .collect(),
             },
@@ -192,7 +197,7 @@ pub fn convert_inclusion_proofs_to_hex(
     for i in 0..inclusion_proof_inputs.len() {
         let input = InclusionHexInputsForProver {
             root: hash_to_hex(&inclusion_proof_inputs[i].root),
-            path_index: inclusion_proof_inputs[i].leafIndex,
+            path_index: inclusion_proof_inputs[i].leaf_index,
             path_elements: inclusion_proof_inputs[i]
                 .proof
                 .iter()

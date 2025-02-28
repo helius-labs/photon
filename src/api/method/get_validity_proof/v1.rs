@@ -199,13 +199,13 @@ pub async fn get_validity_proof(
             .collect(),
         rootIndices: account_proofs
             .iter()
-            .map(|x| x.rootSeq)
+            .map(|x| x.root_seq)
             .chain(new_address_proofs.iter().map(|x| x.rootSeq))
             .map(|x| x % queue_size)
             .collect(),
         leafIndices: account_proofs
             .iter()
-            .map(|x| x.leafIndex)
+            .map(|x| x.leaf_index)
             .chain(new_address_proofs.iter().map(|x| x.lowElementLeafIndex))
             .collect(),
         leaves: account_proofs
@@ -219,7 +219,7 @@ pub async fn get_validity_proof(
             .collect(),
         merkleTrees: account_proofs
             .iter()
-            .map(|x| x.merkleTree.clone().to_string())
+            .map(|x| x.merkle_tree.clone().to_string())
             .chain(
                 new_address_proofs
                     .iter()
