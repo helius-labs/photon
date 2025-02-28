@@ -91,6 +91,12 @@ pub async fn get_multiple_compressed_account_proofs_v2(
         .all(&tx)
         .await?;
 
+    if accounts.len() != hashes.len() {
+        return Err(PhotonApiError::RecordNotFound(
+            "Some accounts not found".to_string(),
+        ));
+    }
+
     // Create a map from hash to account for easy lookup
     let account_map: HashMap<Vec<u8>, accounts::Model> = accounts
         .into_iter()
