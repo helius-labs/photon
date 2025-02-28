@@ -1,4 +1,5 @@
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_validity_proof::ContextInfo;
 use crate::api::method::utils::PAGE_LIMIT;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
@@ -31,11 +32,9 @@ pub struct GetMultipleCompressedAccountProofsResponseValueV2 {
     pub root: Hash,
     pub leaf_index: u32,
     pub hash: Hash,
-    pub merkle_tree: SerializablePubkey,
-    pub queue: SerializablePubkey,
-    pub root_seq: u64,
     pub prove_by_index: bool,
-    pub tree_type: u16,
+    pub root_seq: u64,
+    pub context: ContextInfo,
 }
 
 impl From<MerkleProofWithContext> for GetMultipleCompressedAccountProofsResponseValueV2 {
@@ -45,12 +44,16 @@ impl From<MerkleProofWithContext> for GetMultipleCompressedAccountProofsResponse
             root: proof.root,
             leaf_index: proof.leaf_index,
             hash: proof.hash,
-            merkle_tree: proof.merkle_tree,
             root_seq: proof.root_seq,
-            // Default values to be overridden as needed
             prove_by_index: false,
-            tree_type: 0,
-            queue: SerializablePubkey::default(),
+            context: {
+                ContextInfo {
+                    tree_type: 0,
+                    merkle_tree: proof.merkle_tree,
+                    queue: Default::default(),
+                    cpi_context: None,
+                }
+            },
         }
     }
 }
@@ -179,8 +182,12 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     // Enrich with account data
     for value in &mut result {
         if let Some(account) = account_map.get(&value.hash.to_vec()) {
-            value.tree_type = account.tree_type as u16;
-            value.queue = SerializablePubkey::try_from(account.queue.clone())?;
+            value.context = ContextInfo {
+                tree_type: account.tree_type as u16,
+                merkle_tree: SerializablePubkey::try_from(account.tree.clone())?,
+                queue: SerializablePubkey::try_from(account.queue.clone())?,
+                cpi_context: None,
+            };
         }
     }
 
