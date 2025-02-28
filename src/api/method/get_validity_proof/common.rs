@@ -267,17 +267,6 @@ impl From<Option<u64>> for RootIndex {
     }
 }
 
-// TODO: Keep in here for API doc generation?
-#[repr(u16)]
-#[derive(Serialize, Deserialize, ToSchema, Debug, PartialEq, Clone, Copy, Eq)]
-pub enum SerializableTreeType {
-    State = 1,
-    Address = 2,
-    BatchedState = 3,
-    BatchedAddress = 4,
-    Unknown = 0, // TODO: remove this
-}
-
 #[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
