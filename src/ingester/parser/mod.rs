@@ -10,12 +10,12 @@ use self::state_update::{StateUpdate, Transaction};
 pub mod indexer_events;
 pub mod merkle_tree_events_parser;
 pub mod state_update;
+pub mod tree_info;
 mod tx_event_parser;
 pub mod tx_event_parser_v2;
 
 use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_v2;
 use solana_program::pubkey;
-pub use tx_event_parser::map_tree_and_queue_accounts;
 
 pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
     pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");

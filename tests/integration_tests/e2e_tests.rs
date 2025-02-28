@@ -32,10 +32,11 @@ use serial_test::serial;
 use std::str::FromStr;
 
 use futures::StreamExt;
+use photon_indexer::common::typedefs::limit::Limit;
 use photon_indexer::{
     api::method::{
         get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-        utils::{Limit, SignatureInfo},
+        utils::SignatureInfo,
     },
     common::typedefs::serializable_signature::SerializableSignature,
 };
@@ -207,7 +208,7 @@ async fn test_e2e_mint_and_transfer_transactions(
                 })
                 .await
                 .unwrap();
-            validity_proof_v2.value.compressedProof = CompressedProof::default();
+            validity_proof_v2.value.compressedProof = Some(CompressedProof::default());
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof-v2", name.clone(), person),
                 validity_proof_v2
@@ -427,7 +428,7 @@ async fn test_lamport_transfers(
                 .await
                 .unwrap();
 
-            let limit = photon_indexer::api::method::utils::Limit::new(1).unwrap();
+            let limit = Limit::new(1).unwrap();
             let mut cursor = None;
             let mut paginated_signatures = Vec::new();
             loop {

@@ -402,7 +402,7 @@ pub fn compare_account_with_account_v2(account: &Account, account_v2: &AccountV2
     assert_eq!(account.data, account_v2.data);
     assert_eq!(account.owner, account_v2.owner);
     assert_eq!(account.lamports, account_v2.lamports);
-    assert_eq!(account.tree, account_v2.tree);
+    assert_eq!(account.tree, account_v2.merkle_context.tree);
     assert_eq!(account.leaf_index, account_v2.leaf_index);
     assert_eq!(account.seq, account_v2.seq);
     assert_eq!(account.slot_created, account_v2.slot_created);

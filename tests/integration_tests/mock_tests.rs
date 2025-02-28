@@ -48,7 +48,7 @@ use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
 use light_merkle_tree_metadata::merkle_tree::TreeType;
-use photon_indexer::api::method::utils::Limit;
+use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
 use std::vec;
@@ -922,8 +922,8 @@ async fn test_persisted_state_trees(
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkleTree, tree);
-        assert_eq!(num_nodes as u64 - 1, proof.rootSeq);
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 
@@ -955,8 +955,8 @@ async fn test_persisted_state_trees(
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkleTree, tree);
-        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.rootSeq);
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 }
@@ -1166,7 +1166,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof_v2.value.compressedProof = CompressedProof::default();
+    validity_proof_v2.value.compressedProof = Some(CompressedProof::default());
 
     insta::assert_json_snapshot!(format!("{}-validity-proof-v2", name), validity_proof_v2);
 }
@@ -1583,9 +1583,9 @@ async fn test_persist_and_verify(
             .unwrap_or(0) as u64;
 
         for proof in proofs {
-            assert_eq!(proof.merkleTree, tree, "Merkle tree should match");
+            assert_eq!(proof.merkle_tree, tree, "Merkle tree should match");
             assert_eq!(
-                max_seq, proof.rootSeq,
+                max_seq, proof.root_seq,
                 "Root sequence should be the maximum sequence number"
             );
             assert_eq!(
