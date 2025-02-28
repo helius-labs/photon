@@ -1,5 +1,6 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_compressed_account_proof::GetCompressedAccountProofResponseValueV2;
+use crate::api::method::get_multiple_compressed_account_proofs::HashList;
 use crate::api::method::get_validity_proof::ContextInfo;
 use crate::api::method::utils::PAGE_LIMIT;
 use crate::common::typedefs::context::Context;
@@ -17,7 +18,6 @@ use sea_orm::{
 use serde::Deserialize;
 use std::collections::HashMap;
 use utoipa::ToSchema;
-use crate::api::method::get_multiple_compressed_account_proofs::HashList;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
