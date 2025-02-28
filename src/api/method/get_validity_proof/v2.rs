@@ -7,7 +7,6 @@ use itertools::Itertools;
 use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
 use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2, MerkleContextV2};
-use crate::api::method::get_validity_proof::SerializableTreeType;
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
@@ -114,7 +113,7 @@ pub async fn get_validity_proof_v2(
         v2_response.value.merkle_context.insert(
             index,
             MerkleContextV2 {
-                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree_type: account.tree_type as u16,
                 tree: SerializablePubkey::try_from_slice(account.tree.as_slice())
                     .unwrap_or(SerializablePubkey::default()),
                 queue: SerializablePubkey::try_from_slice(account.queue.as_slice())

@@ -3,7 +3,7 @@ use super::{
     unsigned_integer::UnsignedInteger,
 };
 use crate::api::error::PhotonApiError;
-use crate::api::method::get_validity_proof::{MerkleContextV2, SerializableTreeType};
+use crate::api::method::get_validity_proof::MerkleContextV2;
 use crate::api::method::utils::parse_decimal;
 use crate::dao::generated::accounts;
 use crate::dao::generated::accounts::Model;
@@ -127,7 +127,7 @@ impl TryFrom<accounts::Model> for AccountV2 {
             seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
             prove_by_index: account.in_output_queue,
             merkle_context: MerkleContextV2 {
-                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree_type: account.tree_type as u16,
                 tree: account.tree.try_into()?,
                 queue: account.queue.clone().try_into()?,
                 cpi_context: None,
@@ -162,7 +162,7 @@ pub struct AccountContext {
     // Legacy: None
     // Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
     pub tx_hash: Option<Hash>,
-    pub tree_type: SerializableTreeType,
+    pub tree_type: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
@@ -221,7 +221,7 @@ impl AccountWithContext {
                 nullifier_queue_index: nullifier_queue_index.map(UnsignedInteger),
                 nullifier,
                 tx_hash: None,
-                tree_type: SerializableTreeType::from(tree_type as u16),
+                tree_type: tree_type as u16,
             },
         }
     }

@@ -124,7 +124,7 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                     .merkleTrees
                     .iter()
                     .map(|x| MerkleContextV2 {
-                        tree_type: SerializableTreeType::Unknown,
+                        tree_type: 0,                                            // TODO: check
                         tree: SerializablePubkey::try_from(x.as_str()).unwrap(), // TODO: handle error
                         queue: SerializablePubkey::default(),
                         cpi_context: None,
@@ -262,7 +262,8 @@ impl From<Option<u64>> for RootIndex {
     }
 }
 
-#[repr(u64)]
+// TODO: Keep in here for API doc generation?
+#[repr(u16)]
 #[derive(Serialize, Deserialize, ToSchema, Debug, PartialEq, Clone, Copy, Eq)]
 pub enum SerializableTreeType {
     State = 1,
@@ -272,25 +273,11 @@ pub enum SerializableTreeType {
     Unknown = 0, // TODO: remove this
 }
 
-// from u64
-impl From<u16> for SerializableTreeType {
-    fn from(value: u16) -> Self {
-        match value {
-            0 => SerializableTreeType::Unknown,
-            1 => SerializableTreeType::State,
-            2 => SerializableTreeType::Address,
-            3 => SerializableTreeType::BatchedState,
-            4 => SerializableTreeType::BatchedAddress,
-            _ => panic!("Invalid TreeType"),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct MerkleContextV2 {
-    pub tree_type: SerializableTreeType,
+    pub tree_type: u16,
     pub tree: SerializablePubkey,
     // nullifier_queue in legacy trees, output_queue in V2 trees.
     pub queue: SerializablePubkey,
