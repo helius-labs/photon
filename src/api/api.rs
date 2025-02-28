@@ -3,9 +3,7 @@ use crate::api::method::get_compressed_accounts_by_owner::{
     GetCompressedAccountsByOwnerRequest, GetCompressedAccountsByOwnerResponse,
     GetCompressedAccountsByOwnerResponseV2,
 };
-use crate::api::method::get_multiple_compressed_account_proofs::{
-    get_multiple_compressed_account_proofs, GetMultipleCompressedAccountProofsResponse, HashList,
-};
+use crate::api::method::get_multiple_compressed_account_proofs::{get_multiple_compressed_account_proofs, get_multiple_compressed_account_proofs_v2, GetMultipleCompressedAccountProofsResponse, GetMultipleCompressedAccountProofsResponseV2, HashList};
 use crate::api::method::get_queue_elements::{
     get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
 };
@@ -25,7 +23,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;
-
+use crate::api::method::get_compressed_account_proof::{get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2};
 use super::method::get_compressed_account::{
     get_compressed_account, get_compressed_account_v2, AccountResponse, AccountResponseV2,
 };
@@ -153,11 +151,25 @@ impl PhotonApi {
         get_compressed_account_proof(&self.db_conn, request).await
     }
 
+    pub async fn get_compressed_account_proof_v2(
+        &self,
+        request: HashRequest,
+    ) -> Result<GetCompressedAccountProofResponseV2, PhotonApiError> {
+        get_compressed_account_proof_v2(&self.db_conn, request).await
+    }
+
     pub async fn get_multiple_compressed_account_proofs(
         &self,
         request: HashList,
     ) -> Result<GetMultipleCompressedAccountProofsResponse, PhotonApiError> {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_multiple_compressed_account_proofs_v2(
+        &self,
+        request: HashList,
+    ) -> Result<GetMultipleCompressedAccountProofsResponseV2, PhotonApiError> {
+        get_multiple_compressed_account_proofs_v2(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_multiple_new_address_proofs(
@@ -461,9 +473,19 @@ impl PhotonApi {
                 response: GetCompressedAccountProofResponse::schema().1,
             },
             OpenApiSpec {
+                name: "getCompressedAccountProofV2".to_string(),
+                request: Some(HashRequest::schema().1),
+                response: GetCompressedAccountProofResponseV2::schema().1,
+            },
+            OpenApiSpec {
                 name: "getMultipleCompressedAccountProofs".to_string(),
                 request: Some(HashList::schema().1),
                 response: GetMultipleCompressedAccountProofsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleCompressedAccountProofsV2".to_string(),
+                request: Some(HashList::schema().1),
+                response: GetMultipleCompressedAccountProofsResponseV2::schema().1,
             },
             OpenApiSpec {
                 name: "getMultipleNewAddressProofs".to_string(),

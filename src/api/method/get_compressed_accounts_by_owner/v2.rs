@@ -47,6 +47,8 @@ pub async fn get_compressed_accounts_by_owner_v2(
 
     let raw_sql = query_builder.get_query(&columns);
 
+    println!("raw_sql: {}", raw_sql);
+
     let result: Vec<accounts::Model> = accounts::Model::find_by_statement(Statement::from_string(
         conn.get_database_backend(),
         raw_sql,

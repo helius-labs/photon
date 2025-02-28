@@ -17,6 +17,7 @@ use sea_orm::{
 use serde::Deserialize;
 use std::collections::HashMap;
 use utoipa::ToSchema;
+use crate::api::method::get_multiple_compressed_account_proofs::HashList;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -24,9 +25,6 @@ pub struct GetMultipleCompressedAccountProofsResponseV2 {
     pub context: Context,
     pub value: Vec<GetCompressedAccountProofResponseValueV2>,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct HashList(pub Vec<Hash>);
 
 pub async fn get_multiple_compressed_account_proofs_v2(
     conn: &DatabaseConnection,
