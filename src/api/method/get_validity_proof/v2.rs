@@ -11,8 +11,6 @@ use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
-const MAX_ALLOWED_HASHES: usize = 8;
-
 pub async fn get_validity_proof_v2(
     conn: &DatabaseConnection,
     prover_url: &str,
