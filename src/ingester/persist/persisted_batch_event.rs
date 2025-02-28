@@ -2,11 +2,13 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
-use crate::ingester::parser::batch_event_parser::{BatchEvent, IndexedBatchEvents};
+use crate::ingester::parser::indexer_events::BatchEvent;
+use crate::ingester::parser::{
+    indexer_events::MerkleTreeEvent, merkle_tree_events_parser::IndexedBatchEvents,
+};
 use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::ingester::persist::MAX_SQL_INSERTS;
 use crate::migration::Expr;
-use light_batched_merkle_tree::event::{BatchAppendEvent, BatchNullifyEvent};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
     QueryTrait,
@@ -26,12 +28,13 @@ pub async fn persist_batch_events(
             // Batch size is 500 for batched State Merkle trees.
             let mut leaf_nodes = Vec::with_capacity(500);
             match event {
-                BatchEvent::BatchNullify(batch_nullify_event) => {
+                MerkleTreeEvent::BatchNullify(batch_nullify_event) => {
                     persist_batch_nullify_event(txn, batch_nullify_event, &mut leaf_nodes).await
                 }
-                BatchEvent::BatchAppend(batch_append_event) => {
+                MerkleTreeEvent::BatchAppend(batch_append_event) => {
                     persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
                 }
+                _ => Err(IngesterError::InvalidEvent),
             }?;
             if leaf_nodes.len() <= MAX_SQL_INSERTS {
                 persist_leaf_nodes(txn, leaf_nodes).await?;
@@ -53,7 +56,7 @@ pub async fn persist_batch_events(
 /// 2. Remove inserted elements from the database output queue.
 async fn persist_batch_append_event<'a>(
     txn: &DatabaseTransaction,
-    batch_append_event: &'a BatchAppendEvent,
+    batch_append_event: &'a BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
     // 1. Create leaf nodes with the account hash as leaf.
@@ -110,7 +113,7 @@ async fn persist_batch_append_event<'a>(
 ///     and remove them from the database nullifier queue.
 async fn persist_batch_nullify_event<'a>(
     txn: &DatabaseTransaction,
-    batch_nullify_event: &'a BatchNullifyEvent,
+    batch_nullify_event: &'a BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
     // 1. Create leaf nodes with nullifier as leaf.

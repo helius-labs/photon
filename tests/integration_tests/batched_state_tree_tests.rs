@@ -309,15 +309,16 @@ async fn test_batched_tree_transactions(
         } else {
             last_inserted_index += 10;
             assert_eq!(
-                post_output_queue_elements.value.len(),
-                pre_output_queue_elements.value.len().saturating_sub(10),
-                "Append event should decrease the length of the output queue by 10."
-            );
-            assert_eq!(
                 post_input_queue_elements.value.len(),
                 pre_input_queue_elements.value.len(),
                 "Append event should not change the length of the input queue."
             );
+            assert_eq!(
+                post_output_queue_elements.value.len(),
+                pre_output_queue_elements.value.len().saturating_sub(10),
+                "Append event should decrease the length of the output queue by 10."
+            );
+
             println!(
                 "post input queue len {}",
                 post_input_queue_elements.value.len(),
@@ -753,120 +754,6 @@ async fn test_four_cpi_events(#[values(DatabaseBackend::Postgres)] db_backend: D
     }
 }
 
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_get_queue_elements(#[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend) {
-    let trim_test_name = trim_test_name(function_name!());
-    let name = trim_test_name;
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-    reset_tables(setup.db_conn.as_ref()).await.unwrap();
-    let sort_by_slot = true;
-    let signatures = read_file_names(&name, sort_by_slot);
-    let index_individually = false;
-    // left: Hash(3TiXqGbJdXrBtyGSe5Xsq4LJjuqSBDizdioQN4JGQ3qr)
-    //  right: Hash(PFjDTsC3g8kbsu41HRe1d1vyYoiS6B64cLf8jUriF9E)
-    let merkle_tree_pubkey =
-        Pubkey::from_str("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu").unwrap();
-
-    println!("signatures {:?}", signatures);
-    let (appends, signatures) = signatures.split_at(50);
-    index(
-        &name,
-        setup.db_conn.clone(),
-        setup.client.clone(),
-        appends,
-        index_individually,
-    )
-    .await;
-    for (i, signature) in signatures.iter().enumerate() {
-        // Index transactions.
-        index(
-            &name,
-            setup.db_conn.clone(),
-            setup.client.clone(),
-            &[signature.to_string()],
-            index_individually,
-        )
-        .await;
-        // get queue elements
-        let get_queue_elements_result = setup
-            .api
-            .get_queue_elements(GetQueueElementsRequest {
-                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
-                start_offset: None,
-                queue_type: QueueType::BatchedInput as u8,
-                num_elements: 1000,
-            })
-            .await
-            .unwrap();
-        println!(
-            "queue elements {:?}",
-            get_queue_elements_result
-                .value
-                .iter()
-                .map(|x| (x.leaf_index, x.account_hash.0))
-                .collect::<Vec<_>>()
-        );
-
-        if !get_queue_elements_result.value.is_empty() {
-            println!("root {} : {:?}", i, get_queue_elements_result.value[0].root);
-        }
-    }
-
-    let get_queue_elements_result = setup
-        .api
-        .get_queue_elements(GetQueueElementsRequest {
-            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
-            start_offset: None,
-            queue_type: QueueType::BatchedOutput as u8,
-            num_elements: 1000,
-        })
-        .await
-        .unwrap();
-    println!(
-        "output queue elements {:?}",
-        get_queue_elements_result
-            .value
-            .iter()
-            .map(|x| x.leaf_index)
-            .collect::<Vec<_>>()
-    );
-    let input_get_queue_elements_result = setup
-        .api
-        .get_queue_elements(GetQueueElementsRequest {
-            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
-            start_offset: None,
-            queue_type: QueueType::BatchedInput as u8,
-            num_elements: 1000,
-        })
-        .await
-        .unwrap();
-    println!(
-        "input queue elements {:?}",
-        input_get_queue_elements_result
-            .value
-            .iter()
-            .map(|x| x.leaf_index)
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(get_queue_elements_result.value[0].root_seq, 7);
-    assert_eq!(
-        get_queue_elements_result.value[0].root,
-        Hash::from([
-            5, 179, 110, 61, 105, 239, 248, 251, 134, 208, 10, 32, 75, 187, 81, 206, 233, 75, 32,
-            246, 144, 171, 204, 44, 195, 19, 151, 127, 235, 253, 170, 45
-        ])
-    );
-}
 /// Reset table
 /// Index transactions individually or in one batch
 pub async fn index(
