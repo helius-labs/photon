@@ -4,14 +4,12 @@ use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use anchor_lang::AnchorDeserialize;
-use lazy_static::lazy_static;
 use light_merkle_tree_metadata::merkle_tree::TreeType;
 use log::info;
-use solana_program::pubkey::Pubkey;
-use solana_sdk::pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
-
+use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
+use crate::ingester::parser::tree_info::TreeInfo;
 
 pub fn parse_legacy_public_transaction_event(
     tx: &TransactionInfo,
