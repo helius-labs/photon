@@ -178,7 +178,7 @@ impl TryFrom<accounts::Model> for AccountWithContext {
                     .map(|index| UnsignedInteger(index as u64)),
                 nullifier: account.nullifier.map(Hash::try_from).transpose()?,
                 tx_hash: account.tx_hash.map(Hash::try_from).transpose()?,
-                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree_type: account.tree_type as u16,
             },
         })
     }
