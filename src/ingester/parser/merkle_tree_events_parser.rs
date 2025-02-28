@@ -10,7 +10,6 @@ use crate::ingester::parser::state_update::{
 use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
-use log::info;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
@@ -25,12 +24,9 @@ pub fn parse_merkle_tree_event(
         && next_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
-        info!("indexing Merkle tree event");
-        info!("data {:?}", instruction.data.to_vec());
-        let merkle_tree_event = MerkleTreeEvent::deserialize(&mut instruction.data.as_slice());
+        let merkle_tree_event = MerkleTreeEvent::deserialize(&mut next_instruction.data.as_slice());
         if let Ok(merkle_tree_event) = merkle_tree_event {
             let mut state_update = StateUpdate::new();
-            info!("merkle_tree_event {:?}", merkle_tree_event);
             let event = match merkle_tree_event {
                 MerkleTreeEvent::V2(nullifier_event) => {
                     parse_legacy_nullifier_event(tx.signature, nullifier_event)?
