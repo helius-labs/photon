@@ -27,8 +27,6 @@ use crate::api::method::get_validity_proof::{
     CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, ContextInfo,
     MerkleContextV2, RootIndex,
 };
-use crate::api::method::utils::Context;
-use crate::api::method::utils::Limit;
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
@@ -41,7 +39,9 @@ use crate::common::typedefs::account::{
 };
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::limit::Limit;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::AccountState;

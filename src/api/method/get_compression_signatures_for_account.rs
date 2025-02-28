@@ -1,12 +1,12 @@
-use sea_orm::DatabaseConnection;
-
 use super::{
     super::error::PhotonApiError,
     utils::{
-        search_for_signatures, Context, GetNonPaginatedSignaturesResponse, HashRequest,
-        SignatureFilter, SignatureInfoList, SignatureSearchType,
+        search_for_signatures, GetNonPaginatedSignaturesResponse, HashRequest, SignatureFilter,
+        SignatureInfoList, SignatureSearchType,
     },
 };
+use crate::common::typedefs::context::Context;
+use sea_orm::DatabaseConnection;
 
 pub async fn get_compression_signatures_for_account(
     conn: &DatabaseConnection,

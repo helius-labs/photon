@@ -17,10 +17,8 @@ use tokio::{
 };
 
 use crate::{
-    api::method::{get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE, utils::Context},
-    common::fetch_current_slot_with_infinite_retry,
-    dao::generated::state_trees,
-    metric,
+    api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE,
+    common::fetch_current_slot_with_infinite_retry, dao::generated::state_trees, metric,
 };
 use light_concurrent_merkle_tree::copy::ConcurrentMerkleTreeCopy;
 use light_concurrent_merkle_tree::light_hasher::Poseidon;
@@ -30,6 +28,7 @@ use crate::common::typedefs::hash::Hash;
 
 use solana_sdk::account::Account as SolanaAccount;
 
+use crate::common::typedefs::context::Context;
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
 use solana_sdk::pubkey::Pubkey;
 use std::mem;

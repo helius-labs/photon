@@ -7,7 +7,7 @@ use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::{AccountState, TokenData};
 use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::dao::generated::{accounts, blocks, token_accounts};
+use crate::dao::generated::{accounts, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
@@ -15,19 +15,19 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Statement, Value,
 };
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use solana_sdk::signature::Signature;
 
-use sqlx::types::Decimal;
-use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
-use utoipa::ToSchema;
-
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::limit::Limit;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use sqlx::types::Decimal;
+use utoipa::openapi::{RefOr, Schema};
+use utoipa::ToSchema;
 
 use super::super::error::PhotonApiError;
 use crate::dao::generated::accounts::Model;
-use sea_orm_migration::sea_query::Expr;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
@@ -36,92 +36,6 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .to_string()
         .parse::<u64>()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-pub struct Limit(u64);
-
-impl Limit {
-    pub fn new(value: u64) -> Result<Self, &'static str> {
-        if value > PAGE_LIMIT {
-            Err("Value must be less than or equal to 1000")
-        } else {
-            Ok(Limit(value))
-        }
-    }
-
-    pub fn value(&self) -> u64 {
-        self.0
-    }
-}
-
-impl Default for Limit {
-    fn default() -> Self {
-        Limit(PAGE_LIMIT)
-    }
-}
-
-impl<'de> Deserialize<'de> for Limit {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u64::deserialize(deserializer)?;
-        if value > PAGE_LIMIT {
-            Err(de::Error::invalid_value(
-                de::Unexpected::Unsigned(value),
-                &"a value less than or equal to 1000",
-            ))
-        } else {
-            Ok(Limit(value))
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Context {
-    pub slot: u64,
-}
-
-impl<'__s> ToSchema<'__s> for Context {
-    fn schema() -> (&'__s str, RefOr<Schema>) {
-        let schema = Schema::Object(
-            ObjectBuilder::new()
-                .schema_type(SchemaType::Object)
-                .property("slot", UnsignedInteger::schema().1)
-                .required("slot")
-                .build(),
-        );
-        ("Context", RefOr::T(schema))
-    }
-
-    fn aliases() -> Vec<(&'static str, Schema)> {
-        Vec::new()
-    }
-}
-
-#[derive(FromQueryResult)]
-pub struct ContextModel {
-    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
-    pub slot: i64,
-}
-
-impl Context {
-    pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
-        let context = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
-            .into_model::<ContextModel>()
-            .one(db)
-            .await?
-            .ok_or(PhotonApiError::RecordNotFound(
-                "No data has been indexed".to_string(),
-            ))?;
-        Ok(Context {
-            slot: context.slot as u64,
-        })
-    }
 }
 
 pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
@@ -134,7 +48,7 @@ pub(crate) fn parse_leaf_index(leaf_index: u64) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
 }
 
-impl TryFrom<accounts::Model> for AccountWithContext {
+impl TryFrom<Model> for AccountWithContext {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {

@@ -1,15 +1,12 @@
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 
+use super::{super::error::PhotonApiError, utils::PAGE_LIMIT};
+use crate::common::typedefs::context::Context;
+use crate::common::typedefs::hash::Hash;
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use super::{
-    super::error::PhotonApiError,
-    utils::{Context, PAGE_LIMIT},
-};
-use crate::common::typedefs::hash::Hash;
-use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 
 // We do not use generics to simplify documentation generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

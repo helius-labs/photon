@@ -3,12 +3,12 @@ use crate::dao::generated::token_accounts;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
 
-use sqlx::types::Decimal;
-use utoipa::ToSchema;
-
 use super::super::error::PhotonApiError;
 use super::utils::{parse_decimal, AccountDataTable};
-use super::utils::{BalanceModel, CompressedAccountRequest, Context};
+use super::utils::{BalanceModel, CompressedAccountRequest};
+use crate::common::typedefs::context::Context;
+use sqlx::types::Decimal;
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

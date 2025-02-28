@@ -1,13 +1,10 @@
+use super::{super::error::PhotonApiError, utils::HashRequest};
+use crate::common::typedefs::context::Context;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-
-use super::{
-    super::error::PhotonApiError,
-    utils::{Context, HashRequest},
-};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

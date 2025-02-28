@@ -145,7 +145,12 @@ async fn test_batched_tree_transactions(
         // Get input queue elements
         if !accounts.closedAccounts.is_empty() {
             input_queue_len += accounts.closedAccounts.len();
-            merkle_tree_pubkey = accounts.closedAccounts[0].account.account.merkle_context.tree.0;
+            merkle_tree_pubkey = accounts.closedAccounts[0]
+                .account
+                .account
+                .merkle_context
+                .tree
+                .0;
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
