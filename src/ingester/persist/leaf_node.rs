@@ -78,7 +78,6 @@ pub async fn persist_leaf_nodes(
     let leaf_locations = leaf_nodes
         .iter()
         .map(|node| {
-            println!("node.tree.to_string() {:?}", node.tree.to_string());
             (
                 node.tree.to_bytes_vec(),
                 node.node_index(
