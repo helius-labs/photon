@@ -7,7 +7,6 @@ use itertools::Itertools;
 use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
 use super::common::{GetValidityProofRequestV2, GetValidityProofResponseV2, MerkleContextV2};
-use crate::api::method::get_validity_proof::SerializableTreeType;
 use crate::common::typedefs::hash::Hash;
 use crate::dao::generated::accounts;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};

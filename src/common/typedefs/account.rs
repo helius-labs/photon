@@ -3,7 +3,7 @@ use super::{
     unsigned_integer::UnsignedInteger,
 };
 use crate::api::error::PhotonApiError;
-use crate::api::method::get_validity_proof::{MerkleContextV2, SerializableTreeType};
+use crate::api::method::get_validity_proof::MerkleContextV2;
 use crate::api::method::utils::parse_decimal;
 use crate::dao::generated::accounts;
 use crate::dao::generated::accounts::Model;
