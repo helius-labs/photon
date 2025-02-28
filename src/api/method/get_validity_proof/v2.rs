@@ -114,7 +114,7 @@ pub async fn get_validity_proof_v2(
         v2_response.value.merkle_context.insert(
             index,
             MerkleContextV2 {
-                tree_type: SerializableTreeType::from(account.tree_type as u16),
+                tree_type: account.tree_type as u16,
                 tree: SerializablePubkey::try_from_slice(account.tree.as_slice())
                     .unwrap_or(SerializablePubkey::default()),
                 queue: SerializablePubkey::try_from_slice(account.queue.as_slice())
