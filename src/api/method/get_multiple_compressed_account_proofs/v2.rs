@@ -22,13 +22,6 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountProofsResponseV2 {
     pub context: Context,
-    #[serde(flatten)]
-    pub value: GetMultipleCompressedAccountProofsResponseValueV2,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetMultipleCompressedAccountProofsResponseValueV2 {
     pub value: Vec<GetCompressedAccountProofResponseValueV2>,
 }
 
@@ -180,7 +173,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     tx.commit().await?;
 
     Ok(GetMultipleCompressedAccountProofsResponseV2 {
-        value: GetMultipleCompressedAccountProofsResponseValueV2 { value: result },
+        value: result,
         context,
     })
 }
