@@ -385,7 +385,7 @@ pub async fn get_transaction_helper_v2(
                         tree: x.account.tree,
                         queue: x.context.queue,
                         cpi_context: None,
-                        next_context: None,
+                        next_tree_context: None,
                     },
                 },
                 nullifier: x.context.nullifier.unwrap_or_default(),
@@ -412,7 +412,7 @@ pub async fn get_transaction_helper_v2(
                 tree: x.account.tree,
                 queue: x.context.queue,
                 cpi_context: None,
-                next_context: None,
+                next_tree_context: None,
             },
         })
         .collect::<Vec<AccountV2>>();

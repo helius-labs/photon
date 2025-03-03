@@ -72,7 +72,7 @@ impl TryFrom<Model> for AccountV2 {
                 tree: account.tree.try_into()?,
                 queue: account.queue.clone().try_into()?,
                 cpi_context: None,
-                next_context: None,
+                next_tree_context: None,
             },
         })
     }

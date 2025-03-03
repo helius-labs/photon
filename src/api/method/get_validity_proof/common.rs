@@ -131,7 +131,7 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                             tree: SerializablePubkey::from(tree_info.tree),
                             queue: SerializablePubkey::from(tree_info.queue),
                             cpi_context: None,
-                            next_context: None,
+                            next_tree_context: None,
                         }
                     })
                     .collect(),
@@ -275,15 +275,15 @@ pub struct MerkleContextV2 {
     // nullifier_queue in legacy trees, output_queue in V2 trees.
     pub queue: SerializablePubkey,
     pub cpi_context: Option<SerializablePubkey>,
-    pub next_context: Option<ContextInfo>,
+    pub next_tree_context: Option<TreeContextInfo>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug, Default, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
-pub struct ContextInfo {
+pub struct TreeContextInfo {
     pub tree_type: u16,
-    pub merkle_tree: SerializablePubkey,
+    pub tree: SerializablePubkey,
     pub queue: SerializablePubkey,
     pub cpi_context: Option<SerializablePubkey>,
 }
