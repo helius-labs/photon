@@ -28,8 +28,8 @@ use crate::api::method::get_transaction_with_compression_info::{
     ClosedAccountWithOptionalTokenData,
 };
 use crate::api::method::get_validity_proof::{
-    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, ContextInfo,
-    MerkleContextV2, RootIndex,
+    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, MerkleContextV2,
+    RootIndex, TreeContextInfo,
 };
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
@@ -135,7 +135,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OwnerBalancesResponse,
     TokenBalanceListV2,
     MerkleContextV2,
-    ContextInfo,
+    TreeContextInfo,
     GetCompressedAccountProofResponseValueV1,
     GetCompressedAccountProofResponseValueV2,
     GetMultipleCompressedAccountProofsResponseValue

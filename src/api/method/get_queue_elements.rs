@@ -17,7 +17,7 @@ use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
-    pub merkle_tree: Hash,
+    pub tree: Hash,
     pub start_offset: Option<u64>,
     pub num_elements: u16,
     pub queue_type: u8,
@@ -37,7 +37,7 @@ pub struct GetQueueElementsResponseValue {
     pub root: Hash,
     pub leaf_index: u64,
     pub leaf: Hash,
-    pub merkle_tree: Hash,
+    pub tree: Hash,
     pub root_seq: u64,
     pub tx_hash: Option<Hash>,
     pub account_hash: Hash,
@@ -68,7 +68,7 @@ pub async fn get_queue_elements(
     }
 
     let mut query_condition =
-        Condition::all().add(accounts::Column::Tree.eq(request.merkle_tree.to_vec()));
+        Condition::all().add(accounts::Column::Tree.eq(request.tree.to_vec()));
 
     match queue_type {
         QueueType::BatchedInput => {
@@ -132,7 +132,7 @@ pub async fn get_queue_elements(
         (
             get_multiple_compressed_leaf_proofs_by_indices(
                 &tx,
-                SerializablePubkey::from(request.merkle_tree.0),
+                SerializablePubkey::from(request.tree.0),
                 indices,
             )
             .await?,
@@ -158,7 +158,7 @@ pub async fn get_queue_elements(
                 root: proof.root,
                 leaf_index: proof.leaf_index as u64,
                 leaf: proof.hash,
-                merkle_tree: Hash::from(proof.merkle_tree.0.to_bytes()),
+                tree: Hash::from(proof.merkle_tree.0.to_bytes()),
                 root_seq: proof.root_seq,
                 tx_hash,
                 account_hash,

@@ -1,7 +1,7 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_compressed_account_proof::GetCompressedAccountProofResponseValueV2;
 use crate::api::method::get_multiple_compressed_account_proofs::HashList;
-use crate::api::method::get_validity_proof::ContextInfo;
+use crate::api::method::get_validity_proof::TreeContextInfo;
 use crate::api::method::utils::PAGE_LIMIT;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
@@ -145,9 +145,9 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     // Enrich with account data
     for value in &mut result {
         if let Some(account) = account_map.get(&value.hash.to_vec()) {
-            value.context = ContextInfo {
+            value.tree_context = TreeContextInfo {
                 tree_type: account.tree_type as u16,
-                merkle_tree: SerializablePubkey::try_from(account.tree.clone())?,
+                tree: SerializablePubkey::try_from(account.tree.clone())?,
                 queue: SerializablePubkey::try_from(account.queue.clone())?,
                 cpi_context: None,
             };
