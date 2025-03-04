@@ -120,7 +120,7 @@ impl From<GetValidityProofResponse> for GetValidityProofResponseV2 {
                     .collect(),
                 leafIndices: response.value.leafIndices,
                 leaves: response.value.leaves,
-                merkle_context: response
+                merkle_contexts: response
                     .value
                     .merkleTrees
                     .iter()
@@ -297,7 +297,7 @@ pub struct CompressedProofWithContextV2 {
     pub rootIndices: Vec<RootIndex>,
     pub leafIndices: Vec<u32>,
     pub leaves: Vec<String>,
-    pub merkle_context: Vec<MerkleContextV2>,
+    pub merkle_contexts: Vec<MerkleContextV2>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
