@@ -117,7 +117,7 @@ pub async fn get_validity_proof_v2(
                 queue: SerializablePubkey::try_from_slice(account.queue.as_slice())
                     .unwrap_or(SerializablePubkey::default()),
                 cpi_context: None,
-                next_context: None,
+                next_tree_context: None,
             },
         );
         // proof by index has no root.

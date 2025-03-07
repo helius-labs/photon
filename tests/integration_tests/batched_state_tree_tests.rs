@@ -128,7 +128,7 @@ async fn test_batched_tree_transactions(
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
-                    merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                    tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
                     queue_type: QueueType::BatchedOutput as u8,
                     num_elements: 100,
@@ -154,7 +154,7 @@ async fn test_batched_tree_transactions(
             let get_queue_elements_result = setup
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
-                    merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                    tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
                     queue_type: QueueType::BatchedInput as u8,
                     num_elements: 100,
@@ -228,7 +228,7 @@ async fn test_batched_tree_transactions(
         let pre_output_queue_elements = setup
             .api
             .get_queue_elements(GetQueueElementsRequest {
-                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
                 queue_type: QueueType::BatchedOutput as u8,
                 num_elements: 100,
@@ -238,7 +238,7 @@ async fn test_batched_tree_transactions(
         let pre_input_queue_elements = setup
             .api
             .get_queue_elements(GetQueueElementsRequest {
-                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
                 queue_type: QueueType::BatchedInput as u8,
                 num_elements: 100,
@@ -257,7 +257,7 @@ async fn test_batched_tree_transactions(
         let post_output_queue_elements = setup
             .api
             .get_queue_elements(GetQueueElementsRequest {
-                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
                 queue_type: QueueType::BatchedOutput as u8,
                 num_elements: 100,
@@ -267,7 +267,7 @@ async fn test_batched_tree_transactions(
         let post_input_queue_elements = setup
             .api
             .get_queue_elements(GetQueueElementsRequest {
-                merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+                tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
                 queue_type: QueueType::BatchedInput as u8,
                 num_elements: 100,
@@ -397,7 +397,7 @@ async fn test_batched_tree_transactions(
     let get_queue_elements_result = setup
         .api
         .get_queue_elements(GetQueueElementsRequest {
-            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+            tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
             queue_type: QueueType::BatchedOutput as u8,
             num_elements: 100,
@@ -413,7 +413,7 @@ async fn test_batched_tree_transactions(
     let get_queue_elements_result = setup
         .api
         .get_queue_elements(GetQueueElementsRequest {
-            merkle_tree: merkle_tree_pubkey.to_bytes().into(),
+            tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
             queue_type: QueueType::BatchedInput as u8,
             num_elements: 100,

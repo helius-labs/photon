@@ -504,7 +504,7 @@ mod tests {
             root: Hash::try_from(ZERO_BYTES[31].to_vec()).unwrap(),
             leaf_index: test_leaf_index,
             hash: Hash::try_from(ZERO_BYTES[0].to_vec()).unwrap(),
-            merkle_tree: merkle_tree,
+            merkle_tree,
             root_seq: 0,
         };
 
