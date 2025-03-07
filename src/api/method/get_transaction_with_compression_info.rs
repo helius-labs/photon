@@ -104,8 +104,8 @@ pub struct AccountWithOptionalTokenDataV2 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
-pub struct ClosedAccountWithOptionalTokenData {
-    pub account: ClosedAccount,
+pub struct ClosedAccountWithOptionalTokenDataV2 {
+    pub account: ClosedAccountV2,
     pub optionalTokenData: Option<TokenData>,
 }
 
@@ -113,7 +113,7 @@ pub struct ClosedAccountWithOptionalTokenData {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct CompressionInfoV2 {
-    pub closedAccounts: Vec<ClosedAccountWithOptionalTokenData>,
+    pub closedAccounts: Vec<ClosedAccountWithOptionalTokenDataV2>,
     pub openedAccounts: Vec<AccountWithOptionalTokenDataV2>,
 }
 
@@ -285,20 +285,20 @@ fn parse_optional_token_data_v2(
     })
 }
 
-fn parse_optional_token_data_for_multiple_accounts_closed_account(
-    accounts: Vec<ClosedAccount>,
-) -> Result<Vec<ClosedAccountWithOptionalTokenData>, PhotonApiError> {
+fn parse_optional_token_data_for_multiple_closed_accounts_v2(
+    accounts: Vec<ClosedAccountV2>,
+) -> Result<Vec<ClosedAccountWithOptionalTokenDataV2>, PhotonApiError> {
     accounts
         .into_iter()
-        .map(parse_optional_token_data_closed_account)
+        .map(parse_optional_token_data_closed_account_v2)
         .collect()
 }
 
-fn parse_optional_token_data_closed_account(
-    account: ClosedAccount,
-) -> Result<ClosedAccountWithOptionalTokenData, PhotonApiError> {
+fn parse_optional_token_data_closed_account_v2(
+    account: ClosedAccountV2,
+) -> Result<ClosedAccountWithOptionalTokenDataV2, PhotonApiError> {
     let hash = account.account.hash.clone();
-    Ok(ClosedAccountWithOptionalTokenData {
+    Ok(ClosedAccountWithOptionalTokenDataV2 {
         optionalTokenData: parse_token_data_v2(&account.account).map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to parse token data for account {}: {}",
@@ -320,7 +320,7 @@ fn parse_optional_token_data_for_multiple_accounts_v2(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ClosedAccount {
+pub struct ClosedAccountV2 {
     pub account: AccountV2,
     pub nullifier: Hash,
     pub tx_hash: Hash,
@@ -368,8 +368,8 @@ pub async fn get_transaction_helper_v2(
     .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
     let closed_accounts = closed_accounts
         .into_iter()
-        .map(|x| -> Result<ClosedAccount, PhotonApiError> {
-            Ok(ClosedAccount {
+        .map(|x| -> Result<ClosedAccountV2, PhotonApiError> {
+            Ok(ClosedAccountV2 {
                 account: AccountV2 {
                     hash: x.account.hash,
                     address: x.account.address,
@@ -392,7 +392,7 @@ pub async fn get_transaction_helper_v2(
                 tx_hash: x.context.tx_hash.unwrap_or_default(),
             })
         })
-        .collect::<Result<Vec<ClosedAccount>, PhotonApiError>>()?;
+        .collect::<Result<Vec<ClosedAccountV2>, PhotonApiError>>()?;
 
     let out_accounts = status_update
         .out_accounts
@@ -420,7 +420,7 @@ pub async fn get_transaction_helper_v2(
     Ok(GetTransactionResponseV2 {
         transaction: txn,
         compressionInfo: CompressionInfoV2 {
-            closedAccounts: parse_optional_token_data_for_multiple_accounts_closed_account(
+            closedAccounts: parse_optional_token_data_for_multiple_closed_accounts_v2(
                 closed_accounts,
             )?,
             openedAccounts: parse_optional_token_data_for_multiple_accounts_v2(out_accounts)?,

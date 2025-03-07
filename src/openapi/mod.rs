@@ -24,8 +24,8 @@ use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAdd
 use crate::api::method::get_queue_elements::GetQueueElementsResponseValue;
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
-    AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccount,
-    ClosedAccountWithOptionalTokenData,
+    AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
+    ClosedAccountWithOptionalTokenDataV2,
 };
 use crate::api::method::get_validity_proof::{
     CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, MerkleContextV2,
@@ -113,8 +113,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     AccountData,
     AccountState,
     AccountWithOptionalTokenData,
-    ClosedAccountWithOptionalTokenData,
-    ClosedAccount,
+    ClosedAccountWithOptionalTokenDataV2,
+    ClosedAccountV2,
     AccountWithOptionalTokenDataV2,
     UnixTimestamp,
     UnsignedInteger,

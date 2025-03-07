@@ -108,7 +108,7 @@ pub async fn get_validity_proof_v2(
             .value
             .leaves
             .insert(index, Hash::new(account.hash.as_slice())?.to_string());
-        v2_response.value.merkle_context.insert(
+        v2_response.value.merkle_contexts.insert(
             index,
             MerkleContextV2 {
                 tree_type: account.tree_type as u16,
