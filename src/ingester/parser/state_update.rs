@@ -64,14 +64,6 @@ pub struct IndexedTreeLeafUpdate {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct AccountContext {
-    pub tx_hash: Hash,
-    pub account: Hash,
-    pub nullifier: Hash,
-    pub nullifier_queue_index: u64,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
