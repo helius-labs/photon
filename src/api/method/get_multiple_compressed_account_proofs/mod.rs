@@ -3,12 +3,11 @@ pub use v2::{
     get_multiple_compressed_account_proofs_v2, GetMultipleCompressedAccountProofsResponseV2,
 };
 
+use super::get_compressed_account_proof::GetCompressedAccountProofResponseValue;
 use super::{super::error::PhotonApiError, utils::PAGE_LIMIT};
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
-use crate::ingester::persist::MerkleProofWithContext;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -18,31 +17,7 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleCompressedAccountProofsResponse {
     pub context: Context,
-    pub value: Vec<GetMultipleCompressedAccountProofsResponseValue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetMultipleCompressedAccountProofsResponseValue {
-    pub proof: Vec<Hash>,
-    pub root: Hash,
-    pub leaf_index: u32,
-    pub hash: Hash,
-    pub merkle_tree: SerializablePubkey,
-    pub root_seq: u64,
-}
-
-impl From<MerkleProofWithContext> for GetMultipleCompressedAccountProofsResponseValue {
-    fn from(proof: MerkleProofWithContext) -> Self {
-        GetMultipleCompressedAccountProofsResponseValue {
-            proof: proof.proof,
-            root: proof.root,
-            leaf_index: proof.leaf_index,
-            hash: proof.hash,
-            merkle_tree: proof.merkle_tree,
-            root_seq: proof.root_seq,
-        }
-    }
+    pub value: Vec<GetCompressedAccountProofResponseValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::api::api::PhotonApi;
 use crate::api::method::get_compressed_account_proof::{
-    GetCompressedAccountProofResponseValueV1, GetCompressedAccountProofResponseValueV2,
+    GetCompressedAccountProofResponseValue, GetCompressedAccountProofResponseValueV2,
 };
 use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
@@ -16,7 +16,6 @@ use crate::api::method::get_compressed_token_account_balance::TokenAccountBalanc
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceListV2;
-use crate::api::method::get_multiple_compressed_account_proofs::GetMultipleCompressedAccountProofsResponseValue;
 use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountListV2};
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
@@ -136,9 +135,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TokenBalanceListV2,
     MerkleContextV2,
     TreeContextInfo,
-    GetCompressedAccountProofResponseValueV1,
+    GetCompressedAccountProofResponseValue,
     GetCompressedAccountProofResponseValueV2,
-    GetMultipleCompressedAccountProofsResponseValue
 )))]
 struct ApiDoc;
 
