@@ -197,12 +197,12 @@ async fn test_batched_tree_transactions(
             .all(|x| x.prove_by_index));
         assert!(validity_proof
             .value
-            .merkle_context
+            .merkle_contexts
             .iter()
             .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
         assert!(validity_proof
             .value
-            .merkle_context
+            .merkle_contexts
             .iter()
             .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
         assert!(validity_proof.value.roots.iter().all(|x| x.is_empty()));
@@ -381,12 +381,12 @@ async fn test_batched_tree_transactions(
             }
             assert!(validity_proof
                 .value
-                .merkle_context
+                .merkle_contexts
                 .iter()
                 .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
             assert!(validity_proof
                 .value
-                .merkle_context
+                .merkle_contexts
                 .iter()
                 .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
         }
