@@ -238,19 +238,6 @@ pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, Ingester
     }
 }
 
-pub fn parse_token_data_v2(account: &AccountV2) -> Result<Option<TokenData>, IngesterError> {
-    match account.data.clone() {
-        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
-            let data_slice = data.data.0.as_slice();
-            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
-                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
-            })?;
-            Ok(Some(token_data))
-        }
-        _ => Ok(None),
-    }
-}
-
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
