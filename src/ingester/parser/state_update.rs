@@ -1,7 +1,4 @@
-use super::{
-    indexer_events::{MerkleTreeSequenceNumber, RawIndexedElement},
-    merkle_tree_events_parser::IndexedBatchEvents,
-};
+use super::{indexer_events::RawIndexedElement, merkle_tree_events_parser::IndexedBatchEvents};
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -67,7 +64,6 @@ pub struct IndexedTreeLeafUpdate {
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
     pub in_accounts: HashSet<Hash>,
-    pub in_seq_numbers: Vec<MerkleTreeSequenceNumber>,
     pub out_accounts: Vec<AccountWithContext>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
@@ -86,8 +82,6 @@ impl StateUpdate {
         let mut merged = StateUpdate::default();
 
         for update in updates {
-            // legacy
-            merged.in_seq_numbers.extend(update.in_seq_numbers);
             merged.in_accounts.extend(update.in_accounts);
             merged.out_accounts.extend(update.out_accounts);
             merged

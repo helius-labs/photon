@@ -104,8 +104,6 @@ pub fn create_state_update(
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
         let mut state_update_event = parse_public_transaction_event(tx, slot, event.event.clone())?;
-        state_update_event.in_seq_numbers = event.input_sequence_numbers.clone();
-        // TODO: add address sequence numbers for batched addresses (different PR)
         state_update_event
             .input_context
             .extend(event.batch_input_accounts.clone());
