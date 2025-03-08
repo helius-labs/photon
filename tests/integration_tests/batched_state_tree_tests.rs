@@ -36,6 +36,14 @@ use std::sync::Arc;
 /// 2. get compressed account proofs
 /// 3. correct root update after batch append and batch nullify events
 /// 4. get_validity_proof_v2
+/// 5. get_queue_elements
+///
+/// Data:
+/// - 50 active compressed accounts with 1_000_000 each owned by Pubkey::new_unique()
+/// - 50 nullified compressed accounts
+/// - all accounts are inserted into the batched Merkle tree
+/// - 10 append events and 5 nullify events (zero knowledge proof size 10)
+/// - queues are empty once all transactions are indexed
 #[named]
 #[rstest]
 #[tokio::test]
@@ -488,6 +496,16 @@ async fn test_batched_tree_transactions(
     }
 }
 
+/// Test correct indexing of token accounts in a batched state Merkle tree.
+/// Data:
+/// - 4 recipients with 1 token account each
+/// - 1 sender with 3 token accounts
+///
+/// Asserts:
+/// 1. Sender has 3 token accounts with 12341 balance each.
+/// 2. Recipients have 1 token account each with 9255, 9255, 9255, 9258 balance.
+/// 3. Sender's token balances are correct.
+/// 4. Recipients' token balances are correct.
 #[named]
 #[rstest]
 #[tokio::test]
