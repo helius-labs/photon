@@ -117,10 +117,17 @@ impl StateUpdate {
                 }
             }
 
-            // batch updates
             merged.input_context.extend(update.input_context);
-            merged.batch_events.extend(update.batch_events);
+
+            for (key, events) in update.batch_events {
+                if let Some(existing_events) = merged.batch_events.get_mut(&key) {
+                    existing_events.extend(events);
+                } else {
+                    merged.batch_events.insert(key, events);
+                }
+            }
         }
+
         merged
     }
 }

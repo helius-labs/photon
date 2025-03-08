@@ -24,7 +24,9 @@ pub async fn persist_batch_events(
 ) -> Result<(), IngesterError> {
     for (_, events) in events.iter_mut() {
         events.sort_by(|a, b| a.0.cmp(&b.0));
-        if let Some((_, event)) = events.first() {
+
+        // Process each event in sequence
+        for (_, event) in events.iter() {
             // Batch size is 500 for batched State Merkle trees.
             let mut leaf_nodes = Vec::with_capacity(500);
             match event {
@@ -36,6 +38,7 @@ pub async fn persist_batch_events(
                 }
                 _ => Err(IngesterError::InvalidEvent),
             }?;
+
             if leaf_nodes.len() <= MAX_SQL_INSERTS {
                 persist_leaf_nodes(txn, leaf_nodes).await?;
             } else {
@@ -44,8 +47,6 @@ pub async fn persist_batch_events(
                     persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec()).await?;
                 }
             }
-        } else {
-            return Err(IngesterError::EmptyBatchEvent);
         }
     }
     Ok(())
