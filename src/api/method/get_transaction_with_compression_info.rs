@@ -8,9 +8,11 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::{account::Account, serializable_signature::SerializableSignature};
 use crate::dao::generated::accounts::Model;
+use crate::ingester::error::IngesterError;
 use crate::ingester::parser::parse_transaction;
 use crate::ingester::persist::parse_token_data;
-use crate::ingester::persist::parse_token_data_v2;
+use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use borsh::BorshDeserialize;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -307,6 +309,19 @@ fn parse_optional_token_data_closed_account_v2(
         })?,
         account,
     })
+}
+
+pub fn parse_token_data_v2(account: &AccountV2) -> Result<Option<TokenData>, IngesterError> {
+    match account.data.clone() {
+        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+            let data_slice = data.data.0.as_slice();
+            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
+            })?;
+            Ok(Some(token_data))
+        }
+        _ => Ok(None),
+    }
 }
 
 fn parse_optional_token_data_for_multiple_accounts_v2(
