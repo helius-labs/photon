@@ -12,13 +12,13 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountProofResponse {
     pub context: Context,
-    pub value: GetCompressedAccountProofResponseValueV1,
+    pub value: GetCompressedAccountProofResponseValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
-pub struct GetCompressedAccountProofResponseValueV1 {
+pub struct GetCompressedAccountProofResponseValue {
     pub proof: Vec<Hash>,
     pub root: Hash,
     pub leaf_index: u32,
@@ -27,9 +27,9 @@ pub struct GetCompressedAccountProofResponseValueV1 {
     pub root_seq: u64,
 }
 
-impl From<MerkleProofWithContext> for GetCompressedAccountProofResponseValueV1 {
+impl From<MerkleProofWithContext> for GetCompressedAccountProofResponseValue {
     fn from(proof: MerkleProofWithContext) -> Self {
-        GetCompressedAccountProofResponseValueV1 {
+        GetCompressedAccountProofResponseValue {
             proof: proof.proof,
             root: proof.root,
             leaf_index: proof.leaf_index,

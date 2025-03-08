@@ -3,7 +3,7 @@ mod v2;
 
 pub use v1::{
     get_compressed_account_proof, GetCompressedAccountProofResponse,
-    GetCompressedAccountProofResponseValueV1,
+    GetCompressedAccountProofResponseValue,
 };
 pub use v2::{
     get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2,

@@ -66,7 +66,7 @@ pub async fn get_compressed_mint_token_holders(
                 bytes.len()
             )));
         };
-        let balance = LittleEndian::read_u64(&balance);
+        let balance = LittleEndian::read_u64(balance);
 
         filter = filter.and(
             token_owner_balances::Column::Amount.lt(balance).or(
