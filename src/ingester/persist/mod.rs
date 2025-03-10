@@ -14,7 +14,7 @@ use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use persisted_batch_event::persist_batch_events;
 
-use crate::common::typedefs::account::{Account, AccountV2, AccountWithContext};
+use crate::common::typedefs::account::{Account, AccountWithContext};
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
