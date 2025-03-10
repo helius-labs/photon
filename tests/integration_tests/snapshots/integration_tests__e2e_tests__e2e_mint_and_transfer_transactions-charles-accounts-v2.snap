@@ -29,7 +29,7 @@ expression: accounts_v2
             "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
             "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
             "cpiContext": null,
-            "nextContext": null
+            "nextTreeContext": null
           }
         },
         "tokenData": {
@@ -61,7 +61,7 @@ expression: accounts_v2
             "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
             "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
             "cpiContext": null,
-            "nextContext": null
+            "nextTreeContext": null
           }
         },
         "tokenData": {
