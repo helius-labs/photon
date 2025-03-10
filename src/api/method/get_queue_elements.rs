@@ -32,6 +32,7 @@ pub struct GetQueueElementsResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsResponseValue {
     pub proof: Vec<Hash>,
     pub root: Hash,
