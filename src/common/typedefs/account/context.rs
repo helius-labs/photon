@@ -8,7 +8,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
-use light_merkle_tree_metadata::merkle_tree::TreeType;
+use light_compressed_account::TreeType;
 use serde::Serialize;
 use solana_program::pubkey::Pubkey;
 use utoipa::ToSchema;
@@ -52,7 +52,7 @@ impl AccountWithContext {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         compressed_account: CompressedAccount,
-        hash: [u8; 32],
+        hash: &[u8; 32],
         tree: Pubkey,
         queue: Pubkey,
         leaf_index: u32,

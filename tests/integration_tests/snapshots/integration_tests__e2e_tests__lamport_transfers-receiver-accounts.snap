@@ -1,5 +1,6 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
+assertion_line: 380
 expression: accounts
 ---
 {
@@ -9,17 +10,6 @@ expression: accounts
   "value": {
     "items": [
       {
-        "hash": "2eoEsJByEcWpLTdaEwr1DB6cwXkFxqAVZnbvWoQSDm4V",
-        "address": null,
-        "data": null,
-        "owner": "FLkMEA7eA82Cvp7MqamqFKsRN3E2Vfg3Xa8NRyVARq5n",
-        "lamports": 1000,
-        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
-        "leafIndex": 4,
-        "seq": 5,
-        "slotCreated": 0
-      },
-      {
         "hash": "3q5dSVJCK4Tk2VU9C4MaPPw4TdzKdtp1M5Dug3zERSx4",
         "address": null,
         "data": null,
@@ -28,6 +18,17 @@ expression: accounts
         "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
         "leafIndex": 2,
         "seq": 3,
+        "slotCreated": 0
+      },
+      {
+        "hash": "2eoEsJByEcWpLTdaEwr1DB6cwXkFxqAVZnbvWoQSDm4V",
+        "address": null,
+        "data": null,
+        "owner": "FLkMEA7eA82Cvp7MqamqFKsRN3E2Vfg3Xa8NRyVARq5n",
+        "lamports": 1000,
+        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+        "leafIndex": 4,
+        "seq": 5,
         "slotCreated": 0
       }
     ],

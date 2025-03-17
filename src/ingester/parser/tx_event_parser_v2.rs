@@ -1,11 +1,13 @@
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
     BatchPublicTransactionEvent, CompressedAccount, CompressedAccountData,
-    MerkleTreeSequenceNumber, OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
+    MerkleTreeSequenceNumberV2, OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
+    PublicTransactionEventV2,
 };
-use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
 use crate::ingester::parser::tx_event_parser::parse_public_transaction_event;
 
+use crate::ingester::parser::tree_info::TreeInfo;
 use light_compressed_account::indexer_event::parse::event_from_light_transaction;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -20,7 +22,7 @@ pub fn parse_public_transaction_event_v2(
         events
             .into_iter()
             .map(|public_transaction_event| {
-                let event = PublicTransactionEvent {
+                let event = PublicTransactionEventV2 {
                     input_compressed_account_hashes: public_transaction_event
                         .event
                         .input_compressed_account_hashes,
@@ -52,8 +54,10 @@ pub fn parse_public_transaction_event_v2(
                         .event
                         .sequence_numbers
                         .iter()
-                        .map(|x| MerkleTreeSequenceNumber {
-                            pubkey: x.pubkey,
+                        .map(|x| MerkleTreeSequenceNumberV2 {
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
+                            tree_type: x.tree_type,
                             seq: x.seq,
                         })
                         .collect(),
@@ -71,16 +75,20 @@ pub fn parse_public_transaction_event_v2(
                     input_sequence_numbers: public_transaction_event
                         .input_sequence_numbers
                         .iter()
-                        .map(|x| MerkleTreeSequenceNumber {
-                            pubkey: x.pubkey,
+                        .map(|x| MerkleTreeSequenceNumberV2 {
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
+                            tree_type: x.tree_type,
                             seq: x.seq,
                         })
                         .collect(),
                     address_sequence_numbers: public_transaction_event
                         .address_sequence_numbers
                         .iter()
-                        .map(|x| MerkleTreeSequenceNumber {
-                            pubkey: x.pubkey,
+                        .map(|x| MerkleTreeSequenceNumberV2 {
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
+                            tree_type: x.tree_type,
                             seq: x.seq,
                         })
                         .collect(),
@@ -103,11 +111,38 @@ pub fn create_state_update(
     }
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
-        let mut state_update_event = parse_public_transaction_event(tx, slot, event.event.clone())?;
+        let mut state_update_event = parse_public_transaction_event(
+            tx,
+            slot,
+            PublicTransactionEvent::V2(event.event.clone()),
+        )?;
         state_update_event
             .input_context
             .extend(event.batch_input_accounts.clone());
+
+        for (new_address, seq) in event
+            .new_addresses
+            .iter()
+            .zip(event.address_sequence_numbers.iter())
+        {
+            let tree_info = TreeInfo::get(&new_address.mt_pubkey.to_string())
+                .ok_or(IngesterError::ParserError("Missing queue".to_string()))?
+                .clone();
+            state_update_event.addresses.push(AddressQueueUpdate {
+                tree: tree_info.tree.into(),
+                address: new_address.address,
+                queue_index: seq.seq,
+            });
+        }
+
+        println!(
+            "state_update_event.addresses: {:?}",
+            state_update_event.addresses
+        );
         state_updates.push(state_update_event);
     }
-    Ok(StateUpdate::merge_updates(state_updates))
+
+    let merged = StateUpdate::merge_updates(state_updates);
+    println!("merged addresses: {:?}", merged.addresses);
+    Ok(merged)
 }

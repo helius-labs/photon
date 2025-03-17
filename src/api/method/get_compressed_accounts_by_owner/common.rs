@@ -225,7 +225,7 @@ impl QueryBuilder {
                 {columns}
             FROM accounts
             WHERE {}
-            ORDER BY accounts.hash ASC
+            ORDER BY accounts.leaf_index, accounts.hash ASC
             LIMIT {}
             ",
             self.filters.join(" AND "),

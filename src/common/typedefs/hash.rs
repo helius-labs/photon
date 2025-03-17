@@ -106,6 +106,12 @@ impl From<[u8; 32]> for Hash {
     }
 }
 
+impl From<&[u8; 32]> for Hash {
+    fn from(bytes: &[u8; 32]) -> Self {
+        Hash(*bytes)
+    }
+}
+
 impl From<Hash> for [u8; 32] {
     fn from(val: Hash) -> Self {
         val.0

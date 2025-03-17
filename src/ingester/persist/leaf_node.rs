@@ -4,7 +4,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::state_update::LeafNullification;
-use crate::ingester::parser::tree_info::{TreeInfo, DEFAULT_TREE_HEIGHT};
+use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, ZERO_BYTES};
 use crate::ingester::persist::{compute_parent_hash, get_node_direct_ancestors};
 use crate::migration::OnConflict;
@@ -12,6 +12,8 @@ use itertools::Itertools;
 use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set};
 use std::cmp::max;
 use std::collections::HashMap;
+
+pub const STATE_TREE_HEIGHT: u32 = 32;
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {
@@ -81,7 +83,7 @@ pub async fn persist_leaf_nodes(
             (
                 node.tree.to_bytes_vec(),
                 node.node_index(
-                    TreeInfo::height(&node.tree.0.to_string()).unwrap_or(DEFAULT_TREE_HEIGHT), // TODO: Handle error
+                    TreeInfo::height(&node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT), // TODO: Handle error
                 ),
             )
         })
@@ -97,7 +99,7 @@ pub async fn persist_leaf_nodes(
 
     for leaf_node in leaf_nodes.clone() {
         let node_idx = leaf_node.node_index(
-            TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(DEFAULT_TREE_HEIGHT),
+            TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
         ); // TODO: handle error
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
@@ -131,7 +133,7 @@ pub async fn persist_leaf_nodes(
         .iter()
         .flat_map(|leaf_node| {
             get_node_direct_ancestors(leaf_node.node_index(
-                TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(DEFAULT_TREE_HEIGHT),
+                TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
             )) // TODO: handle error
             .iter()
             .enumerate()

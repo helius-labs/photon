@@ -1,5 +1,5 @@
 use super::{error, parser::state_update::AccountTransaction};
-use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
 use crate::{
     api::method::utils::PAGE_LIMIT,
     common::typedefs::{hash::Hash, token_data::TokenData},
@@ -35,6 +35,7 @@ mod merkle_proof_with_context;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
+use crate::dao::generated::address_queue;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
@@ -71,6 +72,7 @@ pub async fn persist_state_update(
         indexed_merkle_tree_updates,
         batch_events,
         input_context,
+        addresses,
         ..
     } = state_update;
 
@@ -80,10 +82,17 @@ pub async fn persist_state_update(
     let indexed_merkle_tree_updates_len = indexed_merkle_tree_updates.len();
 
     debug!(
-        "Persisting state update with {} input accounts, {} output accounts",
+        "Persisting state update with {} input accounts, {} output accounts, {} addresses",
         in_accounts.len(),
-        out_accounts.len()
+        out_accounts.len(),
+        addresses.len()
     );
+
+    debug!("Persisting addresses...");
+    for chunk in addresses.chunks(MAX_SQL_INSERTS) {
+        append_addresses(txn, chunk).await?;
+    }
+
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
@@ -354,6 +363,32 @@ async fn execute_account_update_query_and_update_balances(
         txn.execute(Statement::from_string(db_backend, raw_sql))
             .await?;
     }
+
+    Ok(())
+}
+
+async fn append_addresses(
+    txn: &DatabaseTransaction,
+    addresses: &[AddressQueueUpdate],
+) -> Result<(), IngesterError> {
+    let mut address_models = Vec::new();
+
+    for address in addresses {
+        address_models.push(address_queue::ActiveModel {
+            address: Set(address.address.to_vec()),
+            tree: Set(address.tree.to_bytes_vec()),
+            queue_index: Set(address.queue_index as i64),
+        });
+    }
+
+    let query = address_queue::Entity::insert_many(address_models)
+        .on_conflict(
+            OnConflict::column(address_queue::Column::Address)
+                .do_nothing()
+                .to_owned(),
+        )
+        .build(txn.get_database_backend());
+    txn.execute(query).await?;
 
     Ok(())
 }

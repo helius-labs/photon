@@ -47,7 +47,7 @@ use std::collections::{HashMap, HashSet};
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
-use light_merkle_tree_metadata::merkle_tree::TreeType;
+use light_compressed_account::TreeType;
 use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
 use solana_sdk::pubkey::Pubkey;
@@ -903,7 +903,7 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    let tree_height = 33; // prev. 5
+    let tree_height = 32; // prev. 5
     persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
     txn.commit().await.unwrap();
 
@@ -999,9 +999,9 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 2,
+        leaf_index: 1,
         value: vec![1],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
         seq: Some(0),
     };
@@ -1033,9 +1033,9 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 4,
+        leaf_index: 3,
         value: vec![3],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
         seq: Some(0),
     };
@@ -1091,7 +1091,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     use photon_indexer::api::method::{
         get_multiple_new_address_proofs::{
             get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
-            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+            AddressListWithTrees, AddressWithTree, LEGACY_ADDRESS_TREE,
         },
         get_validity_proof::CompressedProof,
     };
@@ -1144,7 +1144,7 @@ async fn test_get_multiple_new_address_proofs_interop(
         .into_iter()
         .map(|address| AddressWithTree {
             address,
-            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            tree: SerializablePubkey::from(LEGACY_ADDRESS_TREE),
         })
         .collect();
     let proof_v2 = get_multiple_new_address_proofs_v2(
@@ -1426,7 +1426,7 @@ async fn test_persisted_state_trees_multiple_cases(
 ) {
     let name = trim_test_name(function_name!());
     let tree = SerializablePubkey::new_unique();
-    let tree_height = 33; // prev. 10
+    let tree_height = 32; // prev. 10
 
     info!("Test case 1: Sequential leaf nodes");
     let leaf_nodes_1 = create_leaf_nodes(tree, 0..5, |i| i);
@@ -1448,7 +1448,7 @@ async fn test_persisted_state_trees_multiple_cases(
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_4, tree_height).await;
 
     info!("Test case 7: Very large tree");
-    let large_tree_height = 33; // prev. 20
+    let large_tree_height = 32; // prev. 20
     let leaf_nodes_7 = create_leaf_nodes(tree, 0..20, |i| i);
     test_persist_and_verify(
         name.clone(),
