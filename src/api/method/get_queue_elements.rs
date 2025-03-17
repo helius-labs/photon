@@ -1,4 +1,4 @@
-use light_merkle_tree_metadata::queue::QueueType;
+use light_compressed_account::QueueType;
 use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,

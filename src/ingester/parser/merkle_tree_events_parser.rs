@@ -56,6 +56,17 @@ pub fn parse_merkle_tree_event(
                         ));
                     state_update
                 }
+                MerkleTreeEvent::BatchAddressAppend(batch_event) => {
+                    state_update
+                        .batch_events
+                        .entry(batch_event.merkle_tree_pubkey)
+                        .or_default()
+                        .push((
+                            batch_event.sequence_number,
+                            MerkleTreeEvent::BatchAddressAppend(batch_event),
+                        ));
+                    state_update
+                }
                 _ => Err(IngesterError::ParserError(
                     "Expected nullifier event or merkle tree update".to_string(),
                 ))?,

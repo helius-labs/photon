@@ -53,7 +53,8 @@ impl MigrationTrait for Migration {
                 SELECT
                     hash, data, data_hash, address, owner, tree, NULL as queue, leaf_index, seq,
                     slot_created, spent, prev_spent, lamports, discriminator,
-                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index, FALSE as nullified_in_tree, NULL as tree_type
+                    FALSE as in_output_queue, NULL as nullifier, NULL as tx_hash, NULL as nullifier_queue_index,
+                    FALSE as nullified_in_tree, NULL as tree_type
                 FROM accounts;
 
                 DROP TABLE accounts;
@@ -209,7 +210,6 @@ impl MigrationTrait for Migration {
                 )
                 .await?;
 
-            // Create indexes
             execute_sql(
                 manager,
                 "CREATE INDEX accounts_queue_idx ON accounts (tree, in_output_queue, leaf_index) WHERE in_output_queue = true;",

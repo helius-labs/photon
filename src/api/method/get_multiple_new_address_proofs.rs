@@ -1,3 +1,4 @@
+use light_compressed_account::TreeType;
 use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, Statement,
     TransactionTrait,
@@ -11,11 +12,13 @@ use crate::api::error::PhotonApiError;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
+use crate::ingester::parser::tree_info::TreeInfo;
+use crate::ingester::persist::persisted_indexed_merkle_tree::{
+    get_exclusion_range_with_proof, get_exclusion_range_with_proof_legacy,
+};
 
-pub const ADDRESS_TREE_HEIGHT: u32 = 27;
-pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 pub const MAX_ADDRESSES: usize = 50;
+pub const LEGACY_ADDRESS_TREE: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -25,7 +28,7 @@ pub struct AddressWithTree {
     pub tree: SerializablePubkey,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct MerkleContextWithNewAddressProof {
@@ -71,13 +74,34 @@ pub async fn get_multiple_new_address_proofs_helper(
     let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
 
     for AddressWithTree { address, tree } in addresses {
-        let (model, proof) = get_exclusion_range_with_proof(
-            txn,
-            tree.to_bytes_vec(),
-            ADDRESS_TREE_HEIGHT,
-            address.to_bytes_vec(),
-        )
-        .await?;
+        let tree_and_queue = TreeInfo::get(&tree.to_string())
+            .ok_or(PhotonApiError::InvalidPubkey {
+                field: tree.to_string(),
+            })?
+            .clone();
+        let (model, proof) = match tree_and_queue.tree_type {
+            TreeType::Address => {
+                let address = address.to_bytes_vec();
+                let tree = tree.to_bytes_vec();
+                get_exclusion_range_with_proof_legacy(txn, tree, tree_and_queue.height + 1, address)
+                    .await?
+            }
+            TreeType::BatchedAddress => {
+                get_exclusion_range_with_proof(
+                    txn,
+                    tree.to_bytes_vec(),
+                    tree_and_queue.height + 1,
+                    address.to_bytes_vec(),
+                )
+                .await?
+            }
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid tree type".to_string(),
+                ));
+            }
+        };
+
         let new_address_proof = MerkleContextWithNewAddressProof {
             root: proof.root,
             address,
@@ -89,6 +113,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             merkleTree: tree,
             rootSeq: proof.root_seq,
         };
+        println!("new_address_proof: {:?}", new_address_proof);
         new_address_proofs.push(new_address_proof);
     }
     Ok(new_address_proofs)
@@ -107,7 +132,7 @@ pub async fn get_multiple_new_address_proofs(
             .into_iter()
             .map(|address| AddressWithTree {
                 address,
-                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+                tree: SerializablePubkey::from(LEGACY_ADDRESS_TREE),
             })
             .collect(),
     );

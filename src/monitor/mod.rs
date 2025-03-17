@@ -22,7 +22,7 @@ use crate::{
 };
 use light_concurrent_merkle_tree::copy::ConcurrentMerkleTreeCopy;
 use light_concurrent_merkle_tree::light_hasher::Poseidon;
-use light_sdk::state::MerkleTreeMetadata;
+use light_merkle_tree_metadata::merkle_tree::MerkleTreeMetadata;
 
 use crate::common::typedefs::hash::Hash;
 

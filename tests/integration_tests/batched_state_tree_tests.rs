@@ -1,8 +1,8 @@
 use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
+use light_compressed_account::QueueType;
 use light_hasher::zero_bytes::poseidon::ZERO_BYTES;
-use light_merkle_tree_metadata::queue::QueueType;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
@@ -66,6 +66,9 @@ async fn test_batched_tree_transactions(
     let signatures = read_file_names(&name, sort_by_slot);
     let index_individually = true;
 
+    for (i, signature) in signatures.iter().enumerate() {
+        println!("{} signature {}", i, signature);
+    }
     // build tree
     let mut merkle_tree =
         light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
@@ -105,6 +108,7 @@ async fn test_batched_tree_transactions(
         .await
         .unwrap()
         .compressionInfo;
+
         for account in accounts.closedAccounts.iter() {
             input_queue_elements
                 .push((account.account.account.hash.0, account.account.nullifier.0));
@@ -183,7 +187,7 @@ async fn test_batched_tree_transactions(
         .filter(|(i, _)| i % 2 == 1)
         .map(|(_, x)| x)
         .collect::<Vec<&[u8; 32]>>();
-    for (i, chunk) in filtered_outputs.chunks(4).enumerate() {
+    for (_, chunk) in filtered_outputs.chunks(4).enumerate() {
         let validity_proof = setup
             .api
             .get_validity_proof_v2(GetValidityProofRequestV2 {
@@ -195,7 +199,6 @@ async fn test_batched_tree_transactions(
             })
             .await
             .unwrap();
-        println!("i {}, validity_proof {:?}", i, validity_proof.value);
 
         // No value has been inserted into the tree yet -> all proof by index.
         assert!(validity_proof
@@ -224,6 +227,16 @@ async fn test_batched_tree_transactions(
         event_merkle_tree.append(&[0u8; 32]).unwrap();
     }
     let mut last_inserted_index = 0;
+
+    println!("====");
+    for (i, signature) in signatures[signatures.len() - (num_append_events + num_nullify_events)..]
+        .iter()
+        .take(15)
+        .enumerate()
+    {
+        println!("{} {}", i, signature);
+    }
+    println!("====");
     // Index and assert the batch events.
     // 10 append events and 5 nullify events.
     // The order is:
@@ -282,8 +295,9 @@ async fn test_batched_tree_transactions(
             })
             .await
             .unwrap();
-        let is_nullify_event = i % 2 == 1 && i < 9 || i == 14;
+        let is_nullify_event = i > 9;
         if is_nullify_event {
+            println!("nullify event {} {}", i, signature);
             assert_eq!(
                 post_output_queue_elements.value.len(),
                 pre_output_queue_elements.value.len(),
@@ -336,7 +350,10 @@ async fn test_batched_tree_transactions(
                 pre_input_queue_elements.value.len(),
             );
             // Insert 1 batch.
-            for element in pre_output_queue_elements.value[..10].iter() {
+
+            let slice_length = pre_output_queue_elements.value.len().min(10);
+            for element in pre_output_queue_elements.value[..slice_length].iter() {
+                // for element in pre_output_queue_elements.value[..10].iter() {
                 let leaf = event_merkle_tree.leaf(element.leaf_index as usize);
                 if leaf == [0u8; 32] {
                     event_merkle_tree
@@ -540,7 +557,7 @@ async fn test_batched_tree_token_transactions(
         .await;
 
         let mint = SerializablePubkey::from(
-            Pubkey::from_str("753LWB3Vz9Zsj8uyiMRFyNHuiMdFtu7Ku6x4cyKnSWe3").unwrap(),
+            Pubkey::from_str("7LasgAqT1hWtGEHo6BRPPLN56CWnZKdNk1GwWk7k9zjK").unwrap(),
         );
         let recipients = [
             Pubkey::from_str("DyRWDm81iYePWsdw1Yn2ue8CPcp7Lba6XsB8DVSGM7HK").unwrap(),
