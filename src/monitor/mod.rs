@@ -143,27 +143,12 @@ async fn load_db_tree_roots_with_infinite_retry(db: &DatabaseConnection) -> Vec<
 async fn load_accounts_with_infinite_retry(
     rpc_client: &RpcClient,
     pubkeys: Vec<Pubkey>,
-) -> Vec<SolanaAccount> {
+) -> Vec<Option<SolanaAccount>> {
     loop {
         let accounts = rpc_client.get_multiple_accounts(&pubkeys).await;
         match accounts {
             Ok(accounts) => {
-                let mut parsed_accounts = Vec::new();
-                let mut found_null_account = false;
-                for account in accounts {
-                    match account {
-                        Some(account) => parsed_accounts.push(account),
-                        None => {
-                            log::error!("Found null tree account when fetching historical roots. Retrying...");
-                            found_null_account = true;
-                            break;
-                        }
-                    }
-                }
-                if found_null_account {
-                    continue;
-                }
-                return parsed_accounts;
+                return accounts;
             }
             Err(e) => {
                 log::error!("Error loading accounts: {}", e);
@@ -178,15 +163,17 @@ async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash
         let pubkeys = chunk.iter().map(|(pubkey, _)| pubkey.clone()).collect();
         let accounts = load_accounts_with_infinite_retry(rpc_client, pubkeys).await;
         for ((pubkey, db_hash), account) in chunk.iter().zip(accounts) {
-            let account_roots = parse_historical_roots(account);
-            if !account_roots.contains(db_hash) {
-                log::error!(
-                    "Root mismatch for pubkey {:?}. db_hash: {}, account_roots: {:?}",
-                    pubkey,
-                    db_hash,
-                    account_roots
-                );
-                return;
+            if let Some(account) = account {
+                let account_roots = parse_historical_roots(account);
+                if !account_roots.contains(db_hash) {
+                    log::error!(
+                        "Root mismatch for pubkey {:?}. db_hash: {}, account_roots: {:?}",
+                        pubkey,
+                        db_hash,
+                        account_roots
+                    );
+                    return;
+                }
             }
         }
     }
