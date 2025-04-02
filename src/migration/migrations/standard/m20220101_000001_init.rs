@@ -267,10 +267,14 @@ impl MigrationTrait for Migration {
                     "ALTER TABLE owner_balances ADD COLUMN lamports bigint2 NOT NULL;",
                 )
                 .await?;
-
+                
+                // HACK: We need to use a larger precision for the amount column to avoid overflow, appears when saving snapshot to database (if type is bigint2)
+                // DO UPDATE SET amount = token_owner_balances.amount + excluded.amount. 
+                // ERROR:  numeric field overflow
+                // DETAIL:  A field with precision 20, scale 0 must round to an absolute value less than 10^20.
                 execute_sql(
                     manager,
-                    "ALTER TABLE token_owner_balances ADD COLUMN amount bigint2 NOT NULL;",
+                    "ALTER TABLE token_owner_balances ADD COLUMN amount numeric(22, 0) NOT NULL;",
                 )
                 .await?;
             }
