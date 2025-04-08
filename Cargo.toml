@@ -130,6 +130,7 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.
