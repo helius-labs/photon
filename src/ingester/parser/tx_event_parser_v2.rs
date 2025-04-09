@@ -135,14 +135,9 @@ pub fn create_state_update(
             });
         }
 
-        println!(
-            "state_update_event.addresses: {:?}",
-            state_update_event.addresses
-        );
         state_updates.push(state_update_event);
     }
 
     let merged = StateUpdate::merge_updates(state_updates);
-    println!("merged addresses: {:?}", merged.addresses);
     Ok(merged)
 }
