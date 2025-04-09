@@ -411,13 +411,14 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     // Create a subdirectory for the snapshot files
     let temp_dir = temp_dir.join(dir);
     if !temp_dir.exists() {
-        fs::create_dir(&temp_dir).unwrap();
+        fs::create_dir_all(&temp_dir).unwrap();
     }
     let random_number = rand::random::<u64>();
     let temp_file_path = temp_dir.join(format!("temp-snapshot-{}", random_number));
     if temp_file_path.exists() {
         fs::remove_file(&temp_file_path).unwrap();
     }
+    println!("Creating temp file: {:?}", temp_file_path);
     let temp_file = File::create(&temp_file_path).unwrap();
     (temp_file, temp_file_path)
 }
