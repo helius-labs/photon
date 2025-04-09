@@ -113,7 +113,6 @@ pub async fn get_multiple_new_address_proofs_helper(
             merkleTree: tree,
             rootSeq: proof.root_seq,
         };
-        println!("new_address_proof: {:?}", new_address_proof);
         new_address_proofs.push(new_address_proof);
     }
     Ok(new_address_proofs)

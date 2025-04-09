@@ -18,7 +18,6 @@ pub fn parse_legacy_public_transaction_event(
     next_instruction: &Instruction,
     next_next_instruction: &Instruction,
 ) -> Result<Option<StateUpdate>, IngesterError> {
-    println!("parsing parse_legacy_public_transaction_event");
     if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
         && next_instruction.program_id == SYSTEM_PROGRAM
         && next_next_instruction.program_id == NOOP_PROGRAM_ID
@@ -37,11 +36,6 @@ pub fn parse_legacy_public_transaction_event(
                         e
                     ))
                 })?;
-        println!(
-            "parsed parse_legacy_public_transaction_event v1: {:?}",
-            public_transaction_event
-        );
-
         parse_public_transaction_event(
             tx.signature,
             slot,

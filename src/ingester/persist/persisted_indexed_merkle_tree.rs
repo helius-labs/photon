@@ -283,8 +283,6 @@ pub async fn get_exclusion_range_with_proof_legacy(
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
         "No range proof found".to_string(),
     ))?;
-    println!("range_node: {:?}", range_node);
-
     let hash = compute_range_node_hash_legacy(range_node)
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
@@ -297,11 +295,6 @@ pub async fn get_exclusion_range_with_proof_legacy(
         seq: range_node.seq.map(|x| x as u32),
     };
     let node_index = leaf_node.node_index(tree_height);
-
-    println!(
-        "calculating leaf proofs for leaf {:?} at index {}",
-        leaf_node, node_index
-    );
 
     let leaf_proofs: Vec<MerkleProofWithContext> =
         get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)])
@@ -330,17 +323,12 @@ pub async fn get_exclusion_range_with_proof_legacy(
                 proof_error
             })?;
 
-    println!("leaf_proofs: {:?}", leaf_proofs);
-
     let leaf_proof = leaf_proofs
         .into_iter()
         .next()
         .ok_or(PhotonApiError::RecordNotFound(
             "No leaf proof found".to_string(),
         ))?;
-
-    println!("range_node: {:?}", range_node);
-    println!("leaf_proof: {:?}", leaf_proof);
 
     Ok((range_node.clone(), leaf_proof))
 }
