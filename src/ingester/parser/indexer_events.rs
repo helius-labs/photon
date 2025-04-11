@@ -50,6 +50,18 @@ pub enum PublicTransactionEvent {
     V2(PublicTransactionEventV2),
 }
 
+impl From<PublicTransactionEventV1> for PublicTransactionEvent {
+    fn from(event: PublicTransactionEventV1) -> Self {
+        PublicTransactionEvent::V1(event)
+    }
+}
+
+impl From<PublicTransactionEventV2> for PublicTransactionEvent {
+    fn from(event: PublicTransactionEventV2) -> Self {
+        PublicTransactionEvent::V2(event)
+    }
+}
+
 impl PublicTransactionEvent {
     pub fn input_compressed_account_hashes(&self) -> &[[u8; 32]] {
         match self {
