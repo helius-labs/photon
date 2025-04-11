@@ -36,12 +36,8 @@ pub fn parse_legacy_public_transaction_event(
                         e
                     ))
                 })?;
-        parse_public_transaction_event(
-            tx.signature,
-            slot,
-            PublicTransactionEvent::V1(public_transaction_event),
-        )
-        .map(Some)
+        parse_public_transaction_event(tx.signature, slot, public_transaction_event.into())
+            .map(Some)
     } else {
         Ok(None)
     }
