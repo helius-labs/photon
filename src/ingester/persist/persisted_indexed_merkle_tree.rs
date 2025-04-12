@@ -468,10 +468,8 @@ pub async fn multi_append(
     let mut elements_to_update: HashMap<i64, indexed_trees::Model> = HashMap::new();
 
     if indexed_tree.is_empty() {
-        for model in [
-            get_zeroeth_exclusion_range(tree.clone()),
-            // get_top_element(tree.clone()),
-        ] {
+        {
+            let model = get_zeroeth_exclusion_range(tree.clone());
             elements_to_update.insert(model.leaf_index, model.clone());
             indexed_tree.insert(model.value.clone(), model);
         }
