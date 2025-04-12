@@ -1,5 +1,6 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::OnceLock;
 use tx_event_parser::parse_legacy_public_transaction_event;
 use tx_event_parser_v2::create_state_update_v2;
 
@@ -17,8 +18,21 @@ pub mod tx_event_parser_v2;
 use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_v2;
 use solana_program::pubkey;
 
-pub const ACCOUNT_COMPRESSION_PROGRAM_ID: Pubkey =
-    pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq");
+static ACCOUNT_COMPRESSION_PROGRAM_ID: OnceLock<Pubkey> = OnceLock::new();
+pub fn get_compression_program_id() -> Pubkey {
+    *ACCOUNT_COMPRESSION_PROGRAM_ID
+        .get_or_init(|| pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq"))
+}
+pub fn set_compression_program_id(program_id_str: &str) -> Result<(), String> {
+    match program_id_str.parse::<Pubkey>() {
+        Ok(pubkey) => match ACCOUNT_COMPRESSION_PROGRAM_ID.set(pubkey) {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Compression program ID has already been set".to_string()),
+        },
+        Err(err) => Err(format!("Invalid compression program ID: {}", err)),
+    }
+}
+
 const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
 const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
