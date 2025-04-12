@@ -2,11 +2,7 @@ use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
 use light_compressed_account::QueueType;
-use light_hasher::hash_to_field_size::hashv_to_bn254_field_size_be_const_array;
 use light_hasher::zero_bytes::poseidon::ZERO_BYTES;
-use light_hasher::Poseidon;
-use light_merkle_tree_reference::MerkleTree;
-use photon_indexer::api::method::get_batch_address_update_info::GetBatchAddressUpdateInfoRequest;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
@@ -23,19 +19,12 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
-use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-use rand::prelude::StdRng;
-use rand::{Rng, SeedableRng};
-use sea_orm::DatabaseConnection;
 use serial_test::serial;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Test:
 /// 1. get compressed account by owner

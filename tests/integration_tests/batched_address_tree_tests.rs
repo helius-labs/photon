@@ -2,7 +2,6 @@ use crate::utils::*;
 use function_name::named;
 use light_hasher::hash_to_field_size::hashv_to_bn254_field_size_be_const_array;
 use light_hasher::Poseidon;
-use light_merkle_tree_reference::MerkleTree;
 use num_bigint::BigUint;
 use photon_indexer::api::method::get_batch_address_update_info::GetBatchAddressUpdateInfoRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::{
@@ -179,8 +178,12 @@ async fn test_batched_address_transactions(
             i
         );
     }
-    println!("Address queue state verified before batch update.");
 
+    println!("Address queue state verified before batch update.");
+    println!(
+        "Queue elements after before update: {:?}",
+        queue_elements_before
+    );
     // --- Phase 2: Index Batch Update Transaction ---
     for signature in batch_update_signatures {
         println!("Indexing batch update signature: {}", signature);
@@ -205,6 +208,10 @@ async fn test_batched_address_transactions(
         .await
         .expect("Failed to get address queue elements after batch update");
 
+    println!(
+        "Queue elements after batch update: {:?}",
+        queue_elements_after
+    );
     assert!(
         queue_elements_after.addresses.is_empty(),
         "Address queue should be empty after batch update, but found {} elements",
@@ -218,10 +225,7 @@ async fn test_batched_address_transactions(
         light_merkle_tree_reference::indexed::IndexedMerkleTree::<Poseidon, usize>::new(40, 0)
             .unwrap();
 
-    let start_index = reference_tree.merkle_tree.rightmost_index;
-    let current_root = reference_tree.root();
-
-    for (hash, leaf_index) in &expected_addresses {
+    for (hash, _) in &expected_addresses {
         let hash_bn = BigUint::from_bytes_be(hash);
         reference_tree
             .append(&hash_bn)
@@ -229,7 +233,7 @@ async fn test_batched_address_transactions(
     }
     let final_reference_root = reference_tree.root();
     let new_addresses: Vec<AddressWithTree> = vec![AddressWithTree {
-        address: SerializablePubkey::from(Pubkey::from([0; 32])),
+        address: SerializablePubkey::from(Pubkey::from(expected_addresses[0].0)),
         tree: SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes())),
     }];
     let proof = setup
@@ -237,6 +241,8 @@ async fn test_batched_address_transactions(
         .get_multiple_new_address_proofs_v2(AddressListWithTrees(new_addresses))
         .await
         .expect("Failed to get multiple new address proofs");
+
+    println!("proofs: {:?}", proof);
 
     let proof_root = proof.value.first().unwrap().root.0;
     assert_eq!(final_reference_root, proof_root, "Final tree root mismatch");
