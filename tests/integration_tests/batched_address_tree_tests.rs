@@ -12,6 +12,7 @@ use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
+use num_bigint::BigUint;
 
 /// Test:
 /// 1. Index transactions creating compressed addresses via CPI.
@@ -106,8 +107,6 @@ async fn test_batched_address_transactions(
         signatures.len() > num_creation_txs,
         "Signatures list should contain creation txs + at least one batch update tx"
     );
-
-    let mut reference_address_tree = MerkleTree::<Poseidon>::new(40, 0);
 
     // --- Phase 1: Index Address Creation Transactions ---
     let creation_signatures = &signatures[..num_creation_txs]; // Assume first N are creations
@@ -212,14 +211,24 @@ async fn test_batched_address_transactions(
     println!("Address queue state verified after batch update (empty).");
 
     // --- Phase 3: Verify Final Tree State and Proofs ---
+
+    let mut reference_tree = light_merkle_tree_reference::indexed::IndexedMerkleTree::<Poseidon, usize>::new(40, 0).unwrap();
+
+    let start_index = reference_tree.merkle_tree.rightmost_index;
+    let current_root = reference_tree.root();
+
+    println!("Empty Reference Merkle Tree Root: {:?}", current_root);
+    println!("Reference tree starting index: {:?}", start_index);
+
     println!("Verifying final tree state...");
     for (hash, leaf_index) in &expected_addresses {
         println!("updating reference tree with index {} and hash: {:?}", leaf_index, hash);
-        reference_address_tree
-            .append(&hash)
+        let hash_bn =  BigUint::from_bytes_be(hash);
+        reference_tree
+            .append(&hash_bn)
             .expect("Failed to update reference tree");
     }
-    let final_reference_root = reference_address_tree.root();
+    let final_reference_root = reference_tree.root();
     println!(
         "Final Reference Merkle Tree Root: {:?}",
         final_reference_root
