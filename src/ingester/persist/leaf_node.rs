@@ -83,7 +83,7 @@ pub async fn persist_leaf_nodes(
             (
                 node.tree.to_bytes_vec(),
                 node.node_index(
-                    TreeInfo::height(&node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT), // TODO: Handle error
+                    TreeInfo::height(&node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
                 ),
             )
         })
@@ -100,7 +100,7 @@ pub async fn persist_leaf_nodes(
     for leaf_node in leaf_nodes.clone() {
         let node_idx = leaf_node.node_index(
             TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
-        ); // TODO: handle error
+        );
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
 
