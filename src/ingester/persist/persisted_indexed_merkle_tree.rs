@@ -338,7 +338,6 @@ pub async fn update_indexed_tree_leaves(
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
     for tree in trees {
         {
-            // let leaf = get_top_element(tree.to_bytes().to_vec());
             let leaf = get_zeroeth_exclusion_range(tree.to_bytes().to_vec());
             let leaf_update = indexed_leaf_updates.get(&(tree, leaf.leaf_index as u64));
             if leaf_update.is_none() {
