@@ -203,12 +203,14 @@ async fn persist_batch_address_append_event(
         .iter()
         .map(|address| address.address.clone())
         .collect::<Vec<_>>();
+
     multi_append(
         txn,
         address_values,
         batch_address_append_event.merkle_tree_pubkey.to_vec(),
     )
     .await?;
+    
     address_queue::Entity::delete_many()
         .filter(
             address_queue::Column::QueueIndex

@@ -464,6 +464,7 @@ pub async fn multi_append(
         Some(row) => row.try_get("", "leaf_index").unwrap_or(0),
         None => 0,
     };
+
     let mut indexed_tree = query_next_smallest_elements(txn, values.clone(), tree.clone()).await?;
     let mut elements_to_update: HashMap<i64, indexed_trees::Model> = HashMap::new();
 
