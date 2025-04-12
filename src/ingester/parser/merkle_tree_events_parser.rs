@@ -7,7 +7,7 @@ use crate::ingester::parser::indexer_events::{
 use crate::ingester::parser::state_update::{
     IndexedTreeLeafUpdate, LeafNullification, StateUpdate,
 };
-use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
+use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
 use solana_program::pubkey::Pubkey;
@@ -20,7 +20,7 @@ pub fn parse_merkle_tree_event(
     next_instruction: &Instruction,
     tx: &TransactionInfo,
 ) -> Result<Option<StateUpdate>, IngesterError> {
-    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+    if get_compression_program_id() == instruction.program_id
         && next_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
