@@ -23,6 +23,8 @@ use sea_orm::{
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
+use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
@@ -43,8 +45,6 @@ use sqlx::{
     PgPool,
 };
 use std::sync::Arc;
-use photon_indexer::ingester::index_block;
-use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 
 const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
     encoding: Some(UiTransactionEncoding::Base64),
@@ -494,7 +494,6 @@ async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
     client.get_account(&account).await.unwrap()
 }
 
-
 /// Reads file names from tests/data/transactions/<name>
 /// returns vector of file names sorted by slot
 pub fn read_file_names(name: &String, sort_by_slot: bool) -> Vec<String> {
@@ -558,8 +557,8 @@ pub async fn index(
                     ..Default::default()
                 },
             )
-                .await
-                .unwrap();
+            .await
+            .unwrap();
 
             if index_transactions_individually {
                 for tx in txs {
@@ -572,7 +571,7 @@ pub async fn index(
                     rpc_client.clone(),
                     txs.iter().map(|x| x.as_str()).collect(),
                 )
-                    .await;
+                .await;
             }
         }
     }

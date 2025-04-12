@@ -3,8 +3,11 @@ use function_name::named;
 use light_hasher::hash_to_field_size::hashv_to_bn254_field_size_be_const_array;
 use light_hasher::Poseidon;
 use light_merkle_tree_reference::MerkleTree;
+use num_bigint::BigUint;
 use photon_indexer::api::method::get_batch_address_update_info::GetBatchAddressUpdateInfoRequest;
-use photon_indexer::api::method::get_multiple_new_address_proofs::{AddressListWithTrees, AddressWithTree};
+use photon_indexer::api::method::get_multiple_new_address_proofs::{
+    AddressListWithTrees, AddressWithTree,
+};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
@@ -12,7 +15,6 @@ use serial_test::serial;
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
-use num_bigint::BigUint;
 
 /// Test:
 /// 1. Index transactions creating compressed addresses via CPI.
@@ -60,7 +62,7 @@ async fn test_batched_address_transactions(
             db_backend,
         },
     )
-        .await;
+    .await;
     reset_tables(setup.db_conn.as_ref()).await.unwrap();
     let sort_by_slot = true;
     let signatures = read_file_names(&name, sort_by_slot);
@@ -130,7 +132,7 @@ async fn test_batched_address_transactions(
             &[signature.clone()],
             index_individually,
         )
-            .await;
+        .await;
 
         // Verify the tree pubkey derived from tx matches the expected one (optional sanity check)
         let json_str =
@@ -189,7 +191,7 @@ async fn test_batched_address_transactions(
             &[signature.clone()],
             index_individually,
         )
-            .await;
+        .await;
     }
 
     // --- Verify Address Queue State AFTER Batch Update ---
@@ -212,7 +214,9 @@ async fn test_batched_address_transactions(
 
     // --- Phase 3: Verify Final Tree State and Proofs ---
 
-    let mut reference_tree = light_merkle_tree_reference::indexed::IndexedMerkleTree::<Poseidon, usize>::new(40, 0).unwrap();
+    let mut reference_tree =
+        light_merkle_tree_reference::indexed::IndexedMerkleTree::<Poseidon, usize>::new(40, 0)
+            .unwrap();
 
     let start_index = reference_tree.merkle_tree.rightmost_index;
     let current_root = reference_tree.root();
@@ -222,8 +226,11 @@ async fn test_batched_address_transactions(
 
     println!("Verifying final tree state...");
     for (hash, leaf_index) in &expected_addresses {
-        println!("updating reference tree with index {} and hash: {:?}", leaf_index, hash);
-        let hash_bn =  BigUint::from_bytes_be(hash);
+        println!(
+            "updating reference tree with index {} and hash: {:?}",
+            leaf_index, hash
+        );
+        let hash_bn = BigUint::from_bytes_be(hash);
         reference_tree
             .append(&hash_bn)
             .expect("Failed to update reference tree");
@@ -234,12 +241,10 @@ async fn test_batched_address_transactions(
         final_reference_root
     );
 
-    let new_addresses: Vec<AddressWithTree> = vec![
-        AddressWithTree {
-            address: SerializablePubkey::from(Pubkey::from([0; 32])),
-            tree: SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes())),
-        },
-    ];
+    let new_addresses: Vec<AddressWithTree> = vec![AddressWithTree {
+        address: SerializablePubkey::from(Pubkey::from([0; 32])),
+        tree: SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes())),
+    }];
     let proof = setup
         .api
         .get_multiple_new_address_proofs_v2(AddressListWithTrees(new_addresses))
