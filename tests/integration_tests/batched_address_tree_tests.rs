@@ -221,26 +221,13 @@ async fn test_batched_address_transactions(
     let start_index = reference_tree.merkle_tree.rightmost_index;
     let current_root = reference_tree.root();
 
-    println!("Empty Reference Merkle Tree Root: {:?}", current_root);
-    println!("Reference tree starting index: {:?}", start_index);
-
-    println!("Verifying final tree state...");
     for (hash, leaf_index) in &expected_addresses {
-        println!(
-            "updating reference tree with index {} and hash: {:?}",
-            leaf_index, hash
-        );
         let hash_bn = BigUint::from_bytes_be(hash);
         reference_tree
             .append(&hash_bn)
             .expect("Failed to update reference tree");
     }
     let final_reference_root = reference_tree.root();
-    println!(
-        "Final Reference Merkle Tree Root: {:?}",
-        final_reference_root
-    );
-
     let new_addresses: Vec<AddressWithTree> = vec![AddressWithTree {
         address: SerializablePubkey::from(Pubkey::from([0; 32])),
         tree: SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes())),
