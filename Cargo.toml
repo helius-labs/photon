@@ -77,16 +77,15 @@ solana-program = "1.18.0"
 solana-sdk = "1.18.0"
 solana-transaction-status = "1.18.0"
 
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
-
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 
 sqlx = { version = "0.6.2", features = [
     "macros",
@@ -130,7 +129,7 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "8093d132c427cf38a83e729da451395ba6d0c52c" }
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.

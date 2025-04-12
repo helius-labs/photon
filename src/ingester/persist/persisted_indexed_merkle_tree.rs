@@ -163,7 +163,6 @@ pub async fn get_exclusion_range_with_proof(
             merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
             })?,
-            // HACK: Fixed value while not supporting forester.
             root_seq: 3,
         };
         merkle_proof.validate()?;
@@ -273,7 +272,6 @@ pub async fn get_exclusion_range_with_proof_legacy(
             merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
             })?,
-            // HACK: Fixed value while not supporting forester.
             root_seq: 3,
         };
         merkle_proof.validate()?;
