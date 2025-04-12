@@ -210,7 +210,7 @@ async fn persist_batch_address_append_event(
         batch_address_append_event.merkle_tree_pubkey.to_vec(),
     )
     .await?;
-    
+
     address_queue::Entity::delete_many()
         .filter(
             address_queue::Column::QueueIndex
