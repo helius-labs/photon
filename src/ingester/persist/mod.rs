@@ -90,7 +90,7 @@ pub async fn persist_state_update(
 
     debug!("Persisting addresses...");
     for chunk in addresses.chunks(MAX_SQL_INSERTS) {
-        append_addresses(txn, chunk).await?;
+        insert_addresses_into_queues(txn, chunk).await?;
     }
 
     debug!("Persisting output accounts...");
@@ -367,7 +367,7 @@ async fn execute_account_update_query_and_update_balances(
     Ok(())
 }
 
-async fn append_addresses(
+async fn insert_addresses_into_queues(
     txn: &DatabaseTransaction,
     addresses: &[AddressQueueUpdate],
 ) -> Result<(), IngesterError> {

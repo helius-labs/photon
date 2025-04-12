@@ -43,6 +43,8 @@ use sqlx::{
     PgPool,
 };
 use std::sync::Arc;
+use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 
 const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
     encoding: Some(UiTransactionEncoding::Base64),
@@ -490,4 +492,88 @@ pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaA
 #[allow(dead_code)]
 async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
     client.get_account(&account).await.unwrap()
+}
+
+
+/// Reads file names from tests/data/transactions/<name>
+/// returns vector of file names sorted by slot
+pub fn read_file_names(name: &String, sort_by_slot: bool) -> Vec<String> {
+    let signatures = std::fs::read_dir(format!("tests/data/transactions/{}", name))
+        .unwrap()
+        .filter_map(|entry| {
+            entry
+                .ok()
+                .and_then(|e| e.file_name().to_str().map(|s| s.to_string()))
+        })
+        .collect::<Vec<String>>();
+    if sort_by_slot {
+        let mut sorted_files: Vec<(String, u64)> = Vec::new();
+        for filename in signatures {
+            let json_str =
+                std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, filename))
+                    .unwrap();
+            let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            let slot = json["slot"].as_u64().unwrap_or(0);
+            sorted_files.push((filename, slot));
+        }
+        sorted_files.sort_by_key(|k| k.1);
+        sorted_files.into_iter().map(|(name, _)| name).collect()
+    } else {
+        signatures
+    }
+}
+
+/// Reset table
+/// Index transactions individually or in one batch
+pub async fn index(
+    test_name: &str,
+    db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClient>,
+    txns: &[String],
+    index_transactions_individually: bool,
+) {
+    let txs_permutations = txns
+        .iter()
+        .map(|x| vec![x.to_string()])
+        .collect::<Vec<Vec<_>>>();
+
+    for index_transactions_individually in [index_transactions_individually] {
+        for (i, txs) in txs_permutations.clone().iter().enumerate() {
+            println!(
+                "indexing tx {} {}/{}",
+                index_transactions_individually,
+                i + 1,
+                txs_permutations.len()
+            );
+            println!("tx {:?}", txs);
+
+            // HACK: We index a block so that API methods can fetch the current slot.
+            index_block(
+                db_conn.as_ref(),
+                &BlockInfo {
+                    metadata: BlockMetadata {
+                        slot: 0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+                .await
+                .unwrap();
+
+            if index_transactions_individually {
+                for tx in txs {
+                    index_transaction(test_name, db_conn.clone(), rpc_client.clone(), tx).await;
+                }
+            } else {
+                index_multiple_transactions(
+                    test_name,
+                    db_conn.clone(),
+                    rpc_client.clone(),
+                    txs.iter().map(|x| x.as_str()).collect(),
+                )
+                    .await;
+            }
+        }
+    }
 }
