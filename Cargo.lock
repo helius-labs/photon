@@ -105,7 +105,7 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 [[package]]
 name = "aligned-sized"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2541,6 +2541,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "groth16-solana"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e88b742ab45083ea752bcece9bb0a1f8b9bdff52013a5f6b4dce77ac2b59f34c"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ec 0.5.0",
+ "ark-ff 0.5.0",
+ "ark-serialize 0.5.0",
+ "num-bigint 0.4.6",
+ "solana-bn254",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3477,7 +3492,7 @@ dependencies = [
 [[package]]
 name = "light-account-checks"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "solana-program",
  "thiserror 2.0.12",
@@ -3486,7 +3501,7 @@ dependencies = [
 [[package]]
 name = "light-batched-merkle-tree"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "aligned-sized",
  "borsh 0.10.4",
@@ -3506,7 +3521,7 @@ dependencies = [
 [[package]]
 name = "light-bloom-filter"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "bitvec",
  "fastmurmur3",
@@ -3523,23 +3538,20 @@ checksum = "47ced86d6f1b163a04d5d0be44f8bbeedb11d32f73af27812bbd144e0f1f1a42"
 dependencies = [
  "bytemuck",
  "memoffset 0.9.1",
+ "solana-program",
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "light-compressed-account"
-version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+version = "0.1.1"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
- "anchor-lang",
- "anyhow",
- "ark-bn254 0.5.0",
- "ark-ff 0.5.0",
  "borsh 0.10.4",
  "bytemuck",
  "light-hasher",
+ "light-macros",
  "light-zero-copy",
- "num-bigint 0.4.6",
  "rand 0.8.5",
  "solana-program",
  "thiserror 2.0.12",
@@ -3549,22 +3561,22 @@ dependencies = [
 [[package]]
 name = "light-concurrent-merkle-tree"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "borsh 0.10.4",
  "light-bounded-vec",
  "light-hasher",
  "light-utils",
  "memoffset 0.9.1",
+ "solana-program",
  "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "light-hasher"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
- "anchor-lang",
  "ark-bn254 0.5.0",
  "ark-ff 0.5.0",
  "arrayvec",
@@ -3579,7 +3591,7 @@ dependencies = [
 [[package]]
 name = "light-indexed-array"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "light-hasher",
  "num-bigint 0.4.6",
@@ -3590,7 +3602,7 @@ dependencies = [
 [[package]]
 name = "light-indexed-merkle-tree"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "light-bounded-vec",
  "light-concurrent-merkle-tree",
@@ -3599,13 +3611,14 @@ dependencies = [
  "light-utils",
  "num-bigint 0.4.6",
  "num-traits",
+ "solana-program",
  "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "light-macros"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "bs58 0.5.1",
  "proc-macro2",
@@ -3616,7 +3629,7 @@ dependencies = [
 [[package]]
 name = "light-merkle-tree-metadata"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "borsh 0.10.4",
  "bytemuck",
@@ -3629,7 +3642,7 @@ dependencies = [
 [[package]]
 name = "light-merkle-tree-reference"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "light-hasher",
  "light-indexed-array",
@@ -3665,12 +3678,12 @@ dependencies = [
 [[package]]
 name = "light-prover-client"
 version = "1.2.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "ark-bn254 0.5.0",
  "ark-serialize 0.5.0",
  "ark-std 0.5.0",
- "groth16-solana",
+ "groth16-solana 0.0.3",
  "light-batched-merkle-tree",
  "light-bounded-vec",
  "light-compressed-account",
@@ -3695,7 +3708,7 @@ dependencies = [
 [[package]]
 name = "light-sdk"
 version = "0.11.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "borsh 0.10.4",
  "light-compressed-account",
@@ -3711,7 +3724,7 @@ dependencies = [
 [[package]]
 name = "light-sdk-macros"
 version = "0.4.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "ark-bn254 0.5.0",
  "light-hasher",
@@ -3740,10 +3753,9 @@ dependencies = [
 [[package]]
 name = "light-verifier"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
- "anchor-lang",
- "groth16-solana",
+ "groth16-solana 0.1.0",
  "light-compressed-account",
  "solana-program",
  "thiserror 2.0.12",
@@ -3752,7 +3764,7 @@ dependencies = [
 [[package]]
 name = "light-zero-copy"
 version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=8093d132c427cf38a83e729da451395ba6d0c52c#8093d132c427cf38a83e729da451395ba6d0c52c"
+source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "solana-program",
  "thiserror 2.0.12",
@@ -6032,6 +6044,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bn254"
+version = "2.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4420f125118732833f36facf96a27e7b78314b2d642ba07fa9ffdacd8d79e243"
+dependencies = [
+ "ark-bn254 0.4.0",
+ "ark-ec 0.4.2",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
+ "bytemuck",
+ "solana-define-syscall",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "solana-clap-utils"
 version = "1.18.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6116,6 +6143,12 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
 ]
+
+[[package]]
+name = "solana-define-syscall"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf784bb2cb3e02cac9801813c30187344228d2ae952534902108f6150573a33d"
 
 [[package]]
 name = "solana-frozen-abi"

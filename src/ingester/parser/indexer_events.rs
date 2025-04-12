@@ -44,88 +44,6 @@ impl MerkleTreeSequenceNumber {
     }
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Eq, PartialEq)]
-pub enum PublicTransactionEvent {
-    V1(PublicTransactionEventV1),
-    V2(PublicTransactionEventV2),
-}
-
-impl From<PublicTransactionEventV1> for PublicTransactionEvent {
-    fn from(event: PublicTransactionEventV1) -> Self {
-        PublicTransactionEvent::V1(event)
-    }
-}
-
-impl From<PublicTransactionEventV2> for PublicTransactionEvent {
-    fn from(event: PublicTransactionEventV2) -> Self {
-        PublicTransactionEvent::V2(event)
-    }
-}
-
-impl PublicTransactionEvent {
-    pub fn input_compressed_account_hashes(&self) -> &[[u8; 32]] {
-        match self {
-            PublicTransactionEvent::V1(x) => &x.input_compressed_account_hashes[..],
-            PublicTransactionEvent::V2(x) => &x.input_compressed_account_hashes[..],
-        }
-    }
-
-    pub fn output_compressed_account_hashes(&self) -> &[[u8; 32]] {
-        match self {
-            PublicTransactionEvent::V1(x) => &x.output_compressed_account_hashes[..],
-            PublicTransactionEvent::V2(x) => &x.output_compressed_account_hashes[..],
-        }
-    }
-
-    pub fn output_compressed_accounts(&self) -> &[OutputCompressedAccountWithPackedContext] {
-        match self {
-            PublicTransactionEvent::V1(x) => &x.output_compressed_accounts[..],
-            PublicTransactionEvent::V2(x) => &x.output_compressed_accounts[..],
-        }
-    }
-
-    pub fn pubkey_array(&self) -> &[Pubkey] {
-        match self {
-            PublicTransactionEvent::V1(x) => &x.pubkey_array[..],
-            PublicTransactionEvent::V2(x) => &x.pubkey_array[..],
-        }
-    }
-
-    pub fn sequence_numbers(&self) -> Vec<MerkleTreeSequenceNumber> {
-        match self {
-            PublicTransactionEvent::V1(x) => x
-                .sequence_numbers
-                .iter()
-                .map(|x| {
-                    MerkleTreeSequenceNumber::V1(MerkleTreeSequenceNumberV1 {
-                        pubkey: x.pubkey,
-                        seq: x.seq,
-                    })
-                })
-                .collect(),
-            PublicTransactionEvent::V2(x) => x
-                .sequence_numbers
-                .iter()
-                .map(|x| {
-                    MerkleTreeSequenceNumber::V2(MerkleTreeSequenceNumberV2 {
-                        tree_pubkey: x.tree_pubkey,
-                        queue_pubkey: x.queue_pubkey,
-                        tree_type: x.tree_type,
-                        seq: x.seq,
-                    })
-                })
-                .collect(),
-        }
-    }
-
-    pub fn output_leaf_indices(&self) -> &[u32] {
-        match self {
-            PublicTransactionEvent::V1(x) => &x.output_leaf_indices[..],
-            PublicTransactionEvent::V2(x) => &x.output_leaf_indices[..],
-        }
-    }
-}
-
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
 pub struct PublicTransactionEventV1 {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
@@ -154,6 +72,30 @@ pub struct PublicTransactionEventV2 {
     pub pubkey_array: Vec<Pubkey>,
     // TODO: remove(data can just be written into a compressed account)
     pub message: Option<Vec<u8>>,
+}
+
+impl Into<PublicTransactionEventV1> for PublicTransactionEventV2 {
+    fn into(self) -> PublicTransactionEventV1 {
+        PublicTransactionEventV1 {
+            input_compressed_account_hashes: self.input_compressed_account_hashes,
+            output_compressed_account_hashes: self.output_compressed_account_hashes,
+            output_compressed_accounts: self.output_compressed_accounts,
+            output_leaf_indices: self.output_leaf_indices,
+            sequence_numbers: self
+                .sequence_numbers
+                .iter()
+                .map(|x| MerkleTreeSequenceNumberV1 {
+                    pubkey: x.tree_pubkey,
+                    seq: x.seq,
+                })
+                .collect(),
+            relay_fee: self.relay_fee,
+            is_compress: self.is_compress,
+            compression_lamports: self.compression_lamports,
+            pubkey_array: self.pubkey_array,
+            message: self.message,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

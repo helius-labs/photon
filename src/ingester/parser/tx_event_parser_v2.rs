@@ -1,16 +1,17 @@
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
     BatchPublicTransactionEvent, CompressedAccount, CompressedAccountData,
-    MerkleTreeSequenceNumberV2, OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
-    PublicTransactionEventV2,
+    MerkleTreeSequenceNumberV2, OutputCompressedAccountWithPackedContext, PublicTransactionEventV2,
 };
-use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
-use crate::ingester::parser::tx_event_parser::parse_public_transaction_event;
+use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
-use crate::ingester::parser::tree_info::TreeInfo;
 use light_compressed_account::indexer_event::parse::event_from_light_transaction;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+
+use super::state_update::AddressQueueUpdate;
 
 pub fn parse_public_transaction_event_v2(
     program_ids: &[Pubkey],
@@ -101,7 +102,7 @@ pub fn parse_public_transaction_event_v2(
     })
 }
 
-pub fn create_state_update(
+pub fn create_state_update_v2(
     tx: Signature,
     slot: u64,
     transaction_event: Vec<BatchPublicTransactionEvent>,
@@ -111,29 +112,25 @@ pub fn create_state_update(
     }
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
-        let mut state_update_event = parse_public_transaction_event(
-            tx,
-            slot,
-            PublicTransactionEvent::V2(event.event.clone()),
-        )?;
+        let mut state_update_event = create_state_update_v1(tx, slot, event.clone().event.into())?;
+
         state_update_event
             .input_context
             .extend(event.batch_input_accounts.clone());
 
-        for (new_address, seq) in event
-            .new_addresses
-            .iter()
-            .zip(event.address_sequence_numbers.iter())
-        {
-            let tree_info = TreeInfo::get(&new_address.mt_pubkey.to_string())
-                .ok_or(IngesterError::ParserError("Missing queue".to_string()))?
-                .clone();
-            state_update_event.addresses.push(AddressQueueUpdate {
-                tree: tree_info.tree.into(),
-                address: new_address.address,
-                queue_index: seq.seq,
-            });
-        }
+        state_update_event
+            .addresses
+            .extend(
+                event
+                    .new_addresses
+                    .clone()
+                    .iter()
+                    .map(|x| AddressQueueUpdate {
+                        tree: SerializablePubkey::from(x.mt_pubkey),
+                        address: x.address,
+                        queue_index: x.queue_index,
+                    }),
+            );
 
         state_updates.push(state_update_event);
     }

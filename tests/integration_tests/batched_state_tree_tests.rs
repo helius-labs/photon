@@ -860,11 +860,6 @@ async fn test_batched_address_transactions(
     let address_tree_pubkey =
         Pubkey::from_str("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK").expect("Invalid Pubkey");
 
-    let seed = [
-        138, 54, 108, 101, 236, 143, 115, 167, 182, 198, 161, 249, 158, 237, 205, 199, 40, 82, 146,
-        196, 129, 32, 127, 185, 66, 119, 19, 21, 3, 0, 112, 13,
-    ];
-
     let program_id =
         Pubkey::from_str("FNt7byTHev1k5x2cXZLBr8TdWiC3zoP5vcnZR4P682Uy").expect("Invalid Pubkey");
 

@@ -1,7 +1,7 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
 use solana_sdk::pubkey::Pubkey;
 use tx_event_parser::parse_legacy_public_transaction_event;
-use tx_event_parser_v2::create_state_update;
+use tx_event_parser_v2::create_state_update_v2;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
@@ -45,7 +45,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
-            let state_update = create_state_update(tx.signature, slot, event)?;
+            let state_update = create_state_update_v2(tx.signature, slot, event)?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {

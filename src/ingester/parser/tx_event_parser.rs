@@ -1,6 +1,6 @@
 use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::error::IngesterError;
-use crate::ingester::parser::indexer_events::{PublicTransactionEvent, PublicTransactionEventV1};
+use crate::ingester::parser::indexer_events::PublicTransactionEventV1;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
@@ -36,53 +36,35 @@ pub fn parse_legacy_public_transaction_event(
                         e
                     ))
                 })?;
-        parse_public_transaction_event(tx.signature, slot, public_transaction_event.into())
-            .map(Some)
+        create_state_update_v1(tx.signature, slot, public_transaction_event.into()).map(Some)
     } else {
         Ok(None)
     }
 }
 
-pub fn parse_public_transaction_event(
+pub fn create_state_update_v1(
     tx: Signature,
     slot: u64,
-    transaction_event: PublicTransactionEvent,
+    transaction_event: PublicTransactionEventV1,
 ) -> Result<StateUpdate, IngesterError> {
     let mut state_update = StateUpdate::new();
+    let mut tree_to_seq_number = transaction_event
+        .sequence_numbers
+        .iter()
+        .map(|seq| (seq.pubkey, seq.seq))
+        .collect::<HashMap<_, _>>();
 
-    let mut has_batched_instructions = false;
-    let mut tree_to_seq_number = HashMap::new();
-
-    for seq in transaction_event.sequence_numbers().iter() {
-        if let Some(tree_info) = TreeInfo::get(&seq.tree_pubkey().to_string()) {
-            if tree_info.tree_type == TreeType::BatchedState
-                || tree_info.tree_type == TreeType::BatchedAddress
-            {
-                tree_to_seq_number.insert(tree_info.tree, seq.seq());
-                has_batched_instructions = true;
-            }
-        }
-    }
-
-    if !has_batched_instructions {
-        tree_to_seq_number = transaction_event
-            .sequence_numbers()
-            .iter()
-            .map(|seq| (seq.tree_pubkey(), seq.seq()))
-            .collect::<HashMap<_, _>>();
-    }
-
-    for hash in transaction_event.input_compressed_account_hashes() {
+    for hash in transaction_event.input_compressed_account_hashes {
         state_update.in_accounts.insert(hash.into());
     }
 
     for ((out_account, hash), leaf_index) in transaction_event
-        .output_compressed_accounts()
+        .output_compressed_accounts
         .into_iter()
-        .zip(transaction_event.output_compressed_account_hashes())
-        .zip(transaction_event.output_leaf_indices().iter())
+        .zip(transaction_event.output_compressed_account_hashes)
+        .zip(transaction_event.output_leaf_indices.iter())
     {
-        let tree = transaction_event.pubkey_array()[out_account.merkle_tree_index as usize];
+        let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
         let tree_and_queue = TreeInfo::get(&tree.to_string())
             .ok_or(IngesterError::ParserError("Missing queue".to_string()))?
             .clone();
@@ -102,7 +84,7 @@ pub fn parse_public_transaction_event(
         let in_output_queue = tree_and_queue.tree_type == TreeType::BatchedState;
         let enriched_account = AccountWithContext::new(
             out_account.compressed_account.clone(),
-            hash,
+            &hash,
             tree_and_queue.tree,
             tree_and_queue.queue,
             *leaf_index,

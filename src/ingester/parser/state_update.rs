@@ -4,7 +4,7 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
-use light_compressed_account::indexer_event::event::BatchNullifyContext;
+use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
@@ -69,6 +69,16 @@ pub struct AddressQueueUpdate {
     pub tree: SerializablePubkey,
     pub address: [u8; 32],
     pub queue_index: u64,
+}
+
+impl From<NewAddress> for AddressQueueUpdate {
+    fn from(new_address: NewAddress) -> Self {
+        AddressQueueUpdate {
+            tree: SerializablePubkey::from(new_address.mt_pubkey),
+            address: new_address.address,
+            queue_index: new_address.queue_index,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
