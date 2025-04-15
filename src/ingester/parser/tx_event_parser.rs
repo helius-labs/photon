@@ -3,7 +3,7 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEventV1;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
+use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use anchor_lang::AnchorDeserialize;
 use light_compressed_account::TreeType;
@@ -18,7 +18,7 @@ pub fn parse_legacy_public_transaction_event(
     next_instruction: &Instruction,
     next_next_instruction: &Instruction,
 ) -> Result<Option<StateUpdate>, IngesterError> {
-    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+    if get_compression_program_id() == instruction.program_id
         && next_instruction.program_id == SYSTEM_PROGRAM
         && next_next_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
