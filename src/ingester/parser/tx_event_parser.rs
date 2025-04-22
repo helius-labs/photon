@@ -36,6 +36,7 @@ pub fn parse_legacy_public_transaction_event(
                         e
                     ))
                 })?;
+        println!("public_transaction_event: {:?}", public_transaction_event);
         create_state_update_v1(tx.signature, slot, public_transaction_event.into()).map(Some)
     } else {
         Ok(None)

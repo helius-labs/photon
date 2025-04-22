@@ -59,6 +59,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
+            println!("parse_public_transaction_event_v2");
             let state_update = create_state_update_v2(tx.signature, slot, event)?;
             is_compression_transaction = true;
             state_updates.push(state_update);
@@ -72,6 +73,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         &ordered_instructions[index + 1],
                         &ordered_instructions[index + 2],
                     )? {
+                        println!("parse_legacy_public_transaction_event");
                         is_compression_transaction = true;
                         state_updates.push(state_update);
                     }
@@ -81,6 +83,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                         &ordered_instructions[index + 1],
                         tx,
                     )? {
+                        println!("is_compression_transaction");
                         is_compression_transaction = true;
                         state_updates.push(state_update);
                     }
