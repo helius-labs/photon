@@ -8,13 +8,14 @@ use serde::Deserialize;
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
-use solana_sdk::pubkey::Pubkey as SolanaPubkey;
+use solana_pubkey::Pubkey as SolanaPubkey;
 use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
 use utoipa::ToSchema;
 
-use solana_program::pubkey::ParsePubkeyError;
+use solana_pubkey::ParsePubkeyError;
 use std::convert::TryFrom;
+use solana_sdk::pubkey::Pubkey as SdkPubkey;
 
 #[derive(Default, Clone, PartialEq, Eq, Hash, Copy)]
 /// A Solana public key.
@@ -28,11 +29,25 @@ impl SerializablePubkey {
     pub fn new_unique() -> Self {
         SerializablePubkey(SolanaPubkey::new_unique())
     }
+
+    pub fn solana_to_sdk(pubkey: &SolanaPubkey) -> SdkPubkey {
+        let bytes = pubkey.to_bytes();
+        SdkPubkey::new_from_array(bytes)
+    }
+
+    pub fn sdk_to_solana(pubkey: &SdkPubkey) -> SolanaPubkey {
+        let bytes = pubkey.to_bytes();
+        SolanaPubkey::new_from_array(bytes)
+    }
+
+    pub fn to_sdk_pubkey(&self) -> SdkPubkey {
+        Self::solana_to_sdk(&self.0)
+    }
 }
 
 impl anchor_lang::AnchorDeserialize for SerializablePubkey {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
-        <solana_sdk::pubkey::Pubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
+        <SolanaPubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
     }
 
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
@@ -87,6 +102,26 @@ impl fmt::Display for SerializablePubkey {
 impl From<SolanaPubkey> for SerializablePubkey {
     fn from(pubkey: SolanaPubkey) -> Self {
         SerializablePubkey(pubkey)
+    }
+}
+
+impl From<&SolanaPubkey> for SerializablePubkey {
+    fn from(pubkey: &SolanaPubkey) -> Self {
+        SerializablePubkey(*pubkey)
+    }
+}
+
+impl From<SdkPubkey> for SerializablePubkey {
+    fn from(pubkey: SdkPubkey) -> Self {
+        let bytes = pubkey.to_bytes();
+        SerializablePubkey(SolanaPubkey::new_from_array(bytes))
+    }
+}
+
+impl From<&SdkPubkey> for SerializablePubkey {
+    fn from(pubkey: &SdkPubkey) -> Self {
+        let bytes = pubkey.to_bytes();
+        SerializablePubkey(SolanaPubkey::new_from_array(bytes))
     }
 }
 

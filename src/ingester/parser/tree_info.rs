@@ -182,7 +182,7 @@ lazy_static! {
                     tree: *legacy_tree,
                     queue: *legacy_queue,
                     height: 26,
-                    tree_type: TreeType::State,
+                    tree_type: TreeType::StateV1,
                 },
             );
 
@@ -192,7 +192,7 @@ lazy_static! {
                     tree: *legacy_tree,
                     queue: *legacy_queue,
                     height: 26,
-                    tree_type: TreeType::State,
+                    tree_type: TreeType::StateV1,
                 },
             );
         }
@@ -204,7 +204,7 @@ lazy_static! {
                     tree: *legacy_tree,
                     queue: *legacy_queue,
                     height: 26,
-                    tree_type: TreeType::Address,
+                    tree_type: TreeType::AddressV1,
                 },
             );
 
@@ -214,7 +214,7 @@ lazy_static! {
                     tree: *legacy_tree,
                     queue: *legacy_queue,
                     height: 26,
-                    tree_type: TreeType::Address,
+                    tree_type: TreeType::AddressV1,
                 },
             );
         }
@@ -225,7 +225,7 @@ lazy_static! {
                 tree: pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
                 queue: pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
                 height: 32,
-                tree_type: TreeType::BatchedState,
+                tree_type: TreeType::StateV2,
             },
         );
 
@@ -235,7 +235,7 @@ lazy_static! {
                 tree: pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
                 queue: pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
                 height: 32,
-                tree_type: TreeType::BatchedState,
+                tree_type: TreeType::StateV2,
             },
         );
 
@@ -245,7 +245,7 @@ lazy_static! {
                 tree: pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
                 queue: pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
                 height: 40,
-                tree_type: TreeType::BatchedAddress,
+                tree_type: TreeType::AddressV2,
             },
         );
 

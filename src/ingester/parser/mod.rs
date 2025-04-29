@@ -1,5 +1,5 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::sync::OnceLock;
 use tx_event_parser::parse_public_transaction_event_v1;
 use tx_event_parser_v2::create_state_update_v2;
@@ -16,7 +16,7 @@ mod tx_event_parser;
 pub mod tx_event_parser_v2;
 
 use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_v2;
-use solana_program::pubkey;
+use solana_pubkey::pubkey;
 
 static ACCOUNT_COMPRESSION_PROGRAM_ID: OnceLock<Pubkey> = OnceLock::new();
 pub fn get_compression_program_id() -> Pubkey {

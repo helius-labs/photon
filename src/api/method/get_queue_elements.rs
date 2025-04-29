@@ -72,7 +72,7 @@ pub async fn get_queue_elements(
         Condition::all().add(accounts::Column::Tree.eq(request.tree.to_vec()));
 
     match queue_type {
-        QueueType::BatchedInput => {
+        QueueType::InputStateV2 => {
             query_condition =
                 query_condition.add(accounts::Column::NullifierQueueIndex.is_not_null());
             if let Some(start_offset) = request.start_offset {
@@ -80,7 +80,7 @@ pub async fn get_queue_elements(
                     .add(accounts::Column::NullifierQueueIndex.gte(start_offset as i64));
             }
         }
-        QueueType::BatchedOutput => {
+        QueueType::OutputStateV2 => {
             query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
             if let Some(start_offset) = request.start_offset {
                 query_condition =
@@ -96,10 +96,10 @@ pub async fn get_queue_elements(
     }
 
     let query = match queue_type {
-        QueueType::BatchedInput => accounts::Entity::find()
+        QueueType::InputStateV2 => accounts::Entity::find()
             .filter(query_condition)
             .order_by_asc(accounts::Column::NullifierQueueIndex),
-        QueueType::BatchedOutput => accounts::Entity::find()
+        QueueType::OutputStateV2 => accounts::Entity::find()
             .filter(query_condition)
             .order_by_asc(accounts::Column::LeafIndex),
         _ => {
@@ -121,10 +121,10 @@ pub async fn get_queue_elements(
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
     let (proofs, first_value_queue_index) = if !indices.is_empty() {
         let first_value_queue_index = match queue_type {
-            QueueType::BatchedInput => Ok(queue_elements[0].nullifier_queue_index.ok_or(
+            QueueType::InputStateV2 => Ok(queue_elements[0].nullifier_queue_index.ok_or(
                 PhotonApiError::ValidationError("Nullifier queue index is missing".to_string()),
             )? as u64),
-            QueueType::BatchedOutput => Ok(queue_elements[0].leaf_index as u64),
+            QueueType::OutputStateV2 => Ok(queue_elements[0].leaf_index as u64),
             _ => Err(PhotonApiError::ValidationError(format!(
                 "Invalid queue type: {:?}",
                 queue_type

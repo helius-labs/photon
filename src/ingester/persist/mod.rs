@@ -27,8 +27,8 @@ use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
-use solana_program::pubkey;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::signature::Signature;
+use solana_pubkey::{pubkey, Pubkey};
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
@@ -123,7 +123,7 @@ pub async fn persist_state_update(
 
     let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
         .iter()
-        .filter(|account| account.context.tree_type == TreeType::State as u16)
+        .filter(|account| account.context.tree_type == TreeType::StateV1 as u16)
         .map(|account| {
             (
                 LeafNode::from(account.clone()),
@@ -187,7 +187,15 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting index tree updates...");
-    update_indexed_tree_leaves_v1(txn, indexed_merkle_tree_updates).await?;
+    // Convert from solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+    let converted_updates = indexed_merkle_tree_updates
+        .into_iter()
+        .map(|((pubkey, u64_val), update)| {
+            let sdk_pubkey = solana_sdk::pubkey::Pubkey::new_from_array(pubkey.to_bytes());
+            ((sdk_pubkey, u64_val), update)
+        })
+        .collect();
+    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
 
     persist_batch_events(txn, batch_merkle_tree_events).await?;
 

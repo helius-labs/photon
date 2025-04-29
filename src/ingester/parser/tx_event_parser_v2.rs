@@ -8,7 +8,7 @@ use crate::ingester::parser::state_update::StateUpdate;
 use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
 use light_compressed_account::indexer_event::parse::event_from_light_transaction;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
 use super::state_update::AddressQueueUpdate;
@@ -36,7 +36,7 @@ pub fn parse_public_transaction_event_v2(
                         .iter()
                         .map(|x| OutputCompressedAccountWithPackedContext {
                             compressed_account: CompressedAccount {
-                                owner: x.compressed_account.owner,
+                                owner: SerializablePubkey::solana_to_sdk(&x.compressed_account.owner),
                                 lamports: x.compressed_account.lamports,
                                 address: x.compressed_account.address,
                                 data: x.compressed_account.data.as_ref().map(|d| {
@@ -56,8 +56,8 @@ pub fn parse_public_transaction_event_v2(
                         .sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey,
-                            queue_pubkey: x.queue_pubkey,
+                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
+                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
@@ -67,7 +67,7 @@ pub fn parse_public_transaction_event_v2(
                     compression_lamports: public_transaction_event
                         .event
                         .compress_or_decompress_lamports,
-                    pubkey_array: public_transaction_event.event.pubkey_array,
+                    pubkey_array: public_transaction_event.event.pubkey_array.iter().map(|p| SerializablePubkey::solana_to_sdk(p)).collect(),
                     message: public_transaction_event.event.message,
                 };
 
@@ -78,8 +78,8 @@ pub fn parse_public_transaction_event_v2(
                         .input_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey,
-                            queue_pubkey: x.queue_pubkey,
+                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
+                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
@@ -88,8 +88,8 @@ pub fn parse_public_transaction_event_v2(
                         .address_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey,
-                            queue_pubkey: x.queue_pubkey,
+                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
+                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })

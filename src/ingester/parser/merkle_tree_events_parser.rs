@@ -10,7 +10,7 @@ use crate::ingester::parser::state_update::{
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
 /// A map of merkle tree events and sequence numbers by merkle tree pubkey.

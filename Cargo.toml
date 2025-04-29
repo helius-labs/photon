@@ -75,17 +75,17 @@ serde_json = "1.0.82"
 solana-client = "1.18.0"
 solana-program = "1.18.0"
 solana-sdk = "1.18.0"
-solana-transaction-status = "1.18.0"
+solana-pubkey = "2.3.0"
 
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+solana-transaction-status = "1.18.0"
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-hasher = "2.0.0"
-light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 
 sqlx = { version = "0.6.2", features = [
     "macros",

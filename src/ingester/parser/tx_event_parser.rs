@@ -70,7 +70,7 @@ pub fn create_state_update_v1(
             .clone();
 
         let mut seq = None;
-        if tree_and_queue.tree_type == TreeType::State {
+        if tree_and_queue.tree_type == TreeType::StateV1 {
             seq = Some(*tree_to_seq_number.get(&tree).ok_or_else(|| {
                 IngesterError::ParserError("Missing sequence number".to_string())
             })?);
@@ -81,12 +81,15 @@ pub fn create_state_update_v1(
             *seq += 1;
         }
 
-        let in_output_queue = tree_and_queue.tree_type == TreeType::BatchedState;
+        let in_output_queue = tree_and_queue.tree_type == TreeType::StateV2;
+        let tree_pubkey = solana_pubkey::Pubkey::new_from_array(tree_and_queue.tree.to_bytes());
+        let queue_pubkey = solana_pubkey::Pubkey::new_from_array(tree_and_queue.queue.to_bytes());
+
         let enriched_account = AccountWithContext::new(
             out_account.compressed_account.clone(),
             &hash,
-            tree_and_queue.tree,
-            tree_and_queue.queue,
+            tree_pubkey,
+            queue_pubkey,
             *leaf_index,
             slot,
             seq,
