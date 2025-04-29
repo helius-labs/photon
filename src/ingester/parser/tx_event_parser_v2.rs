@@ -70,6 +70,7 @@ pub fn parse_public_transaction_event_v2(
                     pubkey_array: public_transaction_event.event.pubkey_array,
                     message: public_transaction_event.event.message,
                 };
+
                 let batch_public_transaction_event = BatchPublicTransactionEvent {
                     event,
                     new_addresses: public_transaction_event.new_addresses,
@@ -96,6 +97,7 @@ pub fn parse_public_transaction_event_v2(
                     batch_input_accounts: public_transaction_event.batch_input_accounts,
                     tx_hash: public_transaction_event.tx_hash,
                 };
+
                 batch_public_transaction_event
             })
             .collect::<Vec<_>>()
@@ -115,11 +117,11 @@ pub fn create_state_update_v2(
         let mut state_update_event = create_state_update_v1(tx, slot, event.clone().event.into())?;
 
         state_update_event
-            .input_context
+            .batch_nullify_context
             .extend(event.batch_input_accounts.clone());
 
         state_update_event
-            .addresses
+            .batch_new_addresses
             .extend(
                 event
                     .new_addresses

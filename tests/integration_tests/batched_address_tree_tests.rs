@@ -18,14 +18,14 @@ use std::str::FromStr;
 /// Test:
 /// 1. Index transactions creating compressed addresses via CPI.
 /// 2. Verify address queue population reflects indexed state.
-/// 3. Index transaction performing BatchUpdateAddressTree.
+/// 3. Index transaction performing BatchAddressUpdate instruction.
 /// 4. Verify address queue is cleared by the indexer processing the update.
 /// 5. Verify final Merkle tree root and proofs against a reference tree.
 ///
 /// Data:
 /// - Transactions generated from `test_create_v2_address` run.
 /// - Includes multiple address creation CPIs (`InsertIntoQueues`).
-/// - Includes one `BatchUpdateAddressTree` instruction.
+/// - Includes one `BatchAddressUpdate` instruction.
 ///
 ///
 /// Assumption: The exact sequence of (address hash, leaf index) pairs and the
@@ -159,7 +159,8 @@ async fn test_batched_address_transactions(
         .api
         .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            batch_size: 50,
+            start_offset: None,
+            batch_size: 0,
         })
         .await
         .expect("Failed to get address queue elements before batch update");
@@ -203,6 +204,7 @@ async fn test_batched_address_transactions(
         .api
         .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
             tree: address_tree_pubkey.to_bytes().into(),
+            start_offset: None,
             batch_size: 100,
         })
         .await

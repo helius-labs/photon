@@ -3508,7 +3508,7 @@ dependencies = [
  "light-account-checks",
  "light-bloom-filter",
  "light-compressed-account",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-macros",
  "light-merkle-tree-metadata",
  "light-verifier",
@@ -3549,7 +3549,7 @@ source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd
 dependencies = [
  "borsh 0.10.4",
  "bytemuck",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-macros",
  "light-zero-copy",
  "rand 0.8.5",
@@ -3565,7 +3565,7 @@ source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd
 dependencies = [
  "borsh 0.10.4",
  "light-bounded-vec",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-utils",
  "memoffset 0.9.1",
  "solana-program",
@@ -3589,11 +3589,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-hasher"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e3a2bb2d7b6d106b3c4647b9089c21e6391203ebb0d3aa73ba2ee15e91fca2"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
+ "arrayvec",
+ "borsh 0.10.4",
+ "light-poseidon 0.3.0",
+ "num-bigint 0.4.6",
+ "sha2 0.10.8",
+ "sha3 0.10.8",
+ "solana-program",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "light-indexed-array"
 version = "0.1.0"
 source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
- "light-hasher",
+ "light-hasher 1.1.0",
  "num-bigint 0.4.6",
  "num-traits",
  "thiserror 2.0.12",
@@ -3606,7 +3624,7 @@ source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd
 dependencies = [
  "light-bounded-vec",
  "light-concurrent-merkle-tree",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-merkle-tree-reference",
  "light-utils",
  "num-bigint 0.4.6",
@@ -3644,7 +3662,7 @@ name = "light-merkle-tree-reference"
 version = "1.1.0"
 source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-indexed-array",
  "num-bigint 0.4.6",
  "num-traits",
@@ -3688,7 +3706,7 @@ dependencies = [
  "light-bounded-vec",
  "light-compressed-account",
  "light-concurrent-merkle-tree",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-indexed-array",
  "light-indexed-merkle-tree",
  "light-merkle-tree-reference",
@@ -3712,7 +3730,7 @@ source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd
 dependencies = [
  "borsh 0.10.4",
  "light-compressed-account",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-macros",
  "light-sdk-macros",
  "light-verifier",
@@ -3727,7 +3745,7 @@ version = "0.4.0"
 source = "git+https://github.com/Lightprotocol/light-protocol?rev=d3e3170243d9cd87926ed41703f58374bfcaf532#d3e3170243d9cd87926ed41703f58374bfcaf532"
 dependencies = [
  "ark-bn254 0.5.0",
- "light-hasher",
+ "light-hasher 1.1.0",
  "light-poseidon 0.3.0",
  "proc-macro2",
  "quote",
@@ -4460,7 +4478,7 @@ dependencies = [
  "light-batched-merkle-tree",
  "light-compressed-account",
  "light-concurrent-merkle-tree",
- "light-hasher",
+ "light-hasher 2.0.0",
  "light-indexed-merkle-tree",
  "light-merkle-tree-metadata",
  "light-merkle-tree-reference",

@@ -18,7 +18,7 @@ use super::{
     compute_parent_hash, get_multiple_compressed_leaf_proofs_from_full_leaf_info,
     persisted_state_tree::ZERO_BYTES, MerkleProofWithContext, MAX_SQL_INSERTS,
 };
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
 use crate::{
     api::error::PhotonApiError,
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
@@ -49,7 +49,7 @@ pub fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, Inge
     .map_err(|e| IngesterError::ParserError(format!("Failed to convert hash: {}", e)))
 }
 
-pub fn compute_range_node_hash_legacy(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
+pub fn compute_range_node_hash_v1(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
     let mut poseidon = Poseidon::<Fr>::new_circom(3).unwrap();
     let next_index = node.next_index.to_be_bytes();
     Hash::try_from(
@@ -89,7 +89,7 @@ pub fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
     }
 }
 
-pub fn get_zeroeth_exclusion_range_legacy(tree: Vec<u8>) -> indexed_trees::Model {
+pub fn get_zeroeth_exclusion_range_v1(tree: Vec<u8>) -> indexed_trees::Model {
     indexed_trees::Model {
         tree,
         leaf_index: 0,
@@ -117,7 +117,7 @@ pub fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
     }
 }
 
-pub async fn get_exclusion_range_with_proof(
+pub async fn get_exclusion_range_with_proof_v2(
     txn: &DatabaseTransaction,
     tree: Vec<u8>,
     tree_height: u32,
@@ -222,7 +222,7 @@ pub async fn get_exclusion_range_with_proof(
     Ok((range_node.clone(), leaf_proof))
 }
 
-pub async fn get_exclusion_range_with_proof_legacy(
+pub async fn get_exclusion_range_with_proof_v1(
     txn: &DatabaseTransaction,
     tree: Vec<u8>,
     tree_height: u32,
@@ -238,13 +238,12 @@ pub async fn get_exclusion_range_with_proof_legacy(
         })?;
 
     if btree.is_empty() {
-        let zeroeth_element = get_zeroeth_exclusion_range_legacy(tree.clone());
-        let zeroeth_element_hash =
-            compute_range_node_hash_legacy(&zeroeth_element).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-            })?;
+        let zeroeth_element = get_zeroeth_exclusion_range_v1(tree.clone());
+        let zeroeth_element_hash = compute_range_node_hash_v1(&zeroeth_element).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+        })?;
         let top_element = get_top_element(tree.clone());
-        let top_element_hash = compute_range_node_hash_legacy(&top_element).map_err(|e| {
+        let top_element_hash = compute_range_node_hash_v1(&top_element).map_err(|e| {
             PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
         })?;
         let mut proof: Vec<Hash> = vec![top_element_hash.clone()];
@@ -281,7 +280,7 @@ pub async fn get_exclusion_range_with_proof_legacy(
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
         "No range proof found".to_string(),
     ))?;
-    let hash = compute_range_node_hash_legacy(range_node)
+    let hash = compute_range_node_hash_v1(range_node)
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
     let leaf_node = LeafNode {
@@ -331,7 +330,7 @@ pub async fn get_exclusion_range_with_proof_legacy(
     Ok((range_node.clone(), leaf_proof))
 }
 
-pub async fn update_indexed_tree_leaves(
+pub async fn update_indexed_tree_leaves_v1(
     txn: &DatabaseTransaction,
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
@@ -426,7 +425,7 @@ pub async fn update_indexed_tree_leaves(
             })
             .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
-        persist_leaf_nodes(txn, state_tree_leaf_nodes).await?;
+        persist_leaf_nodes(txn, state_tree_leaf_nodes, TREE_HEIGHT_V1).await?;
     }
 
     Ok(())
@@ -436,6 +435,7 @@ pub async fn multi_append(
     txn: &DatabaseTransaction,
     values: Vec<Vec<u8>>,
     tree: Vec<u8>,
+    tree_height: u32,
 ) -> Result<(), IngesterError> {
     if txn.get_database_backend() == DatabaseBackend::Postgres {
         txn.execute(Statement::from_string(
@@ -450,7 +450,6 @@ pub async fn multi_append(
 
     let index_stmt = Statement::from_string(
         txn.get_database_backend(),
-        // TODO: Use parametrized queries instead
         format!(
             "SELECT leaf_index FROM indexed_trees WHERE tree = {} ORDER BY leaf_index DESC LIMIT 1",
             format_bytes(tree.clone(), txn.get_database_backend())
@@ -549,7 +548,7 @@ pub async fn multi_append(
         })
         .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
-    persist_leaf_nodes(txn, leaf_nodes).await?;
+    persist_leaf_nodes(txn, leaf_nodes, tree_height).await?;
 
     Ok(())
 }

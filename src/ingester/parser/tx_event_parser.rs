@@ -11,7 +11,7 @@ use log::info;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 
-pub fn parse_legacy_public_transaction_event(
+pub fn parse_public_transaction_event_v1(
     tx: &TransactionInfo,
     slot: u64,
     instruction: &Instruction,

@@ -16,7 +16,8 @@ use crate::ingester::persist::persisted_state_tree::get_subtrees;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetBatchAddressUpdateInfoRequest {
-    pub tree: Hash,
+    pub tree: SerializablePubkey,
+    pub start_offset: Option<u64>,
     pub batch_size: u16,
 }
 
@@ -56,7 +57,7 @@ pub async fn get_batch_address_update_info(
 ) -> Result<GetBatchAddressUpdateInfoResponse, PhotonApiError> {
     let batch_size = request.batch_size;
     let merkle_tree_pubkey = request.tree;
-    let tree_info = TreeInfo::get(&merkle_tree_pubkey.to_base58())
+    let tree_info = TreeInfo::get(&merkle_tree_pubkey.to_string())
         .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?
         .clone();
 
@@ -86,15 +87,22 @@ pub async fn get_batch_address_update_info(
         None => 1,
     };
 
+    let offset_condition = match request.start_offset {
+        Some(start_offset) => format!("AND queue_index >= {}", start_offset),
+        None => String::new(),
+    };
+
     // 2. Get queue elements from the address_queues table
     let address_queue_stmt = Statement::from_string(
         tx.get_database_backend(),
         format!(
             "SELECT tree, address, queue_index FROM address_queues
              WHERE tree = {}
+             {}
              ORDER BY queue_index ASC
              LIMIT {}",
             format_bytes(merkle_tree.clone(), tx.get_database_backend()),
+            offset_condition,
             batch_size
         ),
     );

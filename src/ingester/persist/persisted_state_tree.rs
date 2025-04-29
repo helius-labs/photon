@@ -10,7 +10,7 @@ use solana_program::pubkey::Pubkey;
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::state_trees;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::leaf_node::STATE_TREE_HEIGHT;
+use crate::ingester::persist::leaf_node::STATE_TREE_HEIGHT_V2;
 use crate::ingester::persist::persisted_indexed_merkle_tree::format_bytes;
 
 pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
@@ -50,6 +50,7 @@ pub async fn get_proof_nodes<T>(
     leaf_nodes_locations: Vec<(Vec<u8>, i64)>,
     include_leafs: bool,
     include_empty_leaves: bool,
+    tree_height: Option<u32>,
 ) -> Result<HashMap<(Vec<u8>, i64), state_trees::Model>, DbErr>
 where
     T: ConnectionTrait + TransactionTrait,
@@ -103,8 +104,11 @@ where
         leaf_nodes_locations.iter().for_each(|(tree, index)| {
             result.entry((tree.clone(), *index)).or_insert_with(|| {
                 let tree_pubkey = Pubkey::try_from(tree.clone()).unwrap();
-                let tree_height =
-                    TreeInfo::height(&tree_pubkey.to_string()).unwrap_or(STATE_TREE_HEIGHT);
+                let tree_height = if let Some(height) = tree_height {
+                    height
+                } else {
+                    TreeInfo::height(&tree_pubkey.to_string()).unwrap_or(STATE_TREE_HEIGHT_V2)
+                };
                 let model = state_trees::Model {
                     tree: tree.clone(),
                     level: get_level_by_node_index(*index, tree_height),

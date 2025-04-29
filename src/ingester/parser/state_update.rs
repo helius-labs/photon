@@ -1,4 +1,4 @@
-use super::{indexer_events::RawIndexedElement, merkle_tree_events_parser::IndexedBatchEvents};
+use super::{indexer_events::RawIndexedElement, merkle_tree_events_parser::BatchMerkleTreeEvents};
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -90,9 +90,10 @@ pub struct StateUpdate {
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
-    pub batch_events: IndexedBatchEvents,
-    pub input_context: Vec<BatchNullifyContext>,
-    pub addresses: Vec<AddressQueueUpdate>,
+
+    pub batch_merkle_tree_events: BatchMerkleTreeEvents,
+    pub batch_nullify_context: Vec<BatchNullifyContext>,
+    pub batch_new_addresses: Vec<AddressQueueUpdate>,
 }
 
 impl StateUpdate {
@@ -125,17 +126,20 @@ impl StateUpdate {
                 }
             }
 
-            merged.addresses.extend(update.addresses);
-
-            merged.input_context.extend(update.input_context);
-
-            for (key, events) in update.batch_events {
-                if let Some(existing_events) = merged.batch_events.get_mut(&key) {
+            for (key, events) in update.batch_merkle_tree_events {
+                if let Some(existing_events) = merged.batch_merkle_tree_events.get_mut(&key) {
                     existing_events.extend(events);
                 } else {
-                    merged.batch_events.insert(key, events);
+                    merged.batch_merkle_tree_events.insert(key, events);
                 }
             }
+
+            merged
+                .batch_new_addresses
+                .extend(update.batch_new_addresses);
+            merged
+                .batch_nullify_context
+                .extend(update.batch_nullify_context);
         }
 
         merged

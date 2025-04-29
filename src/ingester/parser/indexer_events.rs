@@ -9,6 +9,22 @@ pub struct OutputCompressedAccountWithPackedContext {
     pub merkle_tree_index: u8,
 }
 
+// impl From<light_compressed_account::instruction_data::data::OutputCompressedAccountWithPackedContext> for OutputCompressedAccountWithPackedContext {
+//     fn from(value: light_compressed_account::instruction_data::data::OutputCompressedAccountWithPackedContext) -> Self {
+//         let mut output = vec![];
+//         for (i, oca) in value.output_compressed_accounts.iter().enumerate() {
+//             if i < value.output_leaf_indices.len() && i < value.sequence_numbers.len() {
+//                 output.push(OutputCompressedAccountWithPackedContext {
+//                     compressed_account: oca.clone(),
+//                     merkle_tree_index: value.sequence_numbers[i].seq as u8,
+//                 });
+//             } else {
+//                 panic!("output leaf indices and sequence numbers must have same length");
+//             }
+//         }
+//     }
+// }
+
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumberV2 {
     pub tree_pubkey: Pubkey,

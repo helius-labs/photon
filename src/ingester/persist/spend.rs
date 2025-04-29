@@ -10,7 +10,7 @@ use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
 
 /// 1. Mark the input accounts as spent.
-///     (From both legacy and batched trees)
+///     (From both V1 and V2 (batched) trees)
 /// 2. Update account compressed sol balances.
 /// 3. Update compressed token account balances.
 pub async fn spend_input_accounts(

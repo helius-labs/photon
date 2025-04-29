@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use borsh::BorshDeserialize;
 use serde::Deserialize;
-use solana_sdk::pubkey::ParsePubkeyError;
 
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
@@ -14,6 +13,7 @@ use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
 use utoipa::ToSchema;
 
+use solana_program::pubkey::ParsePubkeyError;
 use std::convert::TryFrom;
 
 #[derive(Default, Clone, PartialEq, Eq, Hash, Copy)]

@@ -4,7 +4,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::state_update::LeafNullification;
-use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, ZERO_BYTES};
 use crate::ingester::persist::{compute_parent_hash, get_node_direct_ancestors};
 use crate::migration::OnConflict;
@@ -13,7 +12,8 @@ use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set
 use std::cmp::max;
 use std::collections::HashMap;
 
-pub const STATE_TREE_HEIGHT: u32 = 32;
+pub const TREE_HEIGHT_V1: u32 = 26;
+pub const STATE_TREE_HEIGHT_V2: u32 = 32;
 
 #[derive(Clone, Debug)]
 pub struct LeafNode {
@@ -70,6 +70,7 @@ impl From<LeafNullification> for LeafNode {
 pub async fn persist_leaf_nodes(
     txn: &DatabaseTransaction,
     mut leaf_nodes: Vec<LeafNode>,
+    tree_height: u32,
 ) -> Result<(), IngesterError> {
     if leaf_nodes.is_empty() {
         return Ok(());
@@ -79,17 +80,11 @@ pub async fn persist_leaf_nodes(
 
     let leaf_locations = leaf_nodes
         .iter()
-        .map(|node| {
-            (
-                node.tree.to_bytes_vec(),
-                node.node_index(
-                    TreeInfo::height(&node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
-                ),
-            )
-        })
+        .map(|node| (node.tree.to_bytes_vec(), node.node_index(tree_height)))
         .collect::<Vec<_>>();
 
-    let node_locations_to_models = get_proof_nodes(txn, leaf_locations, true, false).await?;
+    let node_locations_to_models =
+        get_proof_nodes(txn, leaf_locations, true, false, Some(tree_height)).await?;
     let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))
@@ -98,9 +93,7 @@ pub async fn persist_leaf_nodes(
     let mut models_to_updates = HashMap::new();
 
     for leaf_node in leaf_nodes.clone() {
-        let node_idx = leaf_node.node_index(
-            TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
-        );
+        let node_idx = leaf_node.node_index(tree_height);
         let tree = leaf_node.tree;
         let key = (tree.to_bytes_vec(), node_idx);
 
@@ -132,13 +125,11 @@ pub async fn persist_leaf_nodes(
     let all_ancestors = leaf_nodes
         .iter()
         .flat_map(|leaf_node| {
-            get_node_direct_ancestors(leaf_node.node_index(
-                TreeInfo::height(&leaf_node.tree.0.to_string()).unwrap_or(STATE_TREE_HEIGHT),
-            )) // TODO: handle error
-            .iter()
-            .enumerate()
-            .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
-            .collect::<Vec<(Vec<u8>, i64, usize)>>()
+            get_node_direct_ancestors(leaf_node.node_index(tree_height))
+                .iter()
+                .enumerate()
+                .map(move |(i, &idx)| (leaf_node.tree.to_bytes_vec(), idx, i))
+                .collect::<Vec<(Vec<u8>, i64, usize)>>()
         })
         .sorted_by(|a, b| {
             // Need to sort elements before dedup

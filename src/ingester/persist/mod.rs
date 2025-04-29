@@ -20,8 +20,9 @@ use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
 use error::IngesterError;
+use light_compressed_account::TreeType;
 use log::debug;
-use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
+use persisted_indexed_merkle_tree::update_indexed_tree_leaves_v1;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
@@ -36,6 +37,7 @@ pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
 use crate::dao::generated::address_queue;
+use crate::ingester::persist::leaf_node::TREE_HEIGHT_V1;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
@@ -70,9 +72,9 @@ pub async fn persist_state_update(
         transactions,
         leaf_nullifications,
         indexed_merkle_tree_updates,
-        batch_events,
-        input_context,
-        addresses,
+        batch_merkle_tree_events,
+        batch_nullify_context,
+        batch_new_addresses,
         ..
     } = state_update;
 
@@ -85,11 +87,11 @@ pub async fn persist_state_update(
         "Persisting state update with {} input accounts, {} output accounts, {} addresses",
         in_accounts.len(),
         out_accounts.len(),
-        addresses.len()
+        batch_new_addresses.len()
     );
 
     debug!("Persisting addresses...");
-    for chunk in addresses.chunks(MAX_SQL_INSERTS) {
+    for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
         insert_addresses_into_queues(txn, chunk).await?;
     }
 
@@ -107,7 +109,7 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    spend_input_accounts_batched(txn, &input_context).await?;
+    spend_input_accounts_batched(txn, &batch_nullify_context).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -121,8 +123,7 @@ pub async fn persist_state_update(
 
     let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
         .iter()
-        // HACK: filter accounts by seq, because we don't have seq for accounts which are not in the tree yet
-        .filter(|account| account.account.seq.is_some() && !account.context.in_output_queue)
+        .filter(|account| account.context.tree_type == TreeType::State as u16)
         .map(|account| {
             (
                 LeafNode::from(account.clone()),
@@ -153,7 +154,7 @@ pub async fn persist_state_update(
             .map(|(leaf_node, _)| leaf_node.clone())
             .collect_vec();
 
-        persist_leaf_nodes(txn, leaf_nodes_chunk).await?;
+        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT_V1).await?;
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
@@ -186,9 +187,9 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting index tree updates...");
-    update_indexed_tree_leaves(txn, indexed_merkle_tree_updates).await?;
+    update_indexed_tree_leaves_v1(txn, indexed_merkle_tree_updates).await?;
 
-    persist_batch_events(txn, batch_events).await?;
+    persist_batch_events(txn, batch_merkle_tree_events).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
