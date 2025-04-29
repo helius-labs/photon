@@ -9,22 +9,6 @@ pub struct OutputCompressedAccountWithPackedContext {
     pub merkle_tree_index: u8,
 }
 
-// impl From<light_compressed_account::instruction_data::data::OutputCompressedAccountWithPackedContext> for OutputCompressedAccountWithPackedContext {
-//     fn from(value: light_compressed_account::instruction_data::data::OutputCompressedAccountWithPackedContext) -> Self {
-//         let mut output = vec![];
-//         for (i, oca) in value.output_compressed_accounts.iter().enumerate() {
-//             if i < value.output_leaf_indices.len() && i < value.sequence_numbers.len() {
-//                 output.push(OutputCompressedAccountWithPackedContext {
-//                     compressed_account: oca.clone(),
-//                     merkle_tree_index: value.sequence_numbers[i].seq as u8,
-//                 });
-//             } else {
-//                 panic!("output leaf indices and sequence numbers must have same length");
-//             }
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumberV2 {
     pub tree_pubkey: Pubkey,
@@ -114,6 +98,32 @@ impl Into<PublicTransactionEventV1> for PublicTransactionEventV2 {
     }
 }
 
+impl Into<PublicTransactionEventV2> for PublicTransactionEventV1 {
+    fn into(self) -> PublicTransactionEventV2 {
+        PublicTransactionEventV2 {
+            input_compressed_account_hashes: self.input_compressed_account_hashes,
+            output_compressed_account_hashes: self.output_compressed_account_hashes,
+            output_compressed_accounts: self.output_compressed_accounts,
+            output_leaf_indices: self.output_leaf_indices,
+            sequence_numbers: self
+                .sequence_numbers
+                .iter()
+                .map(|x| MerkleTreeSequenceNumberV2 {
+                    tree_pubkey: x.pubkey,
+                    queue_pubkey: x.pubkey, // Default queue pubkey to tree pubkey
+                    tree_type: 0, // Default tree type to 0 (StateV1)
+                    seq: x.seq,
+                })
+                .collect(),
+            relay_fee: self.relay_fee,
+            is_compress: self.is_compress,
+            compression_lamports: self.compression_lamports,
+            pubkey_array: self.pubkey_array,
+            message: self.message,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BatchPublicTransactionEvent {
     pub event: PublicTransactionEventV2,
@@ -142,7 +152,7 @@ pub struct CompressedAccountData {
 /// Event containing the Merkle path of the given
 /// [`StateMerkleTree`](light_merkle_tree_program::state::StateMerkleTree)
 /// change. Indexers can use this type of events to re-build a non-sparse
-/// version of state Merkle tree.
+/// version of the state Merkle tree.
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub enum MerkleTreeEvent {

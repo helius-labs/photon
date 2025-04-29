@@ -12,7 +12,8 @@ use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, QueryFilter, QueryTrait, Set, Statement, TransactionTrait,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey as SdkPubkey;
+use solana_pubkey::Pubkey;
 
 use super::{
     compute_parent_hash, get_multiple_compressed_leaf_proofs_from_full_leaf_info,
@@ -332,16 +333,17 @@ pub async fn get_exclusion_range_with_proof_v1(
 
 pub async fn update_indexed_tree_leaves_v1(
     txn: &DatabaseTransaction,
-    mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
+    mut indexed_leaf_updates: HashMap<(SdkPubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
-    let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
-    for tree in trees {
+    let trees: HashSet<SdkPubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
+    for sdk_tree in trees {
         {
-            let leaf = get_zeroeth_exclusion_range(tree.to_bytes().to_vec());
-            let leaf_update = indexed_leaf_updates.get(&(tree, leaf.leaf_index as u64));
+            let tree = Pubkey::new_from_array(sdk_tree.to_bytes());
+            let leaf = get_zeroeth_exclusion_range(sdk_tree.to_bytes().to_vec());
+            let leaf_update = indexed_leaf_updates.get(&(sdk_tree, leaf.leaf_index as u64));
             if leaf_update.is_none() {
                 indexed_leaf_updates.insert(
-                    (tree, leaf.leaf_index as u64),
+                    (sdk_tree, leaf.leaf_index as u64),
                     IndexedTreeLeafUpdate {
                         tree,
                         hash: compute_range_node_hash(&leaf)

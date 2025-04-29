@@ -81,8 +81,8 @@ pub async fn get_multiple_new_address_proofs_helper(
             .clone();
 
         // For V2 trees, check if the address is in the queue but not yet in the tree
-        if tree_and_queue.tree_type == TreeType::BatchedAddress {
-            // Check if address is in the queue
+        if tree_and_queue.tree_type == TreeType::AddressV2 {
+            // Check if the address is in the queue
             let address_queue_stmt = Statement::from_string(
                 txn.get_database_backend(),
                 format!(
@@ -117,13 +117,13 @@ pub async fn get_multiple_new_address_proofs_helper(
         }
 
         let (model, proof) = match tree_and_queue.tree_type {
-            TreeType::Address => {
+            TreeType::AddressV1 => {
                 let address = address.to_bytes_vec();
                 let tree = tree.to_bytes_vec();
                 get_exclusion_range_with_proof_v1(txn, tree, tree_and_queue.height + 1, address)
                     .await?
             }
-            TreeType::BatchedAddress => {
+            TreeType::AddressV2 => {
                 get_exclusion_range_with_proof_v2(
                     txn,
                     tree.to_bytes_vec(),

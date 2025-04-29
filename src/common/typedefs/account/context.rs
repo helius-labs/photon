@@ -10,7 +10,7 @@ use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
 use light_compressed_account::TreeType;
 use serde::Serialize;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use utoipa::ToSchema;
 
 /// This is currently used internally:
