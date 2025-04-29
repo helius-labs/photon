@@ -272,7 +272,7 @@ impl From<Option<u64>> for RootIndex {
 pub struct MerkleContextV2 {
     pub tree_type: u16,
     pub tree: SerializablePubkey,
-    // nullifier_queue in legacy trees, output_queue in V2 trees.
+    // nullifier_queue in V1 trees, output_queue in V2 trees.
     pub queue: SerializablePubkey,
     pub cpi_context: Option<SerializablePubkey>,
     pub next_tree_context: Option<TreeContextInfo>,

@@ -12,7 +12,7 @@ use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
 use crate::api::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, AddressWithTree, LEGACY_ADDRESS_TREE,
+    get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_V1,
 };
 use crate::api::method::get_validity_proof::common::{
     convert_inclusion_proofs_to_hex, convert_non_inclusion_merkle_proof_to_hex,
@@ -47,7 +47,7 @@ pub async fn get_validity_proof(
             .iter()
             .map(|new_address| AddressWithTree {
                 address: *new_address,
-                tree: SerializablePubkey::from(LEGACY_ADDRESS_TREE),
+                tree: SerializablePubkey::from(ADDRESS_TREE_V1),
             })
             .collect();
     }

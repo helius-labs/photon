@@ -606,7 +606,7 @@ async fn test_nullfiier_and_address_queue_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::get_multiple_new_address_proofs::{
-        AddressListWithTrees, AddressWithTree, LEGACY_ADDRESS_TREE,
+        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
     };
 
     let name = trim_test_name(function_name!());
@@ -675,7 +675,7 @@ async fn test_nullfiier_and_address_queue_transactions(
 
         let address_list_with_trees = AddressListWithTrees(vec![AddressWithTree {
             address: SerializablePubkey::try_from(address).unwrap(),
-            tree: SerializablePubkey::from(LEGACY_ADDRESS_TREE),
+            tree: SerializablePubkey::from(ADDRESS_TREE_V1),
         }]);
 
         let proof_v2 = setup

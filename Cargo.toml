@@ -80,7 +80,7 @@ solana-transaction-status = "1.18.0"
 light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
+light-hasher = "2.0.0"
 light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
@@ -129,7 +129,6 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "d3e3170243d9cd87926ed41703f58374bfcaf532" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.

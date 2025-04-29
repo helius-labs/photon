@@ -18,8 +18,8 @@ pub struct Account {
     pub lamports: UnsignedInteger,
     pub tree: SerializablePubkey,
     pub leaf_index: UnsignedInteger,
-    // For legacy trees is always Some() since the user tx appends directly to the Merkle tree
-    // for batched tress:
+    // For V1 trees is always Some() since the user tx appends directly to the Merkle tree
+    // for V2 batched trees:
     // 2.1. None when is in output queue
     // 2.2. Some once it was inserted into the Merkle tree from the output queue
     pub seq: Option<UnsignedInteger>,

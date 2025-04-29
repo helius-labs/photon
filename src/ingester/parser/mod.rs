@@ -1,7 +1,7 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::OnceLock;
-use tx_event_parser::parse_legacy_public_transaction_event;
+use tx_event_parser::parse_public_transaction_event_v1;
 use tx_event_parser_v2::create_state_update_v2;
 
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
@@ -65,7 +65,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         } else {
             for (index, _) in ordered_instructions.iter().enumerate() {
                 if ordered_instructions.len() - index > 2 {
-                    if let Some(state_update) = parse_legacy_public_transaction_event(
+                    if let Some(state_update) = parse_public_transaction_event_v1(
                         tx,
                         slot,
                         &ordered_instructions[index],

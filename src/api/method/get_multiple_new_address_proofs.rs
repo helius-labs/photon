@@ -14,11 +14,11 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof, get_exclusion_range_with_proof_legacy,
+    format_bytes, get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
 };
 
 pub const MAX_ADDRESSES: usize = 50;
-pub const LEGACY_ADDRESS_TREE: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
+pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -79,15 +79,52 @@ pub async fn get_multiple_new_address_proofs_helper(
                 field: tree.to_string(),
             })?
             .clone();
+
+        // For V2 trees, check if the address is in the queue but not yet in the tree
+        if tree_and_queue.tree_type == TreeType::BatchedAddress {
+            // Check if address is in the queue
+            let address_queue_stmt = Statement::from_string(
+                txn.get_database_backend(),
+                format!(
+                    "SELECT COUNT(*) as count FROM address_queues
+                     WHERE tree = {} AND address = {}",
+                    format_bytes(tree.to_bytes_vec(), txn.get_database_backend()),
+                    format_bytes(address.to_bytes_vec(), txn.get_database_backend())
+                ),
+            );
+
+            let queue_result = txn.query_one(address_queue_stmt).await.map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to query address queue: {}", e))
+            })?;
+
+            let in_queue = match queue_result {
+                Some(row) => {
+                    let count: i64 = row.try_get("", "count").map_err(|e| {
+                        PhotonApiError::UnexpectedError(format!("Failed to get count: {}", e))
+                    })?;
+                    count > 0
+                }
+                None => false,
+            };
+
+            if in_queue {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Address {} is in the queue for tree {} but not yet in the tree",
+                    address.to_string(),
+                    tree.to_string()
+                )));
+            }
+        }
+
         let (model, proof) = match tree_and_queue.tree_type {
             TreeType::Address => {
                 let address = address.to_bytes_vec();
                 let tree = tree.to_bytes_vec();
-                get_exclusion_range_with_proof_legacy(txn, tree, tree_and_queue.height + 1, address)
+                get_exclusion_range_with_proof_v1(txn, tree, tree_and_queue.height + 1, address)
                     .await?
             }
             TreeType::BatchedAddress => {
-                get_exclusion_range_with_proof(
+                get_exclusion_range_with_proof_v2(
                     txn,
                     tree.to_bytes_vec(),
                     tree_and_queue.height + 1,
@@ -131,7 +168,7 @@ pub async fn get_multiple_new_address_proofs(
             .into_iter()
             .map(|address| AddressWithTree {
                 address,
-                tree: SerializablePubkey::from(LEGACY_ADDRESS_TREE),
+                tree: SerializablePubkey::from(ADDRESS_TREE_V1),
             })
             .collect(),
     );

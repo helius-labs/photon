@@ -168,7 +168,7 @@ lazy_static! {
             ),
         ];
 
-        let legacy_address_trees = [(
+        let address_trees_v1 = [(
             pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2"),
             pubkey!("aq1S9z4reTSQAdgWHGD2zDaS39sjGrAxbR31vxJ2F4F"),
         )];
@@ -197,7 +197,7 @@ lazy_static! {
             );
         }
 
-        for (legacy_tree, legacy_queue) in legacy_address_trees.iter() {
+        for (legacy_tree, legacy_queue) in address_trees_v1.iter() {
             m.insert(
                 legacy_queue.to_string(),
                 TreeInfo {
