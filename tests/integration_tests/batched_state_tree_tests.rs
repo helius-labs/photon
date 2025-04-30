@@ -455,7 +455,7 @@ async fn test_batched_tree_transactions(
         index_individually,
     )
     .await;
-    // Slot created is wrong likely because of test environment.
+    // Slot created is wrong likely because of the test environment.
     let mut leaf_index = 1;
     for i in 0..50 {
         let owner = Pubkey::new_unique();
