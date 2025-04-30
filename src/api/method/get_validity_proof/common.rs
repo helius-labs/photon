@@ -89,7 +89,7 @@ pub struct GetValidityProofRequestDocumentation {
     pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetValidityProofResponse {
     pub value: CompressedProofWithContext,
@@ -221,7 +221,7 @@ fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
     format!("0x{}", hex)
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct CompressedProofWithContext {

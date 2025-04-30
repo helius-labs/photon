@@ -80,6 +80,7 @@ where
         params.push(Value::from(node_idx));
         placeholders.push(format!("(${}, ${})", param_index + 1, param_index + 2));
     }
+
     let placeholder_str = placeholders.join(", ");
     let sql = format!(
             "WITH vals(tree, node_idx) AS (VALUES {}) SELECT st.* FROM state_trees st JOIN vals v ON st.tree = v.tree AND st.node_idx = v.node_idx",
@@ -107,8 +108,10 @@ where
                 let tree_height = if let Some(height) = tree_height {
                     height
                 } else {
-                    TreeInfo::height(&tree_pubkey.to_string()).unwrap_or(STATE_TREE_HEIGHT_V2)
+                    let height = TreeInfo::height(&tree_pubkey.to_string());
+                    height.unwrap_or(STATE_TREE_HEIGHT_V2)
                 };
+                let tree_height = tree_height + 1;
                 let model = state_trees::Model {
                     tree: tree.clone(),
                     level: get_level_by_node_index(*index, tree_height),

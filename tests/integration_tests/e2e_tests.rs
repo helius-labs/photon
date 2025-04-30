@@ -389,11 +389,13 @@ async fn test_lamport_transfers(
                     .map(|x| x.hash.clone())
                     .collect(),
             );
+
             let proofs = setup
                 .api
                 .get_multiple_compressed_account_proofs(hash_list.clone())
                 .await
                 .unwrap();
+
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
             let mut validity_proof = setup
@@ -411,6 +413,7 @@ async fn test_lamport_transfers(
                         hash_list.0.len()
                     )
                 });
+
             // The Gnark prover has some randomness.
             validity_proof.value.compressedProof = CompressedProof::default();
 

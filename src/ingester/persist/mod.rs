@@ -154,7 +154,7 @@ pub async fn persist_state_update(
             .map(|(leaf_node, _)| leaf_node.clone())
             .collect_vec();
 
-        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT_V1).await?;
+        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT_V1 + 1).await?;
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
