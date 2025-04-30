@@ -12,7 +12,6 @@ use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, QueryFilter, QueryTrait, Set, Statement, TransactionTrait,
 };
-use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use solana_pubkey::Pubkey;
 
 use super::{
@@ -333,9 +332,9 @@ pub async fn get_exclusion_range_with_proof_v1(
 
 pub async fn update_indexed_tree_leaves_v1(
     txn: &DatabaseTransaction,
-    mut indexed_leaf_updates: HashMap<(SdkPubkey, u64), IndexedTreeLeafUpdate>,
+    mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
-    let trees: HashSet<SdkPubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
+    let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
     for sdk_tree in trees {
         {
             let tree = Pubkey::new_from_array(sdk_tree.to_bytes());

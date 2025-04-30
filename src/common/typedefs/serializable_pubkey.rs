@@ -8,17 +8,14 @@ use serde::Deserialize;
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
+use solana_pubkey::ParsePubkeyError;
 use solana_pubkey::Pubkey as SolanaPubkey;
+use std::convert::TryFrom;
 use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
 use utoipa::ToSchema;
 
-use solana_pubkey::ParsePubkeyError;
-use std::convert::TryFrom;
-use solana_sdk::pubkey::Pubkey as SdkPubkey;
-
 #[derive(Default, Clone, PartialEq, Eq, Hash, Copy)]
-/// A Solana public key.
 pub struct SerializablePubkey(pub SolanaPubkey);
 
 impl SerializablePubkey {
@@ -28,20 +25,6 @@ impl SerializablePubkey {
 
     pub fn new_unique() -> Self {
         SerializablePubkey(SolanaPubkey::new_unique())
-    }
-
-    pub fn solana_to_sdk(pubkey: &SolanaPubkey) -> SdkPubkey {
-        let bytes = pubkey.to_bytes();
-        SdkPubkey::new_from_array(bytes)
-    }
-
-    pub fn sdk_to_solana(pubkey: &SdkPubkey) -> SolanaPubkey {
-        let bytes = pubkey.to_bytes();
-        SolanaPubkey::new_from_array(bytes)
-    }
-
-    pub fn to_sdk_pubkey(&self) -> SdkPubkey {
-        Self::solana_to_sdk(&self.0)
     }
 }
 
@@ -80,7 +63,7 @@ impl<'__s> ToSchema<'__s> for SerializablePubkey {
         ("SerializablePubkey", RefOr::T(schema))
     }
 
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+    fn aliases() -> Vec<(&'static str, Schema)> {
         Vec::new()
     }
 }
@@ -108,20 +91,6 @@ impl From<SolanaPubkey> for SerializablePubkey {
 impl From<&SolanaPubkey> for SerializablePubkey {
     fn from(pubkey: &SolanaPubkey) -> Self {
         SerializablePubkey(*pubkey)
-    }
-}
-
-impl From<SdkPubkey> for SerializablePubkey {
-    fn from(pubkey: SdkPubkey) -> Self {
-        let bytes = pubkey.to_bytes();
-        SerializablePubkey(SolanaPubkey::new_from_array(bytes))
-    }
-}
-
-impl From<&SdkPubkey> for SerializablePubkey {
-    fn from(pubkey: &SdkPubkey) -> Self {
-        let bytes = pubkey.to_bytes();
-        SerializablePubkey(SolanaPubkey::new_from_array(bytes))
     }
 }
 
@@ -164,7 +133,7 @@ struct Base58Visitor;
 impl<'de> Visitor<'de> for Base58Visitor {
     type Value = SerializablePubkey;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a base58 encoded string")
     }
 

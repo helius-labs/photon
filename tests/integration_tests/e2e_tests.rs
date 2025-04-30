@@ -11,7 +11,7 @@ use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidi
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::utils::*;
 use futures::pin_mut;
