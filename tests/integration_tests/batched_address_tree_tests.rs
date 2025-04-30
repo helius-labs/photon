@@ -248,8 +248,6 @@ async fn test_batched_address_transactions(
         .await
         .expect("Failed to get multiple new address proofs");
 
-    println!("proofs: {:?}", proof);
-
     let proof_root = proof.value.first().unwrap().root.0;
     assert_eq!(final_reference_root, proof_root, "Final tree root mismatch");
 

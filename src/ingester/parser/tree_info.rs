@@ -17,7 +17,7 @@ impl TreeInfo {
     }
 
     pub fn height(pubkey: &str) -> Option<u32> {
-        QUEUE_TREE_MAPPING.get(pubkey).map(|x| x.height + 1)
+        QUEUE_TREE_MAPPING.get(pubkey).map(|x| x.height)
     }
 }
 

@@ -1523,10 +1523,12 @@ async fn test_persist_and_verify(
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         if one_at_a_time {
             for leaf_node in leaf_nodes.clone() {
-                persist_leaf_nodes(&txn, vec![leaf_node], 26).await.unwrap();
+                persist_leaf_nodes(&txn, vec![leaf_node], tree_height)
+                    .await
+                    .unwrap();
             }
         } else {
-            persist_leaf_nodes(&txn, leaf_nodes.clone(), 26)
+            persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
                 .await
                 .unwrap();
         }

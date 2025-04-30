@@ -431,7 +431,6 @@ pub async fn persist_state_update_using_connection(
     state_update: StateUpdate,
 ) -> Result<(), sea_orm::DbErr> {
     let txn = db.begin().await.unwrap();
-    println!("Persisting state update: {:?}", state_update);
     persist_state_update(&txn, state_update).await.unwrap();
     txn.commit().await.unwrap();
     Ok(())

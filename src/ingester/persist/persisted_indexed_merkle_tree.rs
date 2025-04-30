@@ -426,7 +426,7 @@ pub async fn update_indexed_tree_leaves_v1(
             })
             .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
-        persist_leaf_nodes(txn, state_tree_leaf_nodes, TREE_HEIGHT_V1).await?;
+        persist_leaf_nodes(txn, state_tree_leaf_nodes, TREE_HEIGHT_V1 + 1).await?;
     }
 
     Ok(())
