@@ -47,11 +47,11 @@ pub async fn persist_batch_events(
             }?;
 
             if leaf_nodes.len() <= MAX_SQL_INSERTS {
-                persist_leaf_nodes(txn, leaf_nodes, STATE_TREE_HEIGHT_V2).await?;
+                persist_leaf_nodes(txn, leaf_nodes, STATE_TREE_HEIGHT_V2 + 1).await?;
             } else {
                 // Currently not used but a safeguard in case the batch size changes.
                 for leaf_nodes_chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
-                    persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec(), STATE_TREE_HEIGHT_V2)
+                    persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec(), STATE_TREE_HEIGHT_V2 + 1)
                         .await?;
                 }
             }
