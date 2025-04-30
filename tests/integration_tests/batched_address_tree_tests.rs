@@ -11,7 +11,7 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use serial_test::serial;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 
@@ -144,7 +144,11 @@ async fn test_batched_address_transactions(
             .transaction
             .decode()
             .map(|tx| tx.message.static_account_keys().to_vec())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|key| Pubkey::from(key.to_bytes()))
+            .collect::<Vec<_>>();
+
         assert!(
             accounts.contains(&address_tree_pubkey),
             "Indexed tx {} does not involve the expected address tree {}",
