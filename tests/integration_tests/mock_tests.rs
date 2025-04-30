@@ -50,7 +50,7 @@ use sqlx::types::Decimal;
 use light_compressed_account::TreeType;
 use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::vec;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
@@ -195,7 +195,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -216,7 +216,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -237,7 +237,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(1),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -258,7 +258,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -572,7 +572,7 @@ async fn test_persist_token_data(
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Pubkey::new_unique().to_bytes().to_vec()),
-            tree_type: Set(TreeType::State as i32),
+            tree_type: Set(TreeType::StateV1 as i32),
             seq: Set(Some(0)),
             ..Default::default()
         };

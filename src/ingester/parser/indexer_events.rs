@@ -2,6 +2,7 @@
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
+use solana_pubkey::Pubkey;
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
@@ -111,7 +112,7 @@ impl Into<PublicTransactionEventV2> for PublicTransactionEventV1 {
                 .map(|x| MerkleTreeSequenceNumberV2 {
                     tree_pubkey: x.pubkey,
                     queue_pubkey: x.pubkey, // Default queue pubkey to tree pubkey
-                    tree_type: 0, // Default tree type to 0 (StateV1)
+                    tree_type: 0,           // Default tree type to 0 (StateV1)
                     seq: x.seq,
                 })
                 .collect(),

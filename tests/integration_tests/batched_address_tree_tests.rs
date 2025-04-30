@@ -11,7 +11,7 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use serial_test::serial;
-use solana_sdk::pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 

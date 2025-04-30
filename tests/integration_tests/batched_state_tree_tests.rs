@@ -21,7 +21,7 @@ use photon_indexer::common::typedefs::token_data::TokenData;
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
 use serial_test::serial;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
@@ -137,7 +137,7 @@ async fn test_batched_tree_transactions(
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
-                    queue_type: QueueType::BatchedOutput as u8,
+                    queue_type: QueueType::OutputStateV2 as u8,
                     num_elements: 100,
                 })
                 .await
@@ -163,7 +163,7 @@ async fn test_batched_tree_transactions(
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
-                    queue_type: QueueType::BatchedInput as u8,
+                    queue_type: QueueType::InputStateV2 as u8,
                     num_elements: 100,
                 })
                 .await
@@ -246,7 +246,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedOutput as u8,
+                queue_type: QueueType::OutputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -256,7 +256,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedInput as u8,
+                queue_type: QueueType::InputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -275,7 +275,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedOutput as u8,
+                queue_type: QueueType::OutputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -285,7 +285,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedInput as u8,
+                queue_type: QueueType::InputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -419,7 +419,7 @@ async fn test_batched_tree_transactions(
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
-            queue_type: QueueType::BatchedOutput as u8,
+            queue_type: QueueType::OutputStateV2 as u8,
             num_elements: 100,
         })
         .await
@@ -435,7 +435,7 @@ async fn test_batched_tree_transactions(
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
-            queue_type: QueueType::BatchedInput as u8,
+            queue_type: QueueType::InputStateV2 as u8,
             num_elements: 100,
         })
         .await

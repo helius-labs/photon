@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use light_compressed_account::TreeType;
-use solana_program::pubkey;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

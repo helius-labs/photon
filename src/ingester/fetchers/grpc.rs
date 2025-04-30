@@ -12,8 +12,8 @@ use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use solana_pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
@@ -323,7 +323,8 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    let sdk_pubkey = SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
+                    let sdk_pubkey =
+                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
                     Pubkey::new_from_array(sdk_pubkey.to_bytes())
                 })
                 .collect();
@@ -347,14 +348,16 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
         for instruction in instructions {
             let instruction_group = &mut instruction_groups[index as usize];
             let sdk_program_id =
-                SdkPubkey::try_from(accounts[instruction.program_id_index as usize].clone()).unwrap();
+                SdkPubkey::try_from(accounts[instruction.program_id_index as usize].clone())
+                    .unwrap();
             let program_id = Pubkey::new_from_array(sdk_program_id.to_bytes());
             let data = instruction.data.clone();
             let accounts: Vec<Pubkey> = instruction
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    let sdk_pubkey = SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
+                    let sdk_pubkey =
+                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
                     Pubkey::new_from_array(sdk_pubkey.to_bytes())
                 })
                 .collect();

@@ -4,8 +4,7 @@ use sea_orm::{
     TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;

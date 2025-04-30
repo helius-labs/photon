@@ -36,7 +36,7 @@ pub fn parse_public_transaction_event_v2(
                         .iter()
                         .map(|x| OutputCompressedAccountWithPackedContext {
                             compressed_account: CompressedAccount {
-                                owner: SerializablePubkey::solana_to_sdk(&x.compressed_account.owner),
+                                owner: x.compressed_account.owner,
                                 lamports: x.compressed_account.lamports,
                                 address: x.compressed_account.address,
                                 data: x.compressed_account.data.as_ref().map(|d| {
@@ -56,8 +56,8 @@ pub fn parse_public_transaction_event_v2(
                         .sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
-                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
@@ -67,7 +67,7 @@ pub fn parse_public_transaction_event_v2(
                     compression_lamports: public_transaction_event
                         .event
                         .compress_or_decompress_lamports,
-                    pubkey_array: public_transaction_event.event.pubkey_array.iter().map(|p| SerializablePubkey::solana_to_sdk(p)).collect(),
+                    pubkey_array: public_transaction_event.event.pubkey_array,
                     message: public_transaction_event.event.message,
                 };
 
@@ -78,8 +78,8 @@ pub fn parse_public_transaction_event_v2(
                         .input_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
-                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
@@ -88,8 +88,8 @@ pub fn parse_public_transaction_event_v2(
                         .address_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: SerializablePubkey::solana_to_sdk(&x.tree_pubkey),
-                            queue_pubkey: SerializablePubkey::solana_to_sdk(&x.queue_pubkey),
+                            tree_pubkey: x.tree_pubkey,
+                            queue_pubkey: x.queue_pubkey,
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })

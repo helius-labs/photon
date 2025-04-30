@@ -27,8 +27,8 @@ use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
-use solana_sdk::signature::Signature;
 use solana_pubkey::{pubkey, Pubkey};
+use solana_sdk::signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
@@ -191,7 +191,7 @@ pub async fn persist_state_update(
     let converted_updates = indexed_merkle_tree_updates
         .into_iter()
         .map(|((pubkey, u64_val), update)| {
-            let sdk_pubkey = solana_sdk::pubkey::Pubkey::new_from_array(pubkey.to_bytes());
+            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
             ((sdk_pubkey, u64_val), update)
         })
         .collect();
