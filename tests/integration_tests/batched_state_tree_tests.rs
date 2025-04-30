@@ -552,7 +552,7 @@ async fn test_batched_tree_token_transactions(
         .await;
 
         let mint = SerializablePubkey::from(
-            Pubkey::from_str("7LasgAqT1hWtGEHo6BRPPLN56CWnZKdNk1GwWk7k9zjK").unwrap(),
+            Pubkey::from_str("D2J2AZChFBGxn4gYeE3gQsR85u3dWBL3foGobGeGxQfJ").unwrap(),
         );
         let recipients = [
             Pubkey::from_str("DyRWDm81iYePWsdw1Yn2ue8CPcp7Lba6XsB8DVSGM7HK").unwrap(),
