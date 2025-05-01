@@ -70,7 +70,9 @@ pub async fn get_validity_proof(
     };
 
     let new_address_proofs = match !request.newAddressesWithTrees.is_empty() {
-        true => get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees).await?,
+        true => {
+            get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees, true).await?
+        }
         false => {
             vec![]
         }

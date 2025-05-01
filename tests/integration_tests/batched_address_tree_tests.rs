@@ -164,7 +164,7 @@ async fn test_batched_address_transactions(
         .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
             tree: address_tree_pubkey.to_bytes().into(),
             start_offset: None,
-            batch_size: 0,
+            batch_size: 100,
         })
         .await
         .expect("Failed to get address queue elements before batch update");
@@ -185,10 +185,7 @@ async fn test_batched_address_transactions(
     }
 
     println!("Address queue state verified before batch update.");
-    println!(
-        "Queue elements after before update: {:?}",
-        queue_elements_before
-    );
+
     // --- Phase 2: Index Batch Update Transaction ---
     for signature in batch_update_signatures {
         println!("Indexing batch update signature: {}", signature);
@@ -214,10 +211,7 @@ async fn test_batched_address_transactions(
         .await
         .expect("Failed to get address queue elements after batch update");
 
-    println!(
-        "Queue elements after batch update: {:?}",
-        queue_elements_after
-    );
+    println!("Queue elements after update: {:?}", queue_elements_after);
     assert!(
         queue_elements_after.addresses.is_empty(),
         "Address queue should be empty after batch update, but found {} elements",
