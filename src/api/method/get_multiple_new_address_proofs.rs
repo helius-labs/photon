@@ -52,6 +52,7 @@ pub struct GetMultipleNewAddressProofsResponse {
 pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
     addresses: Vec<AddressWithTree>,
+    check_queue: bool,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
@@ -80,7 +81,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             .clone();
 
         // For V2 trees, check if the address is in the queue but not yet in the tree
-        if tree_and_queue.tree_type == TreeType::AddressV2 {
+        if check_queue && tree_and_queue.tree_type == TreeType::AddressV2 {
             // Check if the address is in the queue
             let address_queue_stmt = Statement::from_string(
                 txn.get_database_backend(),
@@ -194,7 +195,7 @@ pub async fn get_multiple_new_address_proofs_v2(
     }
 
     let new_address_proofs =
-        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0).await?;
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, true).await?;
     tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {
