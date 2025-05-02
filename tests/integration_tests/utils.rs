@@ -135,8 +135,8 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     }
 
     let rpc_url = match opts.network {
-        Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
-        Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
+        Network::Mainnet => env::var("MAINNET_RPC_URL").unwrap(),
+        Network::Devnet => env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
     let client = get_rpc_client(&rpc_url);
@@ -494,8 +494,8 @@ async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
 }
 
 /// Reads file names from tests/data/transactions/<name>
-/// returns vector of file names sorted by slot
-pub fn read_file_names(name: &String, sort_by_slot: bool) -> Vec<String> {
+/// returns a vector of file names sorted by slot
+pub fn read_file_names(name: &str, sort_by_slot: bool) -> Vec<String> {
     let signatures = std::fs::read_dir(format!("tests/data/transactions/{}", name))
         .unwrap()
         .filter_map(|entry| {
