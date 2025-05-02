@@ -15,47 +15,44 @@ use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 
-/// Test:
+/// Derives a compressed address from the provided seed, merkle tree pubkey, and program ID.
+fn derive_address(
+    seed: &[u8; 32],
+    merkle_tree_pubkey: &[u8; 32],
+    program_id_bytes: &[u8; 32],
+) -> [u8; 32] {
+    let slices = [
+        seed.as_slice(),
+        merkle_tree_pubkey.as_slice(),
+        program_id_bytes.as_slice(),
+    ];
+    hashv_to_bn254_field_size_be_const_array::<4>(&slices).unwrap()
+}
+
+/// Tests the batched address update process with varying transaction configurations.
+///
+/// Test flow:
 /// 1. Index transactions creating compressed addresses via CPI.
-/// 2. Verify address queue population reflects indexed state.
+/// 2. Verify address queue population reflects the indexed state.
 /// 3. Index transaction performing BatchAddressUpdate instruction.
 /// 4. Verify address queue is cleared by the indexer processing the update.
-/// 5. Verify final Merkle tree root and proofs against a reference tree.
+/// 5. Verify the final Merkle tree root and proofs against a reference tree.
 ///
-/// Data:
-/// - Transactions generated from `test_create_v2_address` run.
-/// - Includes multiple address creation CPIs (`InsertIntoQueues`).
-/// - Includes one `BatchAddressUpdate` instruction.
-///
-///
-/// Assumption: The exact sequence of (address hash, leaf index) pairs and the
-/// address tree pubkey created during the `test_create_v2_address` run are known
-/// and provided/hardcoded below.
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_batched_address_transactions(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+/// # Parameters
+/// * `db_backend` - The database backend to use (Sqlite or Postgres)
+/// * `addresses_per_tx` - Number of addresses generated per transaction
+/// * `num_creation_txs` - Number of creation transactions to process
+/// * `test_name` - The original test name to use for finding test data files
+async fn run_batched_address_test(
+    db_backend: DatabaseBackend,
+    addresses_per_tx: usize,
+    num_creation_txs: usize,
+    test_name: &str,
 ) {
-    pub fn derive_address(
-        seed: &[u8; 32],
-        merkle_tree_pubkey: &[u8; 32],
-        program_id_bytes: &[u8; 32],
-    ) -> [u8; 32] {
-        let slices = [
-            seed.as_slice(),
-            merkle_tree_pubkey.as_slice(),
-            program_id_bytes.as_slice(),
-        ];
-        hashv_to_bn254_field_size_be_const_array::<4>(&slices).unwrap()
-    }
-
     // --- Test Setup ---
-    let trim_test_name = trim_test_name(function_name!());
-    let name = trim_test_name;
+    let name = test_name;
     let setup = setup_with_options(
-        name.clone(),
+        name.parse().unwrap(),
         TestSetupOptions {
             network: Network::Localnet,
             db_backend,
@@ -78,17 +75,20 @@ async fn test_batched_address_transactions(
     );
 
     // =========================================================================
+    // Constants and known values
     let address_tree_pubkey =
         Pubkey::from_str("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK").expect("Invalid Pubkey");
 
     let program_id =
         Pubkey::from_str("FNt7byTHev1k5x2cXZLBr8TdWiC3zoP5vcnZR4P682Uy").expect("Invalid Pubkey");
 
+    // Generate expected addresses
+    let total_addresses = num_creation_txs * addresses_per_tx;
     let mut expected_addresses: Vec<([u8; 32], u64)> = Vec::new();
     let seed = 0;
     let mut rng = StdRng::seed_from_u64(seed);
-    let num_creation_txs: usize = 50;
-    for i in 0..num_creation_txs {
+
+    for i in 0..total_addresses {
         let seed = rng.gen();
         let address = derive_address(
             &seed,
@@ -114,9 +114,11 @@ async fn test_batched_address_transactions(
     let batch_update_signatures = &signatures[num_creation_txs..]; // Assume the transaction *immediately following* the creations is the batch update
 
     println!(
-        "Indexing {} address creation transactions...",
-        creation_signatures.len()
+        "Indexing {} address creation transactions ({} addresses per tx)...",
+        creation_signatures.len(),
+        addresses_per_tx
     );
+
     for (i, signature) in creation_signatures.iter().enumerate() {
         println!(
             "Indexing creation signature {}/{}: {}",
@@ -171,8 +173,14 @@ async fn test_batched_address_transactions(
 
     assert_eq!(
         queue_elements_before.addresses.len(),
-        50,
+        total_addresses,
         "Address queue length mismatch before batch update"
+    );
+
+    println!("expected_addresses len: {}", expected_addresses.len());
+    println!(
+        "addresses in queue len: {}",
+        queue_elements_before.addresses.len()
     );
 
     for (i, element) in queue_elements_before.addresses.iter().enumerate() {
@@ -220,7 +228,6 @@ async fn test_batched_address_transactions(
     println!("Address queue state verified after batch update (empty).");
 
     // --- Phase 3: Verify Final Tree State and Proofs ---
-
     let mut reference_tree =
         light_merkle_tree_reference::indexed::IndexedMerkleTree::<Poseidon, usize>::new(40, 0)
             .unwrap();
@@ -246,4 +253,30 @@ async fn test_batched_address_transactions(
     assert_eq!(final_reference_root, proof_root, "Final tree root mismatch");
 
     println!("Final tree state and proofs verified.");
+}
+
+/// Test with 1 address per transaction (50 transactions for 50 addresses)
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_batched_address_transactions(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    // 1 address per transaction, 50 transactions
+    let test_name = trim_test_name(function_name!());
+    run_batched_address_test(db_backend, 1, 50, &test_name).await;
+}
+
+/// Test with 2 addresses per transaction (25 transactions for 50 addresses)
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_batched_address_2_transactions(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    // 2 addresses per transaction, 25 transactions
+    let test_name = trim_test_name(function_name!());
+    run_batched_address_test(db_backend, 2, 25, &test_name).await;
 }
