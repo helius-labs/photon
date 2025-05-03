@@ -89,7 +89,7 @@ pub struct GetValidityProofRequestDocumentation {
     pub newAddressesWithTrees: Vec<AddressWithTree>,
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetValidityProofResponse {
     pub value: CompressedProofWithContext,
@@ -221,7 +221,7 @@ fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
     format!("0x{}", hex)
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct CompressedProofWithContext {
@@ -272,7 +272,7 @@ impl From<Option<u64>> for RootIndex {
 pub struct MerkleContextV2 {
     pub tree_type: u16,
     pub tree: SerializablePubkey,
-    // nullifier_queue in legacy trees, output_queue in V2 trees.
+    // nullifier_queue in V1 trees, output_queue in V2 trees.
     pub queue: SerializablePubkey,
     pub cpi_context: Option<SerializablePubkey>,
     pub next_tree_context: Option<TreeContextInfo>,

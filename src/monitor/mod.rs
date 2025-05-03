@@ -22,7 +22,7 @@ use crate::{
 };
 use light_concurrent_merkle_tree::copy::ConcurrentMerkleTreeCopy;
 use light_concurrent_merkle_tree::light_hasher::Poseidon;
-use light_sdk::state::MerkleTreeMetadata;
+use light_merkle_tree_metadata::merkle_tree::MerkleTreeMetadata;
 
 use crate::common::typedefs::hash::Hash;
 
@@ -118,7 +118,7 @@ fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {
         return extract_roots(merkle_tree.root_history.as_slice());
     }
 
-    // fallback: legacy tree
+    // fallback: V1 tree
     let concurrent_tree = ConcurrentMerkleTreeCopy::<Poseidon, 26>::from_bytes_copy(
         &account.data[8 + mem::size_of::<MerkleTreeMetadata>()..],
     )

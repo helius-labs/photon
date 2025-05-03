@@ -61,6 +61,10 @@ use super::{
         get_indexer_slot::get_indexer_slot,
     },
 };
+use crate::api::method::get_batch_address_update_info::{
+    get_batch_address_update_info, GetBatchAddressUpdateInfoRequest,
+    GetBatchAddressUpdateInfoResponse,
+};
 use crate::api::method::get_compressed_account_proof::{
     get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2,
 };
@@ -376,8 +380,21 @@ impl PhotonApi {
     ) -> Result<GetNonPaginatedSignaturesResponseWithError, PhotonApiError> {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
+
+    pub async fn get_batch_address_update_info(
+        &self,
+        request: GetBatchAddressUpdateInfoRequest,
+    ) -> Result<GetBatchAddressUpdateInfoResponse, PhotonApiError> {
+        get_batch_address_update_info(self.db_conn.as_ref(), request).await
+    }
+
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
+            OpenApiSpec {
+                name: "getBatchAddressUpdateInfo".to_string(),
+                request: Some(GetBatchAddressUpdateInfoRequest::schema().1),
+                response: GetBatchAddressUpdateInfoResponse::schema().1,
+            },
             OpenApiSpec {
                 name: "getQueueElements".to_string(),
                 request: Some(GetQueueElementsRequest::schema().1),

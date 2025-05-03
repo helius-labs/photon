@@ -11,7 +11,7 @@ use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidi
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::utils::*;
 use futures::pin_mut;
@@ -389,11 +389,13 @@ async fn test_lamport_transfers(
                     .map(|x| x.hash.clone())
                     .collect(),
             );
+
             let proofs = setup
                 .api
                 .get_multiple_compressed_account_proofs(hash_list.clone())
                 .await
                 .unwrap();
+
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
             let mut validity_proof = setup
@@ -411,6 +413,7 @@ async fn test_lamport_transfers(
                         hash_list.0.len()
                     )
                 });
+
             // The Gnark prover has some randomness.
             validity_proof.value.compressedProof = CompressedProof::default();
 
@@ -606,7 +609,7 @@ async fn test_nullfiier_and_address_queue_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::get_multiple_new_address_proofs::{
-        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
     };
 
     let name = trim_test_name(function_name!());
@@ -675,7 +678,7 @@ async fn test_nullfiier_and_address_queue_transactions(
 
         let address_list_with_trees = AddressListWithTrees(vec![AddressWithTree {
             address: SerializablePubkey::try_from(address).unwrap(),
-            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            tree: SerializablePubkey::from(ADDRESS_TREE_V1),
         }]);
 
         let proof_v2 = setup

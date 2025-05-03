@@ -1,5 +1,5 @@
 use super::{error, parser::state_update::AccountTransaction};
-use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
 use crate::{
     api::method::utils::PAGE_LIMIT,
     common::typedefs::{hash::Hash, token_data::TokenData},
@@ -20,14 +20,15 @@ use ark_bn254::Fr;
 use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
 use error::IngesterError;
+use light_compressed_account::TreeType;
 use log::debug;
-use persisted_indexed_merkle_tree::update_indexed_tree_leaves;
+use persisted_indexed_merkle_tree::update_indexed_tree_leaves_v1;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
-use solana_program::pubkey;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_pubkey::{pubkey, Pubkey};
+use solana_sdk::signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
@@ -35,6 +36,8 @@ mod merkle_proof_with_context;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
+use crate::dao::generated::address_queue;
+use crate::ingester::persist::leaf_node::TREE_HEIGHT_V1;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
@@ -69,8 +72,9 @@ pub async fn persist_state_update(
         transactions,
         leaf_nullifications,
         indexed_merkle_tree_updates,
-        batch_events,
-        input_context,
+        batch_merkle_tree_events,
+        batch_nullify_context,
+        batch_new_addresses,
         ..
     } = state_update;
 
@@ -80,10 +84,17 @@ pub async fn persist_state_update(
     let indexed_merkle_tree_updates_len = indexed_merkle_tree_updates.len();
 
     debug!(
-        "Persisting state update with {} input accounts, {} output accounts",
+        "Persisting state update with {} input accounts, {} output accounts, {} addresses",
         in_accounts.len(),
-        out_accounts.len()
+        out_accounts.len(),
+        batch_new_addresses.len()
     );
+
+    debug!("Persisting addresses...");
+    for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
+        insert_addresses_into_queues(txn, chunk).await?;
+    }
+
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
         append_output_accounts(txn, chunk).await?;
@@ -98,7 +109,7 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    spend_input_accounts_batched(txn, &input_context).await?;
+    spend_input_accounts_batched(txn, &batch_nullify_context).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -112,8 +123,7 @@ pub async fn persist_state_update(
 
     let mut leaf_nodes_with_signatures: Vec<(LeafNode, Signature)> = out_accounts
         .iter()
-        // HACK: filter accounts by seq, because we don't have seq for accounts which are not in the tree yet
-        .filter(|account| account.account.seq.is_some() && !account.context.in_output_queue)
+        .filter(|account| account.context.tree_type == TreeType::StateV1 as u16)
         .map(|account| {
             (
                 LeafNode::from(account.clone()),
@@ -144,7 +154,7 @@ pub async fn persist_state_update(
             .map(|(leaf_node, _)| leaf_node.clone())
             .collect_vec();
 
-        persist_leaf_nodes(txn, leaf_nodes_chunk).await?;
+        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT_V1 + 1).await?;
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
@@ -177,9 +187,17 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting index tree updates...");
-    update_indexed_tree_leaves(txn, indexed_merkle_tree_updates).await?;
+    // Convert from solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+    let converted_updates = indexed_merkle_tree_updates
+        .into_iter()
+        .map(|((pubkey, u64_val), update)| {
+            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
+            ((sdk_pubkey, u64_val), update)
+        })
+        .collect();
+    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
 
-    persist_batch_events(txn, batch_events).await?;
+    persist_batch_events(txn, batch_merkle_tree_events).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
@@ -354,6 +372,32 @@ async fn execute_account_update_query_and_update_balances(
         txn.execute(Statement::from_string(db_backend, raw_sql))
             .await?;
     }
+
+    Ok(())
+}
+
+async fn insert_addresses_into_queues(
+    txn: &DatabaseTransaction,
+    addresses: &[AddressQueueUpdate],
+) -> Result<(), IngesterError> {
+    let mut address_models = Vec::new();
+
+    for address in addresses {
+        address_models.push(address_queue::ActiveModel {
+            address: Set(address.address.to_vec()),
+            tree: Set(address.tree.to_bytes_vec()),
+            queue_index: Set(address.queue_index as i64),
+        });
+    }
+
+    let query = address_queue::Entity::insert_many(address_models)
+        .on_conflict(
+            OnConflict::column(address_queue::Column::Address)
+                .do_nothing()
+                .to_owned(),
+        )
+        .build(txn.get_database_backend());
+    txn.execute(query).await?;
 
     Ok(())
 }

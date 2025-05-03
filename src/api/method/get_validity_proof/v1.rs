@@ -2,7 +2,9 @@ use super::common::{get_public_input_hash, hash_to_hex};
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
-use light_batched_merkle_tree::constants::DEFAULT_BATCH_STATE_TREE_HEIGHT;
+use light_batched_merkle_tree::constants::{
+    DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
+};
 use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
 use light_prover_client::prove_utils::CircuitType;
 use light_sdk::STATE_MERKLE_TREE_HEIGHT;
@@ -10,7 +12,7 @@ use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 
 use crate::api::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_ADDRESS,
+    get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_V1,
 };
 use crate::api::method::get_validity_proof::common::{
     convert_inclusion_proofs_to_hex, convert_non_inclusion_merkle_proof_to_hex,
@@ -45,7 +47,7 @@ pub async fn get_validity_proof(
             .iter()
             .map(|new_address| AddressWithTree {
                 address: *new_address,
-                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+                tree: SerializablePubkey::from(ADDRESS_TREE_V1),
             })
             .collect();
     }
@@ -68,7 +70,9 @@ pub async fn get_validity_proof(
     };
 
     let new_address_proofs = match !request.newAddressesWithTrees.is_empty() {
-        true => get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees).await?,
+        true => {
+            get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees, true).await?
+        }
         false => {
             vec![]
         }
@@ -125,7 +129,10 @@ pub async fn get_validity_proof(
             ))
         }
     };
-    let public_input_hash = if state_tree_height == DEFAULT_BATCH_STATE_TREE_HEIGHT as usize {
+
+    let is_v2 = (state_tree_height == DEFAULT_BATCH_STATE_TREE_HEIGHT as usize)
+        || (address_tree_height == DEFAULT_BATCH_ADDRESS_TREE_HEIGHT as usize);
+    let public_input_hash = if is_v2 {
         hash_to_hex(&crate::common::typedefs::hash::Hash(get_public_input_hash(
             &account_proofs,
             &new_address_proofs,

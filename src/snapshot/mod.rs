@@ -11,9 +11,9 @@ use std::{
 pub use crate::common::{
     fetch_block_parent_slot, get_network_start_slot, setup_logging, setup_metrics, LoggingFormat,
 };
+use crate::ingester::parser::get_compression_program_id;
 use crate::ingester::{
     fetchers::BlockStreamConfig,
-    parser::ACCOUNT_COMPRESSION_PROGRAM_ID,
     typedefs::block_info::{BlockInfo, Instruction, TransactionInfo},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -27,6 +27,7 @@ use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
 use s3_utils::multipart_upload::put_object_stream_custom;
 use tokio::io::{AsyncRead, ReadBuf};
+
 pub mod s3_utils;
 
 pub const MEGABYTE: usize = 1024 * 1024;
@@ -356,10 +357,8 @@ impl DirectoryAdapter {
 }
 
 fn is_compression_instruction(instruction: &Instruction) -> bool {
-    instruction.program_id == ACCOUNT_COMPRESSION_PROGRAM_ID
-        || instruction
-            .accounts
-            .contains(&ACCOUNT_COMPRESSION_PROGRAM_ID)
+    instruction.program_id == get_compression_program_id()
+        || instruction.accounts.contains(&get_compression_program_id())
 }
 
 pub fn is_compression_transaction(tx: &TransactionInfo) -> bool {
@@ -411,13 +410,14 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     // Create a subdirectory for the snapshot files
     let temp_dir = temp_dir.join(dir);
     if !temp_dir.exists() {
-        fs::create_dir(&temp_dir).unwrap();
+        fs::create_dir_all(&temp_dir).unwrap();
     }
     let random_number = rand::random::<u64>();
     let temp_file_path = temp_dir.join(format!("temp-snapshot-{}", random_number));
     if temp_file_path.exists() {
         fs::remove_file(&temp_file_path).unwrap();
     }
+    println!("Creating temp file: {:?}", temp_file_path);
     let temp_file = File::create(&temp_file_path).unwrap();
     (temp_file, temp_file_path)
 }

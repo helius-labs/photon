@@ -156,6 +156,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             .collect::<Vec<(Vec<u8>, i64)>>(),
         include_leafs,
         true,
+        None,
     )
     .await?;
 
@@ -211,6 +212,5 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     // for proof in proofs.iter() {
     //     validate_proof(proof)?;
     // }
-
     Ok(proofs)
 }

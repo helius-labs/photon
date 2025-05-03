@@ -17,7 +17,7 @@ use photon_indexer::api::method::utils::{
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof, update_indexed_tree_leaves, validate_tree,
+    get_exclusion_range_with_proof_v2, update_indexed_tree_leaves_v1, validate_tree,
 };
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -47,10 +47,10 @@ use std::collections::{HashMap, HashSet};
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
-use light_merkle_tree_metadata::merkle_tree::TreeType;
+use light_compressed_account::TreeType;
 use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::vec;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
@@ -195,7 +195,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -216,7 +216,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -237,7 +237,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(1),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -258,7 +258,7 @@ async fn test_multiple_accounts(
                 slot_created: UnsignedInteger(0),
             },
             context: AccountContext {
-                tree_type: TreeType::State as u16,
+                tree_type: TreeType::StateV1 as u16,
                 ..AccountContext::default()
             },
         },
@@ -572,7 +572,7 @@ async fn test_persist_token_data(
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Pubkey::new_unique().to_bytes().to_vec()),
-            tree_type: Set(TreeType::State as i32),
+            tree_type: Set(TreeType::StateV1 as i32),
             seq: Set(Some(0)),
             ..Default::default()
         };
@@ -903,8 +903,10 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    let tree_height = 33; // prev. 5
-    persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
+    let tree_height = 32; // prev. 5
+    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+        .await
+        .unwrap();
     txn.commit().await.unwrap();
 
     let proofs = get_multiple_compressed_leaf_proofs(
@@ -938,7 +940,9 @@ async fn test_persisted_state_trees(
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
+    persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+        .await
+        .unwrap();
     txn.commit().await.unwrap();
 
     let leaves = leaf_nodes
@@ -982,13 +986,13 @@ async fn test_indexed_merkle_trees(
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
     let tree_height = 33; // prev. 4
 
-    multi_append(&txn, values, tree.to_bytes_vec())
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
         .await
         .unwrap();
 
     txn.commit().await.unwrap();
 
-    let (model, _) = get_exclusion_range_with_proof(
+    let (model, _) = get_exclusion_range_with_proof_v2(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
@@ -999,9 +1003,9 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 2,
+        leaf_index: 1,
         value: vec![1],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
         seq: Some(0),
     };
@@ -1014,7 +1018,7 @@ async fn test_indexed_merkle_trees(
 
     let values = vec![vec![3]];
 
-    multi_append(&txn, values, tree.to_bytes_vec())
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
         .await
         .unwrap();
 
@@ -1022,7 +1026,7 @@ async fn test_indexed_merkle_trees(
 
     validate_tree(setup.db_conn.as_ref(), tree).await;
 
-    let (model, _) = get_exclusion_range_with_proof(
+    let (model, _) = get_exclusion_range_with_proof_v2(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
@@ -1033,9 +1037,9 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 4,
+        leaf_index: 3,
         value: vec![3],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
         seq: Some(0),
     };
@@ -1091,7 +1095,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     use photon_indexer::api::method::{
         get_multiple_new_address_proofs::{
             get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
-            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
         },
         get_validity_proof::CompressedProof,
     };
@@ -1144,7 +1148,7 @@ async fn test_get_multiple_new_address_proofs_interop(
         .into_iter()
         .map(|address| AddressWithTree {
             address,
-            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            tree: SerializablePubkey::from(ADDRESS_TREE_V1),
         })
         .collect();
     let proof_v2 = get_multiple_new_address_proofs_v2(
@@ -1306,7 +1310,7 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
 
     for chunk in leaf_node_chunks {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
-        persist_leaf_nodes(&txn, chunk.clone()).await.unwrap();
+        persist_leaf_nodes(&txn, chunk.clone(), 26).await.unwrap();
         txn.commit().await.unwrap();
 
         let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
@@ -1426,7 +1430,7 @@ async fn test_persisted_state_trees_multiple_cases(
 ) {
     let name = trim_test_name(function_name!());
     let tree = SerializablePubkey::new_unique();
-    let tree_height = 33; // prev. 10
+    let tree_height = 32; // prev. 10
 
     info!("Test case 1: Sequential leaf nodes");
     let leaf_nodes_1 = create_leaf_nodes(tree, 0..5, |i| i);
@@ -1448,7 +1452,7 @@ async fn test_persisted_state_trees_multiple_cases(
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_4, tree_height).await;
 
     info!("Test case 7: Very large tree");
-    let large_tree_height = 33; // prev. 20
+    let large_tree_height = 32; // prev. 20
     let leaf_nodes_7 = create_leaf_nodes(tree, 0..20, |i| i);
     test_persist_and_verify(
         name.clone(),
@@ -1519,10 +1523,14 @@ async fn test_persist_and_verify(
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         if one_at_a_time {
             for leaf_node in leaf_nodes.clone() {
-                persist_leaf_nodes(&txn, vec![leaf_node]).await.unwrap();
+                persist_leaf_nodes(&txn, vec![leaf_node], tree_height)
+                    .await
+                    .unwrap();
             }
         } else {
-            persist_leaf_nodes(&txn, leaf_nodes.clone()).await.unwrap();
+            persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
+                .await
+                .unwrap();
         }
         txn.commit().await.unwrap();
 
@@ -1640,7 +1648,7 @@ async fn test_update_indexed_merkle_tree(
                     seq: *seq as u64,
                 },
             );
-            update_indexed_tree_leaves(&txn, indexed_leaf_updates)
+            update_indexed_tree_leaves_v1(&txn, indexed_leaf_updates)
                 .await
                 .unwrap();
         }

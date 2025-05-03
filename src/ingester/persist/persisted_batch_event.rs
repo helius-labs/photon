@@ -1,18 +1,22 @@
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::accounts;
+use crate::dao::generated::{accounts, address_queue};
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::BatchEvent;
 use crate::ingester::parser::{
-    indexer_events::MerkleTreeEvent, merkle_tree_events_parser::IndexedBatchEvents,
+    indexer_events::MerkleTreeEvent, merkle_tree_events_parser::BatchMerkleTreeEvents,
 };
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode, STATE_TREE_HEIGHT_V2};
+use crate::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use crate::ingester::persist::MAX_SQL_INSERTS;
 use crate::migration::Expr;
+use light_batched_merkle_tree::constants::DEFAULT_BATCH_ADDRESS_TREE_HEIGHT;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
     QueryTrait,
 };
+
+const ZKP_BATCH_SIZE: usize = 500;
 
 /// We need to find the events of the same tree:
 /// - order them by sequence number and execute them in order
@@ -20,7 +24,7 @@ use sea_orm::{
 /// - execute a single function call to persist all changed nodes
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
-    mut events: IndexedBatchEvents,
+    mut events: BatchMerkleTreeEvents,
 ) -> Result<(), IngesterError> {
     for (_, events) in events.iter_mut() {
         events.sort_by(|a, b| a.0.cmp(&b.0));
@@ -28,7 +32,7 @@ pub async fn persist_batch_events(
         // Process each event in sequence
         for (_, event) in events.iter() {
             // Batch size is 500 for batched State Merkle trees.
-            let mut leaf_nodes = Vec::with_capacity(500);
+            let mut leaf_nodes = Vec::with_capacity(ZKP_BATCH_SIZE);
             match event {
                 MerkleTreeEvent::BatchNullify(batch_nullify_event) => {
                     persist_batch_nullify_event(txn, batch_nullify_event, &mut leaf_nodes).await
@@ -36,15 +40,19 @@ pub async fn persist_batch_events(
                 MerkleTreeEvent::BatchAppend(batch_append_event) => {
                     persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
                 }
+                MerkleTreeEvent::BatchAddressAppend(batch_address_append_event) => {
+                    persist_batch_address_append_event(txn, batch_address_append_event).await
+                }
                 _ => Err(IngesterError::InvalidEvent),
             }?;
 
             if leaf_nodes.len() <= MAX_SQL_INSERTS {
-                persist_leaf_nodes(txn, leaf_nodes).await?;
+                persist_leaf_nodes(txn, leaf_nodes, STATE_TREE_HEIGHT_V2 + 1).await?;
             } else {
                 // Currently not used but a safeguard in case the batch size changes.
                 for leaf_nodes_chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
-                    persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec()).await?;
+                    persist_leaf_nodes(txn, leaf_nodes_chunk.to_vec(), STATE_TREE_HEIGHT_V2 + 1)
+                        .await?;
                 }
             }
         }
@@ -55,9 +63,9 @@ pub async fn persist_batch_events(
 /// Persists a batch append event.
 /// 1. Create leaf nodes with the account hash as leaf.
 /// 2. Remove inserted elements from the database output queue.
-async fn persist_batch_append_event<'a>(
+async fn persist_batch_append_event(
     txn: &DatabaseTransaction,
-    batch_append_event: &'a BatchEvent,
+    batch_append_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
     // 1. Create leaf nodes with the account hash as leaf.
@@ -112,9 +120,9 @@ async fn persist_batch_append_event<'a>(
 /// 1. Create leaf nodes with nullifier as leaf.
 /// 2. Mark elements as nullified in tree
 ///     and remove them from the database nullifier queue.
-async fn persist_batch_nullify_event<'a>(
+async fn persist_batch_nullify_event(
     txn: &DatabaseTransaction,
-    batch_nullify_event: &'a BatchEvent,
+    batch_nullify_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
     // 1. Create leaf nodes with nullifier as leaf.
@@ -172,5 +180,46 @@ async fn persist_batch_nullify_event<'a>(
         )
         .build(txn.get_database_backend());
     txn.execute(query).await?;
+    Ok(())
+}
+
+/// Persists a batch address append event.
+/// 1. Create leaf nodes with the address value as leaf.
+/// 2. Remove inserted elements from the database address queue.
+async fn persist_batch_address_append_event(
+    txn: &DatabaseTransaction,
+    batch_address_append_event: &BatchEvent,
+) -> Result<(), IngesterError> {
+    let last_queue_index = batch_address_append_event.new_next_index as i64 - 1;
+    let addresses = address_queue::Entity::find()
+        .filter(address_queue::Column::QueueIndex.lt(last_queue_index).and(
+            address_queue::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+        ))
+        .order_by_asc(address_queue::Column::QueueIndex)
+        .all(txn)
+        .await?;
+
+    let address_values = addresses
+        .iter()
+        .map(|address| address.address.clone())
+        .collect::<Vec<_>>();
+
+    // 1. Append the addresses to the indexed merkle tree.
+    multi_append(
+        txn,
+        address_values,
+        batch_address_append_event.merkle_tree_pubkey.to_vec(),
+        DEFAULT_BATCH_ADDRESS_TREE_HEIGHT + 1,
+    )
+    .await?;
+
+    // 2. Remove inserted elements from the database address queue.
+    address_queue::Entity::delete_many()
+        .filter(address_queue::Column::QueueIndex.lt(last_queue_index).and(
+            address_queue::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+        ))
+        .exec(txn)
+        .await?;
+
     Ok(())
 }

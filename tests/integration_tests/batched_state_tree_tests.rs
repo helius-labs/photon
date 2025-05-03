@@ -1,8 +1,8 @@
 use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
+use light_compressed_account::QueueType;
 use light_hasher::zero_bytes::poseidon::ZERO_BYTES;
-use light_merkle_tree_metadata::queue::QueueType;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
@@ -19,17 +19,12 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
-use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
-use sea_orm::DatabaseConnection;
 use serial_test::serial;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Test:
 /// 1. get compressed account by owner
@@ -66,6 +61,9 @@ async fn test_batched_tree_transactions(
     let signatures = read_file_names(&name, sort_by_slot);
     let index_individually = true;
 
+    for (i, signature) in signatures.iter().enumerate() {
+        println!("{} signature {}", i, signature);
+    }
     // build tree
     let mut merkle_tree =
         light_merkle_tree_reference::MerkleTree::<light_hasher::Poseidon>::new(32, 0);
@@ -105,6 +103,7 @@ async fn test_batched_tree_transactions(
         .await
         .unwrap()
         .compressionInfo;
+
         for account in accounts.closedAccounts.iter() {
             input_queue_elements
                 .push((account.account.account.hash.0, account.account.nullifier.0));
@@ -138,7 +137,7 @@ async fn test_batched_tree_transactions(
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
-                    queue_type: QueueType::BatchedOutput as u8,
+                    queue_type: QueueType::OutputStateV2 as u8,
                     num_elements: 100,
                 })
                 .await
@@ -164,7 +163,7 @@ async fn test_batched_tree_transactions(
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
                     start_offset: None,
-                    queue_type: QueueType::BatchedInput as u8,
+                    queue_type: QueueType::InputStateV2 as u8,
                     num_elements: 100,
                 })
                 .await
@@ -183,7 +182,7 @@ async fn test_batched_tree_transactions(
         .filter(|(i, _)| i % 2 == 1)
         .map(|(_, x)| x)
         .collect::<Vec<&[u8; 32]>>();
-    for (i, chunk) in filtered_outputs.chunks(4).enumerate() {
+    for (_, chunk) in filtered_outputs.chunks(4).enumerate() {
         let validity_proof = setup
             .api
             .get_validity_proof_v2(GetValidityProofRequestV2 {
@@ -195,7 +194,6 @@ async fn test_batched_tree_transactions(
             })
             .await
             .unwrap();
-        println!("i {}, validity_proof {:?}", i, validity_proof.value);
 
         // No value has been inserted into the tree yet -> all proof by index.
         assert!(validity_proof
@@ -224,6 +222,16 @@ async fn test_batched_tree_transactions(
         event_merkle_tree.append(&[0u8; 32]).unwrap();
     }
     let mut last_inserted_index = 0;
+
+    println!("====");
+    for (i, signature) in signatures[signatures.len() - (num_append_events + num_nullify_events)..]
+        .iter()
+        .take(15)
+        .enumerate()
+    {
+        println!("{} {}", i, signature);
+    }
+    println!("====");
     // Index and assert the batch events.
     // 10 append events and 5 nullify events.
     // The order is:
@@ -238,7 +246,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedOutput as u8,
+                queue_type: QueueType::OutputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -248,7 +256,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedInput as u8,
+                queue_type: QueueType::InputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -267,7 +275,7 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedOutput as u8,
+                queue_type: QueueType::OutputStateV2 as u8,
                 num_elements: 100,
             })
             .await
@@ -277,13 +285,14 @@ async fn test_batched_tree_transactions(
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
                 start_offset: None,
-                queue_type: QueueType::BatchedInput as u8,
+                queue_type: QueueType::InputStateV2 as u8,
                 num_elements: 100,
             })
             .await
             .unwrap();
-        let is_nullify_event = i % 2 == 1 && i < 9 || i == 14;
+        let is_nullify_event = i > 9;
         if is_nullify_event {
+            println!("nullify event {} {}", i, signature);
             assert_eq!(
                 post_output_queue_elements.value.len(),
                 pre_output_queue_elements.value.len(),
@@ -336,7 +345,10 @@ async fn test_batched_tree_transactions(
                 pre_input_queue_elements.value.len(),
             );
             // Insert 1 batch.
-            for element in pre_output_queue_elements.value[..10].iter() {
+
+            let slice_length = pre_output_queue_elements.value.len().min(10);
+            for element in pre_output_queue_elements.value[..slice_length].iter() {
+                // for element in pre_output_queue_elements.value[..10].iter() {
                 let leaf = event_merkle_tree.leaf(element.leaf_index as usize);
                 if leaf == [0u8; 32] {
                     event_merkle_tree
@@ -407,7 +419,7 @@ async fn test_batched_tree_transactions(
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
-            queue_type: QueueType::BatchedOutput as u8,
+            queue_type: QueueType::OutputStateV2 as u8,
             num_elements: 100,
         })
         .await
@@ -423,7 +435,7 @@ async fn test_batched_tree_transactions(
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
             start_offset: None,
-            queue_type: QueueType::BatchedInput as u8,
+            queue_type: QueueType::InputStateV2 as u8,
             num_elements: 100,
         })
         .await
@@ -443,7 +455,7 @@ async fn test_batched_tree_transactions(
         index_individually,
     )
     .await;
-    // Slot created is wrong likely because of test environment.
+    // Slot created is wrong likely because of the test environment.
     let mut leaf_index = 1;
     for i in 0..50 {
         let owner = Pubkey::new_unique();
@@ -540,7 +552,7 @@ async fn test_batched_tree_token_transactions(
         .await;
 
         let mint = SerializablePubkey::from(
-            Pubkey::from_str("753LWB3Vz9Zsj8uyiMRFyNHuiMdFtu7Ku6x4cyKnSWe3").unwrap(),
+            Pubkey::from_str("D2J2AZChFBGxn4gYeE3gQsR85u3dWBL3foGobGeGxQfJ").unwrap(),
         );
         let recipients = [
             Pubkey::from_str("DyRWDm81iYePWsdw1Yn2ue8CPcp7Lba6XsB8DVSGM7HK").unwrap(),
@@ -769,88 +781,5 @@ async fn test_four_cpi_events(#[values(DatabaseBackend::Postgres)] db_backend: D
             i
         );
         leaf_index += 1;
-    }
-}
-
-/// Reset table
-/// Index transactions individually or in one batch
-pub async fn index(
-    test_name: &str,
-    db_conn: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
-    txns: &[String],
-    index_transactions_individually: bool,
-) {
-    let txs_permutations = txns
-        .iter()
-        .map(|x| vec![x.to_string()])
-        .collect::<Vec<Vec<_>>>();
-
-    for index_transactions_individually in [index_transactions_individually] {
-        for (i, txs) in txs_permutations.clone().iter().enumerate() {
-            println!(
-                "indexing tx {} {}/{}",
-                index_transactions_individually,
-                i + 1,
-                txs_permutations.len()
-            );
-            println!("tx {:?}", txs);
-
-            // HACK: We index a block so that API methods can fetch the current slot.
-            index_block(
-                db_conn.as_ref(),
-                &BlockInfo {
-                    metadata: BlockMetadata {
-                        slot: 0,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-
-            if index_transactions_individually {
-                for tx in txs {
-                    index_transaction(test_name, db_conn.clone(), rpc_client.clone(), tx).await;
-                }
-            } else {
-                index_multiple_transactions(
-                    test_name,
-                    db_conn.clone(),
-                    rpc_client.clone(),
-                    txs.iter().map(|x| x.as_str()).collect(),
-                )
-                .await;
-            }
-        }
-    }
-}
-
-/// Reads file names from tests/data/transactions/<name>
-/// returns vector of file names sorted by slot
-fn read_file_names(name: &String, sort_by_slot: bool) -> Vec<String> {
-    let signatures = std::fs::read_dir(format!("tests/data/transactions/{}", name))
-        .unwrap()
-        .filter_map(|entry| {
-            entry
-                .ok()
-                .and_then(|e| e.file_name().to_str().map(|s| s.to_string()))
-        })
-        .collect::<Vec<String>>();
-    if sort_by_slot {
-        let mut sorted_files: Vec<(String, u64)> = Vec::new();
-        for filename in signatures {
-            let json_str =
-                std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, filename))
-                    .unwrap();
-            let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-            let slot = json["slot"].as_u64().unwrap_or(0);
-            sorted_files.push((filename, slot));
-        }
-        sorted_files.sort_by_key(|k| k.1);
-        sorted_files.into_iter().map(|(name, _)| name).collect()
-    } else {
-        signatures
     }
 }

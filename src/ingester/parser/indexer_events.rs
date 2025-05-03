@@ -2,26 +2,56 @@
 /// to avoid having to import all of Light's dependencies.
 use anchor_lang::prelude::*;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
+use solana_pubkey::Pubkey;
 
-#[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
     pub compressed_account: CompressedAccount,
     pub merkle_tree_index: u8,
 }
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
-pub struct MerkleTreeSequenceNumber {
+pub struct MerkleTreeSequenceNumberV2 {
+    pub tree_pubkey: Pubkey,
+    pub queue_pubkey: Pubkey,
+    pub tree_type: u64,
+    pub seq: u64,
+}
+
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
+pub struct MerkleTreeSequenceNumberV1 {
     pub pubkey: Pubkey,
     pub seq: u64,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq)]
-pub struct PublicTransactionEvent {
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Eq, PartialEq)]
+pub enum MerkleTreeSequenceNumber {
+    V1(MerkleTreeSequenceNumberV1),
+    V2(MerkleTreeSequenceNumberV2),
+}
+
+impl MerkleTreeSequenceNumber {
+    pub fn tree_pubkey(&self) -> Pubkey {
+        match self {
+            MerkleTreeSequenceNumber::V1(x) => x.pubkey,
+            MerkleTreeSequenceNumber::V2(x) => x.tree_pubkey,
+        }
+    }
+    pub fn seq(&self) -> u64 {
+        match self {
+            MerkleTreeSequenceNumber::V1(x) => x.seq,
+            MerkleTreeSequenceNumber::V2(x) => x.seq,
+        }
+    }
+}
+
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
+pub struct PublicTransactionEventV1 {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_accounts: Vec<OutputCompressedAccountWithPackedContext>,
     pub output_leaf_indices: Vec<u32>,
-    pub sequence_numbers: Vec<MerkleTreeSequenceNumber>,
+    pub sequence_numbers: Vec<MerkleTreeSequenceNumberV1>,
     pub relay_fee: Option<u64>,
     pub is_compress: bool,
     pub compression_lamports: Option<u64>,
@@ -30,17 +60,82 @@ pub struct PublicTransactionEvent {
     pub message: Option<Vec<u8>>,
 }
 
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
+pub struct PublicTransactionEventV2 {
+    pub input_compressed_account_hashes: Vec<[u8; 32]>,
+    pub output_compressed_account_hashes: Vec<[u8; 32]>,
+    pub output_compressed_accounts: Vec<OutputCompressedAccountWithPackedContext>,
+    pub output_leaf_indices: Vec<u32>,
+    pub sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
+    pub relay_fee: Option<u64>,
+    pub is_compress: bool,
+    pub compression_lamports: Option<u64>,
+    pub pubkey_array: Vec<Pubkey>,
+    // TODO: remove(data can just be written into a compressed account)
+    pub message: Option<Vec<u8>>,
+}
+
+impl Into<PublicTransactionEventV1> for PublicTransactionEventV2 {
+    fn into(self) -> PublicTransactionEventV1 {
+        PublicTransactionEventV1 {
+            input_compressed_account_hashes: self.input_compressed_account_hashes,
+            output_compressed_account_hashes: self.output_compressed_account_hashes,
+            output_compressed_accounts: self.output_compressed_accounts,
+            output_leaf_indices: self.output_leaf_indices,
+            sequence_numbers: self
+                .sequence_numbers
+                .iter()
+                .map(|x| MerkleTreeSequenceNumberV1 {
+                    pubkey: x.tree_pubkey,
+                    seq: x.seq,
+                })
+                .collect(),
+            relay_fee: self.relay_fee,
+            is_compress: self.is_compress,
+            compression_lamports: self.compression_lamports,
+            pubkey_array: self.pubkey_array,
+            message: self.message,
+        }
+    }
+}
+
+impl Into<PublicTransactionEventV2> for PublicTransactionEventV1 {
+    fn into(self) -> PublicTransactionEventV2 {
+        PublicTransactionEventV2 {
+            input_compressed_account_hashes: self.input_compressed_account_hashes,
+            output_compressed_account_hashes: self.output_compressed_account_hashes,
+            output_compressed_accounts: self.output_compressed_accounts,
+            output_leaf_indices: self.output_leaf_indices,
+            sequence_numbers: self
+                .sequence_numbers
+                .iter()
+                .map(|x| MerkleTreeSequenceNumberV2 {
+                    tree_pubkey: x.pubkey,
+                    queue_pubkey: x.pubkey, // Default queue pubkey to tree pubkey
+                    tree_type: 0,           // Default tree type to 0 (StateV1)
+                    seq: x.seq,
+                })
+                .collect(),
+            relay_fee: self.relay_fee,
+            is_compress: self.is_compress,
+            compression_lamports: self.compression_lamports,
+            pubkey_array: self.pubkey_array,
+            message: self.message,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BatchPublicTransactionEvent {
-    pub event: PublicTransactionEvent,
+    pub event: PublicTransactionEventV2,
     pub new_addresses: Vec<NewAddress>,
-    pub input_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
-    pub address_sequence_numbers: Vec<MerkleTreeSequenceNumber>,
+    pub input_sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
+    pub address_sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
     pub tx_hash: [u8; 32],
     pub batch_input_accounts: Vec<BatchNullifyContext>,
 }
 
-#[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct CompressedAccount {
     pub owner: Pubkey,
     pub lamports: u64,
@@ -48,7 +143,7 @@ pub struct CompressedAccount {
     pub data: Option<CompressedAccountData>,
 }
 
-#[derive(Debug, PartialEq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct CompressedAccountData {
     pub discriminator: [u8; 8],
     pub data: Vec<u8>,
@@ -58,7 +153,7 @@ pub struct CompressedAccountData {
 /// Event containing the Merkle path of the given
 /// [`StateMerkleTree`](light_merkle_tree_program::state::StateMerkleTree)
 /// change. Indexers can use this type of events to re-build a non-sparse
-/// version of state Merkle tree.
+/// version of the state Merkle tree.
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub enum MerkleTreeEvent {

@@ -1,6 +1,7 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
-expression: proof
+assertion_line: 686
+expression: proof_v1
 ---
 {
   "context": {
@@ -8,13 +9,13 @@ expression: proof
   },
   "value": [
     {
-      "root": "2RHRJrmNU2fLCBTr9gtxaz8F1o8vnVc6wdJEZyDSSQf9",
+      "root": "21SAoPAaCduuzL7Hrc37eWgE1fwDruxcEbUBLgAnAg4E",
       "address": "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "143oE544fmAqpnwRQYAmNCKFaweMsg7wSbGfihU8RdU5",
       "nextIndex": 2,
       "proof": [
-        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
+        "11111111111111111111111111111111",
         "3NsrDVjX6esWviMzLrRNkvZ9RguhuMqRwyviKQ3Kr2Ni",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",

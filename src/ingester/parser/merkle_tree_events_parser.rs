@@ -7,20 +7,22 @@ use crate::ingester::parser::indexer_events::{
 use crate::ingester::parser::state_update::{
     IndexedTreeLeafUpdate, LeafNullification, StateUpdate,
 };
-use crate::ingester::parser::{ACCOUNT_COMPRESSION_PROGRAM_ID, NOOP_PROGRAM_ID};
+use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
-pub type IndexedBatchEvents = HashMap<[u8; 32], Vec<(u64, MerkleTreeEvent)>>;
+/// A map of merkle tree events and sequence numbers by merkle tree pubkey.
+/// We keep sequence number to order the events.
+pub type BatchMerkleTreeEvents = HashMap<[u8; 32], Vec<(u64, MerkleTreeEvent)>>;
 
 pub fn parse_merkle_tree_event(
     instruction: &Instruction,
     next_instruction: &Instruction,
     tx: &TransactionInfo,
 ) -> Result<Option<StateUpdate>, IngesterError> {
-    if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
+    if get_compression_program_id() == instruction.program_id
         && next_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
@@ -29,14 +31,14 @@ pub fn parse_merkle_tree_event(
             let mut state_update = StateUpdate::new();
             let event = match merkle_tree_event {
                 MerkleTreeEvent::V2(nullifier_event) => {
-                    parse_legacy_nullifier_event(tx.signature, nullifier_event)?
+                    parse_nullifier_event_v1(tx.signature, nullifier_event)
                 }
                 MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                    parse_indexed_merkle_tree_update(indexed_merkle_tree_event)?
+                    parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
                 }
                 MerkleTreeEvent::BatchAppend(batch_event) => {
                     state_update
-                        .batch_events
+                        .batch_merkle_tree_events
                         .entry(batch_event.merkle_tree_pubkey)
                         .or_default()
                         .push((
@@ -47,12 +49,23 @@ pub fn parse_merkle_tree_event(
                 }
                 MerkleTreeEvent::BatchNullify(batch_event) => {
                     state_update
-                        .batch_events
+                        .batch_merkle_tree_events
                         .entry(batch_event.merkle_tree_pubkey)
                         .or_default()
                         .push((
                             batch_event.sequence_number,
                             MerkleTreeEvent::BatchNullify(batch_event),
+                        ));
+                    state_update
+                }
+                MerkleTreeEvent::BatchAddressAppend(batch_event) => {
+                    state_update
+                        .batch_merkle_tree_events
+                        .entry(batch_event.merkle_tree_pubkey)
+                        .or_default()
+                        .push((
+                            batch_event.sequence_number,
+                            MerkleTreeEvent::BatchAddressAppend(batch_event),
                         ));
                     state_update
                 }
@@ -69,11 +82,8 @@ pub fn parse_merkle_tree_event(
     }
 }
 
-/// Parse legacy state tree nullifier event.
-fn parse_legacy_nullifier_event(
-    tx: Signature,
-    nullifier_event: NullifierEvent,
-) -> Result<StateUpdate, IngesterError> {
+/// Parse a V1 state tree nullifier event.
+fn parse_nullifier_event_v1(tx: Signature, nullifier_event: NullifierEvent) -> StateUpdate {
     let NullifierEvent {
         id,
         nullified_leaves_indices,
@@ -94,12 +104,12 @@ fn parse_legacy_nullifier_event(
         state_update.leaf_nullifications.insert(leaf_nullification);
     }
 
-    Ok(state_update)
+    state_update
 }
 
 fn parse_indexed_merkle_tree_update(
     indexed_merkle_tree_event: IndexedMerkleTreeEvent,
-) -> Result<StateUpdate, IngesterError> {
+) -> StateUpdate {
     let IndexedMerkleTreeEvent {
         id,
         updates,
@@ -128,5 +138,5 @@ fn parse_indexed_merkle_tree_update(
         }
     }
 
-    Ok(state_update)
+    state_update
 }

@@ -8,9 +8,9 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::parser::indexer_events::CompressedAccount;
 use byteorder::{ByteOrder, LittleEndian};
-use light_merkle_tree_metadata::merkle_tree::TreeType;
+use light_compressed_account::TreeType;
 use serde::Serialize;
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use utoipa::ToSchema;
 
 /// This is currently used internally:
@@ -29,14 +29,14 @@ pub struct AccountContext {
     // an account can be in the input and output queue at the same time.
     // an account that is in the input queue must have been in the output queue before or currently is in the output queue
     pub nullifier_queue_index: Option<UnsignedInteger>,
-    // Legacy trees: None
-    // Batched trees:
+    // V1 trees: None
+    // V2 Batched trees:
     // None if not inserted into input queue or inserted into merkle tree from input queue
     // Some(H(account_hash, leaf_index, tx_hash))
     pub nullifier: Option<Hash>,
     // tx_hash is:
-    // Legacy: None
-    // Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
+    // V1: None
+    // V2 Batched: None if inserted into output queue or inserted in tree from output queue, else Some(nullifier)
     pub tx_hash: Option<Hash>,
     pub tree_type: u16,
 }
@@ -52,7 +52,7 @@ impl AccountWithContext {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         compressed_account: CompressedAccount,
-        hash: [u8; 32],
+        hash: &[u8; 32],
         tree: Pubkey,
         queue: Pubkey,
         leaf_index: u32,
