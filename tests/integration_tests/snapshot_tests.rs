@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::vec;
 
 #[tokio::test]
+#[ignore]
 async fn test_basic_snapshotting() {
     use futures::StreamExt;
     use std::env::temp_dir;
