@@ -83,7 +83,6 @@ light-compressed-account = { git = "https://github.com/Lightprotocol/light-proto
 light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 
@@ -129,6 +128,7 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
+light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.
