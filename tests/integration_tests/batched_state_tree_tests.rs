@@ -61,6 +61,10 @@ async fn test_batched_tree_transactions(
     let signatures = read_file_names(&name, sort_by_slot);
     let index_individually = true;
 
+    let mut collected_target_owners: Vec<Pubkey> = Vec::new();
+    const TARGET_OWNER_COUNT: usize = 51;
+    const TARGET_ACCOUNT_LAMPORTS: u64 = 1_000_000;
+
     for (i, signature) in signatures.iter().enumerate() {
         println!("{} signature {}", i, signature);
     }
@@ -93,6 +97,7 @@ async fn test_batched_tree_transactions(
         let transaction: EncodedConfirmedTransactionWithStatusMeta =
             serde_json::from_str(&json_str).unwrap();
 
+        println!("signature {}", signature);
         // use get_transaction_helper because get_transaction_with_compression_info requires an rpc endpoint.
         // It fetches the instruction and parses the data.
         let accounts = get_transaction_helper_v2(
@@ -103,6 +108,24 @@ async fn test_batched_tree_transactions(
         .await
         .unwrap()
         .compressionInfo;
+
+        for opened_account_info in accounts.openedAccounts.iter() {
+            let account_data = &opened_account_info.account;
+            if account_data.lamports.0 == TARGET_ACCOUNT_LAMPORTS {
+                let owner_pk = account_data.owner.0;
+                if collected_target_owners.len() < TARGET_OWNER_COUNT
+                    && !collected_target_owners.contains(&owner_pk)
+                {
+                    collected_target_owners.push(owner_pk);
+                    println!(
+                        "Collected target owner ({} of {}): {}",
+                        collected_target_owners.len(),
+                        TARGET_OWNER_COUNT,
+                        owner_pk
+                    );
+                }
+            }
+        }
 
         for account in accounts.closedAccounts.iter() {
             input_queue_elements
@@ -126,6 +149,8 @@ async fn test_batched_tree_transactions(
                 )
                 .unwrap();
         }
+
+        println!("accounts {:?}", accounts);
 
         // Get output queue elements
         if !accounts.openedAccounts.is_empty() {
@@ -455,10 +480,31 @@ async fn test_batched_tree_transactions(
         index_individually,
     )
     .await;
+
+    assert_eq!(
+        collected_target_owners.len(),
+        TARGET_OWNER_COUNT,
+        "Expected to collect {} target owners from initial transactions, but found {}. Check test data and collection logic.",
+        TARGET_OWNER_COUNT,
+        collected_target_owners.len()
+    );
+    let mut expected_owners = collected_target_owners;
+    expected_owners.remove(0); // closed account owner
+
+    for owner in expected_owners.iter().enumerate() {
+        println!("{} {}", owner.0, owner.1);
+    }
     // Slot created is wrong likely because of the test environment.
     let mut leaf_index = 1;
-    for i in 0..50 {
-        let owner = Pubkey::new_unique();
+    for (i, current_owner_pk) in expected_owners.iter().enumerate() {
+        let owner = *current_owner_pk;
+
+        println!(
+            "Verifying owner (iteration {} from collected list): {}",
+            i, owner
+        );
+
+        println!("Querying for owner: {}", owner);
         let accounts = setup
             .api
             .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
@@ -467,7 +513,19 @@ async fn test_batched_tree_transactions(
             })
             .await
             .unwrap();
-        assert_eq!(accounts.value.items.len(), 1);
+
+        for acc in accounts.value.items.iter() {
+            println!("acc owner {}", acc.owner);
+        }
+        assert_eq!(
+            accounts.value.items.len(),
+            1,
+            "Expected 1 account for owner {}, but found {}. Iteration index: {}.",
+            owner,
+            accounts.value.items.len(),
+            i
+        );
+
         let account = &accounts.value.items[0];
         assert_eq!(account.lamports.0, 1_000_000u64);
         assert_eq!(account.owner.0, owner);
