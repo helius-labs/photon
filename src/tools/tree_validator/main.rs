@@ -7,7 +7,7 @@ use photon_indexer::{
     },
     ingester::persist::persisted_indexed_merkle_tree::validate_tree,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::str::FromStr;
 use tokio;
 

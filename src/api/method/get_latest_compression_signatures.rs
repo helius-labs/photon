@@ -1,10 +1,10 @@
 use super::utils::{GetLatestSignaturesRequest, GetPaginatedSignaturesResponse};
-use sea_orm::DatabaseConnection;
-
 use super::{
     super::error::PhotonApiError,
-    utils::{search_for_signatures, Context, SignatureSearchType},
+    utils::{search_for_signatures, SignatureSearchType},
 };
+use crate::common::typedefs::context::Context;
+use sea_orm::DatabaseConnection;
 
 pub async fn get_latest_compression_signatures(
     conn: &DatabaseConnection,

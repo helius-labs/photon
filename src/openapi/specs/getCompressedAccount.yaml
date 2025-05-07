@@ -8,7 +8,7 @@ info:
 servers:
 - url: https://mainnet.helius-rpc.com?api-key=<api_key>
 paths:
-  /:
+  /getCompressedAccount:
     summary: getCompressedAccount
     post:
       requestBody:

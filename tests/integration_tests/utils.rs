@@ -1,6 +1,8 @@
 use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use once_cell::sync::Lazy;
+use photon_indexer::api::method::utils::{TokenAccount, TokenAccountListV2, TokenAccountV2};
+use photon_indexer::common::typedefs::account::AccountV2;
 use photon_indexer::common::typedefs::hash::Hash;
 use photon_indexer::migration::{MigractorWithCustomMigrations, MigratorTrait};
 use photon_indexer::{
@@ -21,6 +23,8 @@ use sea_orm::{
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
+use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
@@ -131,8 +135,8 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     }
 
     let rpc_url = match opts.network {
-        Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
-        Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
+        Network::Mainnet => env::var("MAINNET_RPC_URL").unwrap(),
+        Network::Devnet => env::var("DEVNET_RPC_URL").unwrap(),
         Network::Localnet => "http://127.0.0.1:8899".to_string(),
     };
     let client = get_rpc_client(&rpc_url);
@@ -194,7 +198,6 @@ pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
         .into_iter()
         .map(|row| row.try_get("", "tablename").unwrap())
         .collect::<Vec<String>>();
-
     for table in tables {
         truncate_table(conn, table.to_string()).await?;
     }
@@ -347,6 +350,32 @@ pub fn verify_response_matches_input_token_data(
         );
     }
 }
+
+pub fn verify_response_matches_input_token_data_v2(
+    response: TokenAccountListV2,
+    tlvs: Vec<TokenDataWithHash>,
+) {
+    if response.items.len() != tlvs.len() {
+        panic!(
+            "Mismatch in number of accounts. Expected: {}, Actual: {}",
+            tlvs.len(),
+            response.items.len()
+        );
+    }
+    let token_accounts = response.items;
+    for (account, tlv) in token_accounts.iter().zip(order_token_datas(tlvs).iter()) {
+        let account = account.clone();
+        assert_eq!(account.token_data.mint, tlv.token_data.mint);
+        assert_eq!(account.token_data.owner, tlv.token_data.owner);
+        assert_eq!(account.token_data.amount, tlv.token_data.amount);
+        assert_eq!(
+            account.token_data.delegate,
+            tlv.token_data.delegate.map(Into::into)
+        );
+        assert_eq!(account.token_data.state, tlv.token_data.state);
+    }
+}
+
 pub fn assert_account_response_list_matches_input(
     account_response: &mut Vec<Account>,
     input_accounts: &mut Vec<Account>,
@@ -355,6 +384,45 @@ pub fn assert_account_response_list_matches_input(
     account_response.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
     input_accounts.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
     assert_eq!(account_response, input_accounts);
+}
+pub fn assert_account_response_list_matches_input_v2(
+    account_response_v2: &mut Vec<AccountV2>,
+    input_accounts: &mut Vec<Account>,
+) {
+    assert_eq!(account_response_v2.len(), input_accounts.len());
+    account_response_v2.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
+    input_accounts.sort_by(|a, b| a.hash.to_vec().cmp(&b.hash.to_vec()));
+
+    for (account_v2, account) in account_response_v2.iter().zip(input_accounts.iter()) {
+        compare_account_with_account_v2(account, account_v2);
+    }
+}
+
+pub fn compare_account_with_account_v2(account: &Account, account_v2: &AccountV2) {
+    assert_eq!(account.hash, account_v2.hash);
+    assert_eq!(account.address, account_v2.address);
+    assert_eq!(account.data, account_v2.data);
+    assert_eq!(account.owner, account_v2.owner);
+    assert_eq!(account.lamports, account_v2.lamports);
+    assert_eq!(account.tree, account_v2.merkle_context.tree);
+    assert_eq!(account.leaf_index, account_v2.leaf_index);
+    assert_eq!(account.seq, account_v2.seq);
+    assert_eq!(account.slot_created, account_v2.slot_created);
+}
+
+pub fn compare_token_account_with_token_account_v2(
+    token_acc: &TokenAccount,
+    token_acc_v2: &TokenAccountV2,
+) {
+    compare_account_with_account_v2(&token_acc.account, &token_acc_v2.account);
+    assert_eq!(token_acc.token_data.mint, token_acc_v2.token_data.mint);
+    assert_eq!(token_acc.token_data.owner, token_acc_v2.token_data.owner);
+    assert_eq!(token_acc.token_data.amount, token_acc_v2.token_data.amount);
+    assert_eq!(
+        token_acc.token_data.delegate,
+        token_acc_v2.token_data.delegate
+    );
+    assert_eq!(token_acc.token_data.state, token_acc_v2.token_data.state);
 }
 
 /// Persist using a database connection instead of a transaction. Should only be use for tests.
@@ -423,4 +491,87 @@ pub async fn cached_fetch_account(setup: &TestSetup, account: Pubkey) -> SolanaA
 #[allow(dead_code)]
 async fn fetch_account(client: &RpcClient, account: Pubkey) -> SolanaAccount {
     client.get_account(&account).await.unwrap()
+}
+
+/// Reads file names from tests/data/transactions/<name>
+/// returns a vector of file names sorted by slot
+pub fn read_file_names(name: &str, sort_by_slot: bool) -> Vec<String> {
+    let signatures = std::fs::read_dir(format!("tests/data/transactions/{}", name))
+        .unwrap()
+        .filter_map(|entry| {
+            entry
+                .ok()
+                .and_then(|e| e.file_name().to_str().map(|s| s.to_string()))
+        })
+        .collect::<Vec<String>>();
+    if sort_by_slot {
+        let mut sorted_files: Vec<(String, u64)> = Vec::new();
+        for filename in signatures {
+            let json_str =
+                std::fs::read_to_string(format!("tests/data/transactions/{}/{}", name, filename))
+                    .unwrap();
+            let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            let slot = json["slot"].as_u64().unwrap_or(0);
+            sorted_files.push((filename, slot));
+        }
+        sorted_files.sort_by_key(|k| k.1);
+        sorted_files.into_iter().map(|(name, _)| name).collect()
+    } else {
+        signatures
+    }
+}
+
+/// Reset table
+/// Index transactions individually or in one batch
+pub async fn index(
+    test_name: &str,
+    db_conn: Arc<DatabaseConnection>,
+    rpc_client: Arc<RpcClient>,
+    txns: &[String],
+    index_transactions_individually: bool,
+) {
+    let txs_permutations = txns
+        .iter()
+        .map(|x| vec![x.to_string()])
+        .collect::<Vec<Vec<_>>>();
+
+    for index_transactions_individually in [index_transactions_individually] {
+        for (i, txs) in txs_permutations.clone().iter().enumerate() {
+            println!(
+                "indexing tx {} {}/{}",
+                index_transactions_individually,
+                i + 1,
+                txs_permutations.len()
+            );
+            println!("tx {:?}", txs);
+
+            // HACK: We index a block so that API methods can fetch the current slot.
+            index_block(
+                db_conn.as_ref(),
+                &BlockInfo {
+                    metadata: BlockMetadata {
+                        slot: 0,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+            if index_transactions_individually {
+                for tx in txs {
+                    index_transaction(test_name, db_conn.clone(), rpc_client.clone(), tx).await;
+                }
+            } else {
+                index_multiple_transactions(
+                    test_name,
+                    db_conn.clone(),
+                    rpc_client.clone(),
+                    txs.iter().map(|x| x.as_str()).collect(),
+                )
+                .await;
+            }
+        }
+    }
 }

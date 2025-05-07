@@ -90,6 +90,10 @@ struct Args {
     #[arg(long, action = clap::ArgAction::SetTrue)]
     disable_api: bool,
 
+    /// Custom account compression program ID (optional)
+    #[arg(long, default_value = "compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq")]
+    compression_program_id: String,
+
     /// Metrics endpoint in the format `host:port`
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
@@ -189,6 +193,13 @@ async fn main() {
     let args = Args::parse();
     setup_logging(args.logging_format);
     setup_metrics(args.metrics_endpoint);
+
+    if let Err(err) =
+        photon_indexer::ingester::parser::set_compression_program_id(&args.compression_program_id)
+    {
+        error!("Failed to set compression program ID: {}", err);
+        std::process::exit(1);
+    }
 
     let db_conn = setup_database_connection(args.db_url.clone(), args.max_db_conn).await;
     if args.db_url.is_none() {

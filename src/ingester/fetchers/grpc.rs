@@ -12,7 +12,8 @@ use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
@@ -314,14 +315,17 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
     let mut instruction_groups: Vec<InstructionGroup> = outer_intructions
         .iter()
         .map(|ix| {
-            let program_id =
-                Pubkey::try_from(accounts[ix.program_id_index as usize].clone()).unwrap();
+            let sdk_program_id =
+                SdkPubkey::try_from(accounts[ix.program_id_index as usize].clone()).unwrap();
+            let program_id = Pubkey::new_from_array(sdk_program_id.to_bytes());
             let data = ix.data.clone();
             let accounts: Vec<Pubkey> = ix
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    Pubkey::try_from(accounts[*account_index as usize].clone()).unwrap()
+                    let sdk_pubkey =
+                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
+                    Pubkey::new_from_array(sdk_pubkey.to_bytes())
                 })
                 .collect();
 
@@ -343,14 +347,18 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
         } = inner_instruction_group;
         for instruction in instructions {
             let instruction_group = &mut instruction_groups[index as usize];
-            let program_id =
-                Pubkey::try_from(accounts[instruction.program_id_index as usize].clone()).unwrap();
+            let sdk_program_id =
+                SdkPubkey::try_from(accounts[instruction.program_id_index as usize].clone())
+                    .unwrap();
+            let program_id = Pubkey::new_from_array(sdk_program_id.to_bytes());
             let data = instruction.data.clone();
             let accounts: Vec<Pubkey> = instruction
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    Pubkey::try_from(accounts[*account_index as usize].clone()).unwrap()
+                    let sdk_pubkey =
+                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
+                    Pubkey::new_from_array(sdk_pubkey.to_bytes())
                 })
                 .collect();
             instruction_group.inner_instructions.push(Instruction {
