@@ -1,27 +1,57 @@
-use super::common::{get_public_input_hash, hash_to_hex};
-use crate::{
-    api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
-};
-use light_batched_merkle_tree::constants::{
-    DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
-};
-use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
-use light_prover_client::prove_utils::CircuitType;
-use light_sdk::STATE_MERKLE_TREE_HEIGHT;
-use reqwest::Client;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
-
 use crate::api::method::get_multiple_new_address_proofs::{
     get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_V1,
 };
-use crate::api::method::get_validity_proof::common::{
-    convert_inclusion_proofs_to_hex, convert_non_inclusion_merkle_proof_to_hex,
-    negate_and_compress_proof, proof_from_json_struct, CompressedProofWithContext,
-    GetValidityProofRequest, GetValidityProofResponse, GnarkProofJson, HexBatchInputsForProver,
-    STATE_TREE_QUEUE_SIZE,
-};
+use crate::api::method::get_validity_proof::prover::prove::generate_proof;
+use crate::api::method::get_validity_proof::CompressedProof;
 use crate::common::typedefs::context::Context;
+use crate::common::typedefs::hash::Hash;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
+use crate::{
+    api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
+};
+use jsonrpsee_core::Serialize;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use serde::Deserialize;
+use utoipa::ToSchema;
+
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressedProofWithContext {
+    pub compressed_proof: CompressedProof,
+    pub roots: Vec<String>,
+    pub root_indices: Vec<u64>,
+    pub leaf_indices: Vec<u32>,
+    pub leaves: Vec<String>,
+    pub merkle_trees: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetValidityProofRequest {
+    #[serde(default)]
+    pub hashes: Vec<Hash>,
+    #[serde(default)]
+    #[schema(deprecated = true)]
+    pub new_addresses: Vec<SerializablePubkey>,
+    #[serde(default)]
+    pub new_addresses_with_trees: Vec<AddressWithTree>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetValidityProofRequestDocumentation {
+    #[serde(default)]
+    pub hashes: Vec<Hash>,
+    #[serde(default)]
+    pub new_addresses_with_trees: Vec<AddressWithTree>,
+}
+
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetValidityProofResponse {
+    pub value: CompressedProofWithContext,
+    pub context: Context,
+}
 
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
@@ -29,30 +59,32 @@ pub async fn get_validity_proof(
     mut request: GetValidityProofRequest,
 ) -> Result<GetValidityProofResponse, PhotonApiError> {
     if request.hashes.is_empty()
-        && request.newAddresses.is_empty()
-        && request.newAddressesWithTrees.is_empty()
+        && request.new_addresses.is_empty()
+        && request.new_addresses_with_trees.is_empty()
     {
         return Err(PhotonApiError::ValidationError(
             "No hashes or new addresses provided for proof generation".to_string(),
         ));
     }
-    if !request.newAddressesWithTrees.is_empty() && !request.newAddresses.is_empty() {
+    if !request.new_addresses_with_trees.is_empty() && !request.new_addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
             "Cannot provide both newAddresses and newAddressesWithTree".to_string(),
         ));
     }
-    if !request.newAddresses.is_empty() {
-        request.newAddressesWithTrees = request
-            .newAddresses
+    if !request.new_addresses.is_empty() {
+        request.new_addresses_with_trees = request
+            .new_addresses
             .iter()
             .map(|new_address| AddressWithTree {
                 address: *new_address,
                 tree: SerializablePubkey::from(ADDRESS_TREE_V1),
             })
             .collect();
+        request.new_addresses.clear();
     }
+
     let context = Context::extract(conn).await?;
-    let client = Client::new();
+
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
         tx.execute(Statement::from_string(
@@ -62,180 +94,90 @@ pub async fn get_validity_proof(
         .await?;
     }
 
-    let account_proofs = match !request.hashes.is_empty() {
-        true => get_multiple_compressed_leaf_proofs(&tx, request.hashes).await?,
-        false => {
-            vec![]
-        }
+    let db_account_proofs = if !request.hashes.is_empty() {
+        get_multiple_compressed_leaf_proofs(&tx, request.hashes.clone()).await?
+    } else {
+        Vec::new()
     };
 
-    let new_address_proofs = match !request.newAddressesWithTrees.is_empty() {
-        true => {
-            get_multiple_new_address_proofs_helper(&tx, request.newAddressesWithTrees, true).await?
-        }
-        false => {
-            vec![]
-        }
+    let db_new_address_proofs = if !request.new_addresses_with_trees.is_empty() {
+        get_multiple_new_address_proofs_helper(&tx, request.new_addresses_with_trees.clone(), true)
+            .await?
+    } else {
+        Vec::new()
     };
     tx.commit().await?;
 
-    let state_tree_height = if account_proofs.is_empty() {
-        0
-    } else {
-        account_proofs[0].proof.len()
-    };
-    let all_state_trees_height_is_equal = account_proofs
-        .iter()
-        .all(|x| x.proof.len() == state_tree_height);
-    if !all_state_trees_height_is_equal {
+    if db_account_proofs.is_empty() && db_new_address_proofs.is_empty() {
         return Err(PhotonApiError::ValidationError(
-            "All state trees must have the same height".to_string(),
-        ));
-    }
-
-    let address_tree_height = if new_address_proofs.is_empty() {
-        0
-    } else {
-        new_address_proofs[0].proof.len()
-    };
-
-    let all_address_trees_height_is_equal = new_address_proofs
-        .iter()
-        .all(|x| x.proof.len() == address_tree_height);
-    if !all_address_trees_height_is_equal {
-        return Err(PhotonApiError::ValidationError(
-            "All address trees must have the same height".to_string(),
-        ));
-    }
-
-    if state_tree_height != address_tree_height
-        && address_tree_height != 0
-        && state_tree_height != 0
-    {
-        // TODO: change error msg and if condition once batched address Merkle trees are supported
-        return Err(PhotonApiError::ValidationError(
-            "State tree height must be equal to address tree height (height 26).
-               Address creation with batched Merkle trees is not supported at this time."
+            "No valid proofs found for the provided hashes or new addresses after DB check."
                 .to_string(),
         ));
     }
-    let circuit_type = match (account_proofs.is_empty(), new_address_proofs.is_empty()) {
-        (false, true) => CircuitType::Inclusion,
-        (true, false) => CircuitType::NonInclusion,
-        (false, false) => CircuitType::Combined,
-        _ => {
-            return Err(PhotonApiError::ValidationError(
-                "No proofs found for the provided hashes or new addresses".to_string(),
-            ))
-        }
-    };
 
-    let is_v2 = (state_tree_height == DEFAULT_BATCH_STATE_TREE_HEIGHT as usize)
-        || (address_tree_height == DEFAULT_BATCH_ADDRESS_TREE_HEIGHT as usize);
-    let public_input_hash = if is_v2 {
-        hash_to_hex(&crate::common::typedefs::hash::Hash(get_public_input_hash(
-            &account_proofs,
-            &new_address_proofs,
-        )))
-    } else {
-        String::new()
-    };
+    let proof_result = generate_proof(db_account_proofs, db_new_address_proofs, prover_url).await?;
 
-    let queue_size = if state_tree_height == STATE_MERKLE_TREE_HEIGHT {
-        STATE_TREE_QUEUE_SIZE
-    } else {
-        BatchedMerkleTreeMetadata::default().root_history_capacity as u64
-    };
-
-    let batch_inputs = HexBatchInputsForProver {
-        circuit_type: circuit_type.to_string(),
-        state_tree_height: state_tree_height as u32,
-        address_tree_height: address_tree_height as u32,
-        public_input_hash,
-        input_compressed_accounts: convert_inclusion_proofs_to_hex(account_proofs.clone()),
-        new_addresses: convert_non_inclusion_merkle_proof_to_hex(new_address_proofs.clone()),
-    };
-
-    let inclusion_proof_url = format!("{}/prove", prover_url);
-    let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
-        PhotonApiError::UnexpectedError(format!("Got an error while serializing the request {}", e))
-    })?;
-
-    let res = client
-        .post(&inclusion_proof_url)
-        .body(json_body.clone())
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e)))?;
-
-    if !res.status().is_success() {
-        return Err(PhotonApiError::UnexpectedError(format!(
-            "Error fetching proof {:?}",
-            res.text().await,
-        )));
-    }
-
-    let text = res
-        .text()
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Error fetching proof {}", e)))?;
-
-    let proof: GnarkProofJson = serde_json::from_str(&text).map_err(|e| {
-        PhotonApiError::UnexpectedError(format!(
-            "Got an error while deserializing the response {}",
-            e
-        ))
-    })?;
-
-    let proof = proof_from_json_struct(proof);
-    // Allow non-snake case
-    #[allow(non_snake_case)]
-    let compressedProof = negate_and_compress_proof(proof);
-
-    let compressed_proof_with_context = CompressedProofWithContext {
-        compressedProof,
-        roots: account_proofs
+    let v1_value = CompressedProofWithContext {
+        compressed_proof: proof_result.compressed_proof,
+        roots: proof_result
+            .account_proof_details
             .iter()
-            .map(|x| x.root.clone().to_string())
+            .map(|d| d.root.clone())
             .chain(
-                new_address_proofs
+                proof_result
+                    .address_proof_details
                     .iter()
-                    .map(|x| x.root.clone().to_string()),
+                    .map(|d| d.root.clone()),
             )
             .collect(),
-        rootIndices: account_proofs
+        root_indices: proof_result
+            .account_proof_details
             .iter()
-            .map(|x| x.root_seq)
-            .chain(new_address_proofs.iter().map(|x| x.rootSeq))
-            .map(|x| x % queue_size)
-            .collect(),
-        leafIndices: account_proofs
-            .iter()
-            .map(|x| x.leaf_index)
-            .chain(new_address_proofs.iter().map(|x| x.lowElementLeafIndex))
-            .collect(),
-        leaves: account_proofs
-            .iter()
-            .map(|x| x.hash.clone().to_string())
+            .map(|d| d.root_index_mod_queue)
             .chain(
-                new_address_proofs
+                proof_result
+                    .address_proof_details
                     .iter()
-                    .map(|x| x.address.clone().to_string()),
+                    .map(|d| d.root_index_mod_queue),
             )
             .collect(),
-        merkleTrees: account_proofs
+        leaf_indices: proof_result
+            .account_proof_details
             .iter()
-            .map(|x| x.merkle_tree.clone().to_string())
+            .map(|d| d.leaf_index)
             .chain(
-                new_address_proofs
+                proof_result
+                    .address_proof_details
                     .iter()
-                    .map(|x| x.merkleTree.clone().to_string()),
+                    .map(|d| d.path_index),
+            )
+            .collect(),
+        leaves: proof_result
+            .account_proof_details
+            .iter()
+            .map(|d| d.hash.clone())
+            .chain(
+                proof_result
+                    .address_proof_details
+                    .iter()
+                    .map(|d| d.address.clone()),
+            )
+            .collect(),
+        merkle_trees: proof_result
+            .account_proof_details
+            .iter()
+            .map(|d| d.merkle_tree_id.clone())
+            .chain(
+                proof_result
+                    .address_proof_details
+                    .iter()
+                    .map(|d| d.merkle_tree_id.clone()),
             )
             .collect(),
     };
+
     Ok(GetValidityProofResponse {
-        value: compressed_proof_with_context,
+        value: v1_value,
         context,
     })
 }
