@@ -215,7 +215,7 @@ async fn test_batched_tree_transactions(
                     .iter()
                     .map(|x| Hash::new(&x[..]).unwrap())
                     .collect::<Vec<_>>(),
-                newAddressesWithTrees: vec![],
+                new_addresses_with_trees: vec![],
             })
             .await
             .unwrap();
@@ -223,20 +223,24 @@ async fn test_batched_tree_transactions(
         // No value has been inserted into the tree yet -> all proof by index.
         assert!(validity_proof
             .value
-            .rootIndices
+            .accounts
             .iter()
-            .all(|x| x.prove_by_index));
+            .all(|x| x.root_index.prove_by_index));
         assert!(validity_proof
             .value
-            .merkle_contexts
+            .accounts
             .iter()
-            .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
+            .all(|x| x.merkle_context.tree.to_string() == merkle_tree_pubkey.to_string()));
         assert!(validity_proof
             .value
-            .merkle_contexts
+            .accounts
             .iter()
-            .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
-        assert!(validity_proof.value.roots.iter().all(|x| x.is_empty()));
+            .all(|x| x.merkle_context.queue.to_string() == queue_pubkey.to_string()));
+        assert!(validity_proof
+            .value
+            .accounts
+            .iter()
+            .all(|x| x.root.is_empty()));
     }
 
     // Merkle tree which is created along side indexing the event transactions.
@@ -399,7 +403,7 @@ async fn test_batched_tree_transactions(
                         .iter()
                         .map(|x| Hash::new(&x[..]).unwrap())
                         .collect::<Vec<_>>(),
-                    newAddressesWithTrees: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap();
@@ -407,33 +411,27 @@ async fn test_batched_tree_transactions(
 
             // No value has been inserted into the tree yet -> all proof by index.
             let mut base_index = j * 8;
-            for (z, (root_index, root)) in validity_proof
-                .value
-                .rootIndices
-                .iter()
-                .zip(validity_proof.value.roots.iter())
-                .enumerate()
-            {
+            for (z, account_proof) in validity_proof.value.accounts.iter().enumerate() {
                 println!("z + base index {} {}", z, base_index);
                 println!("last inserted index {}", last_inserted_index);
                 if base_index < last_inserted_index {
-                    assert!(!root_index.prove_by_index);
+                    assert!(!account_proof.root_index.prove_by_index);
                 } else {
-                    assert!(root_index.prove_by_index);
-                    assert_eq!(root, "");
+                    assert!(account_proof.root_index.prove_by_index);
+                    assert_eq!(account_proof.root, "");
                 }
                 base_index += 2;
             }
-            assert!(validity_proof
-                .value
-                .merkle_contexts
-                .iter()
-                .all(|x| x.tree.0.to_string() == merkle_tree_pubkey.to_string()));
-            assert!(validity_proof
-                .value
-                .merkle_contexts
-                .iter()
-                .all(|x| x.queue.0.to_string() == queue_pubkey.to_string()));
+            assert!(validity_proof.value.accounts.iter().all(|x| x
+                .merkle_context
+                .tree
+                .to_string()
+                == merkle_tree_pubkey.to_string()));
+            assert!(validity_proof.value.accounts.iter().all(|x| x
+                .merkle_context
+                .queue
+                .to_string()
+                == queue_pubkey.to_string()));
         }
     }
     assert_eq!(event_merkle_tree.root(), merkle_tree.root());

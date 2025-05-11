@@ -1130,15 +1130,15 @@ async fn test_get_multiple_new_address_proofs_interop(
         &setup.db_conn,
         &setup.prover_url,
         GetValidityProofRequest {
-            newAddresses: addresses.clone(),
-            newAddressesWithTrees: vec![],
+            new_addresses: addresses.clone(),
+            new_addresses_with_trees: vec![],
             hashes: vec![],
         },
     )
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof.value.compressedProof = CompressedProof::default();
+    validity_proof.value.compressed_proof = CompressedProof::default();
 
     insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
 
@@ -1163,14 +1163,14 @@ async fn test_get_multiple_new_address_proofs_interop(
         &setup.db_conn,
         &setup.prover_url,
         GetValidityProofRequestV2 {
-            newAddressesWithTrees: addresses_with_trees.clone(),
+            new_addresses_with_trees: addresses_with_trees.clone(),
             hashes: vec![],
         },
     )
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof_v2.value.compressedProof = Some(CompressedProof::default());
+    validity_proof_v2.value.compressed_proof = Some(CompressedProof::default());
 
     insta::assert_json_snapshot!(format!("{}-validity-proof-v2", name), validity_proof_v2);
 }

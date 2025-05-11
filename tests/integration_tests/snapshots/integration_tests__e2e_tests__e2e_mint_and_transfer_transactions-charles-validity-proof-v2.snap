@@ -10,44 +10,41 @@ expression: validity_proof_v2
       "b": [],
       "c": []
     },
-    "roots": [
-      "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
-      "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7"
-    ],
-    "rootIndices": [
+    "accounts": [
       {
-        "rootIndex": 7,
-        "proveByIndex": false
+        "hash": "2TxrLe9HDTRDpVXmbkXUgXNksCZ7RdU4Tc2Ea1B8ADs2",
+        "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+        "rootIndex": {
+          "rootIndex": 7,
+          "proveByIndex": false
+        },
+        "leafIndex": 4,
+        "merkleContext": {
+          "treeType": 1,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "cpiContext": null,
+          "nextTreeContext": null
+        }
       },
       {
-        "rootIndex": 7,
-        "proveByIndex": false
+        "hash": "2o5puhnQbtqyyrcZrsow4DSs6kafmyUTYmgdwXfMMehS",
+        "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+        "rootIndex": {
+          "rootIndex": 7,
+          "proveByIndex": false
+        },
+        "leafIndex": 5,
+        "merkleContext": {
+          "treeType": 1,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "cpiContext": null,
+          "nextTreeContext": null
+        }
       }
     ],
-    "leafIndices": [
-      4,
-      5
-    ],
-    "leaves": [
-      "2TxrLe9HDTRDpVXmbkXUgXNksCZ7RdU4Tc2Ea1B8ADs2",
-      "2o5puhnQbtqyyrcZrsow4DSs6kafmyUTYmgdwXfMMehS"
-    ],
-    "merkleContexts": [
-      {
-        "treeType": 1,
-        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
-        "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
-        "cpiContext": null,
-        "nextTreeContext": null
-      },
-      {
-        "treeType": 1,
-        "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
-        "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
-        "cpiContext": null,
-        "nextTreeContext": null
-      }
-    ]
+    "addresses": []
   },
   "context": {
     "slot": 0

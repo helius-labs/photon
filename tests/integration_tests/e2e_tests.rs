@@ -187,13 +187,13 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .api
                 .get_validity_proof(GetValidityProofRequest {
                     hashes: hash_list.0.clone(),
-                    newAddresses: vec![],
-                    newAddressesWithTrees: vec![],
+                    new_addresses: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap();
             // The Gnark prover has some randomness.
-            validity_proof.value.compressedProof = CompressedProof::default();
+            validity_proof.value.compressed_proof = CompressedProof::default();
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), person),
                 validity_proof
@@ -204,11 +204,11 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .api
                 .get_validity_proof_v2(GetValidityProofRequestV2 {
                     hashes: hash_list.0.clone(),
-                    newAddressesWithTrees: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap();
-            validity_proof_v2.value.compressedProof = Some(CompressedProof::default());
+            validity_proof_v2.value.compressed_proof = Some(CompressedProof::default());
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof-v2", name.clone(), person),
                 validity_proof_v2
@@ -402,8 +402,8 @@ async fn test_lamport_transfers(
                 .api
                 .get_validity_proof(GetValidityProofRequest {
                     hashes: hash_list.0.clone(),
-                    newAddresses: vec![],
-                    newAddressesWithTrees: vec![],
+                    new_addresses: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap_or_else(|_| {
@@ -415,7 +415,7 @@ async fn test_lamport_transfers(
                 });
 
             // The Gnark prover has some randomness.
-            validity_proof.value.compressedProof = CompressedProof::default();
+            validity_proof.value.compressed_proof = CompressedProof::default();
 
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), owner_name),
