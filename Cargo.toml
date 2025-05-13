@@ -34,6 +34,9 @@ name = "photon-tree-validator"
 path = "src/tools/tree_validator/main.rs"
 
 [dependencies]
+ark-serialize = "0.4"
+ark-bn254 = "0.4"
+
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
@@ -83,7 +86,6 @@ light-compressed-account = { git = "https://github.com/Lightprotocol/light-proto
 light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-prover-client = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 
 sqlx = { version = "0.6.2", features = [
@@ -97,7 +99,6 @@ sqlx = { version = "0.6.2", features = [
 ] }
 thiserror = "1.0.31"
 # time pinned because of https://github.com/launchbadge/sqlx/issues/3189
-ark-bn254 = "0.4.0"
 hex = "0.4.3"
 num-bigint = "0.4.4"
 num-traits = "0.2.18"
@@ -124,6 +125,7 @@ async-stream = "0.3.5"
 rand = "0.8.5"
 bincode = "1.3.3"
 rust-s3 = "0.34.0"
+
 
 [dev-dependencies]
 function_name = "0.3.0"

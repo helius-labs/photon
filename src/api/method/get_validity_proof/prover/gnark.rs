@@ -1,66 +1,101 @@
 use crate::api::method::get_validity_proof::prover::structs::{CompressedProof, ProofABC};
-use lazy_static::lazy_static;
-use num_bigint::BigUint;
-use std::str::FromStr;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
+use std::ops::Neg;
 
-lazy_static! {
-    static ref FIELD_SIZE: BigUint = BigUint::from_str(
-        "21888242871839275222246405745257275088548364400416034343698204186575808495616"
+type G1 = ark_bn254::g1::G1Affine;
+
+/// Changes the endianness of the given slice of bytes by reversing the order of every 32-byte chunk.
+///
+/// # Arguments
+///
+/// * `bytes` - A reference to a slice of bytes whose endianness will be changed.
+///
+/// # Returns
+///
+/// A `Vec<u8>` containing the bytes with their order reversed in chunks of 32 bytes. If the number
+/// of bytes in the slice is not a multiple of 32, the remaining bytes at the end will also be reversed.
+///
+/// # Examples
+///
+/// ```
+/// let input = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+///                  0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+///                  0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+///                  0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20];
+/// let output = change_endianness(&input);
+/// assert_eq!(output, vec![0x20, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19,
+///                         0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11,
+///                         0x10, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A, 0x09,
+///                         0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]);
+///
+/// let input = vec![0x01, 0x02, 0x03];
+/// let output = change_endianness(&input);
+/// assert_eq!(output, vec![0x03, 0x02, 0x01]);
+/// ```
+fn change_endianness(bytes: &[u8]) -> Vec<u8> {
+    let mut vec = Vec::new();
+    for b in bytes.chunks(32) {
+        for byte in b.iter().rev() {
+            vec.push(*byte);
+        }
+    }
+    vec
+}
+
+/// Negates the `a` component of the given proof and compresses the proof into a `CompressedProof`.
+///
+/// # Arguments
+///
+/// * `proof` - A `ProofABC` structure containing three components: `a`, `b`, and `c`.
+///
+///     - `a` is negated and serialized in big-endian format.
+///     - `b` and `c` are trimmed and included as-is in the compressed form.
+///
+/// # Returns
+///
+/// A `CompressedProof` containing:
+///
+/// * The negated and serialized `a` component as a vector of bytes.
+/// * The first 64 bytes of the `b` component.
+/// * The first 32 bytes of the `c` component.
+///
+/// # Panics
+///
+/// This function will panic if:
+///
+/// * The deserialization or serialization of the `G1` point fails.
+/// * The `proof.a` slice length is insufficient to produce a valid G1 when adding padding for deserialization.
+///
+/// # Note
+///
+/// The function assumes that the `ProofABC` structure contains its `a`, `b`, and `c` components in valid formats
+/// necessary for transformation and compression.
+pub fn negate_proof(proof: ProofABC) -> CompressedProof {
+    let mut proof_a_neg = [0u8; 65];
+
+    let proof_a: G1 = G1::deserialize_with_mode(
+        &*[&change_endianness(&proof.a), &[0u8][..]].concat(),
+        Compress::No,
+        Validate::Yes,
     )
     .unwrap();
-}
 
-fn y_element_is_positive_g1(y_element: &BigUint) -> bool {
-    y_element <= &(FIELD_SIZE.clone() - y_element)
-}
+    proof_a
+        .neg()
+        .x
+        .serialize_with_mode(&mut proof_a_neg[..32], Compress::No)
+        .unwrap();
+    proof_a
+        .neg()
+        .y
+        .serialize_with_mode(&mut proof_a_neg[32..], Compress::No)
+        .unwrap();
 
-fn y_element_is_positive_g2(y_element1: &BigUint, y_element2: &BigUint) -> bool {
-    let field_midpoint = FIELD_SIZE.clone() / 2u32;
+    let compressed_proof = CompressedProof {
+        a: proof_a_neg[0..32].to_vec(),
+        b: proof.b[0..64].to_vec(),
+        c: proof.c[0..32].to_vec(),
+    };
 
-    if y_element1 < &field_midpoint {
-        true
-    } else if y_element1 > &field_midpoint {
-        false
-    } else {
-        y_element2 < &field_midpoint
-    }
-}
-
-fn add_bitmask_to_byte(mut byte: u8, y_is_positive: bool) -> u8 {
-    if !y_is_positive {
-        byte |= 1 << 7;
-    }
-    byte
-}
-
-pub fn negate_and_compress_proof(proof: ProofABC) -> CompressedProof {
-    let proof_a = &proof.a;
-    let proof_b = &proof.b;
-    let proof_c = &proof.c;
-
-    let a_x_element = &mut proof_a[0..32].to_vec();
-    let a_y_element = BigUint::from_bytes_be(&proof_a[32..64]);
-
-    let proof_a_is_positive = !y_element_is_positive_g1(&a_y_element);
-    a_x_element[0] = add_bitmask_to_byte(a_x_element[0], proof_a_is_positive);
-
-    let b_x_element = &mut proof_b[0..64].to_vec();
-    let b_y_element = &proof_b[64..128];
-    let b_y1_element = BigUint::from_bytes_be(&b_y_element[0..32]);
-    let b_y2_element = BigUint::from_bytes_be(&b_y_element[32..64]);
-
-    let proof_b_is_positive = y_element_is_positive_g2(&b_y1_element, &b_y2_element);
-    b_x_element[0] = add_bitmask_to_byte(b_x_element[0], proof_b_is_positive);
-
-    let c_x_element = &mut proof_c[0..32].to_vec();
-    let c_y_element = BigUint::from_bytes_be(&proof_c[32..64]);
-
-    let proof_c_is_positive = y_element_is_positive_g1(&c_y_element);
-    c_x_element[0] = add_bitmask_to_byte(c_x_element[0], proof_c_is_positive);
-
-    CompressedProof {
-        a: a_x_element.clone(),
-        b: b_x_element.clone(),
-        c: c_x_element.clone(),
-    }
+    compressed_proof
 }

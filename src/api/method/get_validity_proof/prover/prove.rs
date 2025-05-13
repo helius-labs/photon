@@ -1,12 +1,13 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
-use crate::api::method::get_validity_proof::prover::gnark::negate_and_compress_proof;
+use crate::api::method::get_validity_proof::prover::gnark::negate_proof;
 use crate::api::method::get_validity_proof::prover::helpers::{
     convert_inclusion_proofs_to_hex, convert_non_inclusion_merkle_proof_to_hex,
     get_public_input_hash, hash_to_hex, proof_from_json_struct,
 };
 use crate::api::method::get_validity_proof::prover::structs::{
-    AccountProofDetail, AddressProofDetail, GnarkProofJson, HexBatchInputsForProver, ProverResult,
+    AccountProofDetail, AddressProofDetail, CircuitType, GnarkProofJson, HexBatchInputsForProver,
+    ProverResult,
 };
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::parser::tree_info::TreeInfo;
@@ -15,7 +16,6 @@ use light_batched_merkle_tree::constants::{
     DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
 };
 use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
-use light_prover_client::prove_utils::CircuitType;
 use light_sdk::STATE_MERKLE_TREE_HEIGHT;
 
 use reqwest::Client;
@@ -141,7 +141,7 @@ pub(crate) async fn generate_proof(
     })?;
 
     let proof_abc = proof_from_json_struct(proof_json);
-    let compressed_gnark_proof = negate_and_compress_proof(proof_abc);
+    let compressed_gnark_proof = negate_proof(proof_abc);
 
     let mut account_details = Vec::with_capacity(db_account_proofs.len());
     for acc_proof in db_account_proofs.iter() {
