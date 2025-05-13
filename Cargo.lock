@@ -600,7 +600,6 @@ checksum = "246a225cc6131e9ee4f24619af0f19d67761fff15d7ccc22e42b80846e69449a"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
- "rayon",
 ]
 
 [[package]]
@@ -3018,7 +3017,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.0",
+ "windows-core",
 ]
 
 [[package]]
@@ -3575,7 +3574,6 @@ source = "git+https://github.com/lightprotocol/program-libs?rev=cf87f3e002d8a7dd
 dependencies = [
  "bytemuck",
  "memoffset 0.9.1",
- "solana-program 2.2.1",
  "thiserror 1.0.69",
 ]
 
@@ -3604,7 +3602,6 @@ dependencies = [
  "light-bounded-vec",
  "light-hasher",
  "memoffset 0.9.1",
- "solana-program 2.2.1",
  "thiserror 2.0.12",
 ]
 
@@ -3633,21 +3630,6 @@ dependencies = [
  "light-hasher",
  "num-bigint 0.4.6",
  "num-traits",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "light-indexed-merkle-tree"
-version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=368f9f08272db78c74b2ade1a1c2fead27dd0a96#368f9f08272db78c74b2ade1a1c2fead27dd0a96"
-dependencies = [
- "light-bounded-vec",
- "light-concurrent-merkle-tree",
- "light-hasher",
- "light-merkle-tree-reference",
- "num-bigint 0.4.6",
- "num-traits",
- "solana-program 2.2.1",
  "thiserror 2.0.12",
 ]
 
@@ -3709,37 +3691,6 @@ dependencies = [
  "ark-ff 0.5.0",
  "num-bigint 0.4.6",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "light-prover-client"
-version = "1.2.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=368f9f08272db78c74b2ade1a1c2fead27dd0a96#368f9f08272db78c74b2ade1a1c2fead27dd0a96"
-dependencies = [
- "ark-bn254 0.5.0",
- "ark-serialize 0.5.0",
- "ark-std 0.5.0",
- "groth16-solana",
- "light-batched-merkle-tree",
- "light-bounded-vec",
- "light-compressed-account",
- "light-concurrent-merkle-tree",
- "light-hasher",
- "light-indexed-array",
- "light-indexed-merkle-tree",
- "light-merkle-tree-reference",
- "num-bigint 0.4.6",
- "num-traits",
- "once_cell",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "solana-bn254",
- "solana-program 2.2.1",
- "sysinfo",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -4021,15 +3972,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ntapi"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a3895c6391c39d7fe7ebc444a87eb2991b2a0bc718fdabd071eec617fc68e4"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4072,7 +4014,6 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -4456,6 +4397,7 @@ dependencies = [
  "anchor-lang",
  "anyhow",
  "ark-bn254 0.4.0",
+ "ark-serialize 0.4.2",
  "async-std",
  "async-stream",
  "async-trait",
@@ -4485,7 +4427,6 @@ dependencies = [
  "light-merkle-tree-metadata",
  "light-merkle-tree-reference",
  "light-poseidon 0.2.0",
- "light-prover-client",
  "light-sdk",
  "log",
  "num-bigint 0.4.6",
@@ -5101,12 +5042,10 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.32",
  "hyper-rustls",
- "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -5118,7 +5057,6 @@ dependencies = [
  "sync_wrapper",
  "system-configuration",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tokio-util",
  "tower-service",
@@ -8025,20 +7963,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sysinfo"
-version = "0.33.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fc858248ea01b66f19d8e8a6d55f41deaf91e9d495246fd01368d99935c6c01"
-dependencies = [
- "core-foundation-sys",
- "libc",
- "memchr",
- "ntapi",
- "rayon",
- "windows",
-]
-
-[[package]]
 name = "system-configuration"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9044,49 +8968,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
-name = "windows"
-version = "0.57.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12342cb4d8e3b046f3d80effd474a7a02447231330ef77d71daa6fbc40681143"
-dependencies = [
- "windows-core 0.57.0",
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.57.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ed2439a290666cd67ecce2b0ffaad89c2a56b976b736e6ece670297897832d"
-dependencies = [
- "windows-implement 0.57.0",
- "windows-interface 0.57.0",
- "windows-result 0.1.2",
- "windows-targets 0.52.6",
-]
-
-[[package]]
 name = "windows-core"
 version = "0.61.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4763c1de310c86d75a878046489e2e5ba02c649d185f21c67d4cf8a56d098980"
 dependencies = [
- "windows-implement 0.60.0",
- "windows-interface 0.59.1",
+ "windows-implement",
+ "windows-interface",
  "windows-link",
- "windows-result 0.3.2",
+ "windows-result",
  "windows-strings",
-]
-
-[[package]]
-name = "windows-implement"
-version = "0.57.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9107ddc059d5b6fbfbffdfa7a7fe3e22a226def0b2608f72e9d552763d3e1ad7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
 ]
 
 [[package]]
@@ -9094,17 +8985,6 @@ name = "windows-implement"
 version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
-]
-
-[[package]]
-name = "windows-interface"
-version = "0.57.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29bee4b38ea3cde66011baa44dba677c432a78593e202392d1e9070cf2a7fca7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9127,15 +9007,6 @@ name = "windows-link"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76840935b766e1b0a05c0066835fb9ec80071d4c09a16f6bd5f7e655e3c14c38"
-
-[[package]]
-name = "windows-result"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e383302e8ec8515204254685643de10811af0ed97ea37210dc26fb0032647f8"
-dependencies = [
- "windows-targets 0.52.6",
-]
 
 [[package]]
 name = "windows-result"
