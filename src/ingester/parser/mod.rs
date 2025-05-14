@@ -47,12 +47,13 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             if ordered_intructions.len() - index > 1 {
                 // Check if the current instruction is from the account compression program
                 if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id {
-                    // Look for a NOOP_PROGRAM_ID instruction after potentially multiple SYSTEM_PROGRAM instructions
+                    // Look for a NOOP_PROGRAM_ID instruction after one or two SYSTEM_PROGRAM instructions
+                    // We handle up to two system program instructions in the case where we also have to pay a tree rollover fee
                     let mut noop_instruction_index = None;
-                    let mut has_system_program = false;
+                    let mut system_program_count = 0;
                     let mut all_intermediate_are_system = true;
                     
-                    // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM
+                    // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM but no more than two
                     for i in (index + 1)..ordered_intructions.len() {
                         let current_instruction = &ordered_intructions[i];
                         
@@ -60,16 +61,20 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                             noop_instruction_index = Some(i);
                             break;
                         } else if current_instruction.program_id == SYSTEM_PROGRAM {
-                            has_system_program = true;
+                            system_program_count += 1;
+                            if system_program_count > 2 {
+                                all_intermediate_are_system = false;
+                                break;
+                            }
                         } else {
                             all_intermediate_are_system = false;
                             break;
                         }
                     }
                     
-                    // If we found a NOOP instruction, at least one SYSTEM_PROGRAM, and all intermediates were valid
+                    // If we found a NOOP instruction, exactly one or two SYSTEM_PROGRAM instructions, and all intermediates were valid
                     if let Some(noop_index) = noop_instruction_index {
-                        if has_system_program && all_intermediate_are_system {
+                        if system_program_count >= 1 && system_program_count <= 2 && all_intermediate_are_system {
                             if !logged_transaction {
                                 debug!(
                                     "Indexing transaction with slot {} and id {}",
