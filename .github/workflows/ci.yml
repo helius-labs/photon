@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install additional tools
+        run: |
+          npm install -g @apidevtools/swagger-cli
+          wget https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
+
+      - name: Start light-prover container
+        run: |
+          docker run -d -p 3001:3001 docker.io/pmantica1/light-prover:1
+
+      - name: Set environment variables
+        run: |
+          echo "MAINNET_RPC_URL=https://api.mainnet-beta.solana.com" >> $GITHUB_ENV
+          echo "DEVNET_RPC_URL=https://api.devnet.solana.com" >> $GITHUB_ENV
+          echo "TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres" >> $GITHUB_ENV
+
+      - name: Run migrations
+        run: cargo run --bin photon-migration up
+
+      - name: Run tests
+        run: cargo test
