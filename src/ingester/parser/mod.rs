@@ -43,41 +43,61 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         ordered_intructions.extend(instruction_group.inner_instructions);
 
         for (index, instruction) in ordered_intructions.iter().enumerate() {
-            if ordered_intructions.len() - index > 2 {
-                let next_instruction = &ordered_intructions[index + 1];
-                let next_next_instruction = &ordered_intructions[index + 2];
-                // We need to check if the account compression instruction contains a noop account to determine
-                // if the instruction emits a noop event. If it doesn't then we want avoid indexing
-                // the following noop instruction because it'll contain either irrelevant or malicious data.
-                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id
-                    && next_instruction.program_id == SYSTEM_PROGRAM
-                    && next_next_instruction.program_id == NOOP_PROGRAM_ID
-                {
-                    if !logged_transaction {
-                        debug!(
-                            "Indexing transaction with slot {} and id {}",
-                            slot, tx.signature
-                        );
-                        logged_transaction = true;
+            // Check if there are enough instructions left to potentially find a pattern
+            if ordered_intructions.len() - index > 1 {
+                // Check if the current instruction is from the account compression program
+                if ACCOUNT_COMPRESSION_PROGRAM_ID == instruction.program_id {
+                    // Look for a NOOP_PROGRAM_ID instruction after potentially multiple SYSTEM_PROGRAM instructions
+                    let mut noop_instruction_index = None;
+                    let mut has_system_program = false;
+                    let mut all_intermediate_are_system = true;
+                    
+                    // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM
+                    for i in (index + 1)..ordered_intructions.len() {
+                        let current_instruction = &ordered_intructions[i];
+                        
+                        if current_instruction.program_id == NOOP_PROGRAM_ID {
+                            noop_instruction_index = Some(i);
+                            break;
+                        } else if current_instruction.program_id == SYSTEM_PROGRAM {
+                            has_system_program = true;
+                        } else {
+                            all_intermediate_are_system = false;
+                            break;
+                        }
                     }
-                    is_compression_transaction = true;
+                    
+                    // If we found a NOOP instruction, at least one SYSTEM_PROGRAM, and all intermediates were valid
+                    if let Some(noop_index) = noop_instruction_index {
+                        if has_system_program && all_intermediate_are_system {
+                            if !logged_transaction {
+                                debug!(
+                                    "Indexing transaction with slot {} and id {}",
+                                    slot, tx.signature
+                                );
+                                logged_transaction = true;
+                            }
+                            is_compression_transaction = true;
 
-                    if tx.error.is_none() {
-                        let public_transaction_event = PublicTransactionEvent::deserialize(
-                            &mut next_next_instruction.data.as_slice(),
-                        )
-                        .map_err(|e| {
-                            IngesterError::ParserError(format!(
-                                "Failed to deserialize PublicTransactionEvent: {}",
-                                e
-                            ))
-                        })?;
-                        let state_update = parse_public_transaction_event(
-                            tx.signature,
-                            slot,
-                            public_transaction_event,
-                        )?;
-                        state_updates.push(state_update);
+                            if tx.error.is_none() {
+                                let noop_instruction = &ordered_intructions[noop_index];
+                                let public_transaction_event = PublicTransactionEvent::deserialize(
+                                    &mut noop_instruction.data.as_slice(),
+                                )
+                                .map_err(|e| {
+                                    IngesterError::ParserError(format!(
+                                        "Failed to deserialize PublicTransactionEvent: {}",
+                                        e
+                                    ))
+                                })?;
+                                let state_update = parse_public_transaction_event(
+                                    tx.signature,
+                                    slot,
+                                    public_transaction_event,
+                                )?;
+                                state_updates.push(state_update);
+                            }
+                        }
                     }
                 }
             }
@@ -116,6 +136,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
             }
         }
     }
+
     let mut state_update = StateUpdate::merge_updates(state_updates);
 
     if !is_voting_transaction(tx) || is_compression_transaction {
