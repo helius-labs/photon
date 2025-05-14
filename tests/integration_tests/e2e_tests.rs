@@ -652,7 +652,7 @@ async fn test_nullfiier_and_address_queue_transactions(
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_index_transaction_with_multiple_system_program_instructions_in_between(
+async fn test_transaction_with_tree_rollover_fee(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::ingester::parser::parse_transaction;
