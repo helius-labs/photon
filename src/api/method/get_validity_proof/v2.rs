@@ -273,10 +273,6 @@ pub async fn get_validity_proof_v2(
                     cpi_context: None,
                     next_tree_context: None,
                 },
-                // If AddressProofInputs was expanded to include next_index, etc.:
-                // next_index: Some(detail.next_index),
-                // leaf_lower_range_value: Some(detail.lower_range_address_hex),
-                // leaf_higher_range_value: Some(detail.higher_range_address_hex),
             });
         }
     }
