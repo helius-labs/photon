@@ -34,8 +34,8 @@ name = "photon-tree-validator"
 path = "src/tools/tree_validator/main.rs"
 
 [dependencies]
-ark-serialize = "0.4"
-ark-bn254 = "0.4"
+ark-serialize = "0.5"
+ark-bn254 = "0.5"
 
 anchor-lang = "0.29.0"
 anyhow = "1.0.79"
@@ -55,7 +55,6 @@ itertools = "0.12.1"
 jsonrpsee = { version = "0.16.2", features = ["server", "macros"] }
 jsonrpsee-core = { version = "0.16.2", features = ["server"] }
 lazy_static = "1.4.0"
-light-poseidon = "0.2.0"
 log = "0.4.17"
 once_cell = "1.19.0"
 rstest = "0.18.2"
@@ -81,6 +80,8 @@ solana-sdk = "1.18.0"
 solana-pubkey = "2.3.0"
 
 solana-transaction-status = "1.18.0"
+
+light-poseidon = "0.3.0"
 light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
