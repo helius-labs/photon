@@ -180,7 +180,7 @@ pub(crate) async fn generate_proof(
     }
 
     Ok(ProverResult {
-        compressed_proof: compressed_gnark_proof,
+        compressed_proof: compressed_gnark_proof?,
         account_proof_details: account_details,
         address_proof_details: address_details,
     })

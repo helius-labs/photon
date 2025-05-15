@@ -1,6 +1,7 @@
 use crate::api::method::get_validity_proof::prover::structs::{CompressedProof, ProofABC};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use std::ops::Neg;
+use crate::api::error::PhotonApiError;
 
 type G1 = ark_bn254::g1::G1Affine;
 
@@ -70,26 +71,26 @@ fn change_endianness(bytes: &[u8]) -> Vec<u8> {
 ///
 /// The function assumes that the `ProofABC` structure contains its `a`, `b`, and `c` components in valid formats
 /// necessary for transformation and compression.
-pub fn negate_proof(proof: ProofABC) -> CompressedProof {
+pub fn negate_proof(proof: ProofABC) -> Result<CompressedProof, PhotonApiError> {
     let mut proof_a_neg = [0u8; 65];
 
     let proof_a: G1 = G1::deserialize_with_mode(
         &*[&change_endianness(&proof.a), &[0u8][..]].concat(),
         Compress::No,
         Validate::No,
-    )
-    .unwrap();
+    ).map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to deserialize G1 point: {}", e)))?;
 
     proof_a
         .neg()
         .x
         .serialize_with_mode(&mut proof_a_neg[..32], Compress::No)
-        .unwrap();
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to serialize x coordinate: {}", e)))?;
+
     proof_a
         .neg()
         .y
         .serialize_with_mode(&mut proof_a_neg[32..], Compress::No)
-        .unwrap();
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to serialize y coordinate: {}", e)))?;
 
     let compressed_proof = CompressedProof {
         a: proof_a_neg[0..32].to_vec(),
@@ -97,5 +98,6 @@ pub fn negate_proof(proof: ProofABC) -> CompressedProof {
         c: proof.c[0..32].to_vec(),
     };
 
-    compressed_proof
+    Ok(compressed_proof)
 }
+
