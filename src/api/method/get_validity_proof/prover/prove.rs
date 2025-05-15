@@ -176,9 +176,6 @@ pub(crate) async fn generate_proof(
             path_index: addr_proof.lowElementLeafIndex,
             merkle_tree_id: addr_proof.merkleTree.to_string(),
             tree_info,
-            // next_index: addr_proof.nextIndex,
-            // lower_range_address_hex: pubkey_to_hex(&addr_proof.lowerRangeAddress),
-            // higher_range_address_hex: pubkey_to_hex(&addr_proof.higherRangeAddress),
         });
     }
 

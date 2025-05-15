@@ -76,7 +76,7 @@ pub fn negate_proof(proof: ProofABC) -> CompressedProof {
     let proof_a: G1 = G1::deserialize_with_mode(
         &*[&change_endianness(&proof.a), &[0u8][..]].concat(),
         Compress::No,
-        Validate::Yes,
+        Validate::No,
     )
     .unwrap();
 
