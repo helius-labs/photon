@@ -132,41 +132,7 @@ pub async fn get_exclusion_range_with_proof_v2(
             ))
         })?;
     if btree.is_empty() {
-        let zeroeth_element = get_zeroeth_exclusion_range(tree.clone());
-        let zeroeth_element_hash = compute_range_node_hash(&zeroeth_element).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-        })?;
-
-        let mut proof: Vec<Hash> = vec![];
-        for i in 0..(tree_height - 1) {
-            let hash = Hash::try_from(ZERO_BYTES[i as usize]).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
-            })?;
-            proof.push(hash);
-        }
-
-        let mut root = zeroeth_element_hash.clone().to_vec();
-
-        for elem in proof.iter() {
-            root = compute_parent_hash(root, elem.to_vec()).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-            })?;
-        }
-
-        let merkle_proof = MerkleProofWithContext {
-            proof,
-            root: Hash::try_from(root).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
-            })?,
-            leaf_index: 0,
-            hash: zeroeth_element_hash,
-            merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
-            })?,
-            root_seq: 3,
-        };
-        merkle_proof.validate()?;
-        return Ok((zeroeth_element, merkle_proof));
+        return proof_for_empty_tree(tree, tree_height);
     }
 
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
@@ -220,6 +186,46 @@ pub async fn get_exclusion_range_with_proof_v2(
         ))?;
 
     Ok((range_node.clone(), leaf_proof))
+}
+
+fn proof_for_empty_tree(
+    tree: Vec<u8>,
+    tree_height: u32,
+) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
+    let zeroeth_element = get_zeroeth_exclusion_range(tree.clone());
+    let zeroeth_element_hash = compute_range_node_hash(&zeroeth_element)
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
+
+    let mut proof: Vec<Hash> = vec![];
+    for i in 0..(tree_height - 1) {
+        let hash = Hash::try_from(ZERO_BYTES[i as usize]).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
+        })?;
+        proof.push(hash);
+    }
+
+    let mut root = zeroeth_element_hash.clone().to_vec();
+
+    for elem in proof.iter() {
+        root = compute_parent_hash(root, elem.to_vec()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+        })?;
+    }
+
+    let merkle_proof = MerkleProofWithContext {
+        proof,
+        root: Hash::try_from(root).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
+        })?,
+        leaf_index: 0,
+        hash: zeroeth_element_hash,
+        merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
+        })?,
+        root_seq: if TREE_HEIGHT_V1 == tree_height { 3 } else { 0 },
+    };
+    merkle_proof.validate()?;
+    Ok((zeroeth_element, merkle_proof))
 }
 
 pub async fn get_exclusion_range_with_proof_v1(
@@ -686,4 +692,25 @@ pub async fn validate_tree(db_conn: &sea_orm::DatabaseConnection, tree: Serializ
         }
     }
     info!("Finished validating tree");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zeroeth_element_hash_is_not_zero_bytes_0() {
+        let dummy_tree_id = vec![1u8; 32];
+        let zeroeth_element = get_zeroeth_exclusion_range(dummy_tree_id.clone());
+        let zeroeth_element_hash_result = compute_range_node_hash(&zeroeth_element);
+        assert!(
+            zeroeth_element_hash_result.is_ok(),
+            "Failed to compute zeroeth_element_hash: {:?}",
+            zeroeth_element_hash_result.err()
+        );
+        let zeroeth_element_hash = zeroeth_element_hash_result.unwrap();
+
+        let zero_hash_at_level_0 = ZERO_BYTES[0];
+        assert_ne!(zeroeth_element_hash.to_vec(), zero_hash_at_level_0.to_vec(),);
+    }
 }

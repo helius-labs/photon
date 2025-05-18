@@ -1,6 +1,6 @@
 use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::error::IngesterError;
-use crate::ingester::parser::indexer_events::PublicTransactionEventV1;
+use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
@@ -29,7 +29,7 @@ pub fn parse_public_transaction_event_v1(
         );
 
         let public_transaction_event =
-            PublicTransactionEventV1::deserialize(&mut next_next_instruction.data.as_slice())
+            PublicTransactionEvent::deserialize(&mut next_next_instruction.data.as_slice())
                 .map_err(|e| {
                     IngesterError::ParserError(format!(
                         "Failed to deserialize PublicTransactionEvent: {}",
@@ -45,7 +45,7 @@ pub fn parse_public_transaction_event_v1(
 pub fn create_state_update_v1(
     tx: Signature,
     slot: u64,
-    transaction_event: PublicTransactionEventV1,
+    transaction_event: PublicTransactionEvent,
 ) -> Result<StateUpdate, IngesterError> {
     let mut state_update = StateUpdate::new();
     let mut tree_to_seq_number = transaction_event

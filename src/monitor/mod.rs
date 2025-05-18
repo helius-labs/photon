@@ -30,6 +30,7 @@ use solana_sdk::account::Account as SolanaAccount;
 
 use crate::common::typedefs::context::Context;
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
+
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
 
