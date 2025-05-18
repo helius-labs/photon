@@ -19,13 +19,9 @@ pub(crate) struct AddressProofDetail {
     pub address: String,
     pub root: String,
     pub root_index_mod_queue: u64,
-    pub path_index: u32, // from lowElementLeafIndex, needed for v1
+    pub path_index: u32,
     pub merkle_tree_id: String,
     pub tree_info: TreeInfo,
-    // pub next_index: u32,
-    // pub lower_range_address_hex: String, // Store as hex string
-    // pub higher_range_address_hex: String, // Store as hex string
-    // pub original_proof_context: MerkleContextWithNewAddressProof, // Option
 }
 
 #[derive(Debug, Clone)]
@@ -35,7 +31,7 @@ pub(crate) struct ProverResult {
     pub address_proof_details: Vec<AddressProofDetail>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct InclusionHexInputsForProver {
     pub root: String,
@@ -44,7 +40,7 @@ pub(crate) struct InclusionHexInputsForProver {
     pub leaf: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NonInclusionHexInputsForProver {
     pub root: String,
@@ -65,19 +61,19 @@ pub(crate) struct GnarkProofJson {
 
 #[derive(Debug)]
 pub(crate) struct ProofABC {
-    pub a: Vec<u8>,
-    pub b: Vec<u8>,
-    pub c: Vec<u8>,
+    pub a: [u8; 64],
+    pub b: [u8; 128],
+    pub c: [u8; 64],
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Debug, Clone)]
 pub struct CompressedProof {
     pub a: Vec<u8>,
     pub b: Vec<u8>,
     pub c: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct HexBatchInputsForProver {
     #[serde(rename = "circuitType")]

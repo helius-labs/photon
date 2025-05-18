@@ -2,7 +2,8 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
     BatchPublicTransactionEvent, CompressedAccount, CompressedAccountData,
-    MerkleTreeSequenceNumberV2, OutputCompressedAccountWithPackedContext, PublicTransactionEventV2,
+    MerkleTreeSequenceNumberV1, MerkleTreeSequenceNumberV2,
+    OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
 };
 use crate::ingester::parser::state_update::StateUpdate;
 use crate::ingester::parser::tx_event_parser::create_state_update_v1;
@@ -23,7 +24,7 @@ pub fn parse_public_transaction_event_v2(
         events
             .into_iter()
             .map(|public_transaction_event| {
-                let event = PublicTransactionEventV2 {
+                let event = PublicTransactionEvent {
                     input_compressed_account_hashes: public_transaction_event
                         .event
                         .input_compressed_account_hashes,
@@ -55,10 +56,8 @@ pub fn parse_public_transaction_event_v2(
                         .event
                         .sequence_numbers
                         .iter()
-                        .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey,
-                            queue_pubkey: x.queue_pubkey,
-                            tree_type: x.tree_type,
+                        .map(|x| MerkleTreeSequenceNumberV1 {
+                            pubkey: x.tree_pubkey,
                             seq: x.seq,
                         })
                         .collect(),

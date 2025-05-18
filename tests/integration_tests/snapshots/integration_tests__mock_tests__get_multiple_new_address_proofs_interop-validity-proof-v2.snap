@@ -15,10 +15,7 @@ expression: validity_proof_v2
       {
         "address": "12nCKqGG85jHxbTeA8i2Z7D4vnNUUrQ4r5e8dv2o16X",
         "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
-        "rootIndex": {
-          "rootIndex": 3,
-          "proveByIndex": false
-        },
+        "rootIndex": 3,
         "merkleContext": {
           "treeType": 2,
           "tree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",

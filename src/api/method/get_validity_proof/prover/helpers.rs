@@ -1,4 +1,6 @@
+use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
+use crate::api::method::get_validity_proof::prover::gnark::negate_g1;
 use crate::api::method::get_validity_proof::prover::structs::{
     GnarkProofJson, InclusionHexInputsForProver, NonInclusionHexInputsForProver, ProofABC,
 };
@@ -64,73 +66,125 @@ pub fn hash_to_hex(hash: &Hash) -> String {
 fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
     let bytes = pubkey.to_bytes_vec();
     let hex = hex::encode(bytes);
+
     format!("0x{}", hex)
 }
 
-fn deserialize_hex_string_to_bytes(hex_str: &str) -> Vec<u8> {
+pub fn deserialize_hex_string_to_bytes(hex_str: &str) -> Result<Vec<u8>, PhotonApiError> {
     let hex_str = if hex_str.starts_with("0x") {
         &hex_str[2..]
     } else {
         hex_str
     };
-
-    // Left pad with 0s if the length is not 64
     let hex_str = format!("{:0>64}", hex_str);
 
-    hex::decode(&hex_str).expect("Failed to decode hex string")
+    hex::decode(hex_str)
+        .map_err(|_| PhotonApiError::UnexpectedError("Failed to decode hex string".to_string()))
 }
 
-pub fn proof_from_json_struct(json: GnarkProofJson) -> ProofABC {
-    let proof_ax = deserialize_hex_string_to_bytes(&json.ar[0]);
-    let proof_ay = deserialize_hex_string_to_bytes(&json.ar[1]);
-    let proof_a = [proof_ax, proof_ay].concat();
+pub fn proof_from_json_struct(json: GnarkProofJson) -> Result<ProofABC, PhotonApiError> {
+    let proof_a_x = deserialize_hex_string_to_bytes(&json.ar[0])?;
+    let proof_a_y = deserialize_hex_string_to_bytes(&json.ar[1])?;
+    let proof_a: [u8; 64] = [proof_a_x, proof_a_y].concat().try_into().map_err(|_| {
+        PhotonApiError::UnexpectedError("Failed to convert proof_a to [u8; 64]".to_string())
+    })?;
+    let proof_a = negate_g1(&proof_a)?;
 
-    let proof_bx0 = deserialize_hex_string_to_bytes(&json.bs[0][0]);
-    let proof_bx1 = deserialize_hex_string_to_bytes(&json.bs[0][1]);
-    let proof_by0 = deserialize_hex_string_to_bytes(&json.bs[1][0]);
-    let proof_by1 = deserialize_hex_string_to_bytes(&json.bs[1][1]);
-    let proof_b = [proof_bx0, proof_bx1, proof_by0, proof_by1].concat();
+    let proof_b_x_0 = deserialize_hex_string_to_bytes(&json.bs[0][0])?;
+    let proof_b_x_1 = deserialize_hex_string_to_bytes(&json.bs[0][1])?;
+    let proof_b_y_0 = deserialize_hex_string_to_bytes(&json.bs[1][0])?;
+    let proof_b_y_1 = deserialize_hex_string_to_bytes(&json.bs[1][1])?;
+    let proof_b: [u8; 128] = [proof_b_x_0, proof_b_x_1, proof_b_y_0, proof_b_y_1]
+        .concat()
+        .try_into()
+        .map_err(|_| {
+            PhotonApiError::UnexpectedError("Failed to convert proof_b to [u8; 128]".to_string())
+        })?;
 
-    let proof_cx = deserialize_hex_string_to_bytes(&json.krs[0]);
-    let proof_cy = deserialize_hex_string_to_bytes(&json.krs[1]);
-    let proof_c = [proof_cx, proof_cy].concat();
+    let proof_c_x = deserialize_hex_string_to_bytes(&json.krs[0])?;
+    let proof_c_y = deserialize_hex_string_to_bytes(&json.krs[1])?;
+    let proof_c: [u8; 64] = [proof_c_x, proof_c_y].concat().try_into().map_err(|_| {
+        PhotonApiError::UnexpectedError("Failed to convert proof_c to [u8; 64]".to_string())
+    })?;
 
-    ProofABC {
+    Ok(ProofABC {
         a: proof_a,
         b: proof_b,
         c: proof_c,
-    }
+    })
 }
 
 pub fn get_public_input_hash(
     account_proofs: &[MerkleProofWithContext],
     new_address_proofs: &[MerkleContextWithNewAddressProof],
-) -> [u8; 32] {
-    let account_hashes: Vec<[u8; 32]> = account_proofs
+) -> Result<[u8; 32], PhotonApiError> {
+    let account_hashes: Result<Vec<[u8; 32]>, PhotonApiError> = account_proofs
         .iter()
-        .map(|x| x.hash.to_vec().clone().try_into().unwrap())
-        .collect::<Vec<[u8; 32]>>();
-    let account_roots: Vec<[u8; 32]> = account_proofs
+        .map(|x| {
+            x.hash.to_vec().try_into().map_err(|_| {
+                PhotonApiError::UnexpectedError("Failed to convert hash to [u8; 32]".to_string())
+            })
+        })
+        .collect();
+    let account_hashes = account_hashes?;
+
+    let account_roots: Result<Vec<[u8; 32]>, PhotonApiError> = account_proofs
         .iter()
-        .map(|x| x.root.to_vec().clone().try_into().unwrap())
-        .collect::<Vec<[u8; 32]>>();
-    let inclusion_hash_chain: [u8; 32] =
-        create_two_inputs_hash_chain(&account_roots, &account_hashes).unwrap();
-    let new_address_hashes: Vec<[u8; 32]> = new_address_proofs
+        .map(|x| {
+            x.root.to_vec().try_into().map_err(|_| {
+                PhotonApiError::UnexpectedError("Failed to convert root to [u8; 32]".to_string())
+            })
+        })
+        .collect();
+    let account_roots = account_roots?;
+
+    let inclusion_hash_chain = create_two_inputs_hash_chain(&account_roots, &account_hashes)
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e))
+        })?;
+
+    let new_address_hashes: Result<Vec<[u8; 32]>, PhotonApiError> = new_address_proofs
         .iter()
-        .map(|x| x.address.try_to_vec().unwrap().clone().try_into().unwrap())
-        .collect::<Vec<[u8; 32]>>();
-    let new_address_roots: Vec<[u8; 32]> = new_address_proofs
+        .map(|x| {
+            x.address
+                .try_to_vec()
+                .map_err(|e| {
+                    PhotonApiError::UnexpectedError(format!("Failed to serialize address: {}", e))
+                })?
+                .try_into()
+                .map_err(|_| {
+                    PhotonApiError::UnexpectedError(
+                        "Failed to convert address bytes to [u8; 32]".to_string(),
+                    )
+                })
+        })
+        .collect();
+    let new_address_hashes = new_address_hashes?;
+
+    let new_address_roots: Result<Vec<[u8; 32]>, PhotonApiError> = new_address_proofs
         .iter()
-        .map(|x| x.root.to_vec().clone().try_into().unwrap())
-        .collect::<Vec<[u8; 32]>>();
+        .map(|x| {
+            x.root.to_vec().try_into().map_err(|_| {
+                PhotonApiError::UnexpectedError(
+                    "Failed to convert new address root to [u8; 32]".to_string(),
+                )
+            })
+        })
+        .collect();
+    let new_address_roots = new_address_roots?;
+
     let non_inclusion_hash_chain =
-        create_two_inputs_hash_chain(&new_address_roots, &new_address_hashes).unwrap();
+        create_two_inputs_hash_chain(&new_address_roots, &new_address_hashes).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e))
+        })?;
+
     if non_inclusion_hash_chain != [0u8; 32] {
-        non_inclusion_hash_chain
+        Ok(non_inclusion_hash_chain)
     } else if inclusion_hash_chain != [0u8; 32] {
-        inclusion_hash_chain
+        Ok(inclusion_hash_chain)
     } else {
-        create_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain]).unwrap()
+        create_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain]).map_err(
+            |e| PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e)),
+        )
     }
 }

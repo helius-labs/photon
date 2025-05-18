@@ -81,13 +81,13 @@ solana-pubkey = "2.3.0"
 
 solana-transaction-status = "1.18.0"
 
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
+
 light-poseidon = "0.3.0"
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
 
 sqlx = { version = "0.6.2", features = [
     "macros",
@@ -131,7 +131,7 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "368f9f08272db78c74b2ade1a1c2fead27dd0a96" }
+light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "a16015358aee65da5f67e4ae73197df5e75495d9" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.

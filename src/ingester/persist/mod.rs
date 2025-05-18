@@ -37,13 +37,12 @@ pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
 use crate::dao::generated::address_queue;
-use crate::ingester::persist::leaf_node::TREE_HEIGHT_V1;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
 mod leaf_node_proof;
 
-pub use self::leaf_node::{persist_leaf_nodes, LeafNode};
+pub use self::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
 pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,

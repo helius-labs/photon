@@ -90,7 +90,7 @@ pub struct AccountProofInputs {
 pub struct AddressProofInputs {
     pub address: String,
     pub root: String,
-    pub root_index: RootIndex,
+    pub root_index: u16,
     pub merkle_context: MerkleContextV2,
 }
 
@@ -265,7 +265,7 @@ pub async fn get_validity_proof_v2(
             v2_addresses_from_prover.push(AddressProofInputs {
                 address: detail.address,
                 root: detail.root,
-                root_index: Some(detail.root_index_mod_queue).into(),
+                root_index: detail.root_index_mod_queue as u16,
                 merkle_context: MerkleContextV2 {
                     tree_type: detail.tree_info.tree_type as u16,
                     tree: SerializablePubkey::from(detail.tree_info.tree),

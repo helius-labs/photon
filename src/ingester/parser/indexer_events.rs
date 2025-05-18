@@ -46,7 +46,7 @@ impl MerkleTreeSequenceNumber {
 }
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
-pub struct PublicTransactionEventV1 {
+pub struct PublicTransactionEvent {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_accounts: Vec<OutputCompressedAccountWithPackedContext>,
@@ -60,74 +60,9 @@ pub struct PublicTransactionEventV1 {
     pub message: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
-pub struct PublicTransactionEventV2 {
-    pub input_compressed_account_hashes: Vec<[u8; 32]>,
-    pub output_compressed_account_hashes: Vec<[u8; 32]>,
-    pub output_compressed_accounts: Vec<OutputCompressedAccountWithPackedContext>,
-    pub output_leaf_indices: Vec<u32>,
-    pub sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
-    pub relay_fee: Option<u64>,
-    pub is_compress: bool,
-    pub compression_lamports: Option<u64>,
-    pub pubkey_array: Vec<Pubkey>,
-    // TODO: remove(data can just be written into a compressed account)
-    pub message: Option<Vec<u8>>,
-}
-
-impl Into<PublicTransactionEventV1> for PublicTransactionEventV2 {
-    fn into(self) -> PublicTransactionEventV1 {
-        PublicTransactionEventV1 {
-            input_compressed_account_hashes: self.input_compressed_account_hashes,
-            output_compressed_account_hashes: self.output_compressed_account_hashes,
-            output_compressed_accounts: self.output_compressed_accounts,
-            output_leaf_indices: self.output_leaf_indices,
-            sequence_numbers: self
-                .sequence_numbers
-                .iter()
-                .map(|x| MerkleTreeSequenceNumberV1 {
-                    pubkey: x.tree_pubkey,
-                    seq: x.seq,
-                })
-                .collect(),
-            relay_fee: self.relay_fee,
-            is_compress: self.is_compress,
-            compression_lamports: self.compression_lamports,
-            pubkey_array: self.pubkey_array,
-            message: self.message,
-        }
-    }
-}
-
-impl Into<PublicTransactionEventV2> for PublicTransactionEventV1 {
-    fn into(self) -> PublicTransactionEventV2 {
-        PublicTransactionEventV2 {
-            input_compressed_account_hashes: self.input_compressed_account_hashes,
-            output_compressed_account_hashes: self.output_compressed_account_hashes,
-            output_compressed_accounts: self.output_compressed_accounts,
-            output_leaf_indices: self.output_leaf_indices,
-            sequence_numbers: self
-                .sequence_numbers
-                .iter()
-                .map(|x| MerkleTreeSequenceNumberV2 {
-                    tree_pubkey: x.pubkey,
-                    queue_pubkey: x.pubkey, // Default queue pubkey to tree pubkey
-                    tree_type: 0,           // Default tree type to 0 (StateV1)
-                    seq: x.seq,
-                })
-                .collect(),
-            relay_fee: self.relay_fee,
-            is_compress: self.is_compress,
-            compression_lamports: self.compression_lamports,
-            pubkey_array: self.pubkey_array,
-            message: self.message,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BatchPublicTransactionEvent {
-    pub event: PublicTransactionEventV2,
+    pub event: PublicTransactionEvent,
     pub new_addresses: Vec<NewAddress>,
     pub input_sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
     pub address_sequence_numbers: Vec<MerkleTreeSequenceNumberV2>,
