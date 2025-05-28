@@ -191,6 +191,15 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
             .map_err(Into::into)
     })?;
 
+    // Alias for getIndexerHealth, to enable compatibility with health check
+    module.register_async_method("getHealth", |_rpc_params, rpc_context| async move {
+        rpc_context
+            .as_ref()
+            .get_indexer_health()
+            .await
+            .map_err(Into::into)
+    })?;
+
     module.register_async_method("getIndexerSlot", |_rpc_params, rpc_context| async move {
         let api = rpc_context.as_ref();
         api.get_indexer_slot().await.map_err(Into::into)
