@@ -105,7 +105,8 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 [[package]]
 name = "aligned-sized"
 version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48a526ec4434d531d488af59fe866f36b310fe8906691c75dffa664450a3800a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3526,7 +3527,8 @@ dependencies = [
 [[package]]
 name = "light-account-checks"
 version = "0.2.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be36ef5deab5f090e6ddcc252e7e93c8b6eef2d65ff82493ed61dc8b14020152"
 dependencies = [
  "solana-account-info",
  "solana-program-error",
@@ -3537,15 +3539,16 @@ dependencies = [
 
 [[package]]
 name = "light-batched-merkle-tree"
-version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5adc9d9574154b7aa8f241790e5535427c446495880e69c384c3b350a9edb9b"
 dependencies = [
  "aligned-sized",
  "borsh 0.10.4",
  "light-account-checks",
  "light-bloom-filter",
  "light-compressed-account",
- "light-hasher",
+ "light-hasher 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-macros",
  "light-merkle-tree-metadata",
  "light-verifier",
@@ -3561,8 +3564,9 @@ dependencies = [
 
 [[package]]
 name = "light-bloom-filter"
-version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14ed35f00c8703b21b9024692c27f4680c007de077a26ac51a59f2ac6550b21"
 dependencies = [
  "bitvec",
  "fastmurmur3",
@@ -3573,8 +3577,9 @@ dependencies = [
 
 [[package]]
 name = "light-bounded-vec"
-version = "1.2.0"
-source = "git+https://github.com/lightprotocol/program-libs?rev=f5aa99e4617672bab00073377a2db92e42610a73#f5aa99e4617672bab00073377a2db92e42610a73"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "233a69f003522990dadcf923b436094ffcb55326a2c3cef7f67acdbcb6e5b039"
 dependencies = [
  "bytemuck",
  "memoffset 0.9.1",
@@ -3584,11 +3589,12 @@ dependencies = [
 [[package]]
 name = "light-compressed-account"
 version = "0.2.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6efd28989fb1b7d6dc0d846919f0483df4a5ce8dca6cbe8d75a8cbad258c7a"
 dependencies = [
  "borsh 0.10.4",
  "bytemuck",
- "light-hasher",
+ "light-hasher 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-macros",
  "light-zero-copy",
  "solana-program-error",
@@ -3599,13 +3605,33 @@ dependencies = [
 
 [[package]]
 name = "light-concurrent-merkle-tree"
-version = "1.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fe1b65ea30b64734aef6f63f2b0384a64987fb3b6208a25447f598ad22edf62"
 dependencies = [
  "borsh 0.10.4",
  "light-bounded-vec",
- "light-hasher",
+ "light-hasher 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memoffset 0.9.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "light-hasher"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "371b6d22607ddf42c977995afb11cac3b57764894edfe2a180fdce640c86e080"
+dependencies = [
+ "ark-bn254 0.5.0",
+ "ark-ff 0.5.0",
+ "arrayvec",
+ "borsh 0.10.4",
+ "light-poseidon 0.3.0",
+ "num-bigint 0.4.6",
+ "sha2 0.10.8",
+ "sha3 0.10.8",
+ "solana-program-error",
+ "solana-pubkey",
  "thiserror 2.0.12",
 ]
 
@@ -3632,7 +3658,7 @@ name = "light-indexed-array"
 version = "0.1.0"
 source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
 dependencies = [
- "light-hasher",
+ "light-hasher 3.0.0 (git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9)",
  "num-bigint 0.4.6",
  "num-traits",
  "thiserror 2.0.12",
@@ -3641,7 +3667,8 @@ dependencies = [
 [[package]]
 name = "light-macros"
 version = "2.0.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca5f4b6e1e97274dde89a64b9b4d0dba31b6bd862f751e2518891103ef9f777a"
 dependencies = [
  "bs58 0.5.1",
  "proc-macro2",
@@ -3651,8 +3678,9 @@ dependencies = [
 
 [[package]]
 name = "light-merkle-tree-metadata"
-version = "0.1.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c5c1292afc30da759b3b2fef1be8a6336780dc4dcc740241f7b3066fa314b36"
 dependencies = [
  "borsh 0.10.4",
  "bytemuck",
@@ -3669,7 +3697,7 @@ name = "light-merkle-tree-reference"
 version = "1.1.0"
 source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
 dependencies = [
- "light-hasher",
+ "light-hasher 3.0.0 (git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9)",
  "light-indexed-array",
  "num-bigint 0.4.6",
  "num-traits",
@@ -3703,7 +3731,8 @@ dependencies = [
 [[package]]
 name = "light-verifier"
 version = "2.0.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08707e7b13ef86e8eb4f7b0f1e68e6e1bbe8ce331767f670406565ce5030de5a"
 dependencies = [
  "groth16-solana",
  "light-compressed-account",
@@ -3715,7 +3744,8 @@ dependencies = [
 [[package]]
 name = "light-zero-copy"
 version = "0.2.0"
-source = "git+https://github.com/Lightprotocol/light-protocol?rev=a16015358aee65da5f67e4ae73197df5e75495d9#a16015358aee65da5f67e4ae73197df5e75495d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a34d759f65547a6540db7047f38f4cb2c3f01658deca95a1dd06f26b578de947"
 dependencies = [
  "solana-program-error",
  "thiserror 2.0.12",
@@ -4401,7 +4431,7 @@ dependencies = [
  "light-batched-merkle-tree",
  "light-compressed-account",
  "light-concurrent-merkle-tree",
- "light-hasher",
+ "light-hasher 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "light-merkle-tree-metadata",
  "light-merkle-tree-reference",
  "light-poseidon 0.3.0",
