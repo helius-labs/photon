@@ -28,8 +28,8 @@ use crate::api::method::get_transaction_with_compression_info::{
     ClosedAccountWithOptionalTokenDataV2,
 };
 use crate::api::method::get_validity_proof::{
-    CompressedProof, CompressedProofWithContext, CompressedProofWithContextV2, MerkleContextV2,
-    RootIndex, TreeContextInfo,
+    AccountProofInputs, AddressProofInputs, CompressedProof, CompressedProofWithContext,
+    CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
 };
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
@@ -82,6 +82,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(
+    AccountProofInputs,
+    AddressProofInputs,
     AddressQueueIndex,
     SerializablePubkey,
     Context,

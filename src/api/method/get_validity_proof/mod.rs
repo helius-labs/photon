@@ -8,6 +8,7 @@ pub use v1::{
     GetValidityProofRequestDocumentation, GetValidityProofResponse,
 };
 pub use v2::{
-    get_validity_proof_v2, CompressedProofWithContextV2, GetValidityProofRequestV2,
-    GetValidityProofResponseV2, MerkleContextV2, RootIndex, TreeContextInfo,
+    get_validity_proof_v2, AccountProofInputs, AddressProofInputs, CompressedProofWithContextV2,
+    GetValidityProofRequestV2, GetValidityProofResponseV2, MerkleContextV2, RootIndex,
+    TreeContextInfo,
 };
