@@ -1,5 +1,6 @@
 ---
 source: tests/integration_tests/e2e_tests.rs
+assertion_line: 417
 expression: validity_proof
 ---
 {
@@ -18,12 +19,12 @@ expression: validity_proof
       5
     ],
     "leafIndices": [
-      4,
-      2
+      2,
+      4
     ],
     "leaves": [
-      "2eoEsJByEcWpLTdaEwr1DB6cwXkFxqAVZnbvWoQSDm4V",
-      "3q5dSVJCK4Tk2VU9C4MaPPw4TdzKdtp1M5Dug3zERSx4"
+      "3q5dSVJCK4Tk2VU9C4MaPPw4TdzKdtp1M5Dug3zERSx4",
+      "2eoEsJByEcWpLTdaEwr1DB6cwXkFxqAVZnbvWoQSDm4V"
     ],
     "merkleTrees": [
       "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",

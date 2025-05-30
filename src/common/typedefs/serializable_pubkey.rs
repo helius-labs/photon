@@ -2,23 +2,20 @@ use core::fmt;
 use std::io::Read;
 use std::str::FromStr;
 
-
 use borsh::BorshDeserialize;
 use serde::Deserialize;
-use solana_sdk::pubkey::ParsePubkeyError;
 
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
-use solana_sdk::pubkey::Pubkey as SolanaPubkey;
+use solana_pubkey::ParsePubkeyError;
+use solana_pubkey::Pubkey as SolanaPubkey;
+use std::convert::TryFrom;
 use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
 use utoipa::ToSchema;
 
-use std::convert::TryFrom;
-
 #[derive(Default, Clone, PartialEq, Eq, Hash, Copy)]
-/// A Solana public key.
 pub struct SerializablePubkey(pub SolanaPubkey);
 
 impl SerializablePubkey {
@@ -33,7 +30,7 @@ impl SerializablePubkey {
 
 impl anchor_lang::AnchorDeserialize for SerializablePubkey {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
-        <solana_sdk::pubkey::Pubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
+        <SolanaPubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
     }
 
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
@@ -66,7 +63,7 @@ impl<'__s> ToSchema<'__s> for SerializablePubkey {
         ("SerializablePubkey", RefOr::T(schema))
     }
 
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
+    fn aliases() -> Vec<(&'static str, Schema)> {
         Vec::new()
     }
 }
@@ -88,6 +85,12 @@ impl fmt::Display for SerializablePubkey {
 impl From<SolanaPubkey> for SerializablePubkey {
     fn from(pubkey: SolanaPubkey) -> Self {
         SerializablePubkey(pubkey)
+    }
+}
+
+impl From<&SolanaPubkey> for SerializablePubkey {
+    fn from(pubkey: &SolanaPubkey) -> Self {
+        SerializablePubkey(*pubkey)
     }
 }
 
@@ -130,7 +133,7 @@ struct Base58Visitor;
 impl<'de> Visitor<'de> for Base58Visitor {
     type Value = SerializablePubkey;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a base58 encoded string")
     }
 

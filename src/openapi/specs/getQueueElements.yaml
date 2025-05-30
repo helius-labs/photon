@@ -1,0 +1,89 @@
+paths:
+  /:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - jsonrpc
+                - id
+                - method
+                - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                    - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                    - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                    - getQueueElements
+                params:
+                  type: object
+                  required:
+                    - queue
+                    - batch
+                    - startOffset
+                    - endOffset
+                  properties:
+                    queue:
+                      $ref: '#/components/schemas/Hash'
+                    batch:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                    startOffset:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                    endOffset:
+                      $ref: '#/components/schemas/UnsignedInteger'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - context
+                  - value
+                properties:
+                  context:
+                    $ref: '#/components/schemas/Context'
+                  value:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Hash'
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+components:
+  schemas:
+    Hash:
+      type: string
+      description: A base58 encoded hash.
+      default: "11111111111111111111111111111111"
+      example: "11111111111111111111111111111111"

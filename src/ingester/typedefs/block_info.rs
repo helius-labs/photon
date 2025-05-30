@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
+use solana_pubkey::Pubkey;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
-    pubkey::Pubkey,
     signature::Signature,
     transaction::VersionedTransaction,
 };
@@ -177,7 +177,7 @@ pub fn parse_instruction_groups(
     versioned_transaction: VersionedTransaction,
     meta: UiTransactionStatusMeta,
 ) -> Result<Vec<InstructionGroup>, IngesterError> {
-    let mut accounts = Vec::from(versioned_transaction.message.static_account_keys());
+    let mut sdk_accounts = Vec::from(versioned_transaction.message.static_account_keys());
     if versioned_transaction
         .message
         .address_table_lookups()
@@ -189,12 +189,21 @@ pub fn parse_instruction_groups(
                 .iter()
                 .chain(loaded_addresses.readonly.iter())
             {
-                let pubkey = Pubkey::from_str(address)
+                let sdk_pubkey = solana_sdk::pubkey::Pubkey::from_str(address)
                     .map_err(|e| IngesterError::ParserError(e.to_string()))?;
-                accounts.push(pubkey);
+                sdk_accounts.push(sdk_pubkey);
             }
         }
     }
+
+    // Convert from solana_sdk::pubkey::Pubkey to solana_pubkey::Pubkey
+    let accounts: Vec<Pubkey> = sdk_accounts
+        .iter()
+        .map(|sdk_pubkey| {
+            let bytes = sdk_pubkey.to_bytes();
+            Pubkey::new_from_array(bytes)
+        })
+        .collect();
 
     // Parse outer instructions and bucket them into groups
     let mut instruction_groups: Vec<InstructionGroup> = versioned_transaction
@@ -202,19 +211,19 @@ pub fn parse_instruction_groups(
         .instructions()
         .iter()
         .map(|ix| {
-            let program_id = accounts[ix.program_id_index as usize];
+            let program_id = accounts[ix.program_id_index as usize].clone();
             let data = ix.data.clone();
-            let accounts: Vec<Pubkey> = ix
+            let instruction_accounts: Vec<Pubkey> = ix
                 .accounts
                 .iter()
-                .map(|account_index| accounts[*account_index as usize])
+                .map(|account_index| accounts[*account_index as usize].clone())
                 .collect();
 
             InstructionGroup {
                 outer_instruction: Instruction {
                     program_id,
                     data,
-                    accounts,
+                    accounts: instruction_accounts,
                 },
                 inner_instructions: Vec::new(),
             }
@@ -229,21 +238,21 @@ pub fn parse_instruction_groups(
                 match ui_instruction {
                     UiInstruction::Compiled(ui_compiled_instruction) => {
                         let program_id =
-                            accounts[ui_compiled_instruction.program_id_index as usize];
+                            accounts[ui_compiled_instruction.program_id_index as usize].clone();
                         let data = bs58::decode(&ui_compiled_instruction.data)
                             .into_vec()
                             .map_err(|e| IngesterError::ParserError(e.to_string()))?;
-                        let accounts = ui_compiled_instruction
+                        let instruction_accounts: Vec<Pubkey> = ui_compiled_instruction
                             .accounts
                             .iter()
-                            .map(|account_index| accounts[*account_index as usize])
+                            .map(|account_index| accounts[*account_index as usize].clone())
                             .collect();
                         instruction_groups[index as usize]
                             .inner_instructions
                             .push(Instruction {
                                 program_id,
                                 data,
-                                accounts,
+                                accounts: instruction_accounts,
                             });
                     }
                     UiInstruction::Parsed(_) => {

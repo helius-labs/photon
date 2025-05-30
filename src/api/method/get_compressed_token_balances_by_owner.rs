@@ -3,12 +3,14 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::common::typedefs::bs58_string::Base58String;
+use crate::common::typedefs::context::Context;
+use crate::common::typedefs::limit::Limit;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::token_owner_balances;
 
 use super::super::error::PhotonApiError;
-use super::utils::{parse_decimal, Context, Limit, PAGE_LIMIT};
+use super::utils::{parse_decimal, PAGE_LIMIT};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct TokenBalance {

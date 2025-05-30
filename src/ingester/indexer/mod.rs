@@ -17,7 +17,7 @@ const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
 #[derive(FromQueryResult)]
 pub struct OptionalContextModel {
-    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
+    // Postgres and SQLite do not support u64 as return type. We need to use i64 and cast it to u64.
     pub slot: Option<i64>,
 }
 

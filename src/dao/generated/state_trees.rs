@@ -12,7 +12,7 @@ pub struct Model {
     pub leaf_idx: Option<i64>,
     pub level: i64,
     pub hash: Vec<u8>,
-    pub seq: i64,
+    pub seq: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

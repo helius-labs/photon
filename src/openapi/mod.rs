@@ -1,10 +1,15 @@
 use std::collections::HashSet;
 
 use crate::api::api::PhotonApi;
+use crate::api::method::get_batch_address_update_info::AddressQueueIndex;
+use crate::api::method::get_compressed_account_proof::{
+    GetCompressedAccountProofResponseValue, GetCompressedAccountProofResponseValueV2,
+};
 use crate::api::method::get_compressed_accounts_by_owner::DataSlice;
 use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
+use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountListV2;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalance;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalanceList;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalancesResponse;
@@ -12,35 +17,41 @@ use crate::api::method::get_compressed_token_account_balance::TokenAccountBalanc
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceListV2;
-use crate::api::method::get_multiple_compressed_accounts::AccountList;
-
+use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountListV2};
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
-use crate::api::method::get_transaction_with_compression_info::AccountWithOptionalTokenData;
-use crate::api::method::get_validity_proof::CompressedProof;
-use crate::api::method::get_validity_proof::CompressedProofWithContext;
-use crate::api::method::utils::Context;
-use crate::api::method::utils::Limit;
+use crate::api::method::get_queue_elements::GetQueueElementsResponseValue;
+use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
+use crate::api::method::get_transaction_with_compression_info::{
+    AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
+    ClosedAccountWithOptionalTokenDataV2,
+};
+use crate::api::method::get_validity_proof::{
+    AccountProofInputs, AddressProofInputs, CompressedProof, CompressedProofWithContext,
+    CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
+};
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
 use crate::api::method::utils::SignatureInfoListWithError;
 use crate::api::method::utils::SignatureInfoWithError;
-use crate::api::method::utils::TokenAcccount;
-use crate::api::method::utils::TokenAccountList;
-use crate::common::typedefs::account::Account;
-use crate::common::typedefs::account::AccountData;
+use crate::api::method::utils::{TokenAccount, TokenAccountV2};
+use crate::api::method::utils::{TokenAccountList, TokenAccountListV2};
+use crate::common::typedefs::account::{
+    Account, AccountContext, AccountData, AccountV2, AccountWithContext,
+};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::limit::Limit;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::ingester::persist::persisted_state_tree::MerkleProofWithContext;
 use dirs;
 use utoipa::openapi::Components;
 use utoipa::openapi::Response;
@@ -71,16 +82,27 @@ const JSON_CONTENT_TYPE: &str = "application/json";
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(
+    AccountProofInputs,
+    AddressProofInputs,
+    AddressQueueIndex,
     SerializablePubkey,
     Context,
     Hash,
+    CompressionInfoV2,
     PaginatedAccountList,
+    PaginatedAccountListV2,
     Account,
-    MerkleProofWithContext,
+    AccountContext,
+    AccountWithContext,
+    AccountV2,
+    GetQueueElementsResponseValue,
     TokenAccountList,
-    TokenAcccount,
+    TokenAccountListV2,
+    TokenAccount,
+    TokenAccountV2,
     TokenAccountBalance,
     AccountList,
+    AccountListV2,
     Limit,
     Base58String,
     Base64String,
@@ -94,10 +116,15 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     AccountData,
     AccountState,
     AccountWithOptionalTokenData,
+    ClosedAccountWithOptionalTokenDataV2,
+    ClosedAccountV2,
+    AccountWithOptionalTokenDataV2,
     UnixTimestamp,
     UnsignedInteger,
     CompressedProof,
     CompressedProofWithContext,
+    CompressedProofWithContextV2,
+    RootIndex,
     MerkleContextWithNewAddressProof,
     SignatureInfoListWithError,
     SignatureInfoWithError,
@@ -110,6 +137,10 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OwnerBalanceList,
     OwnerBalancesResponse,
     TokenBalanceListV2,
+    MerkleContextV2,
+    TreeContextInfo,
+    GetCompressedAccountProofResponseValue,
+    GetCompressedAccountProofResponseValueV2,
 )))]
 struct ApiDoc;
 
@@ -130,21 +161,45 @@ fn add_string_property(
 }
 
 fn build_error_response(description: &str) -> Response {
+    let error_object = ObjectBuilder::new()
+        .property(
+            "code",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .schema_type(SchemaType::Integer)
+                    .build(),
+            )),
+        )
+        .property(
+            "message",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+            )),
+        )
+        .build();
+
+    let response_schema = ObjectBuilder::new()
+        .property(
+            "jsonrpc",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+            )),
+        )
+        .property(
+            "id",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+            )),
+        )
+        .property("error", RefOr::T(Schema::Object(error_object)))
+        .build();
+
     ResponseBuilder::new()
         .description(description)
         .content(
             JSON_CONTENT_TYPE,
             ContentBuilder::new()
-                .schema(Schema::Object(
-                    ObjectBuilder::new()
-                        .property(
-                            "error",
-                            RefOr::T(Schema::Object(
-                                ObjectBuilder::new().schema_type(SchemaType::String).build(),
-                            )),
-                        )
-                        .build(),
-                ))
+                .schema(Schema::Object(response_schema))
                 .build(),
         )
         .build()
@@ -175,6 +230,47 @@ fn request_schema(name: &str, params: Option<RefOr<Schema>>) -> RefOr<Schema> {
         builder = builder.property("params", params);
         builder = builder.required("params");
     }
+
+    RefOr::T(Schema::Object(builder.build()))
+}
+
+fn response_schema(result: RefOr<Schema>) -> RefOr<Schema> {
+    let mut builder = ObjectBuilder::new();
+
+    builder = add_string_property(
+        builder,
+        "jsonrpc",
+        "2.0",
+        "The version of the JSON-RPC protocol.",
+    );
+    builder = add_string_property(
+        builder,
+        "id",
+        "test-account",
+        "An ID to identify the response.",
+    );
+    builder = builder.property("result", result);
+
+    // Add optional error property
+    let error_object = ObjectBuilder::new()
+        .property(
+            "code",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .schema_type(SchemaType::Integer)
+                    .build(),
+            )),
+        )
+        .property(
+            "message",
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new().schema_type(SchemaType::String).build(),
+            )),
+        )
+        .build();
+    builder = builder.property("error", RefOr::T(Schema::Object(error_object)));
+
+    builder = builder.required("jsonrpc").required("id");
 
     RefOr::T(Schema::Object(builder.build()))
 }
@@ -281,7 +377,7 @@ fn filter_unused_components(
         .collect();
 }
 
-pub fn update_docs(is_test: bool) {
+pub fn update_docs_new(is_test: bool) {
     let method_api_specs = PhotonApi::method_api_specs();
 
     for spec in method_api_specs {
@@ -366,5 +462,88 @@ pub fn update_docs(is_test: bool) {
                 spec.name, stderr
             );
         }
+    }
+}
+
+pub fn update_docs(is_test: bool) {
+    let method_api_specs = PhotonApi::method_api_specs();
+    let mut doc = ApiDoc::openapi();
+    doc.components = doc.components.map(|components| {
+        let mut components = components.clone();
+        components.schemas = components
+            .schemas
+            .iter()
+            .map(|(k, v)| (k.clone(), fix_examples_for_allOf_references(v.clone())))
+            .collect();
+        components
+    });
+
+    for spec in method_api_specs {
+        let content = ContentBuilder::new()
+            .schema(request_schema(&spec.name, spec.request))
+            .build();
+        let request_body = RequestBodyBuilder::new()
+            .content(JSON_CONTENT_TYPE, content)
+            .required(Some(Required::True))
+            .build();
+        let wrapped_response_schema =
+            response_schema(fix_examples_for_allOf_references(spec.response));
+
+        let responses = ResponsesBuilder::new().response(
+            "200",
+            ResponseBuilder::new().content(
+                JSON_CONTENT_TYPE,
+                ContentBuilder::new().schema(wrapped_response_schema).build(),
+            ),
+        )
+        .response("429", build_error_response("Exceeded rate limit."))
+        .response("500", build_error_response("The server encountered an unexpected condition that prevented it from fulfilling the request."));
+        let operation = OperationBuilder::new()
+            .request_body(Some(request_body))
+            .responses(responses)
+            .build();
+        let mut path_item = PathItem::new(PathItemType::Post, operation);
+
+        path_item.summary = Some(spec.name.clone());
+        doc.paths
+            .paths
+            .insert(format!("/{method}", method = spec.name), path_item);
+    }
+
+    // doc.paths.paths.insert("/".to_string(), path_item);
+    doc.servers = Some(vec![ServerBuilder::new()
+        .url("https://devnet.helius-rpc.com?api-key=<api_key>".to_string())
+        .build()]);
+    let yaml = doc.to_yaml().unwrap();
+
+    let path = match is_test {
+        true => {
+            let tmp_directory = dirs::home_dir().unwrap().join(".tmp");
+
+            // Create tmp directory if it does not exist
+            if !tmp_directory.exists() {
+                std::fs::create_dir(&tmp_directory).unwrap();
+            }
+
+            relative_project_path(&format!("{}/test.yaml", tmp_directory.display()))
+        }
+        false => {
+            // relative_project_path(&format!("src/openapi/specs/{}.yaml", spec.name.clone()))
+            relative_project_path("src/openapi/specs/api.yaml")
+        }
+    };
+
+    std::fs::write(path.clone(), yaml).unwrap();
+
+    // Call the external swagger-cli validate command and fail if it fails
+    let validate_result = std::process::Command::new("swagger-cli")
+        .arg("validate")
+        .arg(path.to_str().unwrap())
+        .output()
+        .unwrap();
+
+    if !validate_result.status.success() {
+        let stderr = String::from_utf8_lossy(&validate_result.stderr);
+        panic!("Failed to validate OpenAPI schema. {}", stderr);
     }
 }

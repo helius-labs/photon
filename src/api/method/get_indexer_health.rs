@@ -1,9 +1,8 @@
 use sea_orm::DatabaseConnection;
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-
 use super::super::error::PhotonApiError;
-use super::utils::Context;
+use crate::common::typedefs::context::Context;
+use solana_client::nonblocking::rpc_client::RpcClient;
 
 // TODO: Make this an environment variable.
 pub const HEALTH_CHECK_SLOT_DISTANCE: i64 = 20;

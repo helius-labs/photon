@@ -21,6 +21,13 @@ pub enum Accounts {
     Owner,
     Tree,
     LeafIndex,
+    InOutputQueue,
+    NullifierQueueIndex,
+    NullifiedInTree,
+    TreeType,
+    Queue,
+    Nullifier,
+    TxHash,
     Spent,
     PrevSpent,
     Seq,
@@ -98,4 +105,12 @@ pub enum StateTreeHistories {
     Seq,
     TransactionSignature,
     LeafIdx,
+}
+
+#[derive(Copy, Clone, Iden)]
+pub enum AddressQueues {
+    Table,
+    Tree,
+    Address,
+    QueueIndex,
 }

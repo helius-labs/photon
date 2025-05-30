@@ -1,22 +1,23 @@
+use light_compressed_account::TreeType;
 use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, Statement,
     TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
+use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::persist::persisted_indexed_merkle_tree::get_exclusion_range_with_proof;
+use crate::ingester::parser::tree_info::TreeInfo;
+use crate::ingester::persist::persisted_indexed_merkle_tree::{
+    format_bytes, get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
+};
 
-pub const ADDRESS_TREE_HEIGHT: u32 = 27;
-pub const ADDRESS_TREE_ADDRESS: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 pub const MAX_ADDRESSES: usize = 50;
-
-use super::utils::Context;
+pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -26,7 +27,7 @@ pub struct AddressWithTree {
     pub tree: SerializablePubkey,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[allow(non_snake_case)]
 pub struct MerkleContextWithNewAddressProof {
@@ -51,6 +52,7 @@ pub struct GetMultipleNewAddressProofsResponse {
 pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
     addresses: Vec<AddressWithTree>,
+    check_queue: bool,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
@@ -72,13 +74,71 @@ pub async fn get_multiple_new_address_proofs_helper(
     let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
 
     for AddressWithTree { address, tree } in addresses {
-        let (model, proof) = get_exclusion_range_with_proof(
-            txn,
-            tree.to_bytes_vec(),
-            ADDRESS_TREE_HEIGHT,
-            address.to_bytes_vec(),
-        )
-        .await?;
+        let tree_and_queue = TreeInfo::get(&tree.to_string())
+            .ok_or(PhotonApiError::InvalidPubkey {
+                field: tree.to_string(),
+            })?
+            .clone();
+
+        // For V2 trees, check if the address is in the queue but not yet in the tree
+        if check_queue && tree_and_queue.tree_type == TreeType::AddressV2 {
+            // Check if the address is in the queue
+            let address_queue_stmt = Statement::from_string(
+                txn.get_database_backend(),
+                format!(
+                    "SELECT COUNT(*) as count FROM address_queues
+                     WHERE tree = {} AND address = {}",
+                    format_bytes(tree.to_bytes_vec(), txn.get_database_backend()),
+                    format_bytes(address.to_bytes_vec(), txn.get_database_backend())
+                ),
+            );
+
+            let queue_result = txn.query_one(address_queue_stmt).await.map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to query address queue: {}", e))
+            })?;
+
+            let in_queue = match queue_result {
+                Some(row) => {
+                    let count: i64 = row.try_get("", "count").map_err(|e| {
+                        PhotonApiError::UnexpectedError(format!("Failed to get count: {}", e))
+                    })?;
+                    count > 0
+                }
+                None => false,
+            };
+
+            if in_queue {
+                return Err(PhotonApiError::ValidationError(format!(
+                    "Address {} is in the queue for tree {} but not yet in the tree",
+                    address.to_string(),
+                    tree.to_string()
+                )));
+            }
+        }
+
+        let (model, proof) = match tree_and_queue.tree_type {
+            TreeType::AddressV1 => {
+                let address = address.to_bytes_vec();
+                let tree = tree.to_bytes_vec();
+                get_exclusion_range_with_proof_v1(txn, tree, tree_and_queue.height + 1, address)
+                    .await?
+            }
+            TreeType::AddressV2 => {
+                get_exclusion_range_with_proof_v2(
+                    txn,
+                    tree.to_bytes_vec(),
+                    tree_and_queue.height + 1,
+                    address.to_bytes_vec(),
+                )
+                .await?
+            }
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(
+                    "Invalid tree type".to_string(),
+                ));
+            }
+        };
+
         let new_address_proof = MerkleContextWithNewAddressProof {
             root: proof.root,
             address,
@@ -88,7 +148,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             proof: proof.proof,
             lowElementLeafIndex: model.leaf_index as u32,
             merkleTree: tree,
-            rootSeq: proof.rootSeq,
+            rootSeq: proof.root_seq,
         };
         new_address_proofs.push(new_address_proof);
     }
@@ -108,7 +168,7 @@ pub async fn get_multiple_new_address_proofs(
             .into_iter()
             .map(|address| AddressWithTree {
                 address,
-                tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+                tree: SerializablePubkey::from(ADDRESS_TREE_V1),
             })
             .collect(),
     );
@@ -135,7 +195,7 @@ pub async fn get_multiple_new_address_proofs_v2(
     }
 
     let new_address_proofs =
-        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0).await?;
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, true).await?;
     tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {
