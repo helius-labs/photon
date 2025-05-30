@@ -29,8 +29,8 @@ impl MigrationTrait for Migration {
         if manager.get_database_backend() == DatabaseBackend::Postgres {
             // Max balance of an individual account or token account is 2**64. bigint2 is 5000x larger than that to account for batch updates where update the database with new account balances
             // before closing spent accounts and extreme cases where a single wallet owns an excessive amount of account / tokens with high number of lamports.
-            // 
-            // We go a bit overboard here, but it's ok because bigint2 is not the storage bottleneck. 
+            //
+            // We go a bit overboard here, but it's ok because bigint2 is not the storage bottleneck.
             execute_sql(
                 manager,
                 "

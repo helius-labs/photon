@@ -3,7 +3,7 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID, SYSTEM_PROGRAM};
+use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use anchor_lang::AnchorDeserialize;
 use light_compressed_account::TreeType;
@@ -14,13 +14,11 @@ use std::collections::HashMap;
 pub fn parse_public_transaction_event_v1(
     tx: &TransactionInfo,
     slot: u64,
-    instruction: &Instruction,
-    next_instruction: &Instruction,
-    next_next_instruction: &Instruction,
+    compression_instruction: &Instruction,
+    noop_instruction: &Instruction,
 ) -> Result<Option<StateUpdate>, IngesterError> {
-    if get_compression_program_id() == instruction.program_id
-        && next_instruction.program_id == SYSTEM_PROGRAM
-        && next_next_instruction.program_id == NOOP_PROGRAM_ID
+    if get_compression_program_id() == compression_instruction.program_id
+        && noop_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
         info!(
@@ -28,14 +26,15 @@ pub fn parse_public_transaction_event_v1(
             slot, tx.signature
         );
 
-        let public_transaction_event =
-            PublicTransactionEvent::deserialize(&mut next_next_instruction.data.as_slice())
-                .map_err(|e| {
-                    IngesterError::ParserError(format!(
-                        "Failed to deserialize PublicTransactionEvent: {}",
-                        e
-                    ))
-                })?;
+        let public_transaction_event = PublicTransactionEvent::deserialize(
+            &mut noop_instruction.data.as_slice(),
+        )
+        .map_err(|e| {
+            IngesterError::ParserError(format!(
+                "Failed to deserialize PublicTransactionEvent: {}",
+                e
+            ))
+        })?;
         create_state_update_v1(tx.signature, slot, public_transaction_event.into()).map(Some)
     } else {
         Ok(None)

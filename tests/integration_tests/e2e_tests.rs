@@ -691,7 +691,6 @@ async fn test_nullfiier_and_address_queue_transactions(
     }
 }
 
-
 #[named]
 #[rstest]
 #[tokio::test]
@@ -710,7 +709,8 @@ async fn test_transaction_with_tree_rollover_fee(
         },
     )
     .await;
-    let txn = "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
+    let txn =
+        "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn).await;
     let status_update = parse_transaction(&txn.try_into().unwrap(), 0).unwrap();
     // Assert that status update has at least one account
