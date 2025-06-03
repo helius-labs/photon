@@ -17,8 +17,8 @@ use crate::ingester::persist::persisted_state_tree::get_subtrees;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetBatchAddressUpdateInfoRequest {
     pub tree: SerializablePubkey,
-    pub start_offset: Option<u64>,
-    pub batch_size: u16,
+    pub start_queue_index: Option<u64>,
+    pub limit: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -55,7 +55,7 @@ pub async fn get_batch_address_update_info(
     conn: &DatabaseConnection,
     request: GetBatchAddressUpdateInfoRequest,
 ) -> Result<GetBatchAddressUpdateInfoResponse, PhotonApiError> {
-    let batch_size = request.batch_size;
+    let limit = request.limit;
     let merkle_tree_pubkey = request.tree;
     let tree_info = TreeInfo::get(&merkle_tree_pubkey.to_string())
         .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?
@@ -87,8 +87,8 @@ pub async fn get_batch_address_update_info(
         None => 1,
     };
 
-    let offset_condition = match request.start_offset {
-        Some(start_offset) => format!("AND queue_index >= {}", start_offset),
+    let offset_condition = match request.start_queue_index {
+        Some(start_queue_index) => format!("AND queue_index >= {}", start_queue_index),
         None => String::new(),
     };
 
@@ -103,7 +103,7 @@ pub async fn get_batch_address_update_info(
              LIMIT {}",
             format_bytes(merkle_tree.clone(), tx.get_database_backend()),
             offset_condition,
-            batch_size
+            limit
         ),
     );
 

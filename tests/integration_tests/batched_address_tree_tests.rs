@@ -165,8 +165,8 @@ async fn run_batched_address_test(
         .api
         .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            start_offset: None,
-            batch_size: 100,
+            start_queue_index: None,
+            limit: 100,
         })
         .await
         .expect("Failed to get address queue elements before batch update");
@@ -213,8 +213,8 @@ async fn run_batched_address_test(
         .api
         .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            start_offset: None,
-            batch_size: 100,
+            start_queue_index: None,
+            limit: 100,
         })
         .await
         .expect("Failed to get address queue elements after batch update");

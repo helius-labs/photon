@@ -18,8 +18,8 @@ use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
     pub tree: Hash,
-    pub start_offset: Option<u64>,
-    pub num_elements: u16,
+    pub start_queue_index: Option<u64>,
+    pub limit: u16,
     pub queue_type: u8,
 }
 
@@ -57,7 +57,7 @@ pub async fn get_queue_elements(
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
     let queue_type = QueueType::from(request.queue_type as u64);
-    let num_elements = request.num_elements;
+    let limit = request.limit;
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
     if tx.get_database_backend() == DatabaseBackend::Postgres {
@@ -75,16 +75,16 @@ pub async fn get_queue_elements(
         QueueType::InputStateV2 => {
             query_condition =
                 query_condition.add(accounts::Column::NullifierQueueIndex.is_not_null());
-            if let Some(start_offset) = request.start_offset {
+            if let Some(start_queue_index) = request.start_queue_index {
                 query_condition = query_condition
-                    .add(accounts::Column::NullifierQueueIndex.gte(start_offset as i64));
+                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
             }
         }
         QueueType::OutputStateV2 => {
             query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
-            if let Some(start_offset) = request.start_offset {
+            if let Some(start_queue_index) = request.start_queue_index {
                 query_condition =
-                    query_condition.add(accounts::Column::LeafIndex.gte(start_offset as i64));
+                    query_condition.add(accounts::Column::LeafIndex.gte(start_queue_index as i64));
             }
         }
         _ => {
@@ -111,7 +111,7 @@ pub async fn get_queue_elements(
     };
 
     let queue_elements: Vec<QueueElement> = query
-        .limit(num_elements as u64)
+        .limit(limit as u64)
         .into_model::<QueueElement>()
         .all(&tx)
         .await

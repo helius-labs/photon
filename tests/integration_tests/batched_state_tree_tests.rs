@@ -161,9 +161,9 @@ async fn test_batched_tree_transactions(
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
-                    start_offset: None,
+                    start_queue_index: None,
                     queue_type: QueueType::OutputStateV2 as u8,
-                    num_elements: 100,
+                    limit: 100,
                 })
                 .await
                 .unwrap();
@@ -187,9 +187,9 @@ async fn test_batched_tree_transactions(
                 .api
                 .get_queue_elements(GetQueueElementsRequest {
                     tree: merkle_tree_pubkey.to_bytes().into(),
-                    start_offset: None,
+                    start_queue_index: None,
                     queue_type: QueueType::InputStateV2 as u8,
-                    num_elements: 100,
+                    limit: 100,
                 })
                 .await
                 .unwrap();
@@ -274,9 +274,9 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_offset: None,
+                start_queue_index: None,
                 queue_type: QueueType::OutputStateV2 as u8,
-                num_elements: 100,
+                limit: 100,
             })
             .await
             .unwrap();
@@ -284,9 +284,9 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_offset: None,
+                start_queue_index: None,
                 queue_type: QueueType::InputStateV2 as u8,
-                num_elements: 100,
+                limit: 100,
             })
             .await
             .unwrap();
@@ -303,9 +303,9 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_offset: None,
+                start_queue_index: None,
                 queue_type: QueueType::OutputStateV2 as u8,
-                num_elements: 100,
+                limit: 100,
             })
             .await
             .unwrap();
@@ -313,9 +313,9 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_offset: None,
+                start_queue_index: None,
                 queue_type: QueueType::InputStateV2 as u8,
-                num_elements: 100,
+                limit: 100,
             })
             .await
             .unwrap();
@@ -441,9 +441,9 @@ async fn test_batched_tree_transactions(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            start_offset: None,
+            start_queue_index: None,
             queue_type: QueueType::OutputStateV2 as u8,
-            num_elements: 100,
+            limit: 100,
         })
         .await
         .unwrap();
@@ -457,9 +457,9 @@ async fn test_batched_tree_transactions(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            start_offset: None,
+            start_queue_index: None,
             queue_type: QueueType::InputStateV2 as u8,
-            num_elements: 100,
+            limit: 100,
         })
         .await
         .unwrap();
