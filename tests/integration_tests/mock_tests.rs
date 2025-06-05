@@ -1,3 +1,4 @@
+use crate::utils::compare_account_with_account_v2;
 use crate::utils::*;
 use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use function_name::named;
@@ -8,7 +9,7 @@ use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedB
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::get_validity_proof::{
-    get_validity_proof, GetValidityProofRequest,
+    get_validity_proof, get_validity_proof_v2, GetValidityProofRequest, GetValidityProofRequestV2,
 };
 use photon_indexer::api::method::utils::{
     CompressedAccountRequest, GetCompressedTokenAccountsByDelegate,
@@ -16,26 +17,24 @@ use photon_indexer::api::method::utils::{
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof, update_indexed_tree_leaves, validate_tree,
+    get_exclusion_range_with_proof_v2, update_indexed_tree_leaves_v1, validate_tree,
 };
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::dao::generated::{indexed_trees, state_trees};
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::multi_append;
-use photon_indexer::ingester::persist::persisted_state_tree::{
-    get_multiple_compressed_leaf_proofs, ZERO_BYTES,
-};
+use photon_indexer::ingester::persist::persisted_state_tree::ZERO_BYTES;
 use sea_orm::{QueryFilter, TransactionTrait};
 
-use photon_indexer::common::typedefs::account::Account;
+use photon_indexer::common::typedefs::account::{Account, AccountContext, AccountWithContext};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
-use photon_indexer::ingester::persist::persisted_state_tree::{persist_leaf_nodes, LeafNode};
 use photon_indexer::ingester::persist::{
-    compute_parent_hash, persist_token_accounts, EnrichedTokenAccount,
+    compute_parent_hash, get_multiple_compressed_leaf_proofs, persist_leaf_nodes,
+    persist_token_accounts, EnrichedTokenAccount, LeafNode,
 };
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -48,9 +47,10 @@ use std::collections::{HashMap, HashSet};
 use photon_indexer::common::typedefs::token_data::{AccountState, TokenData};
 use sqlx::types::Decimal;
 
-use photon_indexer::api::method::utils::Limit;
+use light_compressed_account::TreeType;
+use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::vec;
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
@@ -96,11 +96,14 @@ async fn test_persist_state_update_basic(
         lamports: UnsignedInteger(1000),
         tree: SerializablePubkey::new_unique(),
         leaf_index: UnsignedInteger(0),
-        seq: UnsignedInteger(0),
+        seq: Some(UnsignedInteger(0)),
         slot_created: UnsignedInteger(0),
     };
 
-    state_update.out_accounts.push(account.clone());
+    state_update.out_accounts.push(AccountWithContext {
+        account: account.clone(),
+        context: AccountContext::default(),
+    });
     persist_state_update_using_connection(&setup.db_conn, state_update)
         .await
         .unwrap();
@@ -139,11 +142,17 @@ async fn test_persist_state_update_basic(
 
     assert_eq!(null_value.value, None);
 }
-
 #[named]
 #[rstest]
 #[tokio::test]
 #[serial]
+// Test V1 accounts with V1 and V2 endpoints:
+// get_compressed_accounts_by_owner
+// get_compressed_accounts_by_owner_v2
+// get_multiple_compressed_accounts
+// get_multiple_compressed_accounts_v2
+// get_compressed_account
+// get_compressed_account_v2
 async fn test_multiple_accounts(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -169,65 +178,89 @@ async fn test_multiple_accounts(
     let mut state_update = StateUpdate::default();
 
     let accounts = vec![
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(0),
-                data: Base64String(vec![1; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner1,
-            lamports: UnsignedInteger(1000),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(10),
-            seq: UnsignedInteger(1),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(0),
+                    data: Base64String(vec![1; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner1,
+                lamports: UnsignedInteger(1000),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(10),
+                seq: Some(UnsignedInteger(1)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext {
+                tree_type: TreeType::StateV1 as u16,
+                ..AccountContext::default()
+            },
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: None,
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(1),
-                data: Base64String(vec![2; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner1,
-            lamports: UnsignedInteger(1030),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(11),
-            seq: UnsignedInteger(2),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: None,
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(1),
+                    data: Base64String(vec![2; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner1,
+                lamports: UnsignedInteger(1030),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(11),
+                seq: Some(UnsignedInteger(2)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext {
+                tree_type: TreeType::StateV1 as u16,
+                ..AccountContext::default()
+            },
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(4),
-                data: Base64String(vec![4; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner2,
-            lamports: UnsignedInteger(10020),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(13),
-            seq: UnsignedInteger(3),
-            slot_created: UnsignedInteger(1),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(4),
+                    data: Base64String(vec![4; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner2,
+                lamports: UnsignedInteger(10020),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(13),
+                seq: Some(UnsignedInteger(3)),
+                slot_created: UnsignedInteger(1),
+            },
+            context: AccountContext {
+                tree_type: TreeType::StateV1 as u16,
+                ..AccountContext::default()
+            },
         },
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(10),
-                data: Base64String(vec![5; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: owner2,
-            lamports: UnsignedInteger(10100),
-            tree: SerializablePubkey::new_unique(),
-            leaf_index: UnsignedInteger(23),
-            seq: UnsignedInteger(1),
-            slot_created: UnsignedInteger(0),
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(10),
+                    data: Base64String(vec![5; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: owner2,
+                lamports: UnsignedInteger(10100),
+                tree: SerializablePubkey::new_unique(),
+                leaf_index: UnsignedInteger(23),
+                seq: Some(UnsignedInteger(1)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext {
+                tree_type: TreeType::StateV1 as u16,
+                ..AccountContext::default()
+            },
         },
     ];
     state_update.out_accounts = accounts.clone();
@@ -274,6 +307,7 @@ async fn test_multiple_accounts(
         let mut accounts_of_interest = accounts
             .clone()
             .into_iter()
+            .map(|x| x.account)
             .filter(|x| x.owner == owner)
             .collect::<Vec<Account>>();
 
@@ -294,9 +328,24 @@ async fn test_multiple_accounts(
             .value;
 
         assert_eq!(res.0, total_balance);
+
+        // V2 Endpoint
+        let res_v2 = setup
+            .api
+            .get_compressed_accounts_by_owner_v2(GetCompressedAccountsByOwnerRequest {
+                owner,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .value;
+
+        for (account, account_v2) in response_accounts.iter().zip(res_v2.items.iter()) {
+            compare_account_with_account_v2(account, account_v2);
+        }
     }
 
-    let mut accounts_of_interest = vec![accounts[0].clone(), accounts[2].clone()];
+    let mut accounts_of_interest = vec![accounts[0].account.clone(), accounts[2].account.clone()];
     let res = setup
         .api
         .get_multiple_compressed_accounts(GetMultipleCompressedAccountsRequest {
@@ -316,12 +365,66 @@ async fn test_multiple_accounts(
         &mut res.items.iter().map(|x| x.clone().unwrap()).collect(),
         &mut accounts_of_interest,
     );
+
+    // V2 Endpoint
+    let res_v2 = setup
+        .api
+        .get_multiple_compressed_accounts_v2(GetMultipleCompressedAccountsRequest {
+            addresses: None,
+            hashes: Some(
+                accounts_of_interest
+                    .iter()
+                    .map(|x| x.hash.clone())
+                    .collect(),
+            ),
+        })
+        .await
+        .unwrap()
+        .value;
+
+    assert_account_response_list_matches_input_v2(
+        &mut res_v2.items.iter().map(|x| x.clone().unwrap()).collect(),
+        &mut accounts_of_interest,
+    );
+
+    for account in accounts.iter() {
+        let request = CompressedAccountRequest {
+            address: account.account.address,
+            hash: Some(account.account.hash.clone()),
+        };
+
+        let res = setup
+            .api
+            .get_compressed_account(request.clone())
+            .await
+            .unwrap()
+            .value;
+
+        assert_eq!(res, Some(account.account.clone()));
+
+        let res_v2 = setup
+            .api
+            .get_compressed_account_v2(request)
+            .await
+            .unwrap()
+            .value;
+
+        compare_account_with_account_v2(&res.unwrap(), &res_v2.unwrap());
+    }
 }
 
 #[named]
 #[rstest]
 #[tokio::test]
 #[serial]
+// Test V1 token accounts with V1 and V2 endpoints:
+// get_compressed_token_accounts_by_owner
+// get_compressed_token_accounts_by_owner_v2
+// get_compressed_token_balances_by_owner
+// get_compressed_token_balances_by_owner_v2
+// get_compressed_token_account_balance
+// get_compressed_token_accounts_by_delegate
+// get_compressed_token_accounts_by_delegate_v2
 async fn test_persist_token_data(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -468,7 +571,9 @@ async fn test_persist_token_data(
             discriminator: Set(Some(Decimal::from(1))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
-            seq: Set(0),
+            queue: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            tree_type: Set(TreeType::StateV1 as i32),
+            seq: Set(Some(0)),
             ..Default::default()
         };
         accounts::Entity::insert(model).exec(&txn).await.unwrap();
@@ -499,6 +604,20 @@ async fn test_persist_token_data(
         .value;
     verify_response_matches_input_token_data(res.clone(), owner_tlv);
 
+    let res_v2 = setup
+        .api
+        .get_compressed_token_accounts_by_owner_v2(GetCompressedTokenAccountsByOwner {
+            owner: owner1,
+            mint: Some(mint1),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .value;
+    for (item, item_v2) in res.items.iter().zip(res_v2.items.iter()) {
+        compare_token_account_with_token_account_v2(item, item_v2);
+    }
+
     for owner in [owner2] {
         let owner_tlv = all_token_data
             .iter()
@@ -515,6 +634,20 @@ async fn test_persist_token_data(
             .unwrap()
             .value;
 
+        let res_v2 = setup
+            .api
+            .get_compressed_token_accounts_by_owner_v2(GetCompressedTokenAccountsByOwner {
+                owner,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .value;
+
+        for (item, item_v2) in res.items.iter().zip(res_v2.items.iter()) {
+            compare_token_account_with_token_account_v2(item, item_v2);
+        }
+
         let mut paginated_res = Vec::new();
         let mut cursor = None;
         loop {
@@ -523,7 +656,7 @@ async fn test_persist_token_data(
                 .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
                     owner,
                     cursor: cursor.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
                 })
                 .await
@@ -536,7 +669,10 @@ async fn test_persist_token_data(
                 break;
             }
         }
-        assert_eq!(paginated_res, res.items);
+
+        for (item, item_v2) in paginated_res.iter().zip(res_v2.items.iter()) {
+            compare_token_account_with_token_account_v2(item, item_v2);
+        }
 
         let mut mint_to_balance: HashMap<SerializablePubkey, u64> = HashMap::new();
 
@@ -586,12 +722,14 @@ async fn test_persist_token_data(
         }
     }
     for delegate in [delegate1, delegate2] {
-        let delegate_tlv = all_token_data
+        let delegate_tlv: Vec<TokenDataWithHash> = all_token_data
             .clone()
             .into_iter()
             .filter(|x| x.token_data.delegate == Some(delegate))
             .collect();
-        let res = setup
+
+        // V1 Endpoint
+        let res_v1 = setup
             .api
             .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
                 delegate,
@@ -600,7 +738,8 @@ async fn test_persist_token_data(
             .await
             .unwrap()
             .value;
-        let mut paginated_res = Vec::new();
+
+        let mut paginated_res_v1 = Vec::new();
         let mut cursor = None;
         loop {
             let res = setup
@@ -608,21 +747,58 @@ async fn test_persist_token_data(
                 .get_compressed_token_accounts_by_delegate(GetCompressedTokenAccountsByDelegate {
                     delegate,
                     cursor: cursor.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    limit: Some(Limit::new(1).unwrap()),
                     ..Default::default()
                 })
                 .await
                 .unwrap()
                 .value;
 
-            paginated_res.extend(res.items.clone());
+            paginated_res_v1.extend(res.items.clone());
             cursor = res.cursor;
             if cursor.is_none() {
                 break;
             }
         }
-        assert_eq!(paginated_res, res.items);
-        verify_response_matches_input_token_data(res, delegate_tlv);
+        assert_eq!(paginated_res_v1, res_v1.items);
+        verify_response_matches_input_token_data(res_v1.clone(), delegate_tlv.clone());
+
+        // V2 Endpoint
+        let res_v2 = setup
+            .api
+            .get_compressed_token_accounts_by_delegate_v2(GetCompressedTokenAccountsByDelegate {
+                delegate,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .value;
+
+        let mut paginated_res_v2 = Vec::new();
+        let mut cursor = None;
+        loop {
+            let res = setup
+                .api
+                .get_compressed_token_accounts_by_delegate_v2(
+                    GetCompressedTokenAccountsByDelegate {
+                        delegate,
+                        cursor: cursor.clone(),
+                        limit: Some(Limit::new(1).unwrap()),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap()
+                .value;
+
+            paginated_res_v2.extend(res.items.clone());
+            cursor = res.cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(paginated_res_v2, res_v2.items);
+        verify_response_matches_input_token_data_v2(res_v2, delegate_tlv);
     }
 
     for (mint, owner_to_balance) in mint_to_owner_to_balance.iter() {
@@ -633,8 +809,8 @@ async fn test_persist_token_data(
             let res = setup
                 .api
                 .get_compressed_mint_token_holders(GetCompressedMintTokenHoldersRequest {
-                    mint: mint.clone(),
-                    limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                    mint: *mint,
+                    limit: Some(Limit::new(1).unwrap()),
                     cursor,
                 })
                 .await
@@ -673,9 +849,9 @@ async fn test_persist_token_data(
 
         loop {
             let request = GetCompressedTokenBalancesByOwnerRequest {
-                owner: owner.clone(),
+                owner: *owner,
                 cursor,
-                limit: Some(photon_indexer::api::method::utils::Limit::new(1).unwrap()),
+                limit: Some(Limit::new(1).unwrap()),
                 ..Default::default()
             };
             let res = setup
@@ -723,11 +899,11 @@ async fn test_persisted_state_trees(
             hash: Hash::new_unique(),
             leaf_index: i,
             tree,
-            seq: i,
+            seq: Some(i),
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
-    let tree_height = 5;
+    let tree_height = 32; // prev. 5
     persist_leaf_nodes(&txn, leaf_nodes.clone(), tree_height)
         .await
         .unwrap();
@@ -748,8 +924,8 @@ async fn test_persisted_state_trees(
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkleTree, tree);
-        assert_eq!(num_nodes as u64 - 1, proof.rootSeq);
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 
@@ -760,7 +936,7 @@ async fn test_persisted_state_trees(
             hash: Hash::new_unique(),
             leaf_index: i,
             tree,
-            seq: i + num_nodes,
+            seq: Some(i + num_nodes),
         })
         .collect();
     let txn = setup.db_conn.as_ref().begin().await.unwrap();
@@ -769,23 +945,22 @@ async fn test_persisted_state_trees(
         .unwrap();
     txn.commit().await.unwrap();
 
-    let proofs = get_multiple_compressed_leaf_proofs(
-        &setup.db_conn.begin().await.unwrap(),
-        leaf_nodes
-            .iter()
-            .map(|x| Hash::try_from(x.hash.clone()).unwrap())
-            .collect(),
-    )
-    .await
-    .unwrap();
+    let leaves = leaf_nodes
+        .iter()
+        .map(|x| Hash::try_from(x.hash.clone()).unwrap())
+        .collect();
+
+    let proofs = get_multiple_compressed_leaf_proofs(&setup.db_conn.begin().await.unwrap(), leaves)
+        .await
+        .unwrap();
 
     let proof_hashes: HashSet<Hash> = proofs.iter().map(|x| x.hash.clone()).collect();
     let leaf_hashes: HashSet<Hash> = leaf_nodes.iter().map(|x| x.hash.clone()).collect();
     assert_eq!(proof_hashes, leaf_hashes);
 
     for proof in proofs {
-        assert_eq!(proof.merkleTree, tree);
-        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.rootSeq);
+        assert_eq!(proof.merkle_tree, tree);
+        assert_eq!(num_nodes as u64 - 1 + num_nodes as u64, proof.root_seq);
         assert_eq!(tree_height - 1, proof.proof.len() as u32);
     }
 }
@@ -809,15 +984,15 @@ async fn test_indexed_merkle_trees(
         .unwrap();
 
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
-    let tree_height = 4;
+    let tree_height = 33; // prev. 4
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
         .await
         .unwrap();
 
     txn.commit().await.unwrap();
 
-    let (model, _) = get_exclusion_range_with_proof(
+    let (model, _) = get_exclusion_range_with_proof_v2(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
@@ -828,11 +1003,11 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 2,
+        leaf_index: 1,
         value: vec![1],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
-        seq: 0,
+        seq: Some(0),
     };
 
     assert_eq!(model, expected_model);
@@ -843,7 +1018,7 @@ async fn test_indexed_merkle_trees(
 
     let values = vec![vec![3]];
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height)
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
         .await
         .unwrap();
 
@@ -851,7 +1026,7 @@ async fn test_indexed_merkle_trees(
 
     validate_tree(setup.db_conn.as_ref(), tree).await;
 
-    let (model, _) = get_exclusion_range_with_proof(
+    let (model, _) = get_exclusion_range_with_proof_v2(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
@@ -862,11 +1037,11 @@ async fn test_indexed_merkle_trees(
 
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
-        leaf_index: 4,
+        leaf_index: 3,
         value: vec![3],
-        next_index: 3,
+        next_index: 2,
         next_value: vec![5],
-        seq: 0,
+        seq: Some(0),
     };
 
     assert_eq!(model, expected_model);
@@ -920,7 +1095,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     use photon_indexer::api::method::{
         get_multiple_new_address_proofs::{
             get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
-            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
         },
         get_validity_proof::CompressedProof,
     };
@@ -955,15 +1130,15 @@ async fn test_get_multiple_new_address_proofs_interop(
         &setup.db_conn,
         &setup.prover_url,
         GetValidityProofRequest {
-            newAddresses: addresses.clone(),
-            newAddressesWithTrees: vec![],
+            new_addresses: addresses.clone(),
+            new_addresses_with_trees: vec![],
             hashes: vec![],
         },
     )
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof.value.compressedProof = CompressedProof::default();
+    validity_proof.value.compressed_proof = CompressedProof::default();
 
     insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof);
 
@@ -973,7 +1148,7 @@ async fn test_get_multiple_new_address_proofs_interop(
         .into_iter()
         .map(|address| AddressWithTree {
             address,
-            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            tree: SerializablePubkey::from(ADDRESS_TREE_V1),
         })
         .collect();
     let proof_v2 = get_multiple_new_address_proofs_v2(
@@ -984,21 +1159,20 @@ async fn test_get_multiple_new_address_proofs_interop(
     .unwrap();
 
     insta::assert_json_snapshot!(name.clone(), proof_v2);
-    let mut validity_proof_v2 = get_validity_proof(
+    let mut validity_proof_v2 = get_validity_proof_v2(
         &setup.db_conn,
         &setup.prover_url,
-        GetValidityProofRequest {
-            newAddressesWithTrees: addresses_with_trees.clone(),
+        GetValidityProofRequestV2 {
+            new_addresses_with_trees: addresses_with_trees.clone(),
             hashes: vec![],
-            newAddresses: vec![],
         },
     )
     .await
     .unwrap();
     // The Gnark prover has some randomness.
-    validity_proof_v2.value.compressedProof = CompressedProof::default();
+    validity_proof_v2.value.compressed_proof = Some(CompressedProof::default());
 
-    insta::assert_json_snapshot!(format!("{}-validity-proof", name), validity_proof_v2);
+    insta::assert_json_snapshot!(format!("{}-validity-proof-v2", name), validity_proof_v2);
 }
 
 #[named]
@@ -1028,21 +1202,24 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
 
     let tree = SerializablePubkey::new_unique();
 
-    fn generate_mock_account(leaf_index: u64, tree: SerializablePubkey) -> Account {
-        Account {
-            hash: Hash::new_unique(),
-            address: Some(SerializablePubkey::new_unique()),
-            data: Some(AccountData {
-                discriminator: UnsignedInteger(1),
-                data: Base64String(vec![1; 500]),
-                data_hash: Hash::new_unique(),
-            }),
-            owner: SerializablePubkey::new_unique(),
-            lamports: UnsignedInteger(1000),
-            tree,
-            leaf_index: UnsignedInteger(leaf_index),
-            seq: UnsignedInteger(0),
-            slot_created: UnsignedInteger(0),
+    fn generate_mock_account(leaf_index: u64, tree: SerializablePubkey) -> AccountWithContext {
+        AccountWithContext {
+            account: Account {
+                hash: Hash::new_unique(),
+                address: Some(SerializablePubkey::new_unique()),
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(1),
+                    data: Base64String(vec![1; 500]),
+                    data_hash: Hash::new_unique(),
+                }),
+                owner: SerializablePubkey::new_unique(),
+                lamports: UnsignedInteger(1000),
+                tree,
+                leaf_index: UnsignedInteger(leaf_index),
+                seq: Some(UnsignedInteger(0)),
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext::default(),
         }
     }
 
@@ -1094,19 +1271,19 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
             tree,
             leaf_index: 0,
             hash: Hash::try_from("34yinGSAmWKeXw61zZzd8hbE1ySB1pDmgiHzJhRtVwJY").unwrap(),
-            seq: 4,
+            seq: Some(4),
         },
         LeafNode {
             tree,
             leaf_index: 1,
             hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 2,
             hash: Hash::try_from("TTSZiUJsGTcU7sXqYtw53yFY5Ag7DmHXR4GzEjVk7J7").unwrap(),
-            seq: 5,
+            seq: Some(5),
         },
     ];
     let leaf_nodes_2 = vec![
@@ -1114,29 +1291,26 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
             tree,
             leaf_index: 0,
             hash: Hash::try_from("3hH3oNVj2bafrqqXLnZjLjkuDaoxKhyyvmxaSs939hws").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 1,
             hash: Hash::try_from("34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY").unwrap(),
-            seq: 0,
+            seq: Some(0),
         },
         LeafNode {
             tree,
             leaf_index: 2,
             hash: Hash::try_from("25D2cs6h29NZgmDepVqc7bLLSWcNJnMvGoxeTpyZjF3u").unwrap(),
-            seq: 10,
+            seq: Some(10),
         },
     ];
     let leaf_node_chunks = vec![leaf_nodes_1, leaf_nodes_2];
 
-    let tree_height = 3;
     for chunk in leaf_node_chunks {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
-        persist_leaf_nodes(&txn, chunk.clone(), tree_height)
-            .await
-            .unwrap();
+        persist_leaf_nodes(&txn, chunk.clone(), 26).await.unwrap();
         txn.commit().await.unwrap();
 
         let proof_address = "12prJNGB6sfTMrZM1Udv2Aamv9fLzpm5YfMqssTmGrWy";
@@ -1179,20 +1353,23 @@ async fn test_gpa_filters(
     let owner1 = SerializablePubkey::new_unique();
     let mut state_update = StateUpdate::default();
 
-    let accounts = vec![Account {
-        hash: Hash::new_unique(),
-        address: Some(SerializablePubkey::new_unique()),
-        data: Some(AccountData {
-            discriminator: UnsignedInteger(0),
-            data: Base64String(vec![1, 2, 3]),
-            data_hash: Hash::new_unique(),
-        }),
-        owner: owner1,
-        lamports: UnsignedInteger(1000),
-        tree: SerializablePubkey::new_unique(),
-        leaf_index: UnsignedInteger(10),
-        seq: UnsignedInteger(1),
-        slot_created: UnsignedInteger(0),
+    let accounts = vec![AccountWithContext {
+        account: Account {
+            hash: Hash::new_unique(),
+            address: Some(SerializablePubkey::new_unique()),
+            data: Some(AccountData {
+                discriminator: UnsignedInteger(0),
+                data: Base64String(vec![1, 2, 3]),
+                data_hash: Hash::new_unique(),
+            }),
+            owner: owner1,
+            lamports: UnsignedInteger(1000),
+            tree: SerializablePubkey::new_unique(),
+            leaf_index: UnsignedInteger(10),
+            seq: Some(UnsignedInteger(1)),
+            slot_created: UnsignedInteger(0),
+        },
+        context: AccountContext::default(),
     }];
     state_update.out_accounts = accounts.clone();
     persist_state_update_using_connection(&setup.db_conn, state_update)
@@ -1203,7 +1380,6 @@ async fn test_gpa_filters(
         .api
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
             owner: owner1,
-
             dataSlice: Some(DataSlice {
                 offset: 0,
                 length: 2,
@@ -1254,7 +1430,7 @@ async fn test_persisted_state_trees_multiple_cases(
 ) {
     let name = trim_test_name(function_name!());
     let tree = SerializablePubkey::new_unique();
-    let tree_height = 10;
+    let tree_height = 32; // prev. 10
 
     info!("Test case 1: Sequential leaf nodes");
     let leaf_nodes_1 = create_leaf_nodes(tree, 0..5, |i| i);
@@ -1276,7 +1452,7 @@ async fn test_persisted_state_trees_multiple_cases(
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_4, tree_height).await;
 
     info!("Test case 7: Very large tree");
-    let large_tree_height = 20;
+    let large_tree_height = 32; // prev. 20
     let leaf_nodes_7 = create_leaf_nodes(tree, 0..20, |i| i);
     test_persist_and_verify(
         name.clone(),
@@ -1310,7 +1486,7 @@ async fn test_persisted_state_trees_multiple_cases(
             hash: Hash::try_from(vec![0; 32]).unwrap(),
             leaf_index: i,
             tree,
-            seq: i,
+            seq: Some(i),
         })
         .collect::<Vec<_>>();
     test_persist_and_verify(name.clone(), db_backend, tree, leaf_nodes_13, tree_height).await;
@@ -1329,7 +1505,7 @@ where
             hash: Hash::new_unique(),
             leaf_index: i as u32,
             tree,
-            seq: seq_fn(i) as u32,
+            seq: Some(seq_fn(i) as u32),
         })
         .collect()
 }
@@ -1381,7 +1557,7 @@ async fn test_persist_and_verify(
                 (
                     Hash::try_from(x.hash.clone()).unwrap(),
                     x.leaf_idx.unwrap_or(0) as u64,
-                    x.seq as u64,
+                    x.seq,
                 )
             })
             .collect::<Vec<_>>();
@@ -1408,12 +1584,16 @@ async fn test_persist_and_verify(
             "Proof hashes should match leaf hashes"
         );
 
-        let max_seq = leaf_nodes.iter().map(|x| x.seq).max().unwrap_or(0) as u64;
+        let max_seq = leaf_nodes
+            .iter()
+            .map(|x| x.seq.unwrap_or_default())
+            .max()
+            .unwrap_or(0) as u64;
 
         for proof in proofs {
-            assert_eq!(proof.merkleTree, tree, "Merkle tree should match");
+            assert_eq!(proof.merkle_tree, tree, "Merkle tree should match");
             assert_eq!(
-                max_seq, proof.rootSeq,
+                max_seq, proof.root_seq,
                 "Root sequence should be the maximum sequence number"
             );
             assert_eq!(
@@ -1440,7 +1620,6 @@ async fn test_update_indexed_merkle_tree(
     let name = trim_test_name(function_name!());
     let setup = setup(name.clone(), db_backend).await;
     let tree = Pubkey::new_unique();
-    let tree_height = 10;
     let index = 1;
     let value = [1; 32];
     let index_element_1 = RawIndexedElement {
@@ -1455,8 +1634,8 @@ async fn test_update_indexed_merkle_tree(
         next_value: [7; 32],
         index,
     };
-    let paramaeters = vec![(index_element_1, 0), (index_element_2, 1)];
-    for permutation in paramaeters.iter().permutations(2) {
+    let parameters = [(index_element_1, 0), (index_element_2, 1)];
+    for permutation in parameters.iter().permutations(2) {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         for (indexed_element, seq) in permutation {
             let mut indexed_leaf_updates = HashMap::new();
@@ -1464,12 +1643,12 @@ async fn test_update_indexed_merkle_tree(
                 (tree, index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
-                    leaf: indexed_element.clone(),
+                    leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,
                 },
             );
-            update_indexed_tree_leaves(&txn, indexed_leaf_updates, tree_height)
+            update_indexed_tree_leaves_v1(&txn, indexed_leaf_updates)
                 .await
                 .unwrap();
         }
@@ -1487,6 +1666,6 @@ async fn test_update_indexed_merkle_tree(
         assert_eq!(tree_model.value, index_element_2.value);
         assert_eq!(tree_model.next_value, index_element_2.next_value);
         assert_eq!(tree_model.next_index, index_element_2.next_index as i64);
-        assert_eq!(tree_model.seq, 1 as i64);
+        assert_eq!(tree_model.seq, Some(1i64));
     }
 }

@@ -1,11 +1,11 @@
-use crate::common::typedefs::account::{Account, AccountData};
+use crate::common::typedefs::account::{Account, AccountV2};
 use crate::common::typedefs::bs58_string::Base58String;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::{AccountState, TokenData};
 use crate::common::typedefs::unix_timestamp::UnixTimestamp;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
-use crate::dao::generated::{accounts, blocks, token_accounts};
+use crate::dao::generated::{accounts, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
@@ -13,18 +13,18 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Statement, Value,
 };
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use solana_sdk::signature::Signature;
 
+use crate::common::typedefs::context::Context;
+use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::limit::Limit;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use sqlx::types::Decimal;
-use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
+use utoipa::openapi::{RefOr, Schema};
 use utoipa::ToSchema;
 
-use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-
 use super::super::error::PhotonApiError;
-use sea_orm_migration::sea_query::Expr;
 
 pub const PAGE_LIMIT: u64 = 1000;
 
@@ -35,131 +35,10 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-pub struct Limit(u64);
-
-impl Limit {
-    pub fn new(value: u64) -> Result<Self, &'static str> {
-        if value > PAGE_LIMIT {
-            Err("Value must be less than or equal to 1000")
-        } else {
-            Ok(Limit(value))
-        }
-    }
-
-    pub fn value(&self) -> u64 {
-        self.0
-    }
-}
-
-impl Default for Limit {
-    fn default() -> Self {
-        Limit(PAGE_LIMIT)
-    }
-}
-
-impl<'de> Deserialize<'de> for Limit {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = u64::deserialize(deserializer)?;
-        if value > PAGE_LIMIT {
-            Err(de::Error::invalid_value(
-                de::Unexpected::Unsigned(value),
-                &"a value less than or equal to 1000",
-            ))
-        } else {
-            Ok(Limit(value))
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromQueryResult)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Context {
-    pub slot: u64,
-}
-
-impl<'__s> ToSchema<'__s> for Context {
-    fn schema() -> (&'__s str, RefOr<Schema>) {
-        let schema = Schema::Object(
-            ObjectBuilder::new()
-                .schema_type(SchemaType::Object)
-                .property("slot", UnsignedInteger::schema().1)
-                .required("slot")
-                .build(),
-        );
-        ("Context", RefOr::T(schema))
-    }
-
-    fn aliases() -> Vec<(&'static str, utoipa::openapi::schema::Schema)> {
-        Vec::new()
-    }
-}
-
-#[derive(FromQueryResult)]
-pub struct ContextModel {
-    // Postgres and SQLlite do not support u64 as return type. We need to use i64 and cast it to u64.
-    pub slot: i64,
-}
-
-impl Context {
-    pub async fn extract(db: &DatabaseConnection) -> Result<Self, PhotonApiError> {
-        let context = blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Slot).max(), "slot")
-            .into_model::<ContextModel>()
-            .one(db)
-            .await?
-            .ok_or(PhotonApiError::RecordNotFound(
-                "No data has been indexed".to_string(),
-            ))?;
-        Ok(Context {
-            slot: context.slot as u64,
-        })
-    }
-}
-
-pub fn parse_discriminator(discriminator: Option<Vec<u8>>) -> Option<u64> {
-    discriminator.map(|discriminator| LittleEndian::read_u64(&discriminator))
-}
-
-fn parse_leaf_index(leaf_index: i64) -> Result<u32, PhotonApiError> {
+pub(crate) fn parse_leaf_index(leaf_index: i64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid leaf index".to_string()))
-}
-
-pub fn parse_account_model(account: accounts::Model) -> Result<Account, PhotonApiError> {
-    let data = match (account.data, account.data_hash, account.discriminator) {
-        (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
-            data: Base64String(data),
-            data_hash: data_hash.try_into()?,
-            discriminator: UnsignedInteger(parse_decimal(discriminator)?),
-        }),
-        (None, None, None) => None,
-        _ => {
-            return Err(PhotonApiError::UnexpectedError(
-                "Invalid account data".to_string(),
-            ))
-        }
-    };
-
-    Ok(Account {
-        hash: account.hash.try_into()?,
-        address: account
-            .address
-            .map(SerializablePubkey::try_from)
-            .transpose()?,
-        data,
-        owner: account.owner.try_into()?,
-        tree: account.tree.try_into()?,
-        leaf_index: UnsignedInteger(parse_leaf_index(account.leaf_index)? as u64),
-        lamports: UnsignedInteger(parse_decimal(account.lamports)?),
-        slot_created: UnsignedInteger(account.slot_created as u64),
-        seq: UnsignedInteger(account.seq as u64),
-    })
 }
 
 // We do not use generics to simplify documentation generation.
@@ -172,7 +51,7 @@ pub struct TokenAccountListResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct TokenAcccount {
+pub struct TokenAccount {
     pub account: Account,
     pub token_data: TokenData,
 }
@@ -180,7 +59,7 @@ pub struct TokenAcccount {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountList {
-    pub items: Vec<TokenAcccount>,
+    pub items: Vec<TokenAccount>,
     pub cursor: Option<Base58String>,
 }
 
@@ -243,7 +122,7 @@ pub struct EnrichedTokenAccountModel {
 }
 
 pub async fn fetch_token_accounts(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &DatabaseConnection,
     owner_or_delegate: Authority,
     options: GetCompressedTokenAccountsByAuthorityOptions,
 ) -> Result<TokenAccountListResponse, PhotonApiError> {
@@ -299,8 +178,8 @@ pub async fn fetch_token_accounts(
             let account = account.ok_or(PhotonApiError::RecordNotFound(
                 "Base account not found for token account".to_string(),
             ))?;
-            Ok(TokenAcccount {
-                account: parse_account_model(account)?,
+            Ok(TokenAccount {
+                account: account.try_into()?,
                 token_data: TokenData {
                     mint: token_account.mint.try_into()?,
                     owner: token_account.owner.try_into()?,
@@ -309,7 +188,7 @@ pub async fn fetch_token_accounts(
                         .delegate
                         .map(SerializablePubkey::try_from)
                         .transpose()?,
-                    state: (AccountState::try_from(token_account.state as u8)).map_err(|e| {
+                    state: AccountState::try_from(token_account.state as u8).map_err(|e| {
                         PhotonApiError::UnexpectedError(format!(
                             "Unable to parse account state {}",
                             e
@@ -319,7 +198,7 @@ pub async fn fetch_token_accounts(
                 },
             })
         })
-        .collect::<Result<Vec<TokenAcccount>, PhotonApiError>>()?;
+        .collect::<Result<Vec<TokenAccount>, PhotonApiError>>()?;
 
     let mut cursor = items.last().map(|item| {
         Base58String({
@@ -580,11 +459,12 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
+            let cursor_filter =  format!(
+                "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
+                num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
+            );
             Ok((
-                format!(
-                    "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
-                    num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
-                ),
+                cursor_filter,
                 vec![
                     slot.into(),
                     slot.into(),
@@ -754,4 +634,124 @@ pub struct GetNonPaginatedSignaturesResponse {
 pub struct GetNonPaginatedSignaturesResponseWithError {
     pub context: Context,
     pub value: SignatureInfoListWithError,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenAccountListResponseV2 {
+    pub context: Context,
+    pub value: TokenAccountListV2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TokenAccountV2 {
+    pub account: AccountV2,
+    pub token_data: TokenData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenAccountListV2 {
+    pub items: Vec<TokenAccountV2>,
+    pub cursor: Option<Base58String>,
+}
+
+// Adds queue to the token account
+pub async fn fetch_token_accounts_v2(
+    conn: &DatabaseConnection,
+    owner_or_delegate: Authority,
+    options: GetCompressedTokenAccountsByAuthorityOptions,
+) -> Result<TokenAccountListResponseV2, PhotonApiError> {
+    let context = Context::extract(conn).await?;
+    let mut filter = match owner_or_delegate {
+        Authority::Owner(owner) => token_accounts::Column::Owner.eq::<Vec<u8>>(owner.into()),
+        Authority::Delegate(delegate) => {
+            token_accounts::Column::Delegate.eq::<Vec<u8>>(delegate.into())
+        }
+    }
+    .and(token_accounts::Column::Spent.eq(false));
+
+    let mut limit = PAGE_LIMIT;
+    if let Some(mint) = options.mint {
+        filter = filter.and(token_accounts::Column::Mint.eq::<Vec<u8>>(mint.into()));
+    }
+    if let Some(cursor) = options.cursor {
+        let bytes = cursor.0;
+        let expected_cursor_length = 64;
+        if bytes.len() != expected_cursor_length {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid cursor length. Expected {}. Received {}.",
+                expected_cursor_length,
+                bytes.len()
+            )));
+        }
+        let (mint, hash) = bytes.split_at(32);
+
+        filter = filter.and(
+            token_accounts::Column::Mint.gt::<Vec<u8>>(mint.into()).or(
+                token_accounts::Column::Mint
+                    .eq::<Vec<u8>>(mint.into())
+                    .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into())),
+            ),
+        );
+    }
+    if let Some(l) = options.limit {
+        limit = l.value();
+    }
+
+    let items = token_accounts::Entity::find()
+        .find_also_related(accounts::Entity)
+        .filter(filter)
+        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
+        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
+        .limit(limit)
+        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
+        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
+        .all(conn)
+        .await?
+        .drain(..)
+        .map(|(token_account, account)| {
+            let account = account.ok_or(PhotonApiError::RecordNotFound(
+                "Base account not found for token account".to_string(),
+            ))?;
+            Ok(TokenAccountV2 {
+                account: account.try_into()?,
+                token_data: TokenData {
+                    mint: token_account.mint.try_into()?,
+                    owner: token_account.owner.try_into()?,
+                    amount: UnsignedInteger(parse_decimal(token_account.amount)?),
+                    delegate: token_account
+                        .delegate
+                        .map(SerializablePubkey::try_from)
+                        .transpose()?,
+                    state: AccountState::try_from(token_account.state as u8).map_err(|e| {
+                        PhotonApiError::UnexpectedError(format!(
+                            "Unable to parse account state {}",
+                            e
+                        ))
+                    })?,
+                    tlv: token_account.tlv.map(Base64String),
+                },
+            })
+        })
+        .collect::<Result<Vec<TokenAccountV2>, PhotonApiError>>()?;
+
+    let mut cursor = items.last().map(|item| {
+        Base58String({
+            let item = item.clone();
+            let mut bytes: Vec<u8> = item.token_data.mint.into();
+            let hash_bytes: Vec<u8> = item.account.hash.into();
+            bytes.extend_from_slice(hash_bytes.as_slice());
+            bytes
+        })
+    });
+    if items.len() < limit as usize {
+        cursor = None;
+    }
+
+    Ok(TokenAccountListResponseV2 {
+        value: TokenAccountListV2 { items, cursor },
+        context,
+    })
 }

@@ -1,0 +1,52 @@
+---
+source: tests/integration_tests/e2e_tests.rs
+assertion_line: 212
+expression: validity_proof_v2
+---
+{
+  "value": {
+    "compressedProof": {
+      "a": [],
+      "b": [],
+      "c": []
+    },
+    "accounts": [
+      {
+        "hash": "JReC6h68m3EdCKP7S35e7BE4pBPwQz1HfjUkboeQy9r",
+        "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+        "rootIndex": {
+          "rootIndex": 7,
+          "proveByIndex": false
+        },
+        "leafIndex": 6,
+        "merkleContext": {
+          "treeType": 1,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "cpiContext": null,
+          "nextTreeContext": null
+        }
+      },
+      {
+        "hash": "2R46QL8CSripTWvEsESL39ccripkjs9MjGtwnbJMzJET",
+        "root": "2wBDKLscN4SBNzNdVsHq17PVXycvM8n4LNiKzJrebqZ7",
+        "rootIndex": {
+          "rootIndex": 7,
+          "proveByIndex": false
+        },
+        "leafIndex": 3,
+        "merkleContext": {
+          "treeType": 1,
+          "tree": "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+          "queue": "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+          "cpiContext": null,
+          "nextTreeContext": null
+        }
+      }
+    ],
+    "addresses": []
+  },
+  "context": {
+    "slot": 0
+  }
+}

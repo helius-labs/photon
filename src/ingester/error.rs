@@ -10,6 +10,10 @@ pub enum IngesterError {
     DatabaseError(String),
     #[error("Parser error: {0}")]
     ParserError(String),
+    #[error("Empty batch event.")]
+    EmptyBatchEvent,
+    #[error("Invalid event.")]
+    InvalidEvent,
 }
 
 impl From<sea_orm::error::DbErr> for IngesterError {

@@ -75,7 +75,6 @@ async fn index_block_metadatas(
             .build(tx.get_database_backend());
         tx.execute(query).await?;
     }
-
     Ok(())
 }
 

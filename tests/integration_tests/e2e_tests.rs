@@ -4,12 +4,14 @@ use function_name::named;
 use futures::Stream;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::AddressList;
-use photon_indexer::api::method::get_transaction_with_compression_info::get_transaction_helper;
-use photon_indexer::api::method::get_validity_proof::CompressedProof;
+use photon_indexer::api::method::get_transaction_with_compression_info::{
+    get_transaction_helper, get_transaction_helper_v2,
+};
+use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidityProofRequestV2};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::utils::*;
 use futures::pin_mut;
@@ -30,10 +32,11 @@ use serial_test::serial;
 use std::str::FromStr;
 
 use futures::StreamExt;
+use photon_indexer::common::typedefs::limit::Limit;
 use photon_indexer::{
     api::method::{
         get_compression_signatures_for_token_owner::GetCompressionSignaturesForTokenOwnerRequest,
-        utils::{Limit, SignatureInfo},
+        utils::SignatureInfo,
     },
     common::typedefs::serializable_signature::SerializableSignature,
 };
@@ -148,6 +151,22 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .await
                 .unwrap();
             assert_json_snapshot!(format!("{}-{}-accounts", name.clone(), person), accounts);
+
+            // V2 Test
+            let accounts_v2 = setup
+                .api
+                .get_compressed_token_accounts_by_owner_v2(GetCompressedTokenAccountsByOwner {
+                    owner: pubkey,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            assert_json_snapshot!(
+                format!("{}-{}-accounts-v2", name.clone(), person),
+                accounts_v2
+            );
+
             let hash_list = HashList(
                 accounts
                     .value
@@ -168,17 +187,31 @@ async fn test_e2e_mint_and_transfer_transactions(
                 .api
                 .get_validity_proof(GetValidityProofRequest {
                     hashes: hash_list.0.clone(),
-                    newAddresses: vec![],
-                    newAddressesWithTrees: vec![],
+                    new_addresses: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap();
             // The Gnark prover has some randomness.
-            validity_proof.value.compressedProof = CompressedProof::default();
-
+            validity_proof.value.compressed_proof = CompressedProof::default();
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), person),
                 validity_proof
+            );
+
+            // V2 Test for Validity Proof
+            let mut validity_proof_v2 = setup
+                .api
+                .get_validity_proof_v2(GetValidityProofRequestV2 {
+                    hashes: hash_list.0.clone(),
+                    new_addresses_with_trees: vec![],
+                })
+                .await
+                .unwrap();
+            validity_proof_v2.value.compressed_proof = Some(CompressedProof::default());
+            assert_json_snapshot!(
+                format!("{}-{}-validity-proof-v2", name.clone(), person),
+                validity_proof_v2
             );
 
             let mut cursor = None;
@@ -225,12 +258,21 @@ async fn test_e2e_mint_and_transfer_transactions(
         for (txn_name, txn_signature) in [("mint", mint_tx), ("transfer", transfer_tx)] {
             let txn =
                 cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
+            let txn_clone =
+                cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
             let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
             // Test get transaction
-            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature, txn).await.unwrap();
+            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature.clone(), txn).await.unwrap();
             assert_json_snapshot!(
                 format!("{}-{}-transaction", name.clone(), txn_name),
                 parsed_transaction
+            );
+
+            // V2 Test for Transactions
+            let parsed_transaction_v2: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponseV2 = get_transaction_helper_v2(&setup.db_conn, txn_signature, txn_clone).await.unwrap();
+            assert_json_snapshot!(
+                format!("{}-{}-transaction-v2", name.clone(), txn_name),
+                parsed_transaction_v2
             );
         }
 
@@ -347,19 +389,21 @@ async fn test_lamport_transfers(
                     .map(|x| x.hash.clone())
                     .collect(),
             );
+
             let proofs = setup
                 .api
                 .get_multiple_compressed_account_proofs(hash_list.clone())
                 .await
                 .unwrap();
+
             assert_json_snapshot!(format!("{}-{}-proofs", name.clone(), owner_name), proofs);
 
             let mut validity_proof = setup
                 .api
                 .get_validity_proof(GetValidityProofRequest {
                     hashes: hash_list.0.clone(),
-                    newAddresses: vec![],
-                    newAddressesWithTrees: vec![],
+                    new_addresses: vec![],
+                    new_addresses_with_trees: vec![],
                 })
                 .await
                 .unwrap_or_else(|_| {
@@ -369,8 +413,9 @@ async fn test_lamport_transfers(
                         hash_list.0.len()
                     )
                 });
+
             // The Gnark prover has some randomness.
-            validity_proof.value.compressedProof = CompressedProof::default();
+            validity_proof.value.compressed_proof = CompressedProof::default();
 
             assert_json_snapshot!(
                 format!("{}-{}-validity-proof", name.clone(), owner_name),
@@ -386,7 +431,7 @@ async fn test_lamport_transfers(
                 .await
                 .unwrap();
 
-            let limit = photon_indexer::api::method::utils::Limit::new(1).unwrap();
+            let limit = Limit::new(1).unwrap();
             let mut cursor = None;
             let mut paginated_signatures = Vec::new();
             loop {
@@ -416,7 +461,6 @@ async fn test_lamport_transfers(
                 .api
                 .get_compressed_balance_by_owner(photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest {
                     owner,
-                    ..Default::default()
                 })
                 .await
                 .unwrap();
@@ -565,7 +609,7 @@ async fn test_nullfiier_and_address_queue_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::api::method::get_multiple_new_address_proofs::{
-        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_ADDRESS,
+        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
     };
 
     let name = trim_test_name(function_name!());
@@ -634,7 +678,7 @@ async fn test_nullfiier_and_address_queue_transactions(
 
         let address_list_with_trees = AddressListWithTrees(vec![AddressWithTree {
             address: SerializablePubkey::try_from(address).unwrap(),
-            tree: SerializablePubkey::from(ADDRESS_TREE_ADDRESS),
+            tree: SerializablePubkey::from(ADDRESS_TREE_V1),
         }]);
 
         let proof_v2 = setup
@@ -646,7 +690,6 @@ async fn test_nullfiier_and_address_queue_transactions(
         assert_json_snapshot!(format!("{}-proof-address", name.clone()), proof_v2);
     }
 }
-
 
 #[named]
 #[rstest]
@@ -666,7 +709,8 @@ async fn test_transaction_with_tree_rollover_fee(
         },
     )
     .await;
-    let txn = "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
+    let txn =
+        "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn).await;
     let status_update = parse_transaction(&txn.try_into().unwrap(), 0).unwrap();
     // Assert that status update has at least one account

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -52,7 +52,7 @@ jobs:
 
       - name: Start light-prover container
         run: |
-          docker run -d -p 3001:3001 docker.io/pmantica1/light-prover:1
+          docker run -d -p 3001:3001 docker.io/sergeytimoshin/prover:latest
 
       - name: Set environment variables
         run: |

@@ -1,8 +1,7 @@
-use std::str::FromStr;
-
 use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
-use solana_sdk::pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
+use std::str::FromStr;
 
 use crate::migration::model::table::Accounts;
 
@@ -27,15 +26,16 @@ impl MigrationTrait for Migration {
             "ARDPkhymCbfdan375FCgPnBJQvUfHeb7nHVdBfwWSxrp",
             "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT",
         ];
-        // Encode the accounts as hex strings 
-        let encoded_accounts = solayer_accounts.iter()
+        // Encode the accounts as hex strings
+        let encoded_accounts = solayer_accounts
+            .iter()
             .map(|account| {
                 let pubkey = Pubkey::from_str(account).unwrap();
                 format!("\\x{}", hex::encode(pubkey.to_bytes()))
             })
             .collect::<Vec<String>>()
             .join("', '");
-        
+
         if manager.get_database_backend() == DatabaseBackend::Postgres {
             // Create index concurrently for Postgres
             execute_sql(
@@ -47,24 +47,22 @@ impl MigrationTrait for Migration {
                 ),
             )
             .await?;
-        } 
+        }
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         if manager.get_database_backend() == DatabaseBackend::Postgres {
-        manager
-            .drop_index(
-                Index::drop()
-                    .name("solayer_account_index2")
-                    .table(Accounts::Table)
-                    .to_owned(),
-            )
-            .await?;
+            manager
+                .drop_index(
+                    Index::drop()
+                        .name("solayer_account_index2")
+                        .table(Accounts::Table)
+                        .to_owned(),
+                )
+                .await?;
         }
 
         Ok(())
     }
-
 }
-

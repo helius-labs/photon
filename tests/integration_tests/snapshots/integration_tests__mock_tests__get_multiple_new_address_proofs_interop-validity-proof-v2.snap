@@ -1,0 +1,32 @@
+---
+source: tests/integration_tests/mock_tests.rs
+assertion_line: 1175
+expression: validity_proof_v2
+---
+{
+  "value": {
+    "compressedProof": {
+      "a": [],
+      "b": [],
+      "c": []
+    },
+    "accounts": [],
+    "addresses": [
+      {
+        "address": "12nCKqGG85jHxbTeA8i2Z7D4vnNUUrQ4r5e8dv2o16X",
+        "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
+        "rootIndex": 3,
+        "merkleContext": {
+          "treeType": 2,
+          "tree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
+          "queue": "aq1S9z4reTSQAdgWHGD2zDaS39sjGrAxbR31vxJ2F4F",
+          "cpiContext": null,
+          "nextTreeContext": null
+        }
+      }
+    ]
+  },
+  "context": {
+    "slot": 0
+  }
+}

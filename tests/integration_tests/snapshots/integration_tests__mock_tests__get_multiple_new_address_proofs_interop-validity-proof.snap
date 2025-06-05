@@ -1,5 +1,6 @@
 ---
 source: tests/integration_tests/mock_tests.rs
+assertion_line: 1124
 expression: validity_proof
 ---
 {
