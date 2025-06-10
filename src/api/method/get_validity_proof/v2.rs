@@ -224,8 +224,13 @@ pub async fn get_validity_proof_v2(
     };
 
     let db_new_address_proofs_for_prover = if !new_addresses_needing_full_proof.is_empty() {
-        get_multiple_new_address_proofs_helper(&tx, new_addresses_needing_full_proof.clone(), true)
-            .await?
+        get_multiple_new_address_proofs_helper(
+            &tx,
+            new_addresses_needing_full_proof.clone(),
+            true,
+            true,
+        )
+        .await?
     } else {
         Vec::new()
     };

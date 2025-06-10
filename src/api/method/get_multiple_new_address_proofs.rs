@@ -53,6 +53,7 @@ pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
     addresses: Vec<AddressWithTree>,
     check_queue: bool,
+    check_addresses_len: bool,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
@@ -60,7 +61,7 @@ pub async fn get_multiple_new_address_proofs_helper(
         ));
     }
 
-    if addresses.len() > MAX_ADDRESSES {
+    if check_addresses_len && addresses.len() > MAX_ADDRESSES {
         return Err(PhotonApiError::ValidationError(
             format!(
                 "Too many addresses requested {}. Maximum allowed: {}",
@@ -195,7 +196,7 @@ pub async fn get_multiple_new_address_proofs_v2(
     }
 
     let new_address_proofs =
-        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, true).await?;
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, true, true).await?;
     tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {

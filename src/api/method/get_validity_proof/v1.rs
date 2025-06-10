@@ -101,8 +101,13 @@ pub async fn get_validity_proof(
     };
 
     let db_new_address_proofs = if !request.new_addresses_with_trees.is_empty() {
-        get_multiple_new_address_proofs_helper(&tx, request.new_addresses_with_trees.clone(), true)
-            .await?
+        get_multiple_new_address_proofs_helper(
+            &tx,
+            request.new_addresses_with_trees.clone(),
+            true,
+            true,
+        )
+        .await?
     } else {
         Vec::new()
     };

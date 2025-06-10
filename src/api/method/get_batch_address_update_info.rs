@@ -142,7 +142,7 @@ pub async fn get_batch_address_update_info(
 
     // 4. Get non-inclusion proofs for each address.
     let non_inclusion_proofs =
-        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees, false).await?;
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees, false, false).await?;
     let subtrees = get_subtrees(&tx, merkle_tree, tree_info.height as usize).await?;
 
     Ok(GetBatchAddressUpdateInfoResponse {
