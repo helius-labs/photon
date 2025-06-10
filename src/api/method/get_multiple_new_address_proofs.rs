@@ -16,7 +16,9 @@ use crate::ingester::persist::persisted_indexed_merkle_tree::{
     format_bytes, get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
 };
 
+pub const FORESTER_MAX_ADDRESSES: usize = 500;
 pub const MAX_ADDRESSES: usize = 50;
+
 pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
@@ -52,8 +54,8 @@ pub struct GetMultipleNewAddressProofsResponse {
 pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
     addresses: Vec<AddressWithTree>,
+    max_addresses: usize,
     check_queue: bool,
-    check_addresses_len: bool,
 ) -> Result<Vec<MerkleContextWithNewAddressProof>, PhotonApiError> {
     if addresses.is_empty() {
         return Err(PhotonApiError::ValidationError(
@@ -61,12 +63,12 @@ pub async fn get_multiple_new_address_proofs_helper(
         ));
     }
 
-    if check_addresses_len && addresses.len() > MAX_ADDRESSES {
+    if addresses.len() > max_addresses {
         return Err(PhotonApiError::ValidationError(
             format!(
                 "Too many addresses requested {}. Maximum allowed: {}",
                 addresses.len(),
-                MAX_ADDRESSES
+                max_addresses
             )
             .to_string(),
         ));
@@ -196,7 +198,8 @@ pub async fn get_multiple_new_address_proofs_v2(
     }
 
     let new_address_proofs =
-        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, true, true).await?;
+        get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, MAX_ADDRESSES, true)
+            .await?;
     tx.commit().await?;
 
     Ok(GetMultipleNewAddressProofsResponse {

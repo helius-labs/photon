@@ -1,5 +1,5 @@
 use crate::api::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, AddressWithTree,
+    get_multiple_new_address_proofs_helper, AddressWithTree, MAX_ADDRESSES,
 };
 use crate::api::method::get_validity_proof::prover::prove::generate_proof;
 use crate::api::method::get_validity_proof::v1::GetValidityProofRequest;
@@ -227,7 +227,7 @@ pub async fn get_validity_proof_v2(
         get_multiple_new_address_proofs_helper(
             &tx,
             new_addresses_needing_full_proof.clone(),
-            true,
+            MAX_ADDRESSES,
             true,
         )
         .await?
