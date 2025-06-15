@@ -10,6 +10,7 @@ use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
 use solana_pubkey::ParsePubkeyError;
 use solana_pubkey::Pubkey as SolanaPubkey;
+use light_compressed_account::Pubkey as LightPubkey;
 use std::convert::TryFrom;
 use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
@@ -103,6 +104,12 @@ impl From<SerializablePubkey> for Vec<u8> {
 impl From<[u8; 32]> for SerializablePubkey {
     fn from(bytes: [u8; 32]) -> Self {
         SerializablePubkey(SolanaPubkey::from(bytes))
+    }
+}
+
+impl From<LightPubkey> for SerializablePubkey {
+    fn from(pubkey: LightPubkey) -> Self {
+        SerializablePubkey(pubkey.into())
     }
 }
 
