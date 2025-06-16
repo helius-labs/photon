@@ -656,8 +656,7 @@ pub struct TokenAccountListV2 {
     pub items: Vec<TokenAccountV2>,
     pub cursor: Option<Base58String>,
 }
-
-// Adds queue to the token account
+// Fetches token accounts for a given owner or delegate with pagination support
 pub async fn fetch_token_accounts_v2(
     conn: &DatabaseConnection,
     owner_or_delegate: Authority,
@@ -706,8 +705,6 @@ pub async fn fetch_token_accounts_v2(
         .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
         .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .limit(limit)
-        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
-        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .all(conn)
         .await?
         .drain(..)

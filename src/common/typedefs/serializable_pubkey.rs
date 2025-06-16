@@ -5,12 +5,12 @@ use std::str::FromStr;
 use borsh::BorshDeserialize;
 use serde::Deserialize;
 
+use light_compressed_account::Pubkey as LightPubkey;
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
 use solana_pubkey::ParsePubkeyError;
 use solana_pubkey::Pubkey as SolanaPubkey;
-use light_compressed_account::Pubkey as LightPubkey;
 use std::convert::TryFrom;
 use utoipa::openapi::{schema::Schema, RefOr};
 use utoipa::openapi::{ObjectBuilder, SchemaType};
