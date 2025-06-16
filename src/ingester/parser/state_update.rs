@@ -6,7 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 

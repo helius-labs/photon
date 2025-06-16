@@ -93,7 +93,7 @@ use crate::api::method::utils::{
 };
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema, SchemaType};
 use utoipa::ToSchema;

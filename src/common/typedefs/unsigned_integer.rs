@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for UnsignedInteger {
     }
 }
 
-impl anchor_lang::AnchorDeserialize for UnsignedInteger {
+impl borsh::BorshDeserialize for UnsignedInteger {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
         if buf.len() < 8 {
             return Err(std::io::Error::new(
@@ -85,7 +85,7 @@ impl anchor_lang::AnchorDeserialize for UnsignedInteger {
     }
 }
 
-impl anchor_lang::AnchorSerialize for UnsignedInteger {
+impl borsh::BorshSerialize for UnsignedInteger {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         writer.write_all(&self.0.to_le_bytes())
     }

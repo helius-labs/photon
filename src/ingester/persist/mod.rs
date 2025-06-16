@@ -28,7 +28,7 @@ use sea_orm::{
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
 use solana_pubkey::{pubkey, Pubkey};
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
@@ -186,14 +186,8 @@ pub async fn persist_state_update(
     }
 
     debug!("Persisting index tree updates...");
-    // Convert from solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
-    let converted_updates = indexed_merkle_tree_updates
-        .into_iter()
-        .map(|((pubkey, u64_val), update)| {
-            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
-            ((sdk_pubkey, u64_val), update)
-        })
-        .collect();
+    // No conversion needed - both use solana_pubkey::Pubkey
+    let converted_updates = indexed_merkle_tree_updates;
     update_indexed_tree_leaves_v1(txn, converted_updates).await?;
 
     persist_batch_events(txn, batch_merkle_tree_events).await?;

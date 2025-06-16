@@ -10,7 +10,7 @@ use photon_indexer::api::method::get_transaction_with_compression_info::{
 use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidityProofRequestV2};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 
 use crate::utils::*;
@@ -40,7 +40,7 @@ use photon_indexer::{
     },
     common::typedefs::serializable_signature::SerializableSignature,
 };
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 // Photon does not support out-of-order transactions, but it does reprocessing previous transactions.
 fn all_valid_permutations(txns: &[&str]) -> Vec<Vec<String>> {

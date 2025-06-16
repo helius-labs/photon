@@ -10,7 +10,7 @@ use cadence_macros::{statsd_count, statsd_gauge};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio::{
     task::JoinHandle,
     time::{interval, sleep},
@@ -26,12 +26,12 @@ use light_merkle_tree_metadata::merkle_tree::MerkleTreeMetadata;
 
 use crate::common::typedefs::hash::Hash;
 
-use solana_sdk::account::Account as SolanaAccount;
+use solana_account::Account as SolanaAccount;
 
 use crate::common::typedefs::context::Context;
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
 
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::mem;
 
 const CHUNK_SIZE: usize = 100;

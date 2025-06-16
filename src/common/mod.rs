@@ -5,9 +5,10 @@ use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
 use clap::{Parser, ValueEnum};
 use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
-use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::config::RpcBlockConfig;
+use solana_commitment_config::CommitmentConfig;
+use solana_transaction_status_client_types::{TransactionDetails, UiTransactionEncoding};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,

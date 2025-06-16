@@ -5,7 +5,7 @@ use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseTransaction, DbErr, EntityTrait, Statement,
     TransactionTrait, Value,
 };
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::state_trees;

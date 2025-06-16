@@ -12,7 +12,7 @@ use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use serial_test::serial;
 use solana_pubkey::Pubkey;
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 
 /// Derives a compressed address from the provided seed, merkle tree pubkey, and program ID.

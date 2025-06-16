@@ -28,7 +28,7 @@ impl SerializablePubkey {
     }
 }
 
-impl anchor_lang::AnchorDeserialize for SerializablePubkey {
+impl borsh::BorshDeserialize for SerializablePubkey {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
         <SolanaPubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
     }
@@ -40,7 +40,7 @@ impl anchor_lang::AnchorDeserialize for SerializablePubkey {
     }
 }
 
-impl anchor_lang::AnchorSerialize for SerializablePubkey {
+impl borsh::BorshSerialize for SerializablePubkey {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         writer.write_all(&self.0.to_bytes())
     }

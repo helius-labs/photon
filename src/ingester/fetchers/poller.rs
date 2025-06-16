@@ -6,12 +6,11 @@ use std::{
 use async_stream::stream;
 use cadence_macros::statsd_count;
 use futures::{pin_mut, Stream, StreamExt};
-use solana_client::{
-    nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
-};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::{client_error::ErrorKind, config::RpcBlockConfig, request::RpcError};
 
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
+use solana_commitment_config::CommitmentConfig;
+use solana_transaction_status_client_types::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
@@ -121,10 +120,7 @@ pub async fn fetch_block_with_infinite_retries(
                 return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
             }
             Err(e) => {
-                if let solana_client::client_error::ClientErrorKind::RpcError(
-                    RpcError::RpcResponseError { code, .. },
-                ) = e.kind
-                {
+                if let ErrorKind::RpcError(RpcError::RpcResponseError { code, .. }) = e.kind {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         metric! {
                             statsd_count!("rpc_skipped_block", 1);

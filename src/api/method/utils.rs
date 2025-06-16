@@ -14,7 +14,7 @@ use sea_orm::{
     QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;

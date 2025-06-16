@@ -1,7 +1,7 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_validity_proof::prover::structs::{CompressedProof, ProofABC};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use solana_program::alt_bn128::compression::prelude::{
+use solana_bn254::compression::prelude::{
     alt_bn128_g1_compress, alt_bn128_g2_compress, convert_endianness,
 };
 use std::ops::Neg;

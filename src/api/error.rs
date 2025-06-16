@@ -4,8 +4,7 @@ use cadence_macros::statsd_count;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use log::error;
-use solana_pubkey::ParsePubkeyError as SolanaPubkeyParseError;
-use solana_sdk::pubkey::ParsePubkeyError;
+use solana_pubkey::ParsePubkeyError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -85,11 +84,6 @@ impl From<ParsePubkeyError> for PhotonApiError {
     }
 }
 
-impl From<SolanaPubkeyParseError> for PhotonApiError {
-    fn from(_error: SolanaPubkeyParseError) -> Self {
-        PhotonApiError::UnexpectedError("Invalid public key in database".to_string())
-    }
-}
 
 fn invalid_request(e: PhotonApiError) -> RpcError {
     RpcError::Call(CallError::from_std_error(e))

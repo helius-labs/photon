@@ -26,17 +26,16 @@ use sea_orm::{
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 pub use rstest::rstest;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
+use solana_rpc_client::{
+    nonblocking::rpc_client::RpcClient, rpc_request::RpcRequest,
 };
-use solana_sdk::account::Account as SolanaAccount;
-use solana_sdk::{
-    clock::Slot,
-    commitment_config::{CommitmentConfig, CommitmentLevel},
-    pubkey::Pubkey,
-    signature::Signature,
-};
-use solana_transaction_status::{
+use solana_rpc_client_api::config::RpcTransactionConfig;
+use solana_account::Account as SolanaAccount;
+use solana_clock::Slot;
+use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
+use solana_transaction_status_client_types::{
     EncodedConfirmedTransactionWithStatusMeta, UiConfirmedBlock, UiTransactionEncoding,
 };
 use sqlx::{

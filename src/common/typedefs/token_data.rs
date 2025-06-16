@@ -1,4 +1,4 @@
-use anchor_lang::{AnchorDeserialize, AnchorSerialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -14,8 +14,8 @@ use super::{
     Debug,
     PartialEq,
     Eq,
-    AnchorSerialize,
-    AnchorDeserialize,
+    BorshSerialize,
+    BorshDeserialize,
     TryFromPrimitive,
     ToSchema,
     Serialize,
@@ -31,7 +31,7 @@ pub enum AccountState {
 }
 
 #[derive(
-    Debug, PartialEq, Eq, AnchorDeserialize, AnchorSerialize, Clone, ToSchema, Serialize, Default,
+    Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, Clone, ToSchema, Serialize, Default,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct TokenData {
