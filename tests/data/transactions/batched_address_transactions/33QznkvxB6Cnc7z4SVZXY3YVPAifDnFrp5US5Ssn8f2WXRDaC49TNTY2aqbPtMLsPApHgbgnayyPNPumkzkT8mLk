@@ -1,0 +1,84 @@
+{
+  "slot": 356,
+  "transaction": [
+    "AWYdkdCLu3N61vfMe359Y8CfZP851Zu3rT4ft1ji14ZfBW9ymroY/hALL/j6L2/rnUg3WVVViuy77vypq/96jwEBAAYJzLjCFXXnWj51s6K1RyQiLzHD11pzA0VK0kuivz8zqsyvX8iLNUN2+UoLUFNDaxylvhzLpTFCEVQgQW9p2B9Jf8/WpQaYLjyBdiAbgERJR/oGU7DHmYztCzftA7PyiiUMAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAFDSsTeVE2hc8C8rX9UpG9lZsrBgqlJepbNIE7Hbm3bgksNuwi9ReDAP20Sqpq/8/wpG4cvGQcDj7QnaE7nvUIC7wPwLtHyi90xBEulKsTz6PGNOXcF+rLA80aI81+eHwQpl591jkE+Dg60Dze4Hi5FNhzGIA7FTWAcNeS4Fz957/QmmoHZdEI20ACv+9MyGVTFGij2iz8yvlzRZ4iyBL0Z6hJMaGMVsGVyDUgMMCq7I7UMnDt9yHprrJD2mjo0AoCAwAFAkBCDwAEBwEABwgFBgKtAat/8kF9vXl1/6AAAAAQGKK+MVuFyrO8cAYDD2OP1JBj59aiFvCxJyNuvPf/C6mP0LzfLjk/Tgj1At0RYpWlMvg45BR2gWYoLWOoT+32IRz72en0XoE7x1MOhSoMP+VC8o7ar2dlAIDJHsg+Mh8altxEj/XZmjIzYExgPJ0ZXTmLtBuqY8wBZxBFmocrpoIKq4ohsEvGlnvb5K1pjCW0bQ1YxyOH5/pK1Iz9tSud",
+    "base64"
+  ],
+  "meta": {
+    "err": null,
+    "status": {
+      "Ok": null
+    },
+    "fee": 5000,
+    "preBalances": [
+      99995058200,
+      2735280,
+      291345090,
+      1,
+      1141440,
+      1141440,
+      1141440,
+      0,
+      1614720
+    ],
+    "postBalances": [
+      99995053200,
+      2735280,
+      291345090,
+      1,
+      1141440,
+      1141440,
+      1141440,
+      0,
+      1614720
+    ],
+    "innerInstructions": [
+      {
+        "index": 1,
+        "instructions": [
+          {
+            "programIdIndex": 5,
+            "accounts": [
+              7,
+              8,
+              6,
+              2
+            ],
+            "data": "SBkMhczQ9esLdkDPW17h1PrvsVACLEjLzR3kexZQL78xiq7gEo5ozKWFeAc2Muc2xiRu8SZ29QDKowDpeoEa6vZnGyuDtn1G1rxQWiAVfoCdC95udMxMBNwoT4zLYfWP6wdnA4JBDXnpSEPK2QKgkbh4bvjFrzoacBTArbE3LnAXzNv6tQpTPHc6n2MEFW4PG1t9eyGdL8F8pSqgRJ55bKLpYsfpaxJ8y3ghA3hs5UY",
+            "stackHeight": 2
+          },
+          {
+            "programIdIndex": 6,
+            "accounts": [],
+            "data": "3Q747BoHqHsBxkNHj5NHEZnP1TajcfmzuWaVnRBAGpdvhUvpLwjkwwa67QwjtszfAHTtyTwhNbHH4vfYf67KtiQCSNeFyrX9LXffM8P253AX7tdvQWkfUEy5SJVeGiTHyd7z8AzramouJ13uwx2RnPx6erXD5tequ",
+            "stackHeight": 3
+          }
+        ]
+      }
+    ],
+    "logMessages": [
+      "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+      "Program ComputeBudget111111111111111111111111111111 success",
+      "Program Lighton6oQpVkeewmo2mcPTQQp7kYHr4fWpAgJyEmDX invoke [1]",
+      "Program log: Instruction: BatchUpdateAddressTree",
+      "Program compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq invoke [2]",
+      "Program log: Instruction: BatchUpdateAddressTree",
+      "Program noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV invoke [3]",
+      "Program noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV consumed 38 of 881118 compute units",
+      "Program noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV success",
+      "Program compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq consumed 102737 of 983611 compute units",
+      "Program compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq success",
+      "Program Lighton6oQpVkeewmo2mcPTQQp7kYHr4fWpAgJyEmDX consumed 120965 of 999850 compute units",
+      "Program Lighton6oQpVkeewmo2mcPTQQp7kYHr4fWpAgJyEmDX success"
+    ],
+    "preTokenBalances": [],
+    "postTokenBalances": [],
+    "rewards": [],
+    "loadedAddresses": {
+      "writable": [],
+      "readonly": []
+    },
+    "computeUnitsConsumed": 121115
+  },
+  "blockTime": 1750081671
+}
