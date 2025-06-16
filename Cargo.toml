@@ -85,7 +85,7 @@ solana-hash = "2.2.1"
 solana-clock = "2.2.1"
 solana-signature = "2.2.1"
 solana-commitment-config = "2.2.1"
-solana-account = "2.2.1"
+solana-account = { version = "2.2.1", features = ["serde"] }
 solana-epoch-info = "2.2.1"
 solana-keypair = "2.2.1"
 solana-compute-budget-interface = "2.2.1"
