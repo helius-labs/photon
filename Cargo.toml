@@ -74,6 +74,7 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.82"
 
 # Granular Solana dependencies to replace monolithic solana-sdk and solana-program
+# Results are not satisfying because multiple other dependencies pull in solana-sdk and solana-program
 solana-rpc-client = "2.2.1"
 solana-rpc-client-api = "2.2.1"
 solana-pubkey = "2.2.1"
