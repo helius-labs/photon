@@ -443,6 +443,7 @@ pub async fn multi_append(
     values: Vec<Vec<u8>>,
     tree: Vec<u8>,
     tree_height: u32,
+    seq: Option<u32>,
 ) -> Result<(), IngesterError> {
     if txn.get_database_backend() == DatabaseBackend::Postgres {
         txn.execute(Statement::from_string(
@@ -490,7 +491,7 @@ pub async fn multi_append(
             value: value.clone(),
             next_index: 0,
             next_value: vec![],
-            seq: Some(0),
+            seq: seq.map(|s| s as i64),
         };
 
         let next_largest = indexed_tree
@@ -520,7 +521,7 @@ pub async fn multi_append(
             value: Set(x.value.clone()),
             next_index: Set(x.next_index),
             next_value: Set(x.next_value.clone()),
-            seq: Set(Some(0)),
+            seq: Set(seq.map(|s| s as i64)),
         })
         .collect();
 
@@ -561,7 +562,7 @@ pub async fn multi_append(
                 })?,
                 leaf_index: x.leaf_index as u32,
                 hash: compute_range_node_hash(x)?,
-                seq: Some(0),
+                seq,
             })
         })
         .collect::<Result<Vec<LeafNode>, IngesterError>>()?;

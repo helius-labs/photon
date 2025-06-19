@@ -210,6 +210,7 @@ async fn persist_batch_address_append_event(
         address_values,
         batch_address_append_event.merkle_tree_pubkey.to_vec(),
         DEFAULT_BATCH_ADDRESS_TREE_HEIGHT + 1,
+        Some(batch_address_append_event.sequence_number as u32),
     )
     .await?;
 
