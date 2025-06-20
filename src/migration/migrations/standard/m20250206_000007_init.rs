@@ -33,7 +33,7 @@ impl MigrationTrait for Migration {
                     address BLOB,
                     owner BLOB NOT NULL,
                     tree BLOB NOT NULL,
-                    queue BLOB NOT NULL,
+                    queue BLOB NULL,
                     leaf_index BIGINT NOT NULL,
                     seq BIGINT,
                     slot_created BIGINT NOT NULL,
