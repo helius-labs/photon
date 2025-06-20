@@ -33,7 +33,7 @@ impl MigrationTrait for Migration {
                     address BLOB,
                     owner BLOB NOT NULL,
                     tree BLOB NOT NULL,
-                    queue BLOB NOT NULL,
+                    queue BLOB NULL,
                     leaf_index BIGINT NOT NULL,
                     seq BIGINT,
                     slot_created BIGINT NOT NULL,
@@ -110,7 +110,9 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column_if_not_exists(ColumnDef::new(Accounts::TreeType).integer().null())
+                        .add_column_if_not_exists(
+                            ColumnDef::new(Accounts::TreeType).integer().null(),
+                        )
                         .to_owned(),
                 )
                 .await?;
@@ -160,7 +162,7 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column_if_not_exists(ColumnDef::new(Accounts::Queue).binary().not_null())
+                        .add_column_if_not_exists(ColumnDef::new(Accounts::Queue).binary().null())
                         .to_owned(),
                 )
                 .await?;
@@ -169,7 +171,9 @@ impl MigrationTrait for Migration {
                 .alter_table(
                     Table::alter()
                         .table(Accounts::Table)
-                        .add_column_if_not_exists(ColumnDef::new(Accounts::Nullifier).binary().null())
+                        .add_column_if_not_exists(
+                            ColumnDef::new(Accounts::Nullifier).binary().null(),
+                        )
                         .to_owned(),
                 )
                 .await?;

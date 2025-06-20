@@ -200,7 +200,7 @@ pub async fn get_validity_proof_v2(
                     root_index: None.into(), // prove_by_index = true
                     leaf_index: acc_model.leaf_index as u64,
                     merkle_context: MerkleContextV2 {
-                        tree_type: acc_model.tree_type as u16,
+                        tree_type: acc_model.tree_type.map(|t| t as u16).unwrap_or(0),
                         tree: SerializablePubkey::try_from_slice(&acc_model.tree)
                             .unwrap_or_default(),
                         queue: SerializablePubkey::try_from_slice(&acc_model.queue)

@@ -68,7 +68,7 @@ impl TryFrom<Model> for AccountV2 {
             seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
             prove_by_index: account.in_output_queue,
             merkle_context: MerkleContextV2 {
-                tree_type: account.tree_type as u16,
+                tree_type: account.tree_type.map(|t| t as u16).unwrap_or(0),
                 tree: account.tree.try_into()?,
                 queue: account.queue.clone().try_into()?,
                 cpi_context: None,

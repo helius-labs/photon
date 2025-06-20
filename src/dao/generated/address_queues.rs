@@ -5,9 +5,9 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "address_queues")]
 pub struct Model {
+    pub tree: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub address: Vec<u8>,
-    pub tree: Vec<u8>,
     pub queue_index: i64,
 }
 

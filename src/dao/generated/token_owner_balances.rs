@@ -9,7 +9,7 @@ pub struct Model {
     pub owner: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub mint: Vec<u8>,
-    #[sea_orm(column_type = "Decimal(Some((20, 0)))")]
+    #[sea_orm(column_type = "Decimal(Some((23, 0)))")]
     pub amount: Decimal,
 }
 

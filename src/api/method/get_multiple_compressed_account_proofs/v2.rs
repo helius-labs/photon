@@ -146,7 +146,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     for value in &mut result {
         if let Some(account) = account_map.get(&value.hash.to_vec()) {
             value.tree_context = TreeContextInfo {
-                tree_type: account.tree_type as u16,
+                tree_type: account.tree_type.map(|t| t as u16).unwrap_or(0),
                 tree: SerializablePubkey::try_from(account.tree.clone())?,
                 queue: SerializablePubkey::try_from(account.queue.clone())?,
                 cpi_context: None,
