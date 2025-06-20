@@ -443,6 +443,7 @@ pub async fn multi_append(
     values: Vec<Vec<u8>>,
     tree: Vec<u8>,
     tree_height: u32,
+    seq: Option<u32>,
 ) -> Result<(), IngesterError> {
     if txn.get_database_backend() == DatabaseBackend::Postgres {
         txn.execute(Statement::from_string(
@@ -490,7 +491,7 @@ pub async fn multi_append(
             value: value.clone(),
             next_index: 0,
             next_value: vec![],
-            seq: Some(0),
+            seq: seq.map(|s| s as i64),
         };
 
         let next_largest = indexed_tree
@@ -512,7 +513,7 @@ pub async fn multi_append(
         indexed_tree.insert(value, indexed_element);
     }
 
-    let active_elements = elements_to_update
+    let active_elements: Vec<indexed_trees::ActiveModel> = elements_to_update
         .values()
         .map(|x| indexed_trees::ActiveModel {
             tree: Set(tree.clone()),
@@ -520,26 +521,37 @@ pub async fn multi_append(
             value: Set(x.value.clone()),
             next_index: Set(x.next_index),
             next_value: Set(x.next_value.clone()),
-            seq: Set(Some(0)),
-        });
+            seq: Set(seq.map(|s| s as i64)),
+        })
+        .collect();
 
-    indexed_trees::Entity::insert_many(active_elements)
+    let mut query = indexed_trees::Entity::insert_many(active_elements.clone())
         .on_conflict(
             OnConflict::columns([
                 indexed_trees::Column::Tree,
                 indexed_trees::Column::LeafIndex,
             ])
             .update_columns([
+                indexed_trees::Column::Value,
                 indexed_trees::Column::NextIndex,
                 indexed_trees::Column::NextValue,
+                indexed_trees::Column::Seq,
             ])
             .to_owned(),
         )
-        .exec(txn)
-        .await
-        .map_err(|e| {
-            IngesterError::DatabaseError(format!("Failed to insert indexed tree elements: {}", e))
-        })?;
+        .build(txn.get_database_backend());
+
+    query.sql = format!("{} WHERE excluded.seq >= indexed_trees.seq", query.sql);
+
+    let result = txn.execute(query).await;
+
+    if let Err(e) = result {
+        log::error!("Failed to insert/update indexed tree elements: {}", e);
+        return Err(IngesterError::DatabaseError(format!(
+            "Failed to insert/update indexed tree elements: {}",
+            e
+        )));
+    }
 
     let leaf_nodes = elements_to_update
         .values()
@@ -550,7 +562,7 @@ pub async fn multi_append(
                 })?,
                 leaf_index: x.leaf_index as u32,
                 hash: compute_range_node_hash(x)?,
-                seq: Some(0),
+                seq,
             })
         })
         .collect::<Result<Vec<LeafNode>, IngesterError>>()?;

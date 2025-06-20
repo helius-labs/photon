@@ -986,7 +986,7 @@ async fn test_indexed_merkle_trees(
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
     let tree_height = 33; // prev. 4
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1, Some(0))
         .await
         .unwrap();
 
@@ -1018,7 +1018,7 @@ async fn test_indexed_merkle_trees(
 
     let values = vec![vec![3]];
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1)
+    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1, Some(1))
         .await
         .unwrap();
 
@@ -1041,7 +1041,7 @@ async fn test_indexed_merkle_trees(
         value: vec![3],
         next_index: 2,
         next_value: vec![5],
-        seq: Some(0),
+        seq: Some(1),
     };
 
     assert_eq!(model, expected_model);

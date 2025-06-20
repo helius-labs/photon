@@ -113,8 +113,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             if in_queue {
                 return Err(PhotonApiError::ValidationError(format!(
                     "Address {} is in the queue for tree {} but not yet in the tree",
-                    address.to_string(),
-                    tree.to_string()
+                    address, tree
                 )));
             }
         }
