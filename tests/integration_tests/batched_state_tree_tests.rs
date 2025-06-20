@@ -240,7 +240,7 @@ async fn test_batched_tree_transactions(
             .value
             .accounts
             .iter()
-            .all(|x| x.root.is_empty()));
+            .all(|x| x.root == Pubkey::default().to_string()));
     }
 
     // Merkle tree which is created along side indexing the event transactions.
@@ -418,7 +418,7 @@ async fn test_batched_tree_transactions(
                     assert!(!account_proof.root_index.prove_by_index);
                 } else {
                     assert!(account_proof.root_index.prove_by_index);
-                    assert_eq!(account_proof.root, "");
+                    assert_eq!(account_proof.root, Pubkey::default().to_string());
                 }
                 base_index += 2;
             }
@@ -608,7 +608,7 @@ async fn test_batched_tree_token_transactions(
         .await;
 
         let mint = SerializablePubkey::from(
-            Pubkey::from_str("D2J2AZChFBGxn4gYeE3gQsR85u3dWBL3foGobGeGxQfJ").unwrap(),
+            Pubkey::from_str("FcygLmSjsnEc9v5GDbFBoGRoAx7zuYPTp8CRhKB8snQ4").unwrap(),
         );
         let recipients = [
             Pubkey::from_str("DyRWDm81iYePWsdw1Yn2ue8CPcp7Lba6XsB8DVSGM7HK").unwrap(),

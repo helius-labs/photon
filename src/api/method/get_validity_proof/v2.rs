@@ -17,6 +17,7 @@ use jsonrpsee_core::Serialize;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
 use serde::Deserialize;
+use solana_pubkey::Pubkey;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -195,7 +196,7 @@ pub async fn get_validity_proof_v2(
             if acc_model.in_output_queue {
                 accounts_for_prove_by_index_inputs[original_idx] = Some(AccountProofInputs {
                     hash: Hash::new(acc_model.hash.as_slice())?.to_string(),
-                    root: "".to_string(),
+                    root: Pubkey::default().to_string(),
                     root_index: None.into(), // prove_by_index = true
                     leaf_index: acc_model.leaf_index as u64,
                     merkle_context: MerkleContextV2 {

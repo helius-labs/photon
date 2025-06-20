@@ -5,6 +5,7 @@ use std::str::FromStr;
 use borsh::BorshDeserialize;
 use serde::Deserialize;
 
+use light_compressed_account::Pubkey as LightPubkey;
 use serde::de::{self, Visitor};
 use serde::ser::{Serialize, Serializer};
 use serde::Deserializer;
@@ -103,6 +104,12 @@ impl From<SerializablePubkey> for Vec<u8> {
 impl From<[u8; 32]> for SerializablePubkey {
     fn from(bytes: [u8; 32]) -> Self {
         SerializablePubkey(SolanaPubkey::from(bytes))
+    }
+}
+
+impl From<LightPubkey> for SerializablePubkey {
+    fn from(pubkey: LightPubkey) -> Self {
+        SerializablePubkey(pubkey.into())
     }
 }
 
