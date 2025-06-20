@@ -1,6 +1,6 @@
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::{accounts, address_queue};
+use crate::dao::generated::{accounts, address_queues};
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::BatchEvent;
 use crate::ingester::parser::{
@@ -191,11 +191,11 @@ async fn persist_batch_address_append_event(
     batch_address_append_event: &BatchEvent,
 ) -> Result<(), IngesterError> {
     let last_queue_index = batch_address_append_event.new_next_index as i64 - 1;
-    let addresses = address_queue::Entity::find()
-        .filter(address_queue::Column::QueueIndex.lt(last_queue_index).and(
-            address_queue::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+    let addresses = address_queues::Entity::find()
+        .filter(address_queues::Column::QueueIndex.lt(last_queue_index).and(
+            address_queues::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
         ))
-        .order_by_asc(address_queue::Column::QueueIndex)
+        .order_by_asc(address_queues::Column::QueueIndex)
         .all(txn)
         .await?;
 
@@ -215,9 +215,9 @@ async fn persist_batch_address_append_event(
     .await?;
 
     // 2. Remove inserted elements from the database address queue.
-    address_queue::Entity::delete_many()
-        .filter(address_queue::Column::QueueIndex.lt(last_queue_index).and(
-            address_queue::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+    address_queues::Entity::delete_many()
+        .filter(address_queues::Column::QueueIndex.lt(last_queue_index).and(
+            address_queues::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
         ))
         .exec(txn)
         .await?;

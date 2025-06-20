@@ -36,7 +36,7 @@ mod merkle_proof_with_context;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
-use crate::dao::generated::address_queue;
+use crate::dao::generated::address_queues;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
@@ -382,16 +382,16 @@ async fn insert_addresses_into_queues(
     let mut address_models = Vec::new();
 
     for address in addresses {
-        address_models.push(address_queue::ActiveModel {
+        address_models.push(address_queues::ActiveModel {
             address: Set(address.address.to_vec()),
             tree: Set(address.tree.to_bytes_vec()),
             queue_index: Set(address.queue_index as i64),
         });
     }
 
-    let query = address_queue::Entity::insert_many(address_models)
+    let query = address_queues::Entity::insert_many(address_models)
         .on_conflict(
-            OnConflict::column(address_queue::Column::Address)
+            OnConflict::column(address_queues::Column::Address)
                 .do_nothing()
                 .to_owned(),
         )
@@ -425,7 +425,7 @@ async fn append_output_accounts(
             in_output_queue: Set(account.context.in_output_queue),
             nullifier_queue_index: Set(account.context.nullifier_queue_index.map(|x| x.0 as i64)),
             nullified_in_tree: Set(false),
-            tree_type: Set(account.context.tree_type as i32),
+            tree_type: Set(Some(account.context.tree_type as i32)),
             nullifier: Set(account.context.nullifier.as_ref().map(|x| x.to_vec())),
             owner: Set(account.account.owner.to_bytes_vec()),
             lamports: Set(Decimal::from(account.account.lamports.0)),

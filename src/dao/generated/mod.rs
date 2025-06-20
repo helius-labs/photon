@@ -4,7 +4,7 @@ pub mod prelude;
 
 pub mod account_transactions;
 pub mod accounts;
-pub mod address_queue;
+pub mod address_queues;
 pub mod blocks;
 pub mod indexed_trees;
 pub mod owner_balances;

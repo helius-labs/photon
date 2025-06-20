@@ -2,6 +2,7 @@
 
 pub use super::account_transactions::Entity as AccountTransactions;
 pub use super::accounts::Entity as Accounts;
+pub use super::address_queues::Entity as AddressQueues;
 pub use super::blocks::Entity as Blocks;
 pub use super::indexed_trees::Entity as IndexedTrees;
 pub use super::owner_balances::Entity as OwnerBalances;

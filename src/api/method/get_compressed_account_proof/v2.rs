@@ -127,7 +127,7 @@ pub async fn get_compressed_account_proof_v2(
 
     // Enrich with account data if available
     if let Some(account) = account {
-        result.tree_context.tree_type = account.tree_type as u16;
+        result.tree_context.tree_type = account.tree_type.map(|t| t as u16).unwrap_or(0);
         result.tree_context.queue = SerializablePubkey::try_from(account.queue)?;
     }
 
