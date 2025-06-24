@@ -197,7 +197,7 @@ fn proof_for_empty_tree(
     tree_height: u32,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
     let root_seq = if tree_height == TREE_HEIGHT_V1 + 1 {
-        3
+        2
     } else {
         0
     };
