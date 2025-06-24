@@ -17,7 +17,7 @@ use photon_indexer::api::method::utils::{
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof_v2, update_indexed_tree_leaves_v1, validate_tree,
+    get_exclusion_range_with_proof_v2, persist_indexed_tree_updates, validate_tree,
 };
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -1643,12 +1643,13 @@ async fn test_update_indexed_merkle_tree(
                 (tree, index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
+                    tree_type: light_compressed_account::TreeType::AddressV1,
                     leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,
                 },
             );
-            update_indexed_tree_leaves_v1(&txn, indexed_leaf_updates)
+            persist_indexed_tree_updates(&txn, indexed_leaf_updates)
                 .await
                 .unwrap();
         }

@@ -5,6 +5,7 @@ use std::{
 
 use ark_bn254::Fr;
 use itertools::Itertools;
+use light_compressed_account::TreeType;
 use light_poseidon::Poseidon;
 use log::info;
 use num_bigint::BigUint;
@@ -327,28 +328,51 @@ pub async fn get_exclusion_range_with_proof_v1(
     Ok((range_node.clone(), leaf_proof))
 }
 
-pub async fn update_indexed_tree_leaves_v1(
+pub async fn persist_indexed_tree_updates(
     txn: &DatabaseTransaction,
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
+    
     for sdk_tree in trees {
         let tree = Pubkey::new_from_array(sdk_tree.to_bytes());
         
+        let tree_type = indexed_leaf_updates
+            .values()
+            .find(|update| update.tree == tree)
+            .map(|update| update.tree_type.clone())
+            .ok_or_else(|| {
+                IngesterError::ParserError(format!(
+                    "No indexed tree leaf updates found for tree: {}. Cannot determine tree type.",
+                    tree
+                ))
+            })?;
+        
         // Check if zeroeth element (leaf_index 0) is missing and insert it if needed
-        let zeroeth_leaf = get_zeroeth_exclusion_range_v1(sdk_tree.to_bytes().to_vec());
-        let zeroeth_update = indexed_leaf_updates.get(&(sdk_tree, zeroeth_leaf.leaf_index as u64));
+        let zeroeth_update = indexed_leaf_updates.get(&(sdk_tree, 0));
         if zeroeth_update.is_none() {
-            println!("Inserting missing zeroeth element for V1 tree {}", sdk_tree);
-            let zeroeth_hash = compute_range_node_hash_v1(&zeroeth_leaf)
-                .map_err(|e| {
-                    IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
-                })?;
+            let (zeroeth_leaf, zeroeth_hash) = match &tree_type {
+                TreeType::AddressV1 | TreeType::StateV1 => {
+                    let leaf = get_zeroeth_exclusion_range_v1(sdk_tree.to_bytes().to_vec());
+                    let hash = compute_range_node_hash_v1(&leaf).map_err(|e| {
+                        IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
+                    })?;
+                    (leaf, hash)
+                },
+                _ => {
+                    let leaf = get_zeroeth_exclusion_range(sdk_tree.to_bytes().to_vec());
+                    let hash = compute_range_node_hash(&leaf).map_err(|e| {
+                        IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
+                    })?;
+                    (leaf, hash)
+                }
+            };
             
             indexed_leaf_updates.insert(
                 (sdk_tree, zeroeth_leaf.leaf_index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
+                    tree_type: tree_type.clone(),
                     hash: zeroeth_hash.0,
                     leaf: RawIndexedElement {
                         value: zeroeth_leaf.value.clone().try_into().map_err(|_e| {
@@ -370,37 +394,40 @@ pub async fn update_indexed_tree_leaves_v1(
             );
         }
         
-        // Check if top element (leaf_index 1) is missing and insert it if needed  
-        let top_leaf = get_top_element(sdk_tree.to_bytes().to_vec());
-        let top_update = indexed_leaf_updates.get(&(sdk_tree, top_leaf.leaf_index as u64));
-        if top_update.is_none() {
-            let top_hash = compute_range_node_hash_v1(&top_leaf).map_err(|e| {
-                IngesterError::ParserError(format!("Failed to compute top element hash: {}", e))
-            })?;
+        // Check if top element (leaf_index 1) is missing and insert it if needed - ONLY for V1 trees
+        if matches!(tree_type, TreeType::AddressV1 | TreeType::StateV1) {
+            let top_update = indexed_leaf_updates.get(&(sdk_tree, 1));
+            if top_update.is_none() {
+                let top_leaf = get_top_element(sdk_tree.to_bytes().to_vec());
+                let top_hash = compute_range_node_hash_v1(&top_leaf).map_err(|e| {
+                    IngesterError::ParserError(format!("Failed to compute top element hash: {}", e))
+                })?;
 
-            indexed_leaf_updates.insert(
-                (sdk_tree, top_leaf.leaf_index as u64),
-                IndexedTreeLeafUpdate {
-                    tree,
-                    hash: top_hash.0,
-                    leaf: RawIndexedElement {
-                        value: top_leaf.value.clone().try_into().map_err(|_e| {
-                            IngesterError::ParserError(format!(
-                                "Failed to convert top element value to array {:?}",
-                                top_leaf.value
-                            ))
-                        })?,
-                        next_index: top_leaf.next_index as usize,
-                        next_value: top_leaf.next_value.try_into().map_err(|_e| {
-                            IngesterError::ParserError(
-                                "Failed to convert top element next value to array".to_string(),
-                            )
-                        })?,
-                        index: top_leaf.leaf_index as usize,
+                indexed_leaf_updates.insert(
+                    (sdk_tree, top_leaf.leaf_index as u64),
+                    IndexedTreeLeafUpdate {
+                        tree,
+                        tree_type: tree_type.clone(),
+                        hash: top_hash.0,
+                        leaf: RawIndexedElement {
+                            value: top_leaf.value.clone().try_into().map_err(|_e| {
+                                IngesterError::ParserError(format!(
+                                    "Failed to convert top element value to array {:?}",
+                                    top_leaf.value
+                                ))
+                            })?,
+                            next_index: top_leaf.next_index as usize,
+                            next_value: top_leaf.next_value.try_into().map_err(|_e| {
+                                IngesterError::ParserError(
+                                    "Failed to convert top element next value to array".to_string(),
+                                )
+                            })?,
+                            index: top_leaf.leaf_index as usize,
+                        },
+                        seq: 1,
                     },
-                    seq: 1,
-                },
-            );
+                );
+            }
         }
     }
     let chunks = indexed_leaf_updates

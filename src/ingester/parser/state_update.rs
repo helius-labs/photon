@@ -5,6 +5,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
+use light_compressed_account::TreeType;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashMap, HashSet};
@@ -58,6 +59,7 @@ pub struct LeafNullification {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct IndexedTreeLeafUpdate {
     pub tree: Pubkey,
+    pub tree_type: TreeType,
     pub leaf: RawIndexedElement,
     pub hash: [u8; 32],
     pub seq: u64,

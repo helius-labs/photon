@@ -7,6 +7,7 @@ use crate::ingester::parser::indexer_events::{
 use crate::ingester::parser::state_update::{
     IndexedTreeLeafUpdate, LeafNullification, StateUpdate,
 };
+use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
@@ -117,6 +118,9 @@ fn parse_indexed_merkle_tree_update(
     } = indexed_merkle_tree_event;
     let mut state_update = StateUpdate::new();
 
+    let tree_pubkey = Pubkey::from(id);
+    let tree_type = TreeInfo::get_tree_type(&tree_pubkey);
+
     for update in updates {
         for (leaf, hash) in [
             (update.new_low_element, update.new_low_element_hash),
@@ -125,7 +129,8 @@ fn parse_indexed_merkle_tree_update(
         .iter()
         {
             let indexed_tree_leaf_update = IndexedTreeLeafUpdate {
-                tree: Pubkey::from(id),
+                tree: tree_pubkey,
+                tree_type: tree_type.clone(),
                 hash: *hash,
                 leaf: *leaf,
                 seq,

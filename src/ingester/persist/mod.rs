@@ -22,7 +22,7 @@ use cadence_macros::statsd_count;
 use error::IngesterError;
 use light_compressed_account::TreeType;
 use log::debug;
-use persisted_indexed_merkle_tree::update_indexed_tree_leaves_v1;
+use persisted_indexed_merkle_tree::persist_indexed_tree_updates;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
@@ -153,7 +153,7 @@ pub async fn persist_state_update(
         })
         .collect();
     // IMPORTANT: Persist indexed tree updates BEFORE state tree nodes to ensure consistency
-    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
+    persist_indexed_tree_updates(txn, converted_updates).await?;
 
     debug!("Persisting state nodes...");
     for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {

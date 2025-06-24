@@ -57,12 +57,11 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                 hash: Hash::from(ZERO_BYTES[0]),
                 seq: None,
             };
-            let tree_height = TreeInfo::get(&merkle_tree_pubkey.to_string())
+            let tree_height = TreeInfo::height(&merkle_tree_pubkey.to_string())
                 .ok_or(PhotonApiError::RecordNotFound(format!(
                     "Tree info not found for tree: {}",
                     merkle_tree_pubkey
-                )))?
-                .height;
+                )))?;
             let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, (tree_height + 1) as u32);
             leaf_nodes.push((zero_leaf.clone(), node_idx));
         }
