@@ -138,8 +138,12 @@ pub async fn get_exclusion_range_with_proof_v2(
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
         "No range proof found".to_string(),
     ))?;
-    let hash = compute_range_node_hash(range_node)
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
+    let hash = if tree_height == TREE_HEIGHT_V1 + 1 {
+        compute_range_node_hash_v1(range_node)
+    } else {
+        compute_range_node_hash(range_node)
+    }
+    .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
     let leaf_node = LeafNode {
         tree: SerializablePubkey::try_from(range_node.tree.clone()).map_err(|e| {
@@ -192,9 +196,32 @@ fn proof_for_empty_tree(
     tree: Vec<u8>,
     tree_height: u32,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
-    let zeroeth_element = get_zeroeth_exclusion_range(tree.clone());
-    let zeroeth_element_hash = compute_range_node_hash(&zeroeth_element)
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
+    let root_seq = if tree_height == TREE_HEIGHT_V1 + 1 {
+        3
+    } else {
+        0
+    };
+    proof_for_empty_tree_with_seq(tree, tree_height, root_seq)
+}
+
+fn proof_for_empty_tree_with_seq(
+    tree: Vec<u8>,
+    tree_height: u32,
+    root_seq: u64,
+) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
+    let (zeroeth_element, zeroeth_element_hash) = if tree_height == TREE_HEIGHT_V1 + 1 {
+        let element = get_zeroeth_exclusion_range_v1(tree.clone());
+        let hash = compute_range_node_hash_v1(&element).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+        })?;
+        (element, hash)
+    } else {
+        let element = get_zeroeth_exclusion_range(tree.clone());
+        let hash = compute_range_node_hash(&element).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+        })?;
+        (element, hash)
+    };
 
     let mut proof: Vec<Hash> = vec![];
     for i in 0..(tree_height - 1) {
@@ -222,7 +249,7 @@ fn proof_for_empty_tree(
         merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
             PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
         })?,
-        root_seq: if TREE_HEIGHT_V1 == tree_height { 3 } else { 0 },
+        root_seq,
     };
     merkle_proof.validate()?;
     Ok((zeroeth_element, merkle_proof))
@@ -244,43 +271,7 @@ pub async fn get_exclusion_range_with_proof_v1(
         })?;
 
     if btree.is_empty() {
-        let zeroeth_element = get_zeroeth_exclusion_range_v1(tree.clone());
-        let zeroeth_element_hash = compute_range_node_hash_v1(&zeroeth_element).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-        })?;
-        let top_element = get_top_element(tree.clone());
-        let top_element_hash = compute_range_node_hash_v1(&top_element).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-        })?;
-        let mut proof: Vec<Hash> = vec![top_element_hash.clone()];
-        for i in 1..(tree_height - 1) {
-            let hash = Hash::try_from(ZERO_BYTES[i as usize]).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
-            })?;
-            proof.push(hash);
-        }
-        let mut root = zeroeth_element_hash.clone().to_vec();
-
-        for elem in proof.iter() {
-            root = compute_parent_hash(root, elem.to_vec()).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-            })?;
-        }
-
-        let merkle_proof = MerkleProofWithContext {
-            proof,
-            root: Hash::try_from(root).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to convert hash: {}", e))
-            })?,
-            leaf_index: 0,
-            hash: zeroeth_element_hash,
-            merkle_tree: SerializablePubkey::try_from(tree.clone()).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
-            })?,
-            root_seq: 3,
-        };
-        merkle_proof.validate()?;
-        return Ok((zeroeth_element, merkle_proof));
+        return proof_for_empty_tree(tree, tree_height);
     }
 
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
@@ -342,39 +333,74 @@ pub async fn update_indexed_tree_leaves_v1(
 ) -> Result<(), IngesterError> {
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
     for sdk_tree in trees {
-        {
-            let tree = Pubkey::new_from_array(sdk_tree.to_bytes());
-            let leaf = get_zeroeth_exclusion_range(sdk_tree.to_bytes().to_vec());
-            let leaf_update = indexed_leaf_updates.get(&(sdk_tree, leaf.leaf_index as u64));
-            if leaf_update.is_none() {
-                indexed_leaf_updates.insert(
-                    (sdk_tree, leaf.leaf_index as u64),
-                    IndexedTreeLeafUpdate {
-                        tree,
-                        hash: compute_range_node_hash(&leaf)
-                            .map_err(|e| {
-                                IngesterError::ParserError(format!("Failed to compute hash: {}", e))
-                            })?
-                            .0,
-                        leaf: RawIndexedElement {
-                            value: leaf.value.clone().try_into().map_err(|_e| {
-                                IngesterError::ParserError(format!(
-                                    "Failed to convert value to array {:?}",
-                                    leaf.value
-                                ))
-                            })?,
-                            next_index: leaf.next_index as usize,
-                            next_value: leaf.next_value.try_into().map_err(|_e| {
-                                IngesterError::ParserError(
-                                    "Failed to convert next value to array".to_string(),
-                                )
-                            })?,
-                            index: leaf.leaf_index as usize,
-                        },
-                        seq: 0,
+        let tree = Pubkey::new_from_array(sdk_tree.to_bytes());
+        
+        // Check if zeroeth element (leaf_index 0) is missing and insert it if needed
+        let zeroeth_leaf = get_zeroeth_exclusion_range_v1(sdk_tree.to_bytes().to_vec());
+        let zeroeth_update = indexed_leaf_updates.get(&(sdk_tree, zeroeth_leaf.leaf_index as u64));
+        if zeroeth_update.is_none() {
+            println!("Inserting missing zeroeth element for V1 tree {}", sdk_tree);
+            let zeroeth_hash = compute_range_node_hash_v1(&zeroeth_leaf)
+                .map_err(|e| {
+                    IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
+                })?;
+            
+            indexed_leaf_updates.insert(
+                (sdk_tree, zeroeth_leaf.leaf_index as u64),
+                IndexedTreeLeafUpdate {
+                    tree,
+                    hash: zeroeth_hash.0,
+                    leaf: RawIndexedElement {
+                        value: zeroeth_leaf.value.clone().try_into().map_err(|_e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to convert zeroeth element value to array {:?}",
+                                zeroeth_leaf.value
+                            ))
+                        })?,
+                        next_index: zeroeth_leaf.next_index as usize,
+                        next_value: zeroeth_leaf.next_value.try_into().map_err(|_e| {
+                            IngesterError::ParserError(
+                                "Failed to convert zeroeth element next value to array".to_string(),
+                            )
+                        })?,
+                        index: zeroeth_leaf.leaf_index as usize,
                     },
-                );
-            }
+                    seq: 0,
+                },
+            );
+        }
+        
+        // Check if top element (leaf_index 1) is missing and insert it if needed  
+        let top_leaf = get_top_element(sdk_tree.to_bytes().to_vec());
+        let top_update = indexed_leaf_updates.get(&(sdk_tree, top_leaf.leaf_index as u64));
+        if top_update.is_none() {
+            let top_hash = compute_range_node_hash_v1(&top_leaf).map_err(|e| {
+                IngesterError::ParserError(format!("Failed to compute top element hash: {}", e))
+            })?;
+
+            indexed_leaf_updates.insert(
+                (sdk_tree, top_leaf.leaf_index as u64),
+                IndexedTreeLeafUpdate {
+                    tree,
+                    hash: top_hash.0,
+                    leaf: RawIndexedElement {
+                        value: top_leaf.value.clone().try_into().map_err(|_e| {
+                            IngesterError::ParserError(format!(
+                                "Failed to convert top element value to array {:?}",
+                                top_leaf.value
+                            ))
+                        })?,
+                        next_index: top_leaf.next_index as usize,
+                        next_value: top_leaf.next_value.try_into().map_err(|_e| {
+                            IngesterError::ParserError(
+                                "Failed to convert top element next value to array".to_string(),
+                            )
+                        })?,
+                        index: top_leaf.leaf_index as usize,
+                    },
+                    seq: 1,
+                },
+            );
         }
     }
     let chunks = indexed_leaf_updates
@@ -476,8 +502,15 @@ pub async fn multi_append(
     let mut elements_to_update: HashMap<i64, indexed_trees::Model> = HashMap::new();
 
     if indexed_tree.is_empty() {
-        {
-            let model = get_zeroeth_exclusion_range(tree.clone());
+        let models = if tree_height == TREE_HEIGHT_V1 + 1 {
+            vec![
+                get_zeroeth_exclusion_range_v1(tree.clone()),
+                get_top_element(tree.clone()),
+            ]
+        } else {
+            vec![get_zeroeth_exclusion_range(tree.clone())]
+        };
+        for model in models {
             elements_to_update.insert(model.leaf_index, model.clone());
             indexed_tree.insert(model.value.clone(), model);
         }
@@ -561,7 +594,11 @@ pub async fn multi_append(
                     IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
                 })?,
                 leaf_index: x.leaf_index as u32,
-                hash: compute_range_node_hash(x)?,
+                hash: if tree_height == TREE_HEIGHT_V1 + 1 {
+                    compute_range_node_hash_v1(x)?
+                } else {
+                    compute_range_node_hash(x)?
+                },
                 seq,
             })
         })

@@ -144,6 +144,17 @@ pub async fn persist_state_update(
 
     leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
 
+    debug!("Persisting index tree updates...");
+    let converted_updates = indexed_merkle_tree_updates
+        .into_iter()
+        .map(|((pubkey, u64_val), update)| {
+            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
+            ((sdk_pubkey, u64_val), update)
+        })
+        .collect();
+    // IMPORTANT: Persist indexed tree updates BEFORE state tree nodes to ensure consistency
+    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
+
     debug!("Persisting state nodes...");
     for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
         let chunk_vec = chunk.iter().cloned().collect_vec();
@@ -184,17 +195,6 @@ pub async fn persist_state_update(
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
-
-    debug!("Persisting index tree updates...");
-    // Convert from solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
-    let converted_updates = indexed_merkle_tree_updates
-        .into_iter()
-        .map(|((pubkey, u64_val), update)| {
-            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
-            ((sdk_pubkey, u64_val), update)
-        })
-        .collect();
-    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
 
     persist_batch_events(txn, batch_merkle_tree_events).await?;
 
