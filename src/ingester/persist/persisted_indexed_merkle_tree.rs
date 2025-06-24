@@ -26,11 +26,51 @@ use crate::{
     dao::generated::{indexed_trees, state_trees},
     ingester::{
         error::IngesterError,
-        parser::{indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate},
+        parser::{
+            indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate,
+            tree_info::TreeInfo,
+        },
     },
 };
 use lazy_static::lazy_static;
 use light_poseidon::PoseidonBytesHasher;
+
+/// Computes range node hash based on tree type
+fn compute_hash_by_tree_type(
+    range_node: &indexed_trees::Model,
+    tree_type: TreeType,
+) -> Result<Hash, IngesterError> {
+    match tree_type {
+        TreeType::AddressV1 | TreeType::StateV1 => compute_range_node_hash_v1(range_node)
+            .map_err(|e| IngesterError::ParserError(format!("Failed to compute V1 hash: {}", e))),
+        _ => compute_range_node_hash(range_node)
+            .map_err(|e| IngesterError::ParserError(format!("Failed to compute V2 hash: {}", e))),
+    }
+}
+
+/// Computes range node hash by looking up tree type from tree pubkey
+fn compute_hash_by_tree_pubkey(
+    range_node: &indexed_trees::Model,
+    tree_pubkey: &[u8],
+) -> Result<Hash, IngesterError> {
+    let pubkey = Pubkey::try_from(tree_pubkey)
+        .map_err(|e| IngesterError::ParserError(format!("Invalid pubkey bytes: {}", e)))?;
+    let tree_type = TreeInfo::get_tree_type(&pubkey);
+    compute_hash_by_tree_type(range_node, tree_type)
+}
+
+/// Computes hash for API functions that receive tree_height
+fn compute_hash_by_tree_height(
+    range_node: &indexed_trees::Model,
+    tree_height: u32,
+) -> Result<Hash, PhotonApiError> {
+    let result = if tree_height == TREE_HEIGHT_V1 + 1 {
+        compute_range_node_hash_v1(range_node)
+    } else {
+        compute_range_node_hash(range_node)
+    };
+    result.map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))
+}
 
 lazy_static! {
     pub static ref HIGHEST_ADDRESS_PLUS_ONE: BigUint = BigUint::from_str(
@@ -139,12 +179,7 @@ pub async fn get_exclusion_range_with_proof_v2(
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
         "No range proof found".to_string(),
     ))?;
-    let hash = if tree_height == TREE_HEIGHT_V1 + 1 {
-        compute_range_node_hash_v1(range_node)
-    } else {
-        compute_range_node_hash(range_node)
-    }
-    .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
+    let hash = compute_hash_by_tree_height(range_node, tree_height)?;
 
     let leaf_node = LeafNode {
         tree: SerializablePubkey::try_from(range_node.tree.clone()).map_err(|e| {
@@ -210,19 +245,12 @@ fn proof_for_empty_tree_with_seq(
     tree_height: u32,
     root_seq: u64,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
-    let (zeroeth_element, zeroeth_element_hash) = if tree_height == TREE_HEIGHT_V1 + 1 {
-        let element = get_zeroeth_exclusion_range_v1(tree.clone());
-        let hash = compute_range_node_hash_v1(&element).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-        })?;
-        (element, hash)
+    let zeroeth_element = if tree_height == TREE_HEIGHT_V1 + 1 {
+        get_zeroeth_exclusion_range_v1(tree.clone())
     } else {
-        let element = get_zeroeth_exclusion_range(tree.clone());
-        let hash = compute_range_node_hash(&element).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
-        })?;
-        (element, hash)
+        get_zeroeth_exclusion_range(tree.clone())
     };
+    let zeroeth_element_hash = compute_hash_by_tree_height(&zeroeth_element, tree_height)?;
 
     let mut proof: Vec<Hash> = vec![];
     for i in 0..(tree_height - 1) {
@@ -333,10 +361,10 @@ pub async fn persist_indexed_tree_updates(
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
     let trees: HashSet<Pubkey> = indexed_leaf_updates.keys().map(|x| x.0).collect();
-    
+
     for sdk_tree in trees {
         let tree = Pubkey::new_from_array(sdk_tree.to_bytes());
-        
+
         let tree_type = indexed_leaf_updates
             .values()
             .find(|update| update.tree == tree)
@@ -347,7 +375,7 @@ pub async fn persist_indexed_tree_updates(
                     tree
                 ))
             })?;
-        
+
         // Check if zeroeth element (leaf_index 0) is missing and insert it if needed
         let zeroeth_update = indexed_leaf_updates.get(&(sdk_tree, 0));
         if zeroeth_update.is_none() {
@@ -355,19 +383,25 @@ pub async fn persist_indexed_tree_updates(
                 TreeType::AddressV1 | TreeType::StateV1 => {
                     let leaf = get_zeroeth_exclusion_range_v1(sdk_tree.to_bytes().to_vec());
                     let hash = compute_range_node_hash_v1(&leaf).map_err(|e| {
-                        IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
+                        IngesterError::ParserError(format!(
+                            "Failed to compute zeroeth element hash: {}",
+                            e
+                        ))
                     })?;
                     (leaf, hash)
-                },
+                }
                 _ => {
                     let leaf = get_zeroeth_exclusion_range(sdk_tree.to_bytes().to_vec());
                     let hash = compute_range_node_hash(&leaf).map_err(|e| {
-                        IngesterError::ParserError(format!("Failed to compute zeroeth element hash: {}", e))
+                        IngesterError::ParserError(format!(
+                            "Failed to compute zeroeth element hash: {}",
+                            e
+                        ))
                     })?;
                     (leaf, hash)
                 }
             };
-            
+
             indexed_leaf_updates.insert(
                 (sdk_tree, zeroeth_leaf.leaf_index as u64),
                 IndexedTreeLeafUpdate {
@@ -393,7 +427,7 @@ pub async fn persist_indexed_tree_updates(
                 },
             );
         }
-        
+
         // Check if top element (leaf_index 1) is missing and insert it if needed - ONLY for V1 trees
         if matches!(tree_type, TreeType::AddressV1 | TreeType::StateV1) {
             let top_update = indexed_leaf_updates.get(&(sdk_tree, 1));
@@ -621,11 +655,7 @@ pub async fn multi_append(
                     IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
                 })?,
                 leaf_index: x.leaf_index as u32,
-                hash: if tree_height == TREE_HEIGHT_V1 + 1 {
-                    compute_range_node_hash_v1(x)?
-                } else {
-                    compute_range_node_hash(x)?
-                },
+                hash: compute_hash_by_tree_pubkey(x, &tree)?,
                 seq,
             })
         })
