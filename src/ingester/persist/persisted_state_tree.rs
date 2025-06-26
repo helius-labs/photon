@@ -8,10 +8,10 @@ use sea_orm::{
 use solana_program::pubkey::Pubkey;
 
 use crate::api::error::PhotonApiError;
+use crate::common::format_bytes;
 use crate::dao::generated::state_trees;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::leaf_node::STATE_TREE_HEIGHT_V2;
-use crate::ingester::persist::persisted_indexed_merkle_tree::format_bytes;
 
 pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     let mut indexes = vec![];

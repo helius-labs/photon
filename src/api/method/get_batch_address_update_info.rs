@@ -6,11 +6,11 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::{
     get_multiple_new_address_proofs_helper, AddressWithTree, MerkleContextWithNewAddressProof,
 };
+use crate::common::format_bytes;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::persisted_indexed_merkle_tree::format_bytes;
 use crate::ingester::persist::persisted_state_tree::get_subtrees;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]

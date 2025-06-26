@@ -4,7 +4,7 @@ use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, thread::sleep, time::Du
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
 use clap::{Parser, ValueEnum};
-use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
+use sea_orm::{DatabaseBackend, DatabaseConnection, SqlxPostgresConnector};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
@@ -152,4 +152,13 @@ pub fn get_rpc_client(rpc_url: &str) -> Arc<RpcClient> {
         Duration::from_secs(90),
         CommitmentConfig::confirmed(),
     ))
+}
+
+pub fn format_bytes(bytes: Vec<u8>, database_backend: DatabaseBackend) -> String {
+    let hex_bytes = hex::encode(bytes);
+    match database_backend {
+        DatabaseBackend::Postgres => format!("E'\\\\x{}'", hex_bytes),
+        DatabaseBackend::Sqlite => format!("x'{}'", hex_bytes),
+        _ => unimplemented!(),
+    }
 }

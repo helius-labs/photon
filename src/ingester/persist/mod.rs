@@ -15,6 +15,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use persisted_batch_event::persist_batch_events;
 
 use crate::common::typedefs::account::{Account, AccountWithContext};
+use crate::dao::generated::address_queues;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
@@ -32,25 +33,23 @@ use solana_sdk::signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
-mod merkle_proof_with_context;
+pub mod indexed_merkle_tree;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
-use crate::dao::generated::address_queues;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
 mod leaf_node_proof;
+mod merkle_proof_with_context;
+mod persisted_batch_event;
+mod spend;
 
 pub use self::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
 pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
 };
-
-mod persisted_batch_event;
-
-mod spend;
 
 pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 

@@ -8,12 +8,13 @@ use solana_pubkey::{pubkey, Pubkey};
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
+use crate::common::format_bytes;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::persisted_indexed_merkle_tree::{
-    format_bytes, get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
+use crate::ingester::persist::indexed_merkle_tree::{
+    get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
 };
 
 pub const FORESTER_MAX_ADDRESSES: usize = 500;
