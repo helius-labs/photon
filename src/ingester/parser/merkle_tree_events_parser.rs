@@ -130,7 +130,7 @@ fn parse_indexed_merkle_tree_update(
         {
             let indexed_tree_leaf_update = IndexedTreeLeafUpdate {
                 tree: tree_pubkey,
-                tree_type: tree_type.clone(),
+                tree_type,
                 hash: *hash,
                 leaf: *leaf,
                 seq,

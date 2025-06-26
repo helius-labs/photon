@@ -16,8 +16,9 @@ use photon_indexer::api::method::utils::{
     GetCompressedTokenAccountsByOwner,
 };
 use photon_indexer::common::typedefs::bs58_string::Base58String;
+use photon_indexer::ingester::persist::indexed_merkle_tree::get_exclusion_range_with_proof_v2;
 use photon_indexer::ingester::persist::persisted_indexed_merkle_tree::{
-    get_exclusion_range_with_proof_v2, persist_indexed_tree_updates, validate_tree,
+    persist_indexed_tree_updates, validate_tree,
 };
 
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -1390,7 +1391,7 @@ async fn test_gpa_filters(
         .unwrap()
         .value;
 
-    assert!(res.items[0].data.clone().unwrap().data.0 == vec![1, 2]);
+    assert_eq!(res.items[0].data.clone().unwrap().data.0, vec![1, 2]);
 
     let filters_and_expected_results = vec![
         ((vec![1, 2], 0), 1),
@@ -1643,7 +1644,7 @@ async fn test_update_indexed_merkle_tree(
                 (tree, index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
-                    tree_type: light_compressed_account::TreeType::AddressV1,
+                    tree_type: TreeType::AddressV1,
                     leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,

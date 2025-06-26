@@ -86,14 +86,17 @@ impl From<NewAddress> for AddressQueueUpdate {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 /// Representation of state update of the compression system that is optimal for simple persistence.
 pub struct StateUpdate {
+    // v1 and v2 tree accounts
     pub in_accounts: HashSet<Hash>,
+    // v1 and v2 tree accounts
     pub out_accounts: Vec<AccountWithContext>,
     pub account_transactions: HashSet<AccountTransaction>,
     pub transactions: HashSet<Transaction>,
     pub leaf_nullifications: HashSet<LeafNullification>,
     pub indexed_merkle_tree_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
-
+    // v2 state and address Merkle tree updates
     pub batch_merkle_tree_events: BatchMerkleTreeEvents,
+    // v2 input accounts that are inserted into the input queue
     pub batch_nullify_context: Vec<BatchNullifyContext>,
     pub batch_new_addresses: Vec<AddressQueueUpdate>,
 }

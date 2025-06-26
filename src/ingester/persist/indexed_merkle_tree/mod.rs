@@ -5,13 +5,13 @@ use std::str::FromStr;
 mod helpers;
 mod proof;
 
-pub(crate) use helpers::{
+pub use helpers::{
     compute_hash_by_tree_height, compute_hash_by_tree_pubkey, compute_range_node_hash,
     compute_range_node_hash_v1, get_top_element, get_zeroeth_exclusion_range,
     get_zeroeth_exclusion_range_v1,
 };
 
-pub(crate) use proof::{
+pub use proof::{
     get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
     query_next_smallest_elements,
 };
