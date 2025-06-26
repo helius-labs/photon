@@ -17,7 +17,19 @@ impl TreeInfo {
     }
 
     pub fn height(pubkey: &str) -> Option<u32> {
-        QUEUE_TREE_MAPPING.get(pubkey).map(|x| x.height)
+        Self::get(pubkey).map(|x| x.height)
+    }
+
+    pub fn get_tree_type(pubkey: &Pubkey) -> TreeType {
+        let tree_pubkey_str = pubkey.to_string();
+        Self::get(&tree_pubkey_str)
+            .map(|info| info.tree_type.clone())
+            .unwrap_or(TreeType::AddressV2)
+    }
+
+    pub fn get_tree_type_from_bytes(tree_bytes: &[u8; 32]) -> TreeType {
+        let pubkey = Pubkey::from(*tree_bytes);
+        Self::get_tree_type(&pubkey)
     }
 }
 

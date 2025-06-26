@@ -130,15 +130,22 @@ pub async fn get_queue_elements(
                 queue_type
             ))),
         }?;
-        (
-            get_multiple_compressed_leaf_proofs_by_indices(
-                &tx,
-                SerializablePubkey::from(request.tree.0),
-                indices,
-            )
-            .await?,
-            first_value_queue_index,
+        let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
+            &tx,
+            SerializablePubkey::from(request.tree.0),
+            indices.clone(),
         )
+        .await?;
+        if generated_proofs.len() != indices.len() {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Expected {} proofs for {} queue elements, but got {} proofs",
+                indices.len(),
+                queue_elements.len(),
+                generated_proofs.len()
+            )));
+        }
+
+        (generated_proofs, first_value_queue_index)
     } else {
         (vec![], 0)
     };

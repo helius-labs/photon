@@ -15,6 +15,7 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use persisted_batch_event::persist_batch_events;
 
 use crate::common::typedefs::account::{Account, AccountWithContext};
+use crate::dao::generated::address_queues;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
 use borsh::BorshDeserialize;
@@ -22,7 +23,7 @@ use cadence_macros::statsd_count;
 use error::IngesterError;
 use light_compressed_account::TreeType;
 use log::debug;
-use persisted_indexed_merkle_tree::update_indexed_tree_leaves_v1;
+use persisted_indexed_merkle_tree::persist_indexed_tree_updates;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
@@ -32,25 +33,23 @@ use solana_sdk::signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 
-mod merkle_proof_with_context;
+pub mod indexed_merkle_tree;
 pub mod persisted_indexed_merkle_tree;
 pub mod persisted_state_tree;
 
-use crate::dao::generated::address_queues;
 pub use merkle_proof_with_context::MerkleProofWithContext;
 
 mod leaf_node;
 mod leaf_node_proof;
+mod merkle_proof_with_context;
+mod persisted_batch_event;
+mod spend;
 
 pub use self::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
 pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
 };
-
-mod persisted_batch_event;
-
-mod spend;
 
 pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
@@ -65,7 +64,9 @@ pub async fn persist_state_update(
         return Ok(());
     }
     let StateUpdate {
+        // input accounts that will be nullified
         in_accounts,
+        // Output accounts that will be created
         out_accounts,
         account_transactions,
         transactions,
@@ -144,6 +145,17 @@ pub async fn persist_state_update(
 
     leaf_nodes_with_signatures.sort_by_key(|x| x.0.seq);
 
+    debug!("Persisting index tree updates...");
+    let converted_updates = indexed_merkle_tree_updates
+        .into_iter()
+        .map(|((pubkey, u64_val), update)| {
+            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
+            ((sdk_pubkey, u64_val), update)
+        })
+        .collect();
+    // IMPORTANT: Persist indexed tree updates BEFORE state tree nodes to ensure consistency
+    persist_indexed_tree_updates(txn, converted_updates).await?;
+
     debug!("Persisting state nodes...");
     for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
         let chunk_vec = chunk.iter().cloned().collect_vec();
@@ -184,17 +196,6 @@ pub async fn persist_state_update(
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
-
-    debug!("Persisting index tree updates...");
-    // Convert from solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
-    let converted_updates = indexed_merkle_tree_updates
-        .into_iter()
-        .map(|((pubkey, u64_val), update)| {
-            let sdk_pubkey = Pubkey::new_from_array(pubkey.to_bytes());
-            ((sdk_pubkey, u64_val), update)
-        })
-        .collect();
-    update_indexed_tree_leaves_v1(txn, converted_updates).await?;
 
     persist_batch_events(txn, batch_merkle_tree_events).await?;
 
@@ -433,7 +434,7 @@ async fn append_output_accounts(
             slot_created: Set(account.account.slot_created.0 as i64),
             seq: Set(account.account.seq.map(|x| x.0 as i64)),
             prev_spent: Set(None),
-            tx_hash: Default::default(), // Its sets at input queue insertion for batch updates
+            tx_hash: Default::default(), // tx hashes are only set when an account is an input
         });
 
         if let Some(token_data) = parse_token_data(&account.account)? {
