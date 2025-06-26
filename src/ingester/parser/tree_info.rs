@@ -24,7 +24,7 @@ impl TreeInfo {
         let tree_pubkey_str = pubkey.to_string();
         Self::get(&tree_pubkey_str)
             .map(|info| info.tree_type.clone())
-            .unwrap_or(TreeType::StateV2)
+            .unwrap_or(TreeType::AddressV2)
     }
 
     pub fn get_tree_type_from_bytes(tree_bytes: &[u8; 32]) -> TreeType {

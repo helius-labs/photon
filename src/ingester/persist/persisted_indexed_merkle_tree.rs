@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 use itertools::Itertools;
 use light_compressed_account::TreeType;
@@ -25,7 +25,6 @@ use crate::{
         parser::{indexer_events::RawIndexedElement, state_update::IndexedTreeLeafUpdate},
     },
 };
-
 
 /// Ensures the zeroeth element (leaf_index 0) exists if not already present
 fn ensure_zeroeth_element_exists(
@@ -167,7 +166,6 @@ pub async fn persist_indexed_tree_updates(
         .values()
         .map(|update| (update.tree, update.tree_type))
         .collect();
-
 
     for (tree, tree_type) in trees {
         let sdk_tree = Pubkey::new_from_array(tree.to_bytes());
