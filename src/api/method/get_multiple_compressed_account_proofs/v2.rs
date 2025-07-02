@@ -148,7 +148,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
             value.tree_context = TreeContextInfo {
                 tree_type: account.tree_type.map(|t| t as u16).unwrap_or(0),
                 tree: SerializablePubkey::try_from(account.tree.clone())?,
-                queue: SerializablePubkey::try_from(account.queue.clone())?,
+                queue: SerializablePubkey::try_from(account.queue.clone().unwrap_or_default())?,
                 cpi_context: None,
             };
         }

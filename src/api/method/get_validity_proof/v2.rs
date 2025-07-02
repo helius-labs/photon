@@ -203,8 +203,10 @@ pub async fn get_validity_proof_v2(
                         tree_type: acc_model.tree_type.map(|t| t as u16).unwrap_or(0),
                         tree: SerializablePubkey::try_from_slice(&acc_model.tree)
                             .unwrap_or_default(),
-                        queue: SerializablePubkey::try_from_slice(&acc_model.queue)
-                            .unwrap_or_default(),
+                        queue: SerializablePubkey::try_from_slice(
+                            &acc_model.queue.clone().unwrap_or_default(),
+                        )
+                        .unwrap_or_default(),
                         cpi_context: None,
                         next_tree_context: None,
                     },

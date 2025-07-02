@@ -25,7 +25,7 @@ pub struct Model {
     pub nullified_in_tree: bool,
     pub nullifier_queue_index: Option<i64>,
     pub in_output_queue: bool,
-    pub queue: Vec<u8>,
+    pub queue: Option<Vec<u8>>,
     pub nullifier: Option<Vec<u8>>,
     pub tx_hash: Option<Vec<u8>>,
 }
