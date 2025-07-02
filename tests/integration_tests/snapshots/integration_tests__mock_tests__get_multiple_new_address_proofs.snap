@@ -1,6 +1,6 @@
 ---
 source: tests/integration_tests/mock_tests.rs
-assertion_line: 1085
+assertion_line: 1086
 expression: proof
 ---
 {
@@ -9,13 +9,13 @@ expression: proof
   },
   "value": [
     {
-      "root": "35jQgsScN7DtyLQL6cMFfmUML23t1AJ9RzNe5wGeXsuq",
+      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
       "address": "Fi6AXBGuGs7DRXP428hwhJJfTpJ4BVZD8DiUcX1cj35W",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
       "nextIndex": 1,
       "proof": [
-        "11111111111111111111111111111111",
+        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
@@ -43,17 +43,17 @@ expression: proof
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
       "merkleTree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
-      "rootSeq": 2,
+      "rootSeq": 3,
       "lowElementLeafIndex": 0
     },
     {
-      "root": "35jQgsScN7DtyLQL6cMFfmUML23t1AJ9RzNe5wGeXsuq",
+      "root": "3FrGzyXtjqjnukHDS2M5oyVj8tMVcHSahcHpWBGR5MHY",
       "address": "sH8ux4csv8wxiRejuHjpTCkrfGgeNtg6Y55AJJ9GJSd",
       "lowerRangeAddress": "11111111111111111111111111111111",
       "higherRangeAddress": "14uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofL",
       "nextIndex": 1,
       "proof": [
-        "11111111111111111111111111111111",
+        "34cMT7MjFrs8hLp2zHMrPJHKkUxBDBwBTNck77wLjjcY",
         "3CFKteYSRSkp9EGFPzibgzCPtNuJ5HeZ31fAsBpgcHwZ",
         "274k4KPY5VhmU5pCwwJzyHaY4AH4m7SjnZnyj44UitJc",
         "2gQksfK543Jw196amPxXWceFzNTfRHiqb7x2edvupftT",
@@ -81,7 +81,7 @@ expression: proof
         "4EE5KQnQ6Tvo78gGhTu8serpJV4srbRhYZ3rdvCiRa5e"
       ],
       "merkleTree": "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
-      "rootSeq": 2,
+      "rootSeq": 3,
       "lowElementLeafIndex": 0
     }
   ]
