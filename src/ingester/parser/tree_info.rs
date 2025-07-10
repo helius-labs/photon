@@ -82,6 +82,10 @@ lazy_static! {
                 pubkey!("nfqB3FAiiB1p3ksiWHB48LzSycpaJZ5RTp5C8RtNyUH"),
             ),
             (
+                pubkey!("smtB1XUpt3c7j7udurMdxmAGib7RzCyBXu95fAZoHyT"),
+                pubkey!("nfqByCmDtLy7pkKpazApswN5H3Y4RSgCVq7NpecLHza"),
+            ),
+            (
                 pubkey!("smtCEeVJsWyeeawgn5cQR5iK7dsJwnxJq7QwdQUepx8"),
                 pubkey!("nfqC5pX1HzaTgUApL2DTp7Xh8j3A5Augk42jngRCoKF"),
             ),

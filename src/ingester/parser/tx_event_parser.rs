@@ -65,7 +65,7 @@ pub fn create_state_update_v1(
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
         let tree_and_queue = TreeInfo::get(&tree.to_string())
-            .ok_or(IngesterError::ParserError("Missing queue".to_string()))?
+            .ok_or(IngesterError::ParserError(format!("Missing queue for tree: {}", tree.to_string())))?
             .clone();
 
         let mut seq = None;
