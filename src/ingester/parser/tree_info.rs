@@ -234,35 +234,71 @@ lazy_static! {
             );
         }
 
-        m.insert(
-            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU".to_string(),
-            TreeInfo {
-                tree: pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
-                queue: pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
-                height: 32,
-                tree_type: TreeType::StateV2,
-            },
-        );
+        let state_trees_v2 = [
+            (
+                pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
+                pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
+            ),
+            (
+                pubkey!("bmt1LryLZUMmF7ZtqESaw7wifBXLfXHQYoE4GAmrahU"),
+                pubkey!("oq1na8gojfdUhsfCpyjNt6h4JaDWtHf1yQj4koBWfto"),
+            ),
+            (
+                pubkey!("bmt2UxoBxB9xWev4BkLvkGdapsz6sZGkzViPNph7VFi"),
+                pubkey!("oq2UkeMsJLfXt2QHzim242SUi3nvjJs8Pn7Eac9H9vg"),
+            ),
+            (
+                pubkey!("bmt3ccLd4bqSVZVeCJnH1F6C8jNygAhaDfxDwePyyGb"),
+                pubkey!("oq3AxjekBWgo64gpauB6QtuZNesuv19xrhaC1ZM1THQ"),
+            ),
+            (
+                pubkey!("bmt4d3p1a4YQgk9PeZv5s4DBUmbF5NxqYpk9HGjQsd8"),
+                pubkey!("oq4ypwvVGzCUMoiKKHWh4S1SgZJ9vCvKpcz6RT6A8dq"),
+            ),
+            (
+                pubkey!("bmt5yU97jC88YXTuSukYHa8Z5Bi2ZDUtmzfkDTA2mG2"),
+                pubkey!("oq5oh5ZR3yGomuQgFduNDzjtGvVWfDRGLuDVjv9a96P"),
+            ),
+        ];
 
-        m.insert(
-            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu".to_string(),
-            TreeInfo {
-                tree: pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
-                queue: pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
-                height: 32,
-                tree_type: TreeType::StateV2,
-            },
-        );
+        let address_trees_v2 = [
+            pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
+            pubkey!("amt2kaJA14v3urZbZvnc5v2np8jqvc4Z8zDep5wbtzx"),
+        ];
 
-        m.insert(
-            "EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK".to_string(),
-            TreeInfo {
-                tree: pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
-                queue: pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
-                height: 40,
-                tree_type: TreeType::AddressV2,
-            },
-        );
+        for (tree, queue) in state_trees_v2.iter() {
+            m.insert(
+                queue.to_string(),
+                TreeInfo {
+                    tree: *tree,
+                    queue: *queue,
+                    height: 32,
+                    tree_type: TreeType::StateV2,
+                },
+            );
+
+            m.insert(
+                tree.to_string(),
+                TreeInfo {
+                    tree: *tree,
+                    queue: *queue,
+                    height: 32,
+                    tree_type: TreeType::StateV2,
+                },
+            );
+        }
+
+        for tree_queue in address_trees_v2.iter() {
+            m.insert(
+                tree_queue.to_string(),
+                TreeInfo {
+                    tree: *tree_queue,
+                    queue: *tree_queue,
+                    height: 40,
+                    tree_type: TreeType::AddressV2,
+                },
+            );
+        }
 
         m
     };
