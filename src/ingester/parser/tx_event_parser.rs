@@ -64,9 +64,20 @@ pub fn create_state_update_v1(
         .zip(transaction_event.output_leaf_indices.iter())
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
-        let tree_and_queue = TreeInfo::get(&tree.to_string())
-            .ok_or(IngesterError::ParserError("Missing queue".to_string()))?
-            .clone();
+        let tree_and_queue = match TreeInfo::get(&tree.to_string()) {
+            Some(info) => info.clone(),
+            None => {
+                if super::SKIP_UNKNOWN_TREES {
+                    log::warn!("Skipping unknown tree: {}", tree.to_string());
+                    continue;
+                } else {
+                    return Err(IngesterError::ParserError(format!(
+                        "Missing queue for tree: {}",
+                        tree.to_string()
+                    )));
+                }
+            }
+        };
 
         let mut seq = None;
         if tree_and_queue.tree_type == TreeType::StateV1 {
