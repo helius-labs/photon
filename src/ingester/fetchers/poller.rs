@@ -90,7 +90,21 @@ fn pop_cached_blocks_to_index(
         } else if min_slot < last_indexed_slot {
             block_cache.remove(&min_slot);
         } else {
-            break;
+            // Handle gaps in block production: if we have a block that's beyond our current
+            // last_indexed_slot, accept it as the next block and continue indexing
+            // This happens when slots are skipped due to validator failures
+            if min_slot > last_indexed_slot {
+                let gap_size = min_slot - last_indexed_slot;
+                if gap_size > 1 {
+                    log::warn!("Found gap in block production: slots {}-{} were skipped, continuing from slot {}", 
+                              last_indexed_slot + 1, min_slot - 1, min_slot);
+                }
+                last_indexed_slot = block.metadata.slot;
+                blocks.push(block.clone());
+                block_cache.remove(&min_slot);
+            } else {
+                break;
+            }
         }
     }
     (blocks, last_indexed_slot)
