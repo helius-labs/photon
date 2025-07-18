@@ -1,3 +1,4 @@
+use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::{
@@ -132,11 +133,20 @@ pub fn create_state_update_v2(
             .extend(event.batch_input_accounts.clone());
             
         // Create account_transactions for v2 batch input accounts
+        // but only for accounts that are not being created in this same transaction
+        let output_account_hashes: std::collections::HashSet<_> = state_update_event
+            .out_accounts
+            .iter()
+            .map(|acc| acc.account.hash.clone())
+            .collect();
+            
         state_update_event.account_transactions.extend(
-            event.batch_input_accounts.iter().map(|batch_account| AccountTransaction {
-                hash: batch_account.account_hash.into(),
-                signature: tx,
-            })
+            event.batch_input_accounts.iter()
+                .filter(|batch_account| !output_account_hashes.contains(&Hash::from(batch_account.account_hash)))
+                .map(|batch_account| AccountTransaction {
+                    hash: batch_account.account_hash.into(),
+                    signature: tx,
+                })
         );
 
         state_update_event
