@@ -51,16 +51,28 @@ pub fn get_block_poller_stream(
         let block_stream = slot_stream
             .map(|slot| {
                 let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
+                async move { 
+                    let result = fetch_block_with_infinite_retries(rpc_client.clone(), slot).await;
+                    (slot, result)
+                }
             })
             .buffer_unordered(max_concurrent_block_fetches);
         pin_mut!(block_stream);
         let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
-        while let Some(block) = block_stream.next().await {
+        let mut skipped_slots: BTreeMap<u64, bool> = BTreeMap::new();
+        
+        while let Some((slot, block)) = block_stream.next().await {
             if let Some(block) = block {
                 block_cache.insert(block.metadata.slot, block);
+            } else {
+                // Track that this slot was skipped
+                skipped_slots.insert(slot, true);
             }
-            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
+            
+            // Clean up skipped slots that are now too old to matter
+            skipped_slots.retain(|&s, _| s > last_indexed_slot);
+            
+            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot, &skipped_slots);
             last_indexed_slot = last_indexed_slot_from_cache;
             metric! {
                 statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
@@ -75,8 +87,30 @@ pub fn get_block_poller_stream(
 fn pop_cached_blocks_to_index(
     block_cache: &mut BTreeMap<u64, BlockInfo>,
     mut last_indexed_slot: u64,
+    skipped_slots: &BTreeMap<u64, bool>,
 ) -> (Vec<BlockInfo>, u64) {
     let mut blocks = Vec::new();
+    
+    // Helper function to check if we can reach last_indexed_slot from a parent_slot
+    // by traversing through skipped slots
+    let can_reach_through_skips = |parent_slot: u64, target_slot: u64| -> bool {
+        if parent_slot == target_slot {
+            return true;
+        }
+        if parent_slot < target_slot {
+            return false;
+        }
+        
+        // Check if all slots between parent_slot and target_slot (exclusive) are skipped
+        for slot in (target_slot + 1)..parent_slot {
+            if !skipped_slots.contains_key(&slot) {
+                // This slot should have a block but we haven't seen it yet
+                return false;
+            }
+        }
+        true
+    };
+    
     loop {
         let min_slot = match block_cache.keys().min() {
             Some(&slot) => slot,
@@ -90,14 +124,13 @@ fn pop_cached_blocks_to_index(
             continue;
         }
         
-        // Case 2: This block's parent matches our last indexed slot - process it
-        // This handles both normal succession and gaps (skipped slots)
-        if block.metadata.parent_slot == last_indexed_slot {
-            // Check if there were skipped slots
-            let expected_slot = last_indexed_slot + 1;
-            if min_slot > expected_slot {
-                log::warn!("Gap in block production: slots {}-{} were skipped (no blocks produced)", 
-                          expected_slot, min_slot - 1);
+        // Case 2: Check if this block can be connected to our last indexed slot
+        // either directly or through a chain of skipped slots
+        if can_reach_through_skips(block.metadata.parent_slot, last_indexed_slot) {
+            // Log if there were skipped slots
+            if block.metadata.parent_slot != last_indexed_slot {
+                log::info!("Block at slot {} has parent {} - accepting due to skipped slots between {} and {}", 
+                         min_slot, block.metadata.parent_slot, last_indexed_slot + 1, block.metadata.parent_slot);
             }
             
             last_indexed_slot = block.metadata.slot;
@@ -108,11 +141,11 @@ fn pop_cached_blocks_to_index(
         
         // Case 3: This block's parent is in the future - we're missing intermediate blocks
         if block.metadata.parent_slot > last_indexed_slot {
-            // Wait for the intermediate blocks to arrive
+            // Wait for the intermediate blocks to arrive or be marked as skipped
             break;
         }
         
-        // Case 4: This block's parent is before our last indexed slot but the block itself is after
+        // Case 4: This block's parent is before our last indexed slot
         // This indicates a fork or invalid block - discard it
         if block.metadata.parent_slot < last_indexed_slot {
             log::warn!("Discarding block at slot {} with parent {} (last indexed: {})", 
@@ -150,20 +183,25 @@ pub async fn fetch_block_with_infinite_retries(
             }
             Err(e) => {
                 if let solana_client::client_error::ClientErrorKind::RpcError(
-                    RpcError::RpcResponseError { code, .. },
-                ) = e.kind
+                    RpcError::RpcResponseError { code, message, .. },
+                ) = &e.kind
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         metric! {
                             statsd_count!("rpc_skipped_block", 1);
                         }
-                        log::info!("Skipped block: {}", slot);
+                        log::info!("Slot {} has no block (skipped): {} (code: {})", slot, message, code);
                         return None;
                     }
+                    log::warn!("RPC error for slot {} (code: {}): {} - will retry", slot, code, message);
+                } else {
+                    log::warn!("Failed to fetch block at slot {}: {} - will retry", slot, e);
                 }
                 metric! {
                     statsd_count!("rpc_block_fetch_failed", 1);
                 }
+                // Continue retrying for non-skipped errors
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
         }
     }
