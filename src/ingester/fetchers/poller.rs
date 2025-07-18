@@ -83,25 +83,42 @@ fn pop_cached_blocks_to_index(
             None => break,
         };
         let block: &BlockInfo = block_cache.get(&min_slot).unwrap();
+        
+        // Case 1: This block is older than what we've already indexed - discard it
+        if min_slot <= last_indexed_slot {
+            block_cache.remove(&min_slot);
+            continue;
+        }
+        
+        // Case 2: This block's parent matches our last indexed slot - process it
+        // This handles both normal succession and gaps (skipped slots)
         if block.metadata.parent_slot == last_indexed_slot {
+            // Check if there were skipped slots
+            let expected_slot = last_indexed_slot + 1;
+            if min_slot > expected_slot {
+                log::warn!("Gap in block production: slots {}-{} were skipped (no blocks produced)", 
+                          expected_slot, min_slot - 1);
+            }
+            
             last_indexed_slot = block.metadata.slot;
             blocks.push(block.clone());
             block_cache.remove(&min_slot);
-        } else if min_slot < last_indexed_slot {
+            continue;
+        }
+        
+        // Case 3: This block's parent is in the future - we're missing intermediate blocks
+        if block.metadata.parent_slot > last_indexed_slot {
+            // Wait for the intermediate blocks to arrive
+            break;
+        }
+        
+        // Case 4: This block's parent is before our last indexed slot but the block itself is after
+        // This indicates a fork or invalid block - discard it
+        if block.metadata.parent_slot < last_indexed_slot {
+            log::warn!("Discarding block at slot {} with parent {} (last indexed: {})", 
+                      min_slot, block.metadata.parent_slot, last_indexed_slot);
             block_cache.remove(&min_slot);
-        } else {
-            if min_slot > last_indexed_slot && block.metadata.parent_slot == last_indexed_slot {
-                let gap_size = min_slot - last_indexed_slot;
-                if gap_size > 1 {
-                    log::warn!("Found gap in block production: slots {}-{} were skipped, continuing from slot {}", 
-                              last_indexed_slot + 1, min_slot - 1, min_slot);
-                }
-                last_indexed_slot = block.metadata.slot;
-                blocks.push(block.clone());
-                block_cache.remove(&min_slot);
-            } else {
-                break;
-            }
+            continue;
         }
     }
     (blocks, last_indexed_slot)
