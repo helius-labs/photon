@@ -131,6 +131,10 @@ fn pop_cached_blocks_to_index(
             if block.metadata.parent_slot != last_indexed_slot {
                 log::info!("Block at slot {} has parent {} - accepting due to skipped slots between {} and {}", 
                          min_slot, block.metadata.parent_slot, last_indexed_slot + 1, block.metadata.parent_slot);
+            } else if min_slot > last_indexed_slot + 1 {
+                // Direct parent match but there's a gap in slot numbers
+                log::info!("Block at slot {} directly follows {} (slots {}-{} were skipped)", 
+                         min_slot, last_indexed_slot, last_indexed_slot + 1, min_slot - 1);
             }
             
             last_indexed_slot = block.metadata.slot;
