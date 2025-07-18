@@ -5,7 +5,7 @@ use crate::ingester::parser::indexer_events::{
     MerkleTreeSequenceNumberV1, MerkleTreeSequenceNumberV2,
     OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
 };
-use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
 use light_compressed_account::indexer_event::parse::event_from_light_transaction;
@@ -130,6 +130,14 @@ pub fn create_state_update_v2(
         state_update_event
             .batch_nullify_context
             .extend(event.batch_input_accounts.clone());
+            
+        // Create account_transactions for v2 batch input accounts
+        state_update_event.account_transactions.extend(
+            event.batch_input_accounts.iter().map(|batch_account| AccountTransaction {
+                hash: batch_account.account_hash.into(),
+                signature: tx,
+            })
+        );
 
         state_update_event
             .batch_new_addresses
