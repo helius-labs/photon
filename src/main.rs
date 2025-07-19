@@ -98,6 +98,14 @@ struct Args {
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
+
+    /// Canonical RPC URL for block validation. If not provided, will auto-detect based on primary RPC URL
+    #[arg(long, default_value = None)]
+    canonical_rpc_url: Option<String>,
+
+    /// Disable canonical block validation when RPC reports blocks as skipped
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    disable_canonical_validation: bool,
 }
 
 async fn start_api_server(
@@ -277,12 +285,14 @@ async fn main() {
                     .unwrap(),
             };
 
-            let block_stream_config = BlockStreamConfig {
-                rpc_client: rpc_client.clone(),
+            let block_stream_config = BlockStreamConfig::new(
+                rpc_client.clone(),
+                args.grpc_url,
                 max_concurrent_block_fetches,
                 last_indexed_slot,
-                geyser_url: args.grpc_url,
-            };
+                args.canonical_rpc_url,
+                !args.disable_canonical_validation,
+            );
 
             (
                 Some(continously_index_new_blocks(

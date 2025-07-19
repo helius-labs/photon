@@ -53,6 +53,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                 rpc_client.clone(),
                 last_indexed_slot,
                 max_concurrent_block_fetches,
+                None, // No canonical validation in grpc fallback
             ))
         );
 
@@ -115,6 +116,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 rpc_client.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
+                                None, // No canonical validation in grpc fallback
                             )));
                             continue;
                         }
@@ -132,6 +134,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
+                            None, // No canonical validation in grpc fallback
                         )));
                         continue;
                     }
@@ -144,6 +147,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
+                            None, // No canonical validation in grpc fallback
                         )));
                     }
                 }

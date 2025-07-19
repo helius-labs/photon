@@ -40,6 +40,7 @@ pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
+    canonical_rpc_client: Option<Arc<RpcClient>>,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         let start_slot = match last_indexed_slot {
@@ -51,8 +52,9 @@ pub fn get_block_poller_stream(
         let block_stream = slot_stream
             .map(|slot| {
                 let rpc_client = rpc_client.clone();
+                let canonical_rpc_client = canonical_rpc_client.clone();
                 async move { 
-                    let result = fetch_block_with_infinite_retries(rpc_client.clone(), slot).await;
+                    let result = fetch_block_with_infinite_retries_and_canonical(rpc_client.clone(), slot, canonical_rpc_client).await;
                     (slot, result)
                 }
             })
@@ -166,6 +168,14 @@ pub async fn fetch_block_with_infinite_retries(
     rpc_client: Arc<RpcClient>,
     slot: u64,
 ) -> Option<BlockInfo> {
+    fetch_block_with_infinite_retries_and_canonical(rpc_client, slot, None).await
+}
+
+pub async fn fetch_block_with_infinite_retries_and_canonical(
+    rpc_client: Arc<RpcClient>,
+    slot: u64,
+    canonical_rpc_client: Option<Arc<RpcClient>>,
+) -> Option<BlockInfo> {
     loop {
         match rpc_client
             .get_block_with_config(
@@ -192,6 +202,43 @@ pub async fn fetch_block_with_infinite_retries(
                 ) = &e.kind
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
+                        // Check with canonical RPC before marking as skipped
+                        if let Some(canonical_client) = &canonical_rpc_client {
+                            log::info!("Slot {} reported as skipped by primary RPC, validating with canonical RPC", slot);
+                            
+                            match canonical_client.get_block_with_config(
+                                slot,
+                                solana_client::rpc_config::RpcBlockConfig {
+                                    encoding: Some(UiTransactionEncoding::Base64),
+                                    transaction_details: Some(TransactionDetails::Full),
+                                    rewards: Some(false),
+                                    commitment: Some(CommitmentConfig::confirmed()),
+                                    max_supported_transaction_version: Some(0),
+                                },
+                            ).await {
+                                Ok(block) => {
+                                    log::warn!("Slot {} exists on canonical RPC but not on primary - using canonical", slot);
+                                    metric! {
+                                        statsd_count!("rpc_canonical_fallback", 1);
+                                    }
+                                    return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
+                                }
+                                Err(canonical_error) => {
+                                    if let solana_client::client_error::ClientErrorKind::RpcError(
+                                        RpcError::RpcResponseError { code: canonical_code, .. },
+                                    ) = &canonical_error.kind {
+                                        if SKIPPED_BLOCK_ERRORS.contains(&canonical_code) {
+                                            log::info!("Slot {} confirmed as skipped by canonical RPC", slot);
+                                        } else {
+                                            log::warn!("Canonical RPC returned different error for slot {}: {}", slot, canonical_error);
+                                        }
+                                    } else {
+                                        log::warn!("Canonical RPC failed for slot {}: {}", slot, canonical_error);
+                                    }
+                                }
+                            }
+                        }
+                        
                         metric! {
                             statsd_count!("rpc_skipped_block", 1);
                         }
