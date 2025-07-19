@@ -251,12 +251,14 @@ async fn main() {
         Some(
             continously_run_snapshotter(
                 directory_adapter.clone(),
-                BlockStreamConfig {
-                    rpc_client: rpc_client.clone(),
-                    max_concurrent_block_fetches: args.max_concurrent_block_fetches.unwrap_or(20),
+                BlockStreamConfig::new(
+                    rpc_client.clone(),
+                    args.grpc_url.clone(),
+                    args.max_concurrent_block_fetches.unwrap_or(20),
                     last_indexed_slot,
-                    geyser_url: args.grpc_url.clone(),
-                },
+                    None, // No canonical validation for snapshotter
+                    false, // Disable canonical validation for snapshotter
+                ),
                 args.incremental_snapshot_interval_slots,
                 args.snapshot_interval_slots,
             )
