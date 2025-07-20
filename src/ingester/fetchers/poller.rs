@@ -104,11 +104,7 @@ fn pop_cached_blocks_to_index(
         if block.metadata.parent_slot == last_indexed_slot {
             // Direct succession - always allowed
             // Log if there were skipped slots
-            if block.metadata.parent_slot > last_indexed_slot + 1 {
-                // There's a real gap between last_indexed_slot and parent_slot
-                log::info!("Block at slot {} has parent {} - accepting due to skipped slots between {} and {}", 
-                         min_slot, block.metadata.parent_slot, last_indexed_slot + 1, block.metadata.parent_slot);
-            } else if block.metadata.parent_slot == last_indexed_slot && min_slot > last_indexed_slot + 1 {
+            if min_slot > last_indexed_slot + 1 {
                 // Direct parent match but there's a gap in slot numbers
                 log::info!("Block at slot {} directly follows {} (slots {}-{} were skipped)", 
                          min_slot, last_indexed_slot, last_indexed_slot + 1, min_slot - 1);
@@ -117,7 +113,9 @@ fn pop_cached_blocks_to_index(
             last_indexed_slot = block.metadata.slot;
             blocks.push(block.clone());
             block_cache.remove(&min_slot);
-            continue;
+            
+            // IMPORTANT: Process only ONE block at a time to ensure strict ordering
+            break;
         }
         
         // Case 3: This block's parent is in the future - we're missing intermediate blocks
