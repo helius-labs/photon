@@ -61,20 +61,14 @@ pub fn get_block_poller_stream(
             .buffer_unordered(max_concurrent_block_fetches);
         pin_mut!(block_stream);
         let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
-        let mut skipped_slots: BTreeMap<u64, bool> = BTreeMap::new();
         
-        while let Some((slot, block)) = block_stream.next().await {
+        while let Some((_slot, block)) = block_stream.next().await {
             if let Some(block) = block {
                 block_cache.insert(block.metadata.slot, block);
-            } else {
-                // Track that this slot was skipped
-                skipped_slots.insert(slot, true);
             }
+            // Note: Skipped slots are no longer tracked since we require strict parent-child ordering
             
-            // Clean up skipped slots that are now too old to matter
-            skipped_slots.retain(|&s, _| s > last_indexed_slot);
-            
-            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot, &skipped_slots);
+            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
             last_indexed_slot = last_indexed_slot_from_cache;
             metric! {
                 statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
@@ -89,29 +83,9 @@ pub fn get_block_poller_stream(
 fn pop_cached_blocks_to_index(
     block_cache: &mut BTreeMap<u64, BlockInfo>,
     mut last_indexed_slot: u64,
-    skipped_slots: &BTreeMap<u64, bool>,
 ) -> (Vec<BlockInfo>, u64) {
     let mut blocks = Vec::new();
     
-    // Helper function to check if we can reach last_indexed_slot from a parent_slot
-    // by traversing through skipped slots
-    let can_reach_through_skips = |parent_slot: u64, target_slot: u64| -> bool {
-        if parent_slot == target_slot {
-            return true;
-        }
-        if parent_slot < target_slot {
-            return false;
-        }
-        
-        // Check if all slots between parent_slot and target_slot (exclusive) are skipped
-        for slot in (target_slot + 1)..parent_slot {
-            if !skipped_slots.contains_key(&slot) {
-                // This slot should have a block but we haven't seen it yet
-                return false;
-            }
-        }
-        true
-    };
     
     loop {
         let min_slot = match block_cache.keys().min() {
@@ -127,8 +101,8 @@ fn pop_cached_blocks_to_index(
         }
         
         // Case 2: Check if this block can be connected to our last indexed slot
-        // either directly or through a chain of skipped slots
-        if can_reach_through_skips(block.metadata.parent_slot, last_indexed_slot) {
+        if block.metadata.parent_slot == last_indexed_slot {
+            // Direct succession - always allowed
             // Log if there were skipped slots
             if block.metadata.parent_slot > last_indexed_slot + 1 {
                 // There's a real gap between last_indexed_slot and parent_slot
@@ -242,7 +216,7 @@ pub async fn fetch_block_with_infinite_retries_and_canonical(
                         metric! {
                             statsd_count!("rpc_skipped_block", 1);
                         }
-                        log::info!("Slot {} has no block (skipped): {} (code: {})", slot, message, code);
+                        log::warn!("Slot {} marked as skipped after canonical validation: {} (code: {})", slot, message, code);
                         return None;
                     }
                     log::warn!("RPC error for slot {} (code: {}): {} - will retry", slot, code, message);
