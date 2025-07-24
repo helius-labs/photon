@@ -10,6 +10,7 @@ mod open_api_tests;
 mod prod_tests;
 mod snapshot_tests;
 mod test_v1_address_tree_sequence_consistency;
+mod test_v1_address_tree_gap_filler;
 mod utils;
 mod snapshot_test_utils;
 mod zeroeth_element_fix_test;
