@@ -9,6 +9,7 @@ mod mock_tests;
 mod open_api_tests;
 mod prod_tests;
 mod snapshot_tests;
+mod test_v1_address_tree_sequence_consistency;
 mod utils;
 mod snapshot_test_utils;
 mod zeroeth_element_fix_test;
