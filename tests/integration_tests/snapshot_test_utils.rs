@@ -16,13 +16,14 @@ use std::sync::Arc;
 /// Test utility to create a snapshot file from compression transactions found on-chain
 pub async fn create_test_snapshot_from_compression_transactions(
     rpc_url: &str,
-    max_signatures: usize,
+    target_slot: u64,
+    snapshot_dir_path: &str,
 ) -> Result<String> {
     println!("Connecting to RPC: {}", rpc_url);
     let client = RpcClient::new(rpc_url.to_string());
 
-    // Step 1: Fetch compression transaction signatures
-    let signatures = fetch_compression_signatures(&client, max_signatures).await?;
+    // Step 1: Fetch compression transaction signatures from current slot down to target slot
+    let (signatures, signature_to_slot_map) = fetch_compression_signatures_until_slot(&client, target_slot).await?;
     println!("Found {} compression transaction signatures:", signatures.len());
     for (i, signature) in signatures.iter().enumerate() {
         println!("  {}. {}", i + 1, signature);
@@ -32,25 +33,11 @@ pub async fn create_test_snapshot_from_compression_transactions(
         return Err(anyhow::anyhow!("No compression transactions found on devnet"));
     }
 
-    // Step 2: Get unique slots from signatures
-    let mut slots = HashSet::new();
-    for signature in &signatures {
-        match client.get_transaction_with_config(
-            signature,
-            solana_client::rpc_config::RpcTransactionConfig {
-                encoding: Some(solana_transaction_status::UiTransactionEncoding::Json),
-                commitment: None,
-                max_supported_transaction_version: Some(1),
-            },
-        ).await {
-            Ok(tx) => {
-                slots.insert(tx.slot);
-            }
-            Err(e) => {
-                eprintln!("Failed to get transaction {}: {}", signature, e);
-            }
-        }
-    }
+    // Step 2: Extract unique slots from signature info (we already have this data!)
+    let slots: HashSet<u64> = signatures.iter()
+        .filter_map(|sig| signature_to_slot_map.get(sig))
+        .copied()
+        .collect();
 
     let mut slots: Vec<u64> = slots.into_iter().collect();
     slots.sort();
@@ -61,7 +48,7 @@ pub async fn create_test_snapshot_from_compression_transactions(
 
     // Step 3: Fetch blocks for these slots
     let mut blocks = Vec::new();
-    for slot in &slots {
+    for (i, slot) in slots.iter().enumerate() {
         match client.get_block_with_config(
             *slot,
             solana_client::rpc_config::RpcBlockConfig {
@@ -79,8 +66,8 @@ pub async fn create_test_snapshot_from_compression_transactions(
                         let datetime = std::time::SystemTime::now().duration_since(block_time)
                             .map(|d| format!("{:.1} seconds ago", d.as_secs_f64()))
                             .unwrap_or_else(|_| format!("timestamp: {}", block_info.metadata.block_time));
-                        println!("Successfully parsed block at slot {} ({} transactions, {})", 
-                               slot, block_info.transactions.len(), datetime);
+                        println!("Successfully parsed block at slot {} ({} transactions, {}) [{}/{}]", 
+                               slot, block_info.transactions.len(), datetime, i + 1, slots.len());
                         blocks.push(block_info);
                     }
                     Err(e) => {
@@ -101,11 +88,11 @@ pub async fn create_test_snapshot_from_compression_transactions(
     println!("Successfully fetched and parsed {} blocks", blocks.len());
 
     // Step 4: Create snapshot from blocks
-    let snapshot_dir = std::path::PathBuf::from("target").join("test_snapshots").join("devnet");
+    let snapshot_dir = std::path::PathBuf::from(snapshot_dir_path);
     std::fs::create_dir_all(&snapshot_dir)?;
 
     let snapshot_dir_str = snapshot_dir.to_str().unwrap().to_string();
-    let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir_str.clone()));
+    let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir_path.to_string()));
 
     // Clear any existing snapshots
     let existing_snapshots = photon_indexer::snapshot::get_snapshot_files_with_metadata(directory_adapter.as_ref()).await?;
@@ -115,21 +102,43 @@ pub async fn create_test_snapshot_from_compression_transactions(
 
     // Sort blocks by slot to ensure proper ordering
     blocks.sort_by_key(|block| block.metadata.slot);
+   
     
-    // Set last_indexed_slot to be the slot before the first block to ensure snapshot creation
-    let last_indexed_slot = blocks.first().map(|b| b.metadata.slot.saturating_sub(1)).unwrap_or(0);
+    // Calculate the total slot range to write everything into one file
+    let first_slot = blocks.first().map(|b| b.metadata.slot).unwrap_or(target_slot + 1);
+    let last_slot = blocks.last().map(|b| b.metadata.slot).unwrap_or(target_slot + 1);
+    let slot_range = last_slot - first_slot + 1;
     
-    // Create blocks stream
-    let blocks_stream = stream::iter(vec![blocks]);
+    println!("Writing all blocks from slot {} to {} into one snapshot file (range: {} slots)", 
+             first_slot, last_slot, slot_range);
+
+    // Create snapshot file directly without using update_snapshot_helper
+    let snapshot_filename = format!("snapshot-{}-{}", first_slot, last_slot);
+    let snapshot_path = snapshot_dir.join(&snapshot_filename);
     
-    // Create snapshot with small interval for testing (every 1 slot incremental, every 10 slots full)
-    photon_indexer::snapshot::update_snapshot_helper(
-        directory_adapter.clone(),
-        blocks_stream,
-        last_indexed_slot,
-        1, // incremental_snapshot_interval_slots
-        100, // full_snapshot_interval_slots (increase to avoid full snapshot merging during test)
-    ).await;
+    println!("Writing snapshot directly to: {:?}", snapshot_path);
+    
+    // Serialize all blocks directly (no version header in individual files)
+    let mut snapshot_data = Vec::new();
+    
+    // Add serialized blocks only (header is added when reading multiple files)
+    for block in &blocks {
+        // Filter for compression transactions only
+        let trimmed_block = photon_indexer::ingester::typedefs::block_info::BlockInfo {
+            metadata: block.metadata.clone(),
+            transactions: block.transactions.iter()
+                .filter(|tx| photon_indexer::snapshot::is_compression_transaction(tx))
+                .cloned()
+                .collect(),
+        };
+        let block_bytes = bincode::serialize(&trimmed_block).unwrap();
+        snapshot_data.extend(block_bytes);
+    }
+    
+    // Write snapshot file directly
+    let data_len = snapshot_data.len();
+    std::fs::write(&snapshot_path, snapshot_data)?;
+    println!("Successfully wrote snapshot file: {:?} ({} bytes)", snapshot_path, data_len);
 
     println!("Snapshot created successfully in directory: {}", snapshot_dir_str);
     
@@ -217,18 +226,21 @@ pub async fn test_snapshot_roundtrip(snapshot_dir: &str) -> Result<()> {
     Ok(())
 }
 
-async fn fetch_compression_signatures(
+async fn fetch_compression_signatures_until_slot(
     client: &RpcClient,
-    max_signatures: usize,
-) -> Result<Vec<Signature>> {
+    target_slot: u64,
+) -> Result<(Vec<Signature>, std::collections::HashMap<Signature, u64>)> {
     let mut signatures = Vec::new();
+    let mut signature_to_slot_map = std::collections::HashMap::new();
     let mut before = None;
 
-    while signatures.len() < max_signatures {
+    println!("Fetching ALL compression signatures from current slot down to slot {}", target_slot);
+
+    loop {
         let config = GetConfirmedSignaturesForAddress2Config {
             before,
             until: None,
-            limit: None, //Some(std::cmp::min(max_signatures - signatures.len(), 1000)),
+            limit: None, // No limit - fetch as many as possible per batch
             commitment: None,
         };
 
@@ -243,7 +255,14 @@ async fn fetch_compression_signatures(
 
      
 
+        let mut reached_target_slot = false;
         for sig_info in &batch {
+            // Check if we've reached the target slot
+            if sig_info.slot < target_slot {
+                reached_target_slot = true;
+                break;
+            }
+
             // Skip failed transactions
             if sig_info.err.is_some() {
                 continue;
@@ -252,21 +271,19 @@ async fn fetch_compression_signatures(
             let signature = Signature::from_str(&sig_info.signature)
                 .context("Failed to parse signature")?;
             signatures.push(signature);
+            signature_to_slot_map.insert(signature, sig_info.slot);
+        }
 
-            if signatures.len() >= max_signatures {
-                break;
-            }
+        if reached_target_slot {
+            // Stop when no more signatures or reached target slot
+            break;
         }
 
         before = batch.last().map(|sig| Signature::from_str(&sig.signature).unwrap());
+   }
 
-        if batch.len() < 1000 {
-            // No more signatures available
-            break;
-        }
-    }
-
-    Ok(signatures)
+    println!("Found {} total compression signatures down to slot {}", signatures.len(), target_slot);
+    Ok((signatures, signature_to_slot_map))
 }
 
 #[cfg(test)]
@@ -279,6 +296,7 @@ mod tests {
         let snapshot_dir = create_test_snapshot_from_compression_transactions(
             "https://api.devnet.solana.com",
             10, // Fetch 10 compression transactions
+        "target/test_snapshots/devnet"
         )
         .await
         .expect("Failed to create test snapshot");

@@ -128,11 +128,13 @@ async fn test_compression_snapshot_creation_and_parsing() {
         .expect("API_KEY environment variable must be set (export API_KEY=\"your-api-key\")");
     
     let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", api_key);
+    let snapshot_dir_path = "target/test_snapshots/devnet";
     
     // Create snapshot from real compression transactions
     let snapshot_dir = create_test_snapshot_from_compression_transactions(
         &rpc_url,
-        5, // Fetch 5 compression transactions
+        391843372, // Target slot - fetch all compression transactions from current slot down to this slot
+        snapshot_dir_path,
     )
     .await
     .expect("Failed to create test snapshot from compression transactions");
