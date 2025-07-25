@@ -21,7 +21,7 @@ fn merkle_event_to_type_id(event: &MerkleTreeEvent) -> u8 {
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum StateUpdateFieldType {
+pub enum StateUpdateFieldType {
     IndexedTreeUpdate,
     LeafNullification,
     BatchNullifyContext,
@@ -35,19 +35,19 @@ enum StateUpdateFieldType {
 #[derive(Debug, Clone)]
 pub struct SequenceGap {
     // Boundary information for gap filling
-    before_slot: u64,
-    after_slot: u64,
-    before_signature: String,
-    after_signature: String,
+    pub before_slot: u64,
+    pub after_slot: u64,
+    pub before_signature: String,
+    pub after_signature: String,
     
     // Tree/context metadata  
-    tree_pubkey: Option<Pubkey>, // Tree pubkey (unified for all tree operations)
-    tree_type_string: Option<String>, // Tree type string (for indexed tree updates)
-    field_type: StateUpdateFieldType,
+    pub tree_pubkey: Option<Pubkey>, // Tree pubkey (unified for all tree operations)
+    pub tree_type_string: Option<String>, // Tree type string (for indexed tree updates)
+    pub field_type: StateUpdateFieldType,
 }
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct StateUpdateSequences {
     // Sequences with slot and signature information for gap analysis
     indexed_tree_seqs: HashMap<(Pubkey, String), Vec<(u64, u64, String)>>, // (tree, type_string) -> (seq, slot, signature)
@@ -154,6 +154,12 @@ pub fn merge_state_update_sequences(all_sequences: &[StateUpdateSequences]) -> S
     }
     
     aggregated
+}
+
+/// Detects gaps from a single StateUpdateSequences struct
+pub fn detect_gaps_from_sequences(sequences: &StateUpdateSequences) -> Vec<SequenceGap> {
+    let sequences_vec = vec![sequences.clone()];
+    detect_all_sequence_gaps(&sequences_vec)
 }
 
 /// Comprehensive gap detection function that takes a vector of StateUpdateSequences and returns ALL gaps found
