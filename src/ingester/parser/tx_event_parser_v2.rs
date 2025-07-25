@@ -138,6 +138,7 @@ pub fn create_state_update_v2(
                     .new_addresses
                     .clone()
                     .iter()
+                    .filter(|x| x.queue_index != u64::MAX) // Exclude AddressV1 trees
                     .map(|x| AddressQueueUpdate {
                         tree: SerializablePubkey::from(x.mt_pubkey),
                         address: x.address,
