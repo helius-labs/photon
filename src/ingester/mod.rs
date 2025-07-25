@@ -28,6 +28,7 @@ pub mod indexer;
 pub mod parser;
 pub mod persist;
 pub mod typedefs;
+pub mod detect_gaps;
 
 fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterError> {
     let mut state_updates: Vec<StateUpdate> = Vec::new();

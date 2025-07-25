@@ -2,6 +2,7 @@ use super::{indexer_events::RawIndexedElement, merkle_tree_events_parser::BatchM
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
 use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
@@ -145,6 +146,15 @@ impl StateUpdate {
             merged
                 .batch_nullify_context
                 .extend(update.batch_nullify_context);
+        }
+        let mut sequences = StateUpdateSequences::default();
+        // TODO: add slot, remove signature
+        sequences.extract_state_update_sequences(&merged, 0,"");
+        let gaps = detect_gaps_from_sequences(&sequences);
+        if gaps.is_empty() {
+            // DO sth.
+        } else {
+            tracing::warn!("Gaps detected in state update sequences: {gaps:?}");
         }
 
         merged

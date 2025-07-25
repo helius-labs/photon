@@ -9,6 +9,26 @@ pub struct TreeInfo {
     pub queue: Pubkey,
     pub height: u32,
     pub tree_type: TreeType,
+    pub seq: TreeTypeSeq
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TreeTypeSeq {
+    // event seq
+    StateV1(u64),
+    // Output queue (leaf index), Input queue index, Batch event seq
+    StateV2(StateV2Seq),
+    // event seq
+    AddressV1(u64),
+    // Input queue index, Batch event seq
+    AddressV2(u64,u64),
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StateV2Seq {
+    pub input_queue_index: u64,
+    pub batch_event_seq: u64,
+    pub output_queue_index: u64,
 }
 
 impl TreeInfo {
@@ -198,6 +218,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
+                    seq: TreeTypeSeq::StateV1(0),
                 },
             );
 
@@ -208,6 +229,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
+                    seq: TreeTypeSeq::StateV1(0),
                 },
             );
         }
@@ -220,6 +242,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
+                    seq: TreeTypeSeq::AddressV1(0),
                 },
             );
 
@@ -230,6 +253,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
+                    seq: TreeTypeSeq::AddressV1(0),
                 },
             );
         }
@@ -274,6 +298,7 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
+                    seq: TreeTypeSeq::StateV2(StateV2Seq::default()),
                 },
             );
 
@@ -284,6 +309,7 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
+                    seq: TreeTypeSeq::StateV2(StateV2Seq::default()),
                 },
             );
         }
@@ -296,6 +322,7 @@ lazy_static! {
                     queue: *tree_queue,
                     height: 40,
                     tree_type: TreeType::AddressV2,
+                    seq: TreeTypeSeq::AddressV2(0, 0),
                 },
             );
         }
