@@ -28,8 +28,12 @@ pub mod parser;
 pub mod persist;
 pub mod typedefs;
 pub mod detect_gaps;
+pub mod rewind_controller;
 
-fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterError> {
+fn derive_block_state_update(
+    block: &BlockInfo, 
+    rewind_controller: Option<&rewind_controller::RewindController>
+) -> Result<StateUpdate, IngesterError> {
     use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
     
     let mut state_updates: Vec<StateUpdate> = Vec::new();
@@ -53,6 +57,16 @@ fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterE
     let gaps = detect_gaps_from_sequences(&sequences);
     if !gaps.is_empty() {
         tracing::warn!("Gaps detected in block {} sequences: {gaps:?}", block.metadata.slot);
+        
+        // Request rewind if controller is available
+        if let Some(controller) = rewind_controller {
+            if let Err(e) = controller.request_rewind_for_gaps(&gaps) {
+                tracing::error!("Failed to request rewind for gaps in block {}: {}", block.metadata.slot, e);
+                return Err(IngesterError::CustomError("Gap detection triggered rewind failure".to_string()));
+            }
+            // Return early after requesting rewind - don't continue processing
+            return Err(IngesterError::CustomError("Gap detection triggered rewind".to_string()));
+        }
     }
     
     // Update sequence state with latest observed sequences
@@ -64,11 +78,12 @@ fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterE
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    derive_block_state_update(block)?;
-    //persist_state_update(&txn, derive_block_state_update(block)?).await?;
+    derive_block_state_update(block, None)?;
+    //persist_state_update(&txn, derive_block_state_update(block, None)?).await?;
     txn.commit().await?;
     Ok(())
 }
+
 
 async fn index_block_metadatas(
     tx: &DatabaseTransaction,
@@ -106,6 +121,7 @@ async fn index_block_metadatas(
 pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
+    rewind_controller: Option<&rewind_controller::RewindController>,
 ) -> Result<(), IngesterError> {
     let blocks_len = block_batch.len();
     let tx = db.begin().await?;
@@ -113,7 +129,7 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(block)?);
+        state_updates.push(derive_block_state_update(block, rewind_controller)?);
     }
     //persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {
@@ -126,11 +142,18 @@ pub async fn index_block_batch(
 pub async fn index_block_batch_with_infinite_retries(
     db: &DatabaseConnection,
     block_batch: Vec<BlockInfo>,
-) {
+    rewind_controller: Option<&rewind_controller::RewindController>,
+) -> Result<(), IngesterError> {
     loop {
-        match index_block_batch(db, &block_batch).await {
-            Ok(()) => return,
+        match index_block_batch(db, &block_batch, rewind_controller).await {
+            Ok(()) => return Ok(()),
             Err(e) => {
+                // Check if this is a gap-triggered rewind error
+                if e.to_string().contains("Gap detection triggered rewind") {
+                    // Don't retry, propagate the rewind error up
+                    return Err(e);
+                }
+                
                 let start_block = block_batch.first().unwrap().metadata.slot;
                 let end_block = block_batch.last().unwrap().metadata.slot;
                 log::error!(

@@ -16,6 +16,7 @@ use solana_pubkey::Pubkey;
 use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use solana_sdk::signature::Signature;
 use tokio::time::sleep;
+use tokio::sync::mpsc;
 use tracing::error;
 use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
@@ -30,6 +31,7 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::fetchers::poller::get_block_poller_stream;
+use crate::ingester::rewind_controller::RewindCommand;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
@@ -43,6 +45,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
+    rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
@@ -53,6 +56,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                 rpc_client.clone(),
                 last_indexed_slot,
                 max_concurrent_block_fetches,
+                rewind_receiver,
             ))
         );
 
@@ -115,6 +119,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 rpc_client.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
+                                None, // No rewind receiver for timeout fallback
                             )));
                             continue;
                         }
@@ -132,6 +137,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
+                            None, // No rewind receiver for out-of-order fallback
                         )));
                         continue;
                     }
@@ -144,6 +150,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             rpc_client.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
+                            None, // No rewind receiver for unhealthy fallback
                         )));
                     }
                 }
