@@ -2,7 +2,6 @@ use super::{indexer_events::RawIndexedElement, merkle_tree_events_parser::BatchM
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
 use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
@@ -77,7 +76,7 @@ pub struct AddressQueueUpdate {
 impl From<NewAddress> for AddressQueueUpdate {
     fn from(new_address: NewAddress) -> Self {
         AddressQueueUpdate {
-            tree: SerializablePubkey::from(new_address.mt_pubkey),
+            tree: SerializablePubkey::from(new_address.tree_pubkey),
             address: new_address.address,
             queue_index: new_address.queue_index,
         }

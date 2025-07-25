@@ -131,20 +131,18 @@ pub fn create_state_update_v2(
             .batch_nullify_context
             .extend(event.batch_input_accounts.clone());
 
-        state_update_event
-            .batch_new_addresses
-            .extend(
-                event
-                    .new_addresses
-                    .clone()
-                    .iter()
-                    .filter(|x| x.queue_index != u64::MAX) // Exclude AddressV1 trees
-                    .map(|x| AddressQueueUpdate {
-                        tree: SerializablePubkey::from(x.mt_pubkey),
-                        address: x.address,
-                        queue_index: x.queue_index,
-                    }),
-            );
+        state_update_event.batch_new_addresses.extend(
+            event
+                .new_addresses
+                .clone()
+                .iter()
+                .filter(|x| x.queue_index != u64::MAX) // Exclude AddressV1 trees
+                .map(|x| AddressQueueUpdate {
+                    tree: SerializablePubkey::from(x.tree_pubkey),
+                    address: x.address,
+                    queue_index: x.queue_index,
+                }),
+        );
 
         state_updates.push(state_update_event);
     }

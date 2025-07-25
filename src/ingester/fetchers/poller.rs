@@ -16,8 +16,8 @@ use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
     ingester::{
-        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
         rewind_controller::RewindCommand,
+        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     },
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
@@ -25,27 +25,11 @@ use crate::{
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 
-fn get_slot_stream(
-    rpc_client: Arc<RpcClient>, 
-    start_slot: u64,
-    mut rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
-) -> impl Stream<Item = u64> {
+fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<Item = u64> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
         let mut next_slot_to_fetch = start_slot;
         loop {
-            // Check for rewind commands before yielding next slot
-            if let Some(ref mut receiver) = rewind_receiver {
-                while let Ok(command) = receiver.try_recv() {
-                    match command {
-                        RewindCommand::Rewind { to_slot, reason } => {
-                            log::error!("Rewinding slot stream to {}: {}", to_slot, reason);
-                            next_slot_to_fetch = to_slot;
-                        }
-                    }
-                }
-            }
-            
             if next_slot_to_fetch > LATEST_SLOT.load(Ordering::SeqCst) {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 continue;
@@ -60,34 +44,66 @@ pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
-    rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
+    mut rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
-        let start_slot = match last_indexed_slot {
+        let mut current_start_slot = match last_indexed_slot {
             0 => 0,
             last_indexed_slot => last_indexed_slot + 1
         };
-        let slot_stream = get_slot_stream(rpc_client.clone(), start_slot, rewind_receiver);
-        pin_mut!(slot_stream);
-        let block_stream = slot_stream
-            .map(|slot| {
-                let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
-            })
-            .buffer_unordered(max_concurrent_block_fetches);
-        pin_mut!(block_stream);
-        let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
-        while let Some(block) = block_stream.next().await {
-            if let Some(block) = block {
-                block_cache.insert(block.metadata.slot, block);
+        
+        loop {
+            let slot_stream = get_slot_stream(rpc_client.clone(), current_start_slot);
+            pin_mut!(slot_stream);
+            let block_stream = slot_stream
+                .map(|slot| {
+                    let rpc_client = rpc_client.clone();
+                    async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
+                })
+                .buffer_unordered(max_concurrent_block_fetches);
+            pin_mut!(block_stream);
+            let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
+            let mut rewind_occurred = false;
+            
+            while let Some(block) = block_stream.next().await {
+                // Check for rewind commands before processing blocks
+                if let Some(ref mut receiver) = rewind_receiver {
+                    while let Ok(command) = receiver.try_recv() {
+                        match command {
+                            RewindCommand::Rewind { to_slot, reason } => {
+                                log::error!("Rewinding block stream to {}: {}", to_slot, reason);
+                                // Clear cached blocks
+                                block_cache.clear();
+                                // Reset positions
+                                last_indexed_slot = to_slot - 1;
+                                current_start_slot = to_slot;
+                                rewind_occurred = true;
+                                log::info!("Cleared cache, restarting from slot {}", current_start_slot);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if rewind_occurred {
+                    break; // Exit inner loop to restart streams
+                }
+                
+                if let Some(block) = block {
+                    block_cache.insert(block.metadata.slot, block);
+                }
+                let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
+                last_indexed_slot = last_indexed_slot_from_cache;
+                metric! {
+                    statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
+                }
+                if !blocks_to_index.is_empty() {
+                    yield blocks_to_index;
+                }
             }
-            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
-            last_indexed_slot = last_indexed_slot_from_cache;
-            metric! {
-                statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
-            }
-            if !blocks_to_index.is_empty() {
-                yield blocks_to_index;
+            
+            if !rewind_occurred {
+                break; // Normal termination
             }
         }
     }

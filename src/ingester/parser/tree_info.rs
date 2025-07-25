@@ -1,8 +1,8 @@
+use crate::ingester::detect_gaps::SequenceEntry;
 use lazy_static::lazy_static;
 use light_compressed_account::TreeType;
 use solana_pubkey::{pubkey, Pubkey};
 use std::collections::HashMap;
-use crate::ingester::detect_gaps::SequenceEntry;
 
 #[derive(Debug, Clone)]
 pub struct TreeInfo {
@@ -10,7 +10,7 @@ pub struct TreeInfo {
     pub queue: Pubkey,
     pub height: u32,
     pub tree_type: TreeType,
-    pub seq: TreeTypeSeq
+    pub seq: TreeTypeSeq, // TODO: remove unused, we use SEQUENCE_STATE
 }
 
 #[derive(Debug, Clone)]
@@ -226,7 +226,11 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
+                    seq: TreeTypeSeq::StateV1(SequenceEntry {
+                        sequence: 0,
+                        slot: 0,
+                        signature: String::new(),
+                    }),
                 },
             );
 
@@ -237,7 +241,11 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
+                    seq: TreeTypeSeq::StateV1(SequenceEntry {
+                        sequence: 0,
+                        slot: 0,
+                        signature: String::new(),
+                    }),
                 },
             );
         }
@@ -250,7 +258,11 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
+                    seq: TreeTypeSeq::AddressV1(SequenceEntry {
+                        sequence: 0,
+                        slot: 0,
+                        signature: String::new(),
+                    }),
                 },
             );
 
@@ -261,7 +273,11 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
+                    seq: TreeTypeSeq::AddressV1(SequenceEntry {
+                        sequence: 0,
+                        slot: 0,
+                        signature: String::new(),
+                    }),
                 },
             );
         }
@@ -331,8 +347,16 @@ lazy_static! {
                     height: 40,
                     tree_type: TreeType::AddressV2,
                     seq: TreeTypeSeq::AddressV2(
-                        SequenceEntry { sequence: 0, slot: 0, signature: String::new() },
-                        SequenceEntry { sequence: 0, slot: 0, signature: String::new() }
+                        SequenceEntry {
+                            sequence: 0,
+                            slot: 0,
+                            signature: String::new(),
+                        },
+                        SequenceEntry {
+                            sequence: 0,
+                            slot: 0,
+                            signature: String::new(),
+                        },
                     ),
                 },
             );
