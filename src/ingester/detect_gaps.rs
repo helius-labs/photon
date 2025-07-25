@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use tracing::warn;
 
 // Global sequence state tracker to maintain latest observed sequences
 lazy_static! {
@@ -48,7 +49,7 @@ pub struct SequenceGap {
     pub field_type: StateUpdateFieldType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct SequenceEntry {
     pub sequence: u64,
     pub slot: u64,
@@ -377,7 +378,6 @@ fn detect_sequence_gaps_with_metadata(
     let start_seq = if let Some(tree) = tree_pubkey {
         let tree_str = tree.to_string();
 
-        // First check current sequence state, fall back to initial mapping
         let state = SEQUENCE_STATE.lock().unwrap();
         if let Some(current_seq) = state.get(&tree_str) {
             println!(
@@ -385,30 +385,19 @@ fn detect_sequence_gaps_with_metadata(
                 tree_str, current_seq
             );
             current_seq.clone()
-        } else if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
-            println!(
-                "DEBUG: Using initial mapping for tree {}: {:?}",
-                tree_str, info.seq
-            );
-            info.seq.clone()
         } else {
-            println!("Tree {} not found in QUEUE_TREE_MAPPING", tree_str);
-            println!(
-                "Available keys: {:?}",
-                QUEUE_TREE_MAPPING.keys().collect::<Vec<_>>()
-            );
-            unimplemented!("Tree not found in mapping");
+            warn!("No current sequence state found for tree {}", tree_str);
+            TreeTypeSeq::default()
         }
     } else if let Some(queue_pubkey) = queue_pubkey {
         let queue_str = queue_pubkey.to_string();
+        // This could be an issue in case of batched output queue updates.
         let state = SEQUENCE_STATE.lock().unwrap();
         if let Some(current_seq) = state.get(&queue_str) {
             current_seq.clone()
         } else {
-            QUEUE_TREE_MAPPING
-                .get(&queue_str)
-                .map(|info| info.seq.clone())
-                .unwrap()
+            warn!("No current sequence state found for queue {}", queue_str);
+            TreeTypeSeq::default()
         }
     } else {
         println!("field_type: {:?}", field_type);
@@ -416,7 +405,11 @@ fn detect_sequence_gaps_with_metadata(
             "tree_pubkey: {:?}, queue_pubkey: {:?}",
             tree_pubkey, queue_pubkey
         );
-        unimplemented!("No tree or queue pubkey provided for gap detection");
+        warn!(
+            "No current sequence state found for queue {:?} and tree {:?}",
+            queue_pubkey, tree_pubkey
+        );
+        TreeTypeSeq::default()
     };
 
     let (unpacked_start_seq, start_entry) = match field_type {
@@ -433,21 +426,33 @@ fn detect_sequence_gaps_with_metadata(
                     "DEBUG: IndexedTreeUpdate with unsupported tree type: {:?}",
                     start_seq
                 );
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         },
         StateUpdateFieldType::BatchMerkleTreeEventAddressAppend => {
             if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
                 (entry.sequence, Some(entry))
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::BatchNewAddress => {
             if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
                 (entry.sequence, Some(entry))
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::BatchMerkleTreeEventAppend => {
@@ -458,7 +463,11 @@ fn detect_sequence_gaps_with_metadata(
                     (0, None)
                 }
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::BatchMerkleTreeEventNullify => {
@@ -469,14 +478,22 @@ fn detect_sequence_gaps_with_metadata(
                     (0, None)
                 }
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::LeafNullification => {
             if let TreeTypeSeq::StateV1(entry) = start_seq {
                 (entry.sequence, Some(entry))
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::OutAccount => {
@@ -489,7 +506,11 @@ fn detect_sequence_gaps_with_metadata(
                     (0, None)
                 }
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
         StateUpdateFieldType::BatchNullifyContext => {
@@ -500,7 +521,11 @@ fn detect_sequence_gaps_with_metadata(
                     (0, None)
                 }
             } else {
-                unimplemented!("Unsupported tree type for gap detection");
+                warn!(
+                    "No current sequence state found for queue {:?} and tree {:?}",
+                    queue_pubkey, tree_pubkey
+                );
+                (u64::MAX, None)
             }
         }
     };
