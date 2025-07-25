@@ -291,7 +291,7 @@ async fn test_comprehensive_state_update_validation() -> Result<()> {
     println!("🔍 Testing Comprehensive StateUpdate Sequence Consistency");
     
     // Load blocks from the created snapshot
-    let snapshot_path = "/Users/ananas/dev/photon/target/snapshot_local";
+    let snapshot_path = "/Users/ananas/dev/photon/target/with_gaps";
     let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_path.to_string()));
     
     println!("📂 Loading snapshot from: {}", snapshot_path);
