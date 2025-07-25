@@ -10,12 +10,10 @@ pub struct TreeInfo {
     pub queue: Pubkey,
     pub height: u32,
     pub tree_type: TreeType,
-    pub seq: TreeTypeSeq, // TODO: remove unused, we use SEQUENCE_STATE
 }
 
 #[derive(Debug, Clone)]
 pub enum TreeTypeSeq {
-    // event seq with complete context
     StateV1(SequenceEntry),
     // Output queue (leaf index), Input queue index, Batch event seq with context
     StateV2(StateV2SeqWithContext),
@@ -23,6 +21,12 @@ pub enum TreeTypeSeq {
     AddressV1(SequenceEntry),
     // Input queue index, Batch event seq with context
     AddressV2(SequenceEntry, SequenceEntry), // (input_queue_entry, batch_event_entry)
+}
+
+impl Default for TreeTypeSeq {
+    fn default() -> Self {
+        TreeTypeSeq::StateV1(SequenceEntry::default())
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -226,11 +230,6 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(SequenceEntry {
-                        sequence: 0,
-                        slot: 0,
-                        signature: String::new(),
-                    }),
                 },
             );
 
@@ -241,11 +240,6 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(SequenceEntry {
-                        sequence: 0,
-                        slot: 0,
-                        signature: String::new(),
-                    }),
                 },
             );
         }
@@ -258,11 +252,6 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(SequenceEntry {
-                        sequence: 0,
-                        slot: 0,
-                        signature: String::new(),
-                    }),
                 },
             );
 
@@ -273,11 +262,6 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(SequenceEntry {
-                        sequence: 0,
-                        slot: 0,
-                        signature: String::new(),
-                    }),
                 },
             );
         }
@@ -322,7 +306,6 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
-                    seq: TreeTypeSeq::StateV2(StateV2SeqWithContext::default()),
                 },
             );
 
@@ -333,7 +316,6 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
-                    seq: TreeTypeSeq::StateV2(StateV2SeqWithContext::default()),
                 },
             );
         }
@@ -346,18 +328,6 @@ lazy_static! {
                     queue: *tree_queue,
                     height: 40,
                     tree_type: TreeType::AddressV2,
-                    seq: TreeTypeSeq::AddressV2(
-                        SequenceEntry {
-                            sequence: 0,
-                            slot: 0,
-                            signature: String::new(),
-                        },
-                        SequenceEntry {
-                            sequence: 0,
-                            slot: 0,
-                            signature: String::new(),
-                        },
-                    ),
                 },
             );
         }
