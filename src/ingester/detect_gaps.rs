@@ -41,15 +41,22 @@ pub struct SequenceGap {
 }
 
 
+#[derive(Debug, Clone)]
+pub struct SequenceEntry {
+    pub sequence: u64,
+    pub slot: u64,
+    pub signature: String,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct StateUpdateSequences {
     // Sequences with slot and signature information for gap analysis
-    indexed_tree_seqs: HashMap<(Pubkey, u64), Vec<(u64, u64, String)>>, // (tree, tree_type_id) -> (seq, slot, signature)
-    nullification_seqs: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (seq, slot, signature)
-    batch_nullify_queue_indexes: Vec<(u64, u64, String)>, // (queue_index, slot, signature)
-    batch_address_queue_indexes: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (queue_index, slot, signature)
-    batch_merkle_event_seqs: HashMap<(Pubkey, u8), Vec<(u64, u64, String)>>, // (tree_pubkey, event_type) -> (seq, slot, signature)
-    out_account_leaf_indexes: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (leaf_index, slot, signature)
+    indexed_tree_seqs: HashMap<(Pubkey, u64), Vec<SequenceEntry>>, // (tree, tree_type_id) -> entries
+    nullification_seqs: HashMap<Pubkey, Vec<SequenceEntry>>, // tree -> entries
+    batch_nullify_queue_indexes: Vec<SequenceEntry>, // queue_index entries
+    batch_address_queue_indexes: HashMap<Pubkey, Vec<SequenceEntry>>, // tree -> queue_index entries
+    batch_merkle_event_seqs: HashMap<(Pubkey, u8), Vec<SequenceEntry>>, // (tree_pubkey, event_type) -> entries
+    out_account_leaf_indexes: HashMap<Pubkey, Vec<SequenceEntry>>, // tree -> leaf_index entries
 }
 
 impl StateUpdateSequences {
@@ -61,7 +68,11 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
         self.indexed_tree_seqs
             .entry((*tree_pubkey, leaf_update.tree_type as u64))
             .or_insert_with(Vec::new)
-            .push((leaf_update.seq, slot, signature.to_string()));
+            .push(SequenceEntry {
+                sequence: leaf_update.seq,
+                slot,
+                signature: signature.to_string(),
+            });
     }
     
     // Extract leaf nullification sequences
@@ -69,12 +80,20 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
         self.nullification_seqs
             .entry(nullification.tree)
             .or_insert_with(Vec::new)
-            .push((nullification.seq, slot, signature.to_string()));
+            .push(SequenceEntry {
+                sequence: nullification.seq,
+                slot,
+                signature: signature.to_string(),
+            });
     }
     
     // Extract batch nullify context queue indexes
     for context in &state_update.batch_nullify_context {
-        self.batch_nullify_queue_indexes.push((context.nullifier_queue_index, slot, signature.to_string()));
+        self.batch_nullify_queue_indexes.push(SequenceEntry {
+            sequence: context.nullifier_queue_index,
+            slot,
+            signature: signature.to_string(),
+        });
     }
     
     // Extract batch new address queue indexes
@@ -82,7 +101,11 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
         self.batch_address_queue_indexes
             .entry(address.tree.0)
             .or_insert_with(Vec::new)
-            .push((address.queue_index, slot, signature.to_string()));
+            .push(SequenceEntry {
+                sequence: address.queue_index,
+                slot,
+                signature: signature.to_string(),
+            });
     }
     
     // Extract batch merkle tree event sequences
@@ -94,7 +117,11 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
                 self.batch_merkle_event_seqs
                     .entry((tree_pubkey, event_type))
                     .or_insert_with(Vec::new)
-                    .push((*seq, slot, signature.to_string()));
+                    .push(SequenceEntry {
+                        sequence: *seq,
+                        slot,
+                        signature: signature.to_string(),
+                    });
             }
         }
     }
@@ -106,7 +133,11 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
         self.out_account_leaf_indexes
             .entry(tree_pubkey)
             .or_insert_with(Vec::new)
-            .push((leaf_index, slot, signature.to_string()));
+            .push(SequenceEntry {
+                sequence: leaf_index,
+                slot,
+                signature: signature.to_string(),
+            });
     }
     
 }
@@ -204,31 +235,42 @@ pub fn detect_all_sequence_gaps(sequences: &StateUpdateSequences) -> Vec<Sequenc
 
 /// Detects gaps in a sequence with full metadata for gap filling
 fn detect_sequence_gaps_with_metadata(
-    sequences: &[(u64, u64, String)], // (seq, slot, signature)
+    sequences: &[SequenceEntry],
     tree_pubkey: Option<Pubkey>,
     queue_pubkey: Option<Pubkey>,
     field_type: StateUpdateFieldType,
 ) -> Vec<SequenceGap> {
+    if field_type == StateUpdateFieldType::BatchNullifyContext 
+    {
+        // For batch nullify context, we don't have tree or queue pubkey, so we can't detect gaps
+        return Vec::new();
+    }
     if sequences.len() < 2 {
         return Vec::new();
     }
     
     let mut sorted_sequences = sequences.to_vec();
-    sorted_sequences.sort_by_key(|(seq, _, _)| *seq);
-    
+    sorted_sequences.sort_by_key(|entry| entry.sequence);
     let mut gaps = Vec::new();
-    let start_seq =  if let Some(tree) = tree_pubkey {
-        QUEUE_TREE_MAPPING
-            .get(&tree.to_string())
-            .map(|info| info.seq)
-            .unwrap()
+    let start_seq = if let Some(tree) = tree_pubkey {
+        let tree_str = tree.to_string();
+        if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
+            println!("Found tree {} with TreeTypeSeq: {:?}", tree_str, info.seq);
+            info.seq
+        } else {
+            println!("Tree {} not found in QUEUE_TREE_MAPPING", tree_str);
+            println!("Available keys: {:?}", QUEUE_TREE_MAPPING.keys().collect::<Vec<_>>());
+            unimplemented!("Tree not found in mapping");
+        }
     } else if let Some(queue_pubkey) = queue_pubkey {
         QUEUE_TREE_MAPPING
             .get(&queue_pubkey.to_string())
             .map(|info| info.seq)
             .unwrap()
     } else {
-       unimplemented!("No tree or queue pubkey provided for gap detection");
+        println!("field_type: {:?}", field_type);
+        println!("tree_pubkey: {:?}, queue_pubkey: {:?}", tree_pubkey, queue_pubkey);
+        unimplemented!("No tree or queue pubkey provided for gap detection");
     };
 
     let unpacked_start_seq = match field_type {
@@ -246,7 +288,7 @@ fn detect_sequence_gaps_with_metadata(
               unimplemented!("Unsupported tree type for gap detection");
           }
         },StateUpdateFieldType::BatchNewAddress => {
-          if let TreeTypeSeq::AddressV2(seq,_ ) = start_seq {
+          if let TreeTypeSeq::AddressV2(_,seq ) = start_seq {
            seq
           } else {
               unimplemented!("Unsupported tree type for gap detection");
@@ -291,26 +333,26 @@ fn detect_sequence_gaps_with_metadata(
         },
     };
 
-    if sorted_sequences[0].0 > unpacked_start_seq {
+    if sorted_sequences[0].sequence > unpacked_start_seq {
         gaps.push(SequenceGap {
             before_slot: 0, // No previous slot available
-            after_slot: sorted_sequences[0].1,
+            after_slot: sorted_sequences[0].slot,
             before_signature: String::new(), // No previous signature available
-            after_signature: sorted_sequences[0].2.clone(),
+            after_signature: sorted_sequences[0].signature.clone(),
             tree_pubkey,
             field_type: field_type.clone(),
         });
     }
     for i in 1..sorted_sequences.len() {
-        let (prev_seq, prev_slot, prev_sig) = &sorted_sequences[i-1];
-        let (curr_seq, curr_slot, curr_sig) = &sorted_sequences[i];
+        let prev_entry = &sorted_sequences[i-1];
+        let curr_entry = &sorted_sequences[i];
         
-        if curr_seq - prev_seq > 1 {
+        if curr_entry.sequence - prev_entry.sequence > 1 {
             gaps.push(SequenceGap {
-                before_slot: *prev_slot,
-                after_slot: *curr_slot,
-                before_signature: prev_sig.clone(),
-                after_signature: curr_sig.clone(),
+                before_slot: prev_entry.slot,
+                after_slot: curr_entry.slot,
+                before_signature: prev_entry.signature.clone(),
+                after_signature: curr_entry.signature.clone(),
                 tree_pubkey,
                 field_type: field_type.clone(),
             });

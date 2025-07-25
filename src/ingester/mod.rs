@@ -31,17 +31,39 @@ pub mod typedefs;
 pub mod detect_gaps;
 
 fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterError> {
+    use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
+    
     let mut state_updates: Vec<StateUpdate> = Vec::new();
+    let mut sequences = StateUpdateSequences::default();
+    
+    // Parse each transaction and extract sequences with proper context
     for transaction in &block.transactions {
-        state_updates.push(parse_transaction(transaction, block.metadata.slot)?);
+        let state_update = parse_transaction(transaction, block.metadata.slot)?;
+        
+        // Extract sequences with proper slot and signature context
+        sequences.extract_state_update_sequences(
+            &state_update, 
+            block.metadata.slot, 
+            &transaction.signature.to_string()
+        );
+        
+        state_updates.push(state_update);
     }
+    
+    // Check for gaps with proper context
+    let gaps = detect_gaps_from_sequences(&sequences);
+    if !gaps.is_empty() {
+        tracing::warn!("Gaps detected in block {} sequences: {gaps:?}", block.metadata.slot);
+    }
+    
     Ok(StateUpdate::merge_updates(state_updates))
 }
 
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    persist_state_update(&txn, derive_block_state_update(block)?).await?;
+    derive_block_state_update(block)?;
+    //persist_state_update(&txn, derive_block_state_update(block)?).await?;
     txn.commit().await?;
     Ok(())
 }
@@ -67,14 +89,14 @@ async fn index_block_metadatas(
 
         // We first build the query and then execute it because SeaORM has a bug where it always throws
         // expected not to insert anything if the key already exists.
-        let query = blocks::Entity::insert_many(block_models)
-            .on_conflict(
-                OnConflict::column(blocks::Column::Slot)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .build(tx.get_database_backend());
-        tx.execute(query).await?;
+        //let query = blocks::Entity::insert_many(block_models)
+       //     .on_conflict(
+       //         OnConflict::column(blocks::Column::Slot)
+       //             .do_nothing()
+       //             .to_owned(),
+      //      )
+      //      .build(tx.get_database_backend());
+      //  tx.execute(query).await?;
     }
     Ok(())
 }
@@ -91,7 +113,7 @@ pub async fn index_block_batch(
     for block in block_batch {
         state_updates.push(derive_block_state_update(block)?);
     }
-    persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
+    //persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {
         statsd_count!("blocks_indexed", blocks_len as i64);
     }

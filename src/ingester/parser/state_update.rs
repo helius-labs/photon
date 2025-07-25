@@ -147,15 +147,6 @@ impl StateUpdate {
                 .batch_nullify_context
                 .extend(update.batch_nullify_context);
         }
-        let mut sequences = StateUpdateSequences::default();
-        // TODO: add slot, remove signature
-        sequences.extract_state_update_sequences(&merged, 0,"");
-        let gaps = detect_gaps_from_sequences(&sequences);
-        if gaps.is_empty() {
-            // DO sth.
-        } else {
-            tracing::warn!("Gaps detected in state update sequences: {gaps:?}");
-        }
 
         merged
     }
