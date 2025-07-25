@@ -1,18 +1,14 @@
 use anyhow::Result;
 use futures::StreamExt;
-use light_compressed_account::TreeType;
 use photon_indexer::ingester::parser::{
     parse_transaction, 
-    state_update::{IndexedTreeLeafUpdate, StateUpdate},
+    state_update::StateUpdate,
     indexer_events::MerkleTreeEvent
 };
 use photon_indexer::snapshot::{load_block_stream_from_directory_adapter, DirectoryAdapter};
-use solana_pubkey::{pubkey, Pubkey};
+use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-// V1 Address Tree Pubkey - the only v1 address tree
-const V1_ADDRESS_TREE: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 fn merkle_event_to_type_id(event: &MerkleTreeEvent) -> u8 {
     match event {
@@ -23,16 +19,8 @@ fn merkle_event_to_type_id(event: &MerkleTreeEvent) -> u8 {
     }
 }
 
-fn type_id_to_name(type_id: u8) -> &'static str {
-    match type_id {
-        1 => "BatchAppend",
-        2 => "BatchNullify", 
-        3 => "BatchAddressAppend",
-        _ => "Unknown",
-    }
-}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum StateUpdateFieldType {
     IndexedTreeUpdate,
     LeafNullification,
@@ -45,7 +33,7 @@ enum StateUpdateFieldType {
 }
 
 #[derive(Debug, Clone)]
-struct SequenceGap {
+pub struct SequenceGap {
     // Boundary information for gap filling
     before_slot: u64,
     after_slot: u64,
@@ -60,23 +48,23 @@ struct SequenceGap {
 
 
 #[derive(Debug, Default)]
-struct StateUpdateSequences {
+pub struct StateUpdateSequences {
     // Sequences with slot and signature information for gap analysis
     indexed_tree_seqs: HashMap<(Pubkey, String), Vec<(u64, u64, String)>>, // (tree, type_string) -> (seq, slot, signature)
     nullification_seqs: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (seq, slot, signature)
     batch_nullify_queue_indexes: Vec<(u64, u64, String)>, // (queue_index, slot, signature)
     batch_address_queue_indexes: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (queue_index, slot, signature)
     batch_merkle_event_seqs: HashMap<(Pubkey, u8), Vec<(u64, u64, String)>>, // (tree_pubkey, event_type) -> (seq, slot, signature)
+    out_account_leaf_indexes: HashMap<Pubkey, Vec<(u64, u64, String)>>, // tree -> (leaf_index, slot, signature)
 }
-
+impl StateUpdateSequences {
 /// Extracts sequences from a StateUpdate with slot and signature context
-fn extract_state_update_sequences(state_update: &StateUpdate, slot: u64, signature: &str) -> StateUpdateSequences {
-    let mut sequences = StateUpdateSequences::default();
+pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slot: u64, signature: &str) {
     
     // Extract indexed tree sequences
     for ((tree_pubkey, _), leaf_update) in &state_update.indexed_merkle_tree_updates {
         let tree_type_string = format!("{:?}", leaf_update.tree_type);
-        sequences.indexed_tree_seqs
+        self.indexed_tree_seqs
             .entry((*tree_pubkey, tree_type_string))
             .or_insert_with(Vec::new)
             .push((leaf_update.seq, slot, signature.to_string()));
@@ -84,7 +72,7 @@ fn extract_state_update_sequences(state_update: &StateUpdate, slot: u64, signatu
     
     // Extract leaf nullification sequences
     for nullification in &state_update.leaf_nullifications {
-        sequences.nullification_seqs
+        self.nullification_seqs
             .entry(nullification.tree)
             .or_insert_with(Vec::new)
             .push((nullification.seq, slot, signature.to_string()));
@@ -92,12 +80,12 @@ fn extract_state_update_sequences(state_update: &StateUpdate, slot: u64, signatu
     
     // Extract batch nullify context queue indexes
     for context in &state_update.batch_nullify_context {
-        sequences.batch_nullify_queue_indexes.push((context.nullifier_queue_index, slot, signature.to_string()));
+        self.batch_nullify_queue_indexes.push((context.nullifier_queue_index, slot, signature.to_string()));
     }
     
     // Extract batch new address queue indexes
     for address in &state_update.batch_new_addresses {
-        sequences.batch_address_queue_indexes
+        self.batch_address_queue_indexes
             .entry(address.tree.0)
             .or_insert_with(Vec::new)
             .push((address.queue_index, slot, signature.to_string()));
@@ -109,7 +97,7 @@ fn extract_state_update_sequences(state_update: &StateUpdate, slot: u64, signatu
         for (seq, merkle_event) in events {
             let event_type = merkle_event_to_type_id(merkle_event);
             if event_type > 0 {
-                sequences.batch_merkle_event_seqs
+                self.batch_merkle_event_seqs
                     .entry((tree_pubkey, event_type))
                     .or_insert_with(Vec::new)
                     .push((*seq, slot, signature.to_string()));
@@ -117,8 +105,143 @@ fn extract_state_update_sequences(state_update: &StateUpdate, slot: u64, signatu
         }
     }
     
-    sequences
+    // Extract out_account leaf indexes
+    for account_with_context in &state_update.out_accounts {
+        let tree_pubkey = account_with_context.account.tree.0;
+        let leaf_index = account_with_context.account.leaf_index.0;
+        self.out_account_leaf_indexes
+            .entry(tree_pubkey)
+            .or_insert_with(Vec::new)
+            .push((leaf_index, slot, signature.to_string()));
+    }
+    
 }
+}
+
+
+/// Merges multiple StateUpdateSequences into a single aggregated structure
+pub fn merge_state_update_sequences(all_sequences: &[StateUpdateSequences]) -> StateUpdateSequences {
+    let mut aggregated = StateUpdateSequences::default();
+    
+    for sequences in all_sequences {
+        // Merge indexed tree sequences
+        for ((tree, tree_type_string), seqs) in &sequences.indexed_tree_seqs {
+            aggregated.indexed_tree_seqs.entry((*tree, tree_type_string.clone())).or_insert_with(Vec::new).extend(seqs.clone());
+        }
+        
+        // Merge nullification sequences
+        for (tree, seqs) in &sequences.nullification_seqs {
+            aggregated.nullification_seqs.entry(*tree).or_insert_with(Vec::new).extend(seqs.clone());
+        }
+        
+        // Merge batch nullify queue indexes
+        aggregated.batch_nullify_queue_indexes.extend(sequences.batch_nullify_queue_indexes.clone());
+        
+        // Merge batch address queue indexes
+        for (tree, seqs) in &sequences.batch_address_queue_indexes {
+            aggregated.batch_address_queue_indexes.entry(*tree).or_insert_with(Vec::new).extend(seqs.clone());
+        }
+        
+        // Merge batch merkle event sequences
+        for ((tree, event_type), seqs) in &sequences.batch_merkle_event_seqs {
+            aggregated.batch_merkle_event_seqs.entry((*tree, *event_type)).or_insert_with(Vec::new).extend(seqs.clone());
+        }
+        
+        // Merge out_account leaf indexes
+        for (tree, seqs) in &sequences.out_account_leaf_indexes {
+            aggregated.out_account_leaf_indexes.entry(*tree).or_insert_with(Vec::new).extend(seqs.clone());
+        }
+    }
+    
+    aggregated
+}
+
+/// Comprehensive gap detection function that takes a vector of StateUpdateSequences and returns ALL gaps found
+/// Aggregates sequences from multiple StateUpdates and detects gaps across all transactions
+pub fn detect_all_sequence_gaps(all_sequences: &[StateUpdateSequences]) -> Vec<SequenceGap> {
+    // First aggregate all sequences from multiple StateUpdates
+    let sequences = merge_state_update_sequences(all_sequences);
+    
+
+    let mut all_gaps = Vec::new();
+    
+    // Check indexed tree updates
+    for ((tree_pubkey, tree_type_string), seqs) in &sequences.indexed_tree_seqs {
+        let gaps = detect_sequence_gaps_with_metadata(
+            seqs,
+            Some(*tree_pubkey),
+            Some(tree_type_string.clone()),
+            StateUpdateFieldType::IndexedTreeUpdate,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    // Check leaf nullifications
+    for (tree_pubkey, seqs) in &sequences.nullification_seqs {
+        let gaps = detect_sequence_gaps_with_metadata(
+            seqs,
+            Some(*tree_pubkey),
+            None,
+            StateUpdateFieldType::LeafNullification,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    // Check batch nullify context
+    if !sequences.batch_nullify_queue_indexes.is_empty() {
+        let gaps = detect_sequence_gaps_with_metadata(
+            &sequences.batch_nullify_queue_indexes,
+            None,
+            None,
+            StateUpdateFieldType::BatchNullifyContext,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    // Check batch new addresses
+    for (tree_pubkey, seqs) in &sequences.batch_address_queue_indexes {
+        let gaps = detect_sequence_gaps_with_metadata(
+            seqs,
+            Some(*tree_pubkey),
+            None,
+            StateUpdateFieldType::BatchNewAddress,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    // Check batch merkle tree events
+    for ((tree_pubkey, event_type), seqs) in &sequences.batch_merkle_event_seqs {
+        let field_type = match event_type {
+            1 => StateUpdateFieldType::BatchMerkleTreeEventAppend,
+            2 => StateUpdateFieldType::BatchMerkleTreeEventNullify,
+            3 => StateUpdateFieldType::BatchMerkleTreeEventAddressAppend,
+            _ => continue,
+        };
+        
+        let gaps = detect_sequence_gaps_with_metadata(
+            seqs,
+            Some(*tree_pubkey),
+            None,
+            field_type,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    // Check out_account leaf indexes
+    for (tree_pubkey, seqs) in &sequences.out_account_leaf_indexes {
+        let gaps = detect_sequence_gaps_with_metadata(
+            seqs,
+            Some(*tree_pubkey),
+            None,
+            StateUpdateFieldType::OutAccount,
+        );
+        all_gaps.extend(gaps);
+    }
+    
+    all_gaps
+}
+
+
 
 /// Detects gaps in a sequence with full metadata for gap filling
 fn detect_sequence_gaps_with_metadata(
@@ -158,8 +281,8 @@ fn detect_sequence_gaps_with_metadata(
 
 
 #[tokio::test]
-async fn test_v1_address_tree_sequence_consistency() -> Result<()> {
-    println!("🔍 Testing v1 Address Tree Sequence Number Consistency");
+async fn test_comprehensive_state_update_validation() -> Result<()> {
+    println!("🔍 Testing Comprehensive StateUpdate Sequence Consistency");
     
     // Load blocks from the created snapshot
     let snapshot_path = "/Users/ananas/dev/photon/target/snapshot_local";
@@ -175,8 +298,7 @@ async fn test_v1_address_tree_sequence_consistency() -> Result<()> {
     println!("📦 Processing {} blocks from snapshot", blocks.len());
     
     // Extract sequences from all StateUpdates with context
-    let mut v1_address_updates: Vec<IndexedTreeLeafUpdate> = Vec::new();
-    let mut all_sequences: Vec<StateUpdateSequences> = Vec::new();
+    let mut sequences = StateUpdateSequences::default();
     let mut total_transactions = 0;
     let mut parsed_transactions = 0;
     
@@ -192,16 +314,9 @@ async fn test_v1_address_tree_sequence_consistency() -> Result<()> {
                 Ok(state_update) => {
                     parsed_transactions += 1;
                     
-                    // Extract v1 address tree updates for backward compatibility
-                    for ((tree_pubkey, _leaf_index), leaf_update) in &state_update.indexed_merkle_tree_updates {
-                        if leaf_update.tree_type == TreeType::AddressV1 && *tree_pubkey == V1_ADDRESS_TREE {
-                            v1_address_updates.push(leaf_update.clone());
-                        }
-                    }
-                    
                     // Extract sequences with context for comprehensive validation
-                    let sequences = extract_state_update_sequences(&state_update, slot, &signature);
-                    all_sequences.push(sequences);
+                    sequences.extract_state_update_sequences(&state_update, slot, &signature);
+                
                 }
                 Err(_) => {
                     // Skip failed parsing - compression transactions might have parsing issues
@@ -212,238 +327,29 @@ async fn test_v1_address_tree_sequence_consistency() -> Result<()> {
     }
     
     println!("📊 Parsed {}/{} transactions successfully", parsed_transactions, total_transactions);
-    println!("🌳 Found {} v1 address tree updates", v1_address_updates.len());
     
-    if v1_address_updates.is_empty() {
-        println!("⚠️  No v1 address tree updates found in snapshot");
-        return Ok(());
-    }
+    // Detect gaps across all transactions
+    let gaps = detect_all_sequence_gaps(&[sequences]);
+
+    // Comprehensive validation summary
+    println!("\n🔍 Comprehensive StateUpdate validation results:");
+    println!("📊 Total gaps detected across all transactions: {}", gaps.len());
     
-    // Sort updates by sequence number for validation
-    v1_address_updates.sort_by_key(|update| update.seq);
-    
-    // Display first and last few updates for context
-    println!("\n📋 First 5 v1 address tree updates:");
-    for (i, update) in v1_address_updates.iter().take(5).enumerate() {
-        println!("  {}. seq={}, leaf_index={}, tree={}", 
-                 i + 1, update.seq, update.leaf.index, update.tree);
-    }
-    
-    if v1_address_updates.len() > 5 {
-        println!("📋 Last 5 v1 address tree updates:");
-        for (i, update) in v1_address_updates.iter().rev().take(5).enumerate() {
-            let idx = v1_address_updates.len() - i;
-            println!("  {}. seq={}, leaf_index={}, tree={}", 
-                     idx, update.seq, update.leaf.index, update.tree);
-        }
-    }
-    
-    // Validate sequence number consistency
-    println!("\n🔍 Validating sequence number consistency...");
-    
-    let first_seq = v1_address_updates[0].seq;
-    let last_seq = v1_address_updates.last().unwrap().seq;
-    println!("📈 Sequence range: {} to {} (span: {})", first_seq, last_seq, last_seq - first_seq + 1);
-    
-    // Check for sequential ordering starting from first sequence number
-    let mut expected_seq = first_seq;
-    let mut gaps = Vec::new();
-    let mut is_sequential = true;
-    
-    for (i, update) in v1_address_updates.iter().enumerate() {
-        if update.seq != expected_seq {
-            gaps.push((i, expected_seq, update.seq));
-            is_sequential = false;
-        }
-        expected_seq = update.seq + 1;
-    }
-    
-    // Check for duplicate sequence numbers
-    let mut seq_counts: HashMap<u64, usize> = HashMap::new();
-    for update in &v1_address_updates {
-        *seq_counts.entry(update.seq).or_insert(0) += 1;
-    }
-    
-    let duplicates: Vec<_> = seq_counts.iter()
-        .filter(|(_, &count)| count > 1)
-        .map(|(&seq, &count)| (seq, count))
-        .collect();
-    
-    // Report results
-    println!("\n📊 Validation Results:");
-    
-    if is_sequential {
-        println!("✅ All v1 address tree sequence numbers are sequential and ascending!");
-        println!("   Expected {} consecutive sequences starting from {}", 
-                 v1_address_updates.len(), first_seq);
-    } else {
-        println!("❌ Found {} gaps in v1 address tree sequence numbers:", gaps.len());
-        for (index, expected, actual) in gaps.iter().take(10) {
-            println!("   Index {}: expected seq {}, found seq {}", index, expected, actual);
-        }
-        if gaps.len() > 10 {
-            println!("   ... and {} more gaps", gaps.len() - 10);
-        }
-    }
-    
-    if duplicates.is_empty() {
-        println!("✅ No duplicate sequence numbers found");
-    } else {
-        println!("❌ Found {} duplicate sequence numbers:", duplicates.len());
-        for (seq, count) in duplicates.iter().take(10) {
-            println!("   Sequence {} appears {} times", seq, count);
-        }
-        if duplicates.len() > 10 {
-            println!("   ... and {} more duplicates", duplicates.len() - 10);
-        }
-    }
-    
-    // Final assertions for the test - validate what we can guarantee
-    assert!(!v1_address_updates.is_empty(), "Should have found v1 address tree updates");
-    assert!(duplicates.is_empty(), "V1 address tree sequence numbers should be unique");
-    
-    // Report on sequence consistency (gaps may be expected due to transaction ordering)
-    if is_sequential {
-        println!("\n🎉 V1 Address Tree sequence validation: PERFECT sequential ordering!");
-    } else {
-        println!("\n✅ V1 Address Tree sequence validation completed with {} gaps detected", gaps.len());
-        println!("   This may be expected behavior depending on transaction ordering in the snapshot");
-    }
-    
-    println!("📊 Summary: {} unique v1 address tree updates processed", v1_address_updates.len());
-    
-    // Comprehensive validation of all StateUpdate fields using new gap detection functions
-    println!("\n🔍 Performing comprehensive validation of all StateUpdate fields...");
-    
-    // Aggregate all sequences by type for gap detection
-    let mut all_indexed_tree_seqs: HashMap<(Pubkey, String), Vec<(u64, u64, String)>> = HashMap::new();
-    let mut all_nullification_seqs: HashMap<Pubkey, Vec<(u64, u64, String)>> = HashMap::new();
-    let mut all_batch_nullify_queue_indexes: Vec<(u64, u64, String)> = Vec::new();
-    let mut all_batch_address_queue_indexes: HashMap<Pubkey, Vec<(u64, u64, String)>> = HashMap::new();
-    let mut all_batch_merkle_event_seqs: HashMap<(Pubkey, u8), Vec<(u64, u64, String)>> = HashMap::new();
-    
-    // Aggregate sequences from all extracted StateUpdateSequences
-    for sequences in &all_sequences {
-        // Merge indexed tree sequences
-        for ((tree, tree_type_string), seqs) in &sequences.indexed_tree_seqs {
-            all_indexed_tree_seqs.entry((*tree, tree_type_string.clone())).or_insert_with(Vec::new).extend(seqs.clone());
-        }
-        
-        // Merge nullification sequences
-        for (tree, seqs) in &sequences.nullification_seqs {
-            all_nullification_seqs.entry(*tree).or_insert_with(Vec::new).extend(seqs.clone());
-        }
-        
-        // Merge batch nullify queue indexes
-        all_batch_nullify_queue_indexes.extend(sequences.batch_nullify_queue_indexes.clone());
-        
-        // Merge batch address queue indexes
-        for (tree, seqs) in &sequences.batch_address_queue_indexes {
-            all_batch_address_queue_indexes.entry(*tree).or_insert_with(Vec::new).extend(seqs.clone());
-        }
-        
-        // Merge batch merkle event sequences
-        for ((tree, event_type), seqs) in &sequences.batch_merkle_event_seqs {
-            all_batch_merkle_event_seqs.entry((*tree, *event_type)).or_insert_with(Vec::new).extend(seqs.clone());
-        }
-    }
-    
-    // Detect gaps using the new functions
-    let mut total_gaps = 0;
-    
-    // Check indexed tree updates
-    for ((tree_pubkey, tree_type_string), sequences) in &all_indexed_tree_seqs {
-        let gaps = detect_sequence_gaps_with_metadata(
-            sequences,
-            Some(*tree_pubkey),
-            Some(tree_type_string.clone()),
-            StateUpdateFieldType::IndexedTreeUpdate,
-        );
-        if !gaps.is_empty() {
-            println!("❌ Found {} gaps in indexed tree updates for tree {} (type {})", gaps.len(), tree_pubkey, tree_type_string);
-            total_gaps += gaps.len();
-        } else {
-            println!("✅ No gaps in indexed tree updates for tree {} (type {}) - {} sequences", tree_pubkey, tree_type_string, sequences.len());
-        }
-    }
-    
-    // Check leaf nullifications
-    for (tree_pubkey, sequences) in &all_nullification_seqs {
-        let gaps = detect_sequence_gaps_with_metadata(
-            sequences,
-            Some(*tree_pubkey),
-            None,
-            StateUpdateFieldType::LeafNullification,
-        );
-        if !gaps.is_empty() {
-            println!("❌ Found {} gaps in leaf nullifications for tree {}", gaps.len(), tree_pubkey);
-            total_gaps += gaps.len();
-        } else {
-            println!("✅ No gaps in leaf nullifications for tree {} - {} sequences", tree_pubkey, sequences.len());
-        }
-    }
-    
-    // Check batch nullify context
-    if !all_batch_nullify_queue_indexes.is_empty() {
-        let gaps = detect_sequence_gaps_with_metadata(
-            &all_batch_nullify_queue_indexes,
-            None,
-            None,
-            StateUpdateFieldType::BatchNullifyContext,
-        );
-        if !gaps.is_empty() {
-            println!("❌ Found {} gaps in batch nullify context queue indexes", gaps.len());
-            total_gaps += gaps.len();
-        } else {
-            println!("✅ No gaps in batch nullify context queue indexes - {} sequences", all_batch_nullify_queue_indexes.len());
-        }
-    }
-    
-    // Check batch new addresses
-    for (tree_pubkey, sequences) in &all_batch_address_queue_indexes {
-        let gaps = detect_sequence_gaps_with_metadata(
-            sequences,
-            Some(*tree_pubkey),
-            None,
-            StateUpdateFieldType::BatchNewAddress,
-        );
-        if !gaps.is_empty() {
-            println!("❌ Found {} gaps in batch new addresses for tree {}", gaps.len(), tree_pubkey);
-            total_gaps += gaps.len();
-        } else {
-            println!("✅ No gaps in batch new addresses for tree {} - {} sequences", tree_pubkey, sequences.len());
-        }
-    }
-    
-    // Check batch merkle tree events
-    for ((tree_pubkey, event_type), sequences) in &all_batch_merkle_event_seqs {
-        let field_type = match event_type {
-            1 => StateUpdateFieldType::BatchMerkleTreeEventAppend,
-            2 => StateUpdateFieldType::BatchMerkleTreeEventNullify,
-            3 => StateUpdateFieldType::BatchMerkleTreeEventAddressAppend,
-            _ => continue,
-        };
-        
-        let gaps = detect_sequence_gaps_with_metadata(
-            sequences,
-            Some(*tree_pubkey),
-            None,
-            field_type,
-        );
-        if !gaps.is_empty() {
-            println!("❌ Found {} gaps in batch merkle tree events for tree {} (event type {})", gaps.len(), tree_pubkey, event_type);
-            total_gaps += gaps.len();
-        } else {
-            println!("✅ No gaps in batch merkle tree events for tree {} (event type {}) - {} sequences", tree_pubkey, event_type, sequences.len());
-        }
-    }
-    
-    println!("\n📊 Comprehensive validation summary:");
-    println!("   Total gaps found across all StateUpdate fields: {}", total_gaps);
-    if total_gaps == 0 {
+    if gaps.is_empty() {
         println!("🎉 All StateUpdate sequences are perfectly consistent!");
     } else {
-        println!("⚠️  Found {} gaps that may need investigation or gap filling", total_gaps);
+        // Group gaps by field type for summary
+        let mut gaps_by_field: HashMap<StateUpdateFieldType, Vec<&SequenceGap>> = HashMap::new();
+        for gap in &gaps {
+            gaps_by_field.entry(gap.field_type.clone()).or_insert_with(Vec::new).push(gap);
+        }
+        
+        println!("⚠️  Gap breakdown by field type:");
+        for (field_type, field_gaps) in &gaps_by_field {
+            println!("   {:?}: {} gaps", field_type, field_gaps.len());
+        }
+        
+        println!("⚠️  These gaps may need investigation or gap filling");
     }
     
     println!("\n🎉 Comprehensive StateUpdate validation completed!");
