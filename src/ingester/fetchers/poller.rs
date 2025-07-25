@@ -9,23 +9,43 @@ use futures::{pin_mut, Stream, StreamExt};
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
+use tokio::sync::mpsc;
 
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
-    ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+    ingester::{
+        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+        rewind_controller::RewindCommand,
+    },
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 
-fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<Item = u64> {
+fn get_slot_stream(
+    rpc_client: Arc<RpcClient>, 
+    start_slot: u64,
+    mut rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
+) -> impl Stream<Item = u64> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
         let mut next_slot_to_fetch = start_slot;
         loop {
+            // Check for rewind commands before yielding next slot
+            if let Some(ref mut receiver) = rewind_receiver {
+                while let Ok(command) = receiver.try_recv() {
+                    match command {
+                        RewindCommand::Rewind { to_slot, reason } => {
+                            log::error!("Rewinding slot stream to {}: {}", to_slot, reason);
+                            next_slot_to_fetch = to_slot;
+                        }
+                    }
+                }
+            }
+            
             if next_slot_to_fetch > LATEST_SLOT.load(Ordering::SeqCst) {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 continue;
@@ -40,13 +60,14 @@ pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
+    rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         let start_slot = match last_indexed_slot {
             0 => 0,
             last_indexed_slot => last_indexed_slot + 1
         };
-        let slot_stream = get_slot_stream(rpc_client.clone(), start_slot);
+        let slot_stream = get_slot_stream(rpc_client.clone(), start_slot, rewind_receiver);
         pin_mut!(slot_stream);
         let block_stream = slot_stream
             .map(|slot| {

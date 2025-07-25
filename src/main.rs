@@ -174,6 +174,7 @@ fn continously_index_new_blocks(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     last_indexed_slot: u64,
+    rewind_controller: Option<photon_indexer::ingester::rewind_controller::RewindController>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let block_stream = block_stream_config.load_block_stream();
@@ -183,6 +184,7 @@ fn continously_index_new_blocks(
             rpc_client.clone(),
             last_indexed_slot,
             None,
+            rewind_controller.as_ref(),
         )
         .await;
     })
@@ -234,6 +236,7 @@ async fn main() {
                 rpc_client.clone(),
                 last_indexed_slot,
                 Some(last_slot),
+                None,
             )
             .await;
         }
@@ -277,11 +280,15 @@ async fn main() {
                     .unwrap(),
             };
 
+            // Create rewind controller for gap detection
+            let (rewind_controller, rewind_receiver) = photon_indexer::ingester::rewind_controller::RewindController::new();
+
             let block_stream_config = BlockStreamConfig {
                 rpc_client: rpc_client.clone(),
                 max_concurrent_block_fetches,
                 last_indexed_slot,
                 geyser_url: args.grpc_url,
+                rewind_receiver: Some(rewind_receiver),
             };
 
             (
@@ -290,6 +297,7 @@ async fn main() {
                     db_conn.clone(),
                     rpc_client.clone(),
                     last_indexed_slot,
+                    Some(rewind_controller),
                 )),
                 Some(continously_monitor_photon(
                     db_conn.clone(),
