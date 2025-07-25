@@ -13,5 +13,4 @@ test-ledger/
 minio
 test.db
 docker-compose.yml
-output.txt
-output1.txt
+*.txt
