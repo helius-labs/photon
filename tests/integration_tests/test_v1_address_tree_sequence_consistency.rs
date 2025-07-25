@@ -348,6 +348,7 @@ async fn test_comprehensive_state_update_validation() -> Result<()> {
         let mut gaps_by_field: HashMap<StateUpdateFieldType, Vec<&SequenceGap>> = HashMap::new();
         for gap in &gaps {
             gaps_by_field.entry(gap.field_type.clone()).or_insert_with(Vec::new).push(gap);
+            println!("DEBUG: Found gap for tree: {:?}, {:?}", gap.tree_pubkey, gap);
         }
         
         println!("⚠️  Gap breakdown by field type:");

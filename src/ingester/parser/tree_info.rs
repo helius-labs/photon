@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use light_compressed_account::TreeType;
 use solana_pubkey::{pubkey, Pubkey};
 use std::collections::HashMap;
+use crate::ingester::detect_gaps::SequenceEntry;
 
 #[derive(Debug, Clone)]
 pub struct TreeInfo {
@@ -12,16 +13,16 @@ pub struct TreeInfo {
     pub seq: TreeTypeSeq
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum TreeTypeSeq {
-    // event seq
-    StateV1(u64),
-    // Output queue (leaf index), Input queue index, Batch event seq
-    StateV2(StateV2Seq),
-    // event seq
-    AddressV1(u64),
-    // Input queue index, Batch event seq
-    AddressV2(u64,u64),
+    // event seq with complete context
+    StateV1(SequenceEntry),
+    // Output queue (leaf index), Input queue index, Batch event seq with context
+    StateV2(StateV2SeqWithContext),
+    // event seq with complete context
+    AddressV1(SequenceEntry),
+    // Input queue index, Batch event seq with context
+    AddressV2(SequenceEntry, SequenceEntry), // (input_queue_entry, batch_event_entry)
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -29,6 +30,13 @@ pub struct StateV2Seq {
     pub input_queue_index: u64,
     pub batch_event_seq: u64,
     pub output_queue_index: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StateV2SeqWithContext {
+    pub input_queue_entry: Option<SequenceEntry>,
+    pub batch_event_entry: Option<SequenceEntry>,
+    pub output_queue_entry: Option<SequenceEntry>,
 }
 
 impl TreeInfo {
@@ -218,7 +226,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(0),
+                    seq: TreeTypeSeq::StateV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
                 },
             );
 
@@ -229,7 +237,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::StateV1,
-                    seq: TreeTypeSeq::StateV1(0),
+                    seq: TreeTypeSeq::StateV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
                 },
             );
         }
@@ -242,7 +250,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(0),
+                    seq: TreeTypeSeq::AddressV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
                 },
             );
 
@@ -253,7 +261,7 @@ lazy_static! {
                     queue: *legacy_queue,
                     height: 26,
                     tree_type: TreeType::AddressV1,
-                    seq: TreeTypeSeq::AddressV1(0),
+                    seq: TreeTypeSeq::AddressV1(SequenceEntry { sequence: 0, slot: 0, signature: String::new() }),
                 },
             );
         }
@@ -298,7 +306,7 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
-                    seq: TreeTypeSeq::StateV2(StateV2Seq::default()),
+                    seq: TreeTypeSeq::StateV2(StateV2SeqWithContext::default()),
                 },
             );
 
@@ -309,7 +317,7 @@ lazy_static! {
                     queue: *queue,
                     height: 32,
                     tree_type: TreeType::StateV2,
-                    seq: TreeTypeSeq::StateV2(StateV2Seq::default()),
+                    seq: TreeTypeSeq::StateV2(StateV2SeqWithContext::default()),
                 },
             );
         }
@@ -322,7 +330,10 @@ lazy_static! {
                     queue: *tree_queue,
                     height: 40,
                     tree_type: TreeType::AddressV2,
-                    seq: TreeTypeSeq::AddressV2(0, 0),
+                    seq: TreeTypeSeq::AddressV2(
+                        SequenceEntry { sequence: 0, slot: 0, signature: String::new() },
+                        SequenceEntry { sequence: 0, slot: 0, signature: String::new() }
+                    ),
                 },
             );
         }

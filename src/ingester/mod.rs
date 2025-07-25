@@ -11,7 +11,6 @@ use sea_orm::DatabaseConnection;
 use sea_orm::DatabaseTransaction;
 
 use sea_orm::EntityTrait;
-use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
 
@@ -56,6 +55,9 @@ fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterE
         tracing::warn!("Gaps detected in block {} sequences: {gaps:?}", block.metadata.slot);
     }
     
+    // Update sequence state with latest observed sequences
+    crate::ingester::detect_gaps::update_sequence_state(&sequences);
+    
     Ok(StateUpdate::merge_updates(state_updates))
 }
 
@@ -73,7 +75,7 @@ async fn index_block_metadatas(
     blocks: Vec<&BlockMetadata>,
 ) -> Result<(), IngesterError> {
     for block_chunk in blocks.chunks(MAX_SQL_INSERTS) {
-        let block_models: Vec<blocks::ActiveModel> = block_chunk
+        let _block_models: Vec<blocks::ActiveModel> = block_chunk
             .iter()
             .map(|block| {
                 Ok::<blocks::ActiveModel, IngesterError>(blocks::ActiveModel {

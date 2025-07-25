@@ -3,6 +3,13 @@ use crate::ingester::parser::{
 };
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
+
+// Global sequence state tracker to maintain latest observed sequences
+lazy_static! {
+    static ref SEQUENCE_STATE: Mutex<HashMap<String, TreeTypeSeq>> = Mutex::new(HashMap::new());
+}
 
 fn merkle_event_to_type_id(event: &MerkleTreeEvent) -> u8 {
     match event {
@@ -59,6 +66,85 @@ pub struct StateUpdateSequences {
     out_account_leaf_indexes: HashMap<Pubkey, Vec<SequenceEntry>>, // tree -> leaf_index entries
 }
 
+/// Updates the global sequence state with the latest observed sequences
+pub fn update_sequence_state(sequences: &StateUpdateSequences) {
+    let mut state = SEQUENCE_STATE.lock().unwrap();
+    
+    // Update indexed tree sequences
+    for ((tree_pubkey, tree_type_id), entries) in &sequences.indexed_tree_seqs {
+        if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
+            let tree_str = tree_pubkey.to_string();
+            // Check the actual tree type from the mapping
+            if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
+                match info.tree_type {
+                    light_compressed_account::TreeType::AddressV1 => {
+                        state.insert(tree_str, TreeTypeSeq::AddressV1(max_entry.clone()));
+                    },
+                    light_compressed_account::TreeType::StateV1 => {
+                        state.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
+                    },
+                    _ => {
+                        // Other tree types not handled in indexed_tree_seqs
+                    }
+                }
+            }
+        }
+    }
+    
+    // Update nullification sequences
+    for (tree_pubkey, entries) in &sequences.nullification_seqs {
+        if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
+            let tree_str = tree_pubkey.to_string();
+            state.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
+        }
+    }
+    
+    // Update batch address queue indexes
+    for (tree_pubkey, entries) in &sequences.batch_address_queue_indexes {
+        if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
+            let tree_str = tree_pubkey.to_string();
+            println!("DEBUG: Updating batch_address_queue_indexes for tree: {}, sequence: {}", tree_str, max_entry.sequence);
+            let input_queue_entry = if let Some(current_seq) = state.get(&tree_str) {
+                if let TreeTypeSeq::AddressV2(input_queue_entry, _) = current_seq {
+                    input_queue_entry.clone()
+                } else {
+                    SequenceEntry { sequence: 0, slot: 0, signature: String::new() }
+                }
+            } else {
+                SequenceEntry { sequence: 0, slot: 0, signature: String::new() }
+            };
+            state.insert(tree_str, TreeTypeSeq::AddressV2(input_queue_entry, max_entry.clone()));
+        }
+    }
+    
+    // Update out account leaf indexes for StateV2 trees
+    for (tree_pubkey, entries) in &sequences.out_account_leaf_indexes {
+        if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
+            let tree_str = tree_pubkey.to_string();
+            if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
+                match info.tree_type {
+                    light_compressed_account::TreeType::StateV2 => {
+                        let mut seq_context = if let Some(current_seq) = state.get(&tree_str) {
+                            if let TreeTypeSeq::StateV2(seq_context) = current_seq {
+                                seq_context.clone()
+                            } else {
+                                crate::ingester::parser::tree_info::StateV2SeqWithContext::default()
+                            }
+                        } else {
+                            crate::ingester::parser::tree_info::StateV2SeqWithContext::default()
+                        };
+                        seq_context.output_queue_entry = Some(max_entry.clone());
+                        state.insert(tree_str, TreeTypeSeq::StateV2(seq_context));
+                    },
+                    _ => {
+                        state.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl StateUpdateSequences {
 /// Extracts sequences from a StateUpdate with slot and signature context
 pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slot: u64, signature: &str) {
@@ -98,6 +184,19 @@ pub fn extract_state_update_sequences(&mut self, state_update: &StateUpdate, slo
     
     // Extract batch new address queue indexes
     for address in &state_update.batch_new_addresses {
+        let tree_str = address.tree.0.to_string();
+        println!("DEBUG: Extracting batch_new_address for tree: {}, queue_index: {}", tree_str, address.queue_index);
+        
+        // Check if this is an AddressV1 tree incorrectly in batch operations
+        if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
+            if info.tree_type == light_compressed_account::TreeType::AddressV1 {
+                println!("ERROR: AddressV1 tree {} found in batch_new_addresses - this should not happen!", tree_str);
+                println!("  queue_index: {}, slot: {}, signature: {}", address.queue_index, slot, signature);
+                // Skip this invalid data
+                continue;
+            }
+        }
+        
         self.batch_address_queue_indexes
             .entry(address.tree.0)
             .or_insert_with(Vec::new)
@@ -156,7 +255,8 @@ pub fn detect_all_sequence_gaps(sequences: &StateUpdateSequences) -> Vec<Sequenc
     let mut all_gaps = Vec::new();
     
     // Check indexed tree updates
-    for ((tree_pubkey, _tree_type_id), seqs) in &sequences.indexed_tree_seqs {
+    for ((tree_pubkey, tree_type_id), seqs) in &sequences.indexed_tree_seqs {
+        println!("DEBUG: Processing indexed_tree_seqs - tree: {}, tree_type_id: {}", tree_pubkey, tree_type_id);
         let gaps = detect_sequence_gaps_with_metadata(
             seqs,
             Some(*tree_pubkey),
@@ -254,90 +354,131 @@ fn detect_sequence_gaps_with_metadata(
     let mut gaps = Vec::new();
     let start_seq = if let Some(tree) = tree_pubkey {
         let tree_str = tree.to_string();
-        if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
-            println!("Found tree {} with TreeTypeSeq: {:?}", tree_str, info.seq);
-            info.seq
+        
+        // First check current sequence state, fall back to initial mapping
+        let state = SEQUENCE_STATE.lock().unwrap();
+        if let Some(current_seq) = state.get(&tree_str) {
+            println!("DEBUG: Using current sequence state for tree {}: {:?}", tree_str, current_seq);
+            current_seq.clone()
+        } else if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
+            println!("DEBUG: Using initial mapping for tree {}: {:?}", tree_str, info.seq);
+            info.seq.clone()
         } else {
             println!("Tree {} not found in QUEUE_TREE_MAPPING", tree_str);
             println!("Available keys: {:?}", QUEUE_TREE_MAPPING.keys().collect::<Vec<_>>());
             unimplemented!("Tree not found in mapping");
         }
     } else if let Some(queue_pubkey) = queue_pubkey {
-        QUEUE_TREE_MAPPING
-            .get(&queue_pubkey.to_string())
-            .map(|info| info.seq)
-            .unwrap()
+        let queue_str = queue_pubkey.to_string();
+        let state = SEQUENCE_STATE.lock().unwrap();
+        if let Some(current_seq) = state.get(&queue_str) {
+            current_seq.clone()
+        } else {
+            QUEUE_TREE_MAPPING
+                .get(&queue_str)
+                .map(|info| info.seq.clone())
+                .unwrap()
+        }
     } else {
         println!("field_type: {:?}", field_type);
         println!("tree_pubkey: {:?}, queue_pubkey: {:?}", tree_pubkey, queue_pubkey);
         unimplemented!("No tree or queue pubkey provided for gap detection");
     };
 
-    let unpacked_start_seq = match field_type {
+    let (unpacked_start_seq, start_entry) = match field_type {
         StateUpdateFieldType::IndexedTreeUpdate => {
-          if let TreeTypeSeq::AddressV1(seq) = start_seq {
-              seq
-          } else {
-              unimplemented!("Unsupported tree type for gap detection");
+          match start_seq {
+              TreeTypeSeq::AddressV1(entry) => {
+                  println!("DEBUG: IndexedTreeUpdate with AddressV1, seq: {}", entry.sequence);
+                  (entry.sequence, Some(entry))
+              },
+              _ => {
+                  println!("DEBUG: IndexedTreeUpdate with unsupported tree type: {:?}", start_seq);
+                  unimplemented!("Unsupported tree type for gap detection");
+              }
           }
         },
         StateUpdateFieldType::BatchMerkleTreeEventAddressAppend => {
-          if let TreeTypeSeq::AddressV2(_,seq ) = start_seq {
-           seq
+          if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
+           (entry.sequence, Some(entry))
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },StateUpdateFieldType::BatchNewAddress => {
-          if let TreeTypeSeq::AddressV2(_,seq ) = start_seq {
-           seq
+          if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
+           (entry.sequence, Some(entry))
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
          StateUpdateFieldType::BatchMerkleTreeEventAppend => {
-          if let TreeTypeSeq::StateV2(seq) = start_seq {
-              seq.batch_event_seq
+          if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+              if let Some(entry) = &seq_context.batch_event_entry {
+                  (entry.sequence, Some(entry.clone()))
+              } else {
+                  (0, None)
+              }
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
          StateUpdateFieldType::BatchMerkleTreeEventNullify => {
-          if let TreeTypeSeq::StateV2(seq) = start_seq {
-              seq.batch_event_seq
+          if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+              if let Some(entry) = &seq_context.batch_event_entry {
+                  (entry.sequence, Some(entry.clone()))
+              } else {
+                  (0, None)
+              }
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
            StateUpdateFieldType::LeafNullification => {
-          if let TreeTypeSeq::StateV1(seq) = start_seq {
-              seq
+          if let TreeTypeSeq::StateV1(entry) = start_seq {
+              (entry.sequence, Some(entry))
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
            StateUpdateFieldType::OutAccount => {
-          if let TreeTypeSeq::StateV1(seq) = start_seq {
-              seq
-          } else if let TreeTypeSeq::StateV2(seq) = start_seq {
-              seq.output_queue_index
+          if let TreeTypeSeq::StateV1(entry) = start_seq {
+              (entry.sequence, Some(entry))
+          } else if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+              if let Some(entry) = &seq_context.output_queue_entry {
+                  (entry.sequence, Some(entry.clone()))
+              } else {
+                  (0, None)
+              }
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
            StateUpdateFieldType::BatchNullifyContext => {
-           if let TreeTypeSeq::StateV2(seq) = start_seq {
-              seq.input_queue_index
+           if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+               if let Some(entry) = &seq_context.input_queue_entry {
+                   (entry.sequence, Some(entry.clone()))
+               } else {
+                   (0, None)
+               }
           } else {
               unimplemented!("Unsupported tree type for gap detection");
           }
         },
     };
 
-    if sorted_sequences[0].sequence > unpacked_start_seq {
+    // Skip gap detection for tree initialization (when unpacked_start_seq == 0)
+    // because there's no previous sequence to compare against
+    if unpacked_start_seq > 0 && sorted_sequences[0].sequence > unpacked_start_seq + 1 {
+        let (before_slot, before_signature) = if let Some(entry) = start_entry {
+            (entry.slot, entry.signature)
+        } else {
+            (0, String::new())
+        };
+        
         gaps.push(SequenceGap {
-            before_slot: 0, // No previous slot available
+            before_slot,
             after_slot: sorted_sequences[0].slot,
-            before_signature: String::new(), // No previous signature available
+            before_signature,
             after_signature: sorted_sequences[0].signature.clone(),
             tree_pubkey,
             field_type: field_type.clone(),
