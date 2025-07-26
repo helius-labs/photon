@@ -103,16 +103,31 @@ pub fn get_block_poller_stream(
                         // Remove any previous empty blocks that are consecutive
                         let parent_slot = block.metadata.parent_slot;
                         if let Some(parent_block) = block_cache.get(&parent_slot) {
-                            if parent_block.transactions.is_empty() {
+                            // Check if parent block also has no compression transactions
+                            let parent_has_compression = parent_block.transactions.iter().any(|tx| {
+                                tx.instruction_groups.iter().any(|group| {
+                                    group.outer_instruction.program_id == get_compression_program_id()
+                                })
+                            });
+                            
+                            if !parent_has_compression {
                                 // Remove the parent empty block since we have a newer empty block
                                 block_cache.remove(&parent_slot);
+                                if blocks_processed % 100 == 0 {
+                                    log::debug!("Removed non-compression block at slot {}", parent_slot);
+                                }
                                 
                                 // Also remove any other consecutive empty blocks before this
                                 let mut check_slot = parent_slot.saturating_sub(1);
                                 while check_slot > last_indexed_slot {
                                     if let Some(check_block) = block_cache.get(&check_slot) {
-                                        if check_block.transactions.is_empty() && 
-                                           check_block.metadata.slot + 1 == check_block.metadata.parent_slot {
+                                        let check_has_compression = check_block.transactions.iter().any(|tx| {
+                                            tx.instruction_groups.iter().any(|group| {
+                                                group.outer_instruction.program_id == get_compression_program_id()
+                                            })
+                                        });
+                                        
+                                        if !check_has_compression {
                                             block_cache.remove(&check_slot);
                                             check_slot = check_slot.saturating_sub(1);
                                         } else {
