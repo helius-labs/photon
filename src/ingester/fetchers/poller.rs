@@ -62,7 +62,7 @@ pub fn get_block_poller_stream(
             pin_mut!(block_stream);
             let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
             let mut rewind_occurred = false;
-
+            
             while let Some(block) = block_stream.next().await {
                 // Check for rewind commands before processing blocks
                 if let Some(ref mut receiver) = rewind_receiver {
@@ -88,6 +88,45 @@ pub fn get_block_poller_stream(
                 }
 
                 if let Some(block) = block {
+                    // Check if this is an empty block (no transactions)
+                    let is_empty_block = block.transactions.is_empty();
+                    
+                    // If current block is empty, check if we can optimize the cache
+                    if is_empty_block && block.metadata.slot > last_indexed_slot + 1 {
+                        // Remove any previous empty blocks that are consecutive
+                        let parent_slot = block.metadata.parent_slot;
+                        if let Some(parent_block) = block_cache.get(&parent_slot) {
+                            if parent_block.transactions.is_empty() {
+                                // Remove the parent empty block since we have a newer empty block
+                                block_cache.remove(&parent_slot);
+                                
+                                // Also remove any other consecutive empty blocks before this
+                                let mut check_slot = parent_slot.saturating_sub(1);
+                                while check_slot > last_indexed_slot {
+                                    if let Some(check_block) = block_cache.get(&check_slot) {
+                                        if check_block.transactions.is_empty() && 
+                                           check_block.metadata.slot + 1 == check_block.metadata.parent_slot {
+                                            block_cache.remove(&check_slot);
+                                            check_slot = check_slot.saturating_sub(1);
+                                        } else {
+                                            break;
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Log warning if cache is getting large
+                    if block_cache.len() > 50000 && blocks_processed % 100 == 0 {
+                        log::warn!(
+                            "Cache size is large: {} blocks. Consider restarting with --start-slot closer to current activity",
+                            block_cache.len()
+                        );
+                    }
+                    
                     block_cache.insert(block.metadata.slot, block);
                 }
                 let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
@@ -97,6 +136,29 @@ pub fn get_block_poller_stream(
                 }
                 if !blocks_to_index.is_empty() {
                     yield blocks_to_index;
+                }
+                
+                // Log cache status periodically
+                blocks_processed += 1;
+                if blocks_processed % 1000 == 0 {
+                    if let Some(&min_cached) = block_cache.keys().min() {
+                        if let Some(&max_cached) = block_cache.keys().max() {
+                            // Count empty vs non-empty blocks
+                            let empty_count = block_cache.values().filter(|b| b.transactions.is_empty()).count();
+                            let non_empty_count = block_cache.len() - empty_count;
+                            
+                            log::info!(
+                                "Block cache status - size: {} (empty: {}, non-empty: {}), range: {}-{}, last_indexed: {}, gap: {}",
+                                block_cache.len(),
+                                empty_count,
+                                non_empty_count,
+                                min_cached,
+                                max_cached,
+                                last_indexed_slot,
+                                min_cached.saturating_sub(last_indexed_slot)
+                            );
+                        }
+                    }
                 }
             }
 
