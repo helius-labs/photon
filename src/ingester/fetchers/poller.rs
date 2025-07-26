@@ -88,8 +88,15 @@ pub fn get_block_poller_stream(
                 }
 
                 if let Some(block) = block {
-                    // Check if this is an empty block (no transactions)
-                    let is_empty_block = block.transactions.is_empty();
+                    // Check if this block has any compression transactions
+                    let has_compression_txs = block.transactions.iter().any(|tx| {
+                        tx.instruction_groups.iter().any(|group| {
+                            group.outer_instruction.program_id == get_compression_program_id()
+                        })
+                    });
+                    
+                    // Consider block "empty" if it has no compression transactions
+                    let is_empty_block = !has_compression_txs;
                     
                     // If current block is empty, check if we can optimize the cache
                     if is_empty_block && block.metadata.slot > last_indexed_slot + 1 {
@@ -143,15 +150,21 @@ pub fn get_block_poller_stream(
                 if blocks_processed % 1000 == 0 {
                     if let Some(&min_cached) = block_cache.keys().min() {
                         if let Some(&max_cached) = block_cache.keys().max() {
-                            // Count empty vs non-empty blocks
-                            let empty_count = block_cache.values().filter(|b| b.transactions.is_empty()).count();
-                            let non_empty_count = block_cache.len() - empty_count;
+                            // Count blocks with compression transactions
+                            let compression_count = block_cache.values().filter(|b| {
+                                b.transactions.iter().any(|tx| {
+                                    tx.instruction_groups.iter().any(|group| {
+                                        group.outer_instruction.program_id == get_compression_program_id()
+                                    })
+                                })
+                            }).count();
+                            let non_compression_count = block_cache.len() - compression_count;
                             
                             log::info!(
-                                "Block cache status - size: {} (empty: {}, non-empty: {}), range: {}-{}, last_indexed: {}, gap: {}",
+                                "Block cache status - size: {} (non-compression: {}, with-compression: {}), range: {}-{}, last_indexed: {}, gap: {}",
                                 block_cache.len(),
-                                empty_count,
-                                non_empty_count,
+                                non_compression_count,
+                                compression_count,
                                 min_cached,
                                 max_cached,
                                 last_indexed_slot,
