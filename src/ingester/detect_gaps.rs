@@ -532,7 +532,8 @@ fn detect_sequence_gaps_with_metadata(
 
     // Skip gap detection for tree initialization (when unpacked_start_seq == 0)
     // because there's no previous sequence to compare against
-    if unpacked_start_seq > 0 && sorted_sequences[0].sequence > unpacked_start_seq + 1 {
+    // Also skip if unpacked_start_seq is u64::MAX (no state found)
+    if unpacked_start_seq > 0 && unpacked_start_seq != u64::MAX && sorted_sequences[0].sequence > unpacked_start_seq.saturating_add(1) {
         let (before_slot, before_signature) = if let Some(entry) = start_entry {
             (entry.slot, entry.signature)
         } else {
