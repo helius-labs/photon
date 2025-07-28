@@ -5,14 +5,14 @@ use crate::ingester::parser::indexer_events::{
     MerkleTreeSequenceNumberV1, MerkleTreeSequenceNumberV2,
     OutputCompressedAccountWithPackedContext, PublicTransactionEvent,
 };
-use crate::ingester::parser::state_update::StateUpdate;
+use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
 use light_compressed_account::indexer_event::parse::event_from_light_transaction;
 use light_compressed_account::Pubkey as LightPubkey;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-
+use crate::common::typedefs::hash::Hash;
 use super::state_update::AddressQueueUpdate;
 
 pub fn parse_public_transaction_event_v2(
@@ -130,6 +130,23 @@ pub fn create_state_update_v2(
         state_update_event
             .batch_nullify_context
             .extend(event.batch_input_accounts.clone());
+
+        // Create account_transactions for v2 batch input accounts
+        // but only for accounts that are not being created in this same transaction
+        let output_account_hashes: std::collections::HashSet<_> = state_update_event
+            .out_accounts
+            .iter()
+            .map(|acc| acc.account.hash.clone())
+            .collect();
+
+        state_update_event.account_transactions.extend(
+            event.batch_input_accounts.iter()
+                .filter(|batch_account| !output_account_hashes.contains(&Hash::from(batch_account.account_hash)))
+                .map(|batch_account| AccountTransaction {
+                    hash: batch_account.account_hash.into(),
+                    signature: tx,
+                })
+        );
 
         state_update_event.batch_new_addresses.extend(
             event
