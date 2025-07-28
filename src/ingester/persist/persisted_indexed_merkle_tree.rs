@@ -8,6 +8,7 @@ use sea_orm::{
     EntityTrait, QueryFilter, QueryTrait, Set, Statement,
 };
 use solana_pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 
 use super::{compute_parent_hash, persisted_state_tree::ZERO_BYTES, MAX_SQL_INSERTS};
 use crate::common::format_bytes;
@@ -80,6 +81,7 @@ fn ensure_zeroeth_element_exists(
                     index: zeroeth_leaf.leaf_index as usize,
                 },
                 seq: 0,
+                signature: Signature::from([0; 64]), // Placeholder for synthetic element
             },
         );
     }
@@ -124,6 +126,7 @@ fn ensure_top_element_exists(
                         index: top_leaf.leaf_index as usize,
                     },
                     seq: 1,
+                    signature: Signature::from([0; 64]), // Placeholder for synthetic element
                 },
             );
         }
@@ -231,6 +234,31 @@ pub async fn persist_indexed_tree_updates(
             .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
         persist_leaf_nodes(txn, state_tree_leaf_nodes, TREE_HEIGHT_V1 + 1).await?;
+
+        // Add address tree entries to state_tree_histories for unified gap detection
+        let address_tree_history_models = chunk
+            .iter()
+            .map(|x| crate::dao::generated::state_tree_histories::ActiveModel {
+                tree: Set(x.tree.to_bytes().to_vec()),
+                seq: Set(x.seq as i64),
+                leaf_idx: Set(x.leaf.index as i64),
+                transaction_signature: Set(Into::<[u8; 64]>::into(x.signature).to_vec()),
+            })
+            .collect::<Vec<_>>();
+
+        if !address_tree_history_models.is_empty() {
+            let query = crate::dao::generated::state_tree_histories::Entity::insert_many(address_tree_history_models)
+                .on_conflict(
+                    OnConflict::columns([
+                        crate::dao::generated::state_tree_histories::Column::Tree,
+                        crate::dao::generated::state_tree_histories::Column::Seq,
+                    ])
+                    .do_nothing()
+                    .to_owned(),
+                )
+                .build(txn.get_database_backend());
+            txn.execute(query).await?;
+        }
     }
 
     Ok(())
