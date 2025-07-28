@@ -63,6 +63,7 @@ pub struct IndexedTreeLeafUpdate {
     pub leaf: RawIndexedElement,
     pub hash: [u8; 32],
     pub seq: u64,
+    pub signature: Signature,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
