@@ -130,18 +130,56 @@ async fn index_block_metadatas(
     Ok(())
 }
 
+/// Quick check if a block might contain transactions for a specific tree
+fn block_contains_tree(block: &BlockInfo, tree_filter: &solana_pubkey::Pubkey) -> bool {
+    // Check if any transaction might involve the tree
+    for tx in &block.transactions {
+        for instruction_group in &tx.instruction_groups {
+            // Check outer instruction accounts
+            if instruction_group.outer_instruction.accounts.contains(tree_filter) {
+                return true;
+            }
+            
+            // Check inner instruction accounts
+            for inner_instruction in &instruction_group.inner_instructions {
+                if inner_instruction.accounts.contains(tree_filter) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
     rewind_controller: Option<&rewind_controller::RewindController>,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
-    let blocks_len = block_batch.len();
+    // Pre-filter blocks if tree filter is specified
+    let filtered_blocks: Vec<&BlockInfo> = if let Some(ref tree) = tree_filter {
+        block_batch.iter()
+            .filter(|block| block_contains_tree(block, tree))
+            .collect()
+    } else {
+        block_batch.iter().collect()
+    };
+    
+    if filtered_blocks.is_empty() {
+        // Skip empty batches
+        metric! {
+            statsd_count!("blocks_skipped", block_batch.len() as i64);
+        }
+        return Ok(());
+    }
+    
+    let blocks_len = filtered_blocks.len();
     let tx = db.begin().await?;
-    let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
+    let block_metadatas: Vec<&BlockMetadata> = filtered_blocks.iter().map(|b| &b.metadata).collect();
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
-    for block in block_batch {
+    for block in filtered_blocks {
         state_updates.push(derive_block_state_update(
             block,
             rewind_controller,
@@ -151,7 +189,9 @@ pub async fn index_block_batch(
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {
         statsd_count!("blocks_indexed", blocks_len as i64);
+        statsd_count!("blocks_skipped", (block_batch.len() - blocks_len) as i64);
     }
+    log::info!("Indexed {} blocks, skipped {} blocks", blocks_len, block_batch.len() - blocks_len);
     tx.commit().await?;
     Ok(())
 }

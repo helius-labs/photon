@@ -44,6 +44,31 @@ pub fn parse_transaction(
     slot: u64,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<StateUpdate, IngesterError> {
+    // Early check: if tree filter is set and transaction doesn't involve the tree, return empty state update
+    if let Some(ref tree) = tree_filter {
+        let mut involves_tree = false;
+        for instruction_group in &tx.instruction_groups {
+            if instruction_group.outer_instruction.accounts.contains(tree) {
+                involves_tree = true;
+                break;
+            }
+            for inner_instruction in &instruction_group.inner_instructions {
+                if inner_instruction.accounts.contains(tree) {
+                    involves_tree = true;
+                    break;
+                }
+            }
+            if involves_tree {
+                break;
+            }
+        }
+        
+        if !involves_tree {
+            // Return empty state update for transactions that don't involve the target tree
+            return Ok(StateUpdate::new());
+        }
+    }
+    
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 

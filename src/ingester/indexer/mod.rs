@@ -87,10 +87,17 @@ pub async fn index_block_stream(
                     let blocks_indexed = slot - last_indexed_slot_at_start;
                     if blocks_indexed < number_of_blocks_to_backfill {
                         if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
-                            info!(
-                                "Backfilled {} / {} blocks",
-                                blocks_indexed, number_of_blocks_to_backfill
-                            );
+                            if tree_filter.is_some() {
+                                info!(
+                                    "Backfilled {} / {} blocks (filtering for tree: {:?})",
+                                    blocks_indexed, number_of_blocks_to_backfill, tree_filter
+                                );
+                            } else {
+                                info!(
+                                    "Backfilled {} / {} blocks",
+                                    blocks_indexed, number_of_blocks_to_backfill
+                                );
+                            }
                         }
                     } else {
                         if finished_backfill_slot.is_none() {
