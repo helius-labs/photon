@@ -443,7 +443,7 @@ pub async fn index_transaction(
     tx: &str,
 ) {
     let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
-    let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
+    let state_update = parse_transaction(&tx.try_into().unwrap(), 0, None).unwrap();
     persist_state_update_using_connection(db_conn.as_ref(), state_update)
         .await
         .unwrap();
@@ -462,7 +462,7 @@ pub async fn index_multiple_transactions(
     }
     let mut state_updates = Vec::new();
     for transaction_info in transactions_infos {
-        let tx_state_update = parse_transaction(&transaction_info, 0).unwrap();
+        let tx_state_update = parse_transaction(&transaction_info, 0, None).unwrap();
         state_updates.push(tx_state_update);
     }
     let state_update = StateUpdate::merge_updates(state_updates);

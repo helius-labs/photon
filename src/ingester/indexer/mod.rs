@@ -7,7 +7,8 @@ use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult,
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
-    common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
+    common::fetch_current_slot_with_infinite_retry,
+    dao::generated::blocks,
     ingester::{index_block_batch_with_infinite_retries, rewind_controller::RewindController},
 };
 
@@ -53,6 +54,7 @@ pub async fn index_block_stream(
     last_indexed_slot_at_start: u64,
     end_slot: Option<u64>,
     rewind_controller: Option<&RewindController>,
+    tree_filter: Option<solana_pubkey::Pubkey>,
 ) {
     pin_mut!(block_stream);
     let current_slot =
@@ -72,7 +74,14 @@ pub async fn index_block_stream(
 
     while let Some(blocks) = block_stream.next().await {
         let last_slot_in_block = blocks.last().unwrap().metadata.slot;
-        match index_block_batch_with_infinite_retries(db.as_ref(), blocks, rewind_controller).await {
+        match index_block_batch_with_infinite_retries(
+            db.as_ref(),
+            blocks,
+            rewind_controller,
+            tree_filter,
+        )
+        .await
+        {
             Ok(()) => {
                 for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
                     let blocks_indexed = slot - last_indexed_slot_at_start;

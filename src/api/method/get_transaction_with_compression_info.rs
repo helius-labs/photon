@@ -210,6 +210,7 @@ pub async fn get_transaction_helper(
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
         })?,
         slot,
+        None,
     )
     .map_err(|_e| {
         PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
@@ -360,6 +361,7 @@ pub async fn get_transaction_helper_v2(
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
         })?,
         slot,
+        None,
     )
     .map_err(|_e| {
         PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
