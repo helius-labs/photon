@@ -1,13 +1,10 @@
-use tokio::sync::mpsc;
-use thiserror::Error;
 use crate::ingester::detect_gaps::SequenceGap;
+use thiserror::Error;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum RewindCommand {
-    Rewind {
-        to_slot: u64,
-        reason: String,
-    },
+    Rewind { to_slot: u64, reason: String },
 }
 
 #[derive(Debug, Error)]
@@ -45,8 +42,12 @@ impl RewindController {
         let rewind_slot = determine_rewind_slot_from_gaps(gaps);
         let gap_count = gaps.len();
         let reason = format!("Sequence gaps detected: {} gaps found", gap_count);
-        
-        tracing::warn!("Requesting rewind to slot {} due to {} sequence gaps", rewind_slot, gap_count);
+
+        tracing::warn!(
+            "Requesting rewind to slot {} due to {} sequence gaps",
+            rewind_slot,
+            gap_count
+        );
         self.request_rewind(rewind_slot, reason)
     }
 }

@@ -27,6 +27,7 @@ use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_pubkey::Pubkey;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
@@ -98,6 +99,11 @@ struct Args {
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
+
+    /// Index only the specified tree pubkey
+    /// When provided, the indexer will only process updates for this specific tree
+    #[arg(long, default_value = None)]
+    tree: Option<String>,
 }
 
 async fn start_api_server(
@@ -175,6 +181,7 @@ fn continously_index_new_blocks(
     rpc_client: Arc<RpcClient>,
     last_indexed_slot: u64,
     rewind_controller: Option<photon_indexer::ingester::rewind_controller::RewindController>,
+    tree_filter: Option<Pubkey>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let block_stream = block_stream_config.load_block_stream();
@@ -185,6 +192,7 @@ fn continously_index_new_blocks(
             last_indexed_slot,
             None,
             rewind_controller.as_ref(),
+            tree_filter,
         )
         .await;
     })
@@ -230,6 +238,12 @@ async fn main() {
                     yield blocks;
                 }
             };
+            let tree_filter = args.tree.as_ref().map(|tree_str| {
+                tree_str
+                    .parse::<Pubkey>()
+                    .expect("Invalid tree pubkey format")
+            });
+
             index_block_stream(
                 block_stream,
                 db_conn.clone(),
@@ -237,6 +251,7 @@ async fn main() {
                 last_indexed_slot,
                 Some(last_slot),
                 None,
+                tree_filter,
             )
             .await;
         }
@@ -281,7 +296,14 @@ async fn main() {
             };
 
             // Create rewind controller for gap detection
-            let (rewind_controller, rewind_receiver) = photon_indexer::ingester::rewind_controller::RewindController::new();
+            let (rewind_controller, rewind_receiver) =
+                photon_indexer::ingester::rewind_controller::RewindController::new();
+
+            let tree_filter = args.tree.as_ref().map(|tree_str| {
+                tree_str
+                    .parse::<Pubkey>()
+                    .expect("Invalid tree pubkey format")
+            });
 
             let block_stream_config = BlockStreamConfig {
                 rpc_client: rpc_client.clone(),
@@ -298,6 +320,7 @@ async fn main() {
                     rpc_client.clone(),
                     last_indexed_slot,
                     Some(rewind_controller),
+                    tree_filter,
                 )),
                 Some(continously_monitor_photon(
                     db_conn.clone(),

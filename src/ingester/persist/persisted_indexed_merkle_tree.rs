@@ -238,25 +238,29 @@ pub async fn persist_indexed_tree_updates(
         // Add address tree entries to state_tree_histories for unified gap detection
         let address_tree_history_models = chunk
             .iter()
-            .map(|x| crate::dao::generated::state_tree_histories::ActiveModel {
-                tree: Set(x.tree.to_bytes().to_vec()),
-                seq: Set(x.seq as i64),
-                leaf_idx: Set(x.leaf.index as i64),
-                transaction_signature: Set(Into::<[u8; 64]>::into(x.signature).to_vec()),
-            })
+            .map(
+                |x| crate::dao::generated::state_tree_histories::ActiveModel {
+                    tree: Set(x.tree.to_bytes().to_vec()),
+                    seq: Set(x.seq as i64),
+                    leaf_idx: Set(x.leaf.index as i64),
+                    transaction_signature: Set(Into::<[u8; 64]>::into(x.signature).to_vec()),
+                },
+            )
             .collect::<Vec<_>>();
 
         if !address_tree_history_models.is_empty() {
-            let query = crate::dao::generated::state_tree_histories::Entity::insert_many(address_tree_history_models)
-                .on_conflict(
-                    OnConflict::columns([
-                        crate::dao::generated::state_tree_histories::Column::Tree,
-                        crate::dao::generated::state_tree_histories::Column::Seq,
-                    ])
-                    .do_nothing()
-                    .to_owned(),
-                )
-                .build(txn.get_database_backend());
+            let query = crate::dao::generated::state_tree_histories::Entity::insert_many(
+                address_tree_history_models,
+            )
+            .on_conflict(
+                OnConflict::columns([
+                    crate::dao::generated::state_tree_histories::Column::Tree,
+                    crate::dao::generated::state_tree_histories::Column::Seq,
+                ])
+                .do_nothing()
+                .to_owned(),
+            )
+            .build(txn.get_database_backend());
             txn.execute(query).await?;
         }
     }

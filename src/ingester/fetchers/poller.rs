@@ -51,7 +51,7 @@ pub fn get_block_poller_stream(
             0 => 0,
             last_indexed_slot => last_indexed_slot + 1
         };
-        
+
         loop {
             let slot_stream = get_slot_stream(rpc_client.clone(), current_start_slot);
             pin_mut!(slot_stream);
@@ -64,7 +64,7 @@ pub fn get_block_poller_stream(
             pin_mut!(block_stream);
             let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
             let mut rewind_occurred = false;
-            
+
             while let Some(block) = block_stream.next().await {
                 // Check for rewind commands before processing blocks
                 if let Some(ref mut receiver) = rewind_receiver {
@@ -84,11 +84,11 @@ pub fn get_block_poller_stream(
                         }
                     }
                 }
-                
+
                 if rewind_occurred {
                     break; // Exit inner loop to restart streams
                 }
-                
+
                 if let Some(block) = block {
                     block_cache.insert(block.metadata.slot, block);
                 }
@@ -101,7 +101,7 @@ pub fn get_block_poller_stream(
                     yield blocks_to_index;
                 }
             }
-            
+
             if !rewind_occurred {
                 break; // Normal termination
             }

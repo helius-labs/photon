@@ -10,8 +10,7 @@ use photon_indexer::snapshot::{
 };
 
 use crate::snapshot_test_utils::{
-    create_test_snapshot_from_compression_transactions,
-    validate_snapshot_parsing,
+    create_test_snapshot_from_compression_transactions, validate_snapshot_parsing,
 };
 use s3::creds::Credentials;
 use s3::Region;
@@ -126,10 +125,10 @@ async fn test_compression_snapshot_creation_and_parsing() {
     // Get API key from environment
     let api_key = std::env::var("API_KEY")
         .expect("API_KEY environment variable must be set (export API_KEY=\"your-api-key\")");
-    
+
     let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", api_key);
     let snapshot_dir_path = "target/test_snapshots/devnet";
-    
+
     // Create snapshot from real compression transactions
     let snapshot_dir = create_test_snapshot_from_compression_transactions(
         &rpc_url,
@@ -145,7 +144,10 @@ async fn test_compression_snapshot_creation_and_parsing() {
         .expect("Failed to validate snapshot parsing");
 
     assert!(!blocks.is_empty(), "Snapshot should contain blocks");
-    println!("Successfully parsed {} blocks from compression snapshot", blocks.len());
+    println!(
+        "Successfully parsed {} blocks from compression snapshot",
+        blocks.len()
+    );
 
     println!("✓ Compression snapshot test completed successfully!");
     println!("✓ Snapshot directory: {}", snapshot_dir);

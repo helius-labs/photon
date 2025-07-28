@@ -5,7 +5,7 @@ use futures::{pin_mut, Stream, StreamExt};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::mpsc;
 
-use super::{typedefs::block_info::BlockInfo, rewind_controller::RewindCommand};
+use super::{rewind_controller::RewindCommand, typedefs::block_info::BlockInfo};
 
 pub mod grpc;
 pub mod poller;

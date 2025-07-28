@@ -34,6 +34,7 @@ pub mod typedefs;
 fn derive_block_state_update(
     block: &BlockInfo,
     rewind_controller: Option<&rewind_controller::RewindController>,
+    tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<StateUpdate, IngesterError> {
     use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
 
@@ -42,7 +43,7 @@ fn derive_block_state_update(
 
     // Parse each transaction and extract sequences with proper context
     for transaction in &block.transactions {
-        let state_update = parse_transaction(transaction, block.metadata.slot)?;
+        let state_update = parse_transaction(transaction, block.metadata.slot, tree_filter)?;
 
         // Extract sequences with proper slot and signature context
         sequences.extract_state_update_sequences(
@@ -90,8 +91,8 @@ fn derive_block_state_update(
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    derive_block_state_update(block, None)?;
-    persist_state_update(&txn, derive_block_state_update(block, None)?).await?;
+    derive_block_state_update(block, None, None)?;
+    persist_state_update(&txn, derive_block_state_update(block, None, None)?).await?;
     txn.commit().await?;
     Ok(())
 }
@@ -133,6 +134,7 @@ pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
     rewind_controller: Option<&rewind_controller::RewindController>,
+    tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     let blocks_len = block_batch.len();
     let tx = db.begin().await?;
@@ -140,7 +142,11 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(block, rewind_controller)?);
+        state_updates.push(derive_block_state_update(
+            block,
+            rewind_controller,
+            tree_filter,
+        )?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {
@@ -154,6 +160,7 @@ pub async fn index_block_batch_with_infinite_retries(
     db: &DatabaseConnection,
     block_batch: Vec<BlockInfo>,
     rewind_controller: Option<&rewind_controller::RewindController>,
+    tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     loop {
         log::info!(
@@ -170,7 +177,7 @@ pub async fn index_block_batch_with_infinite_retries(
                 .unwrap()
                 .get("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT")
         );
-        match index_block_batch(db, &block_batch, rewind_controller).await {
+        match index_block_batch(db, &block_batch, rewind_controller, tree_filter).await {
             Ok(()) => return Ok(()),
             Err(e) => {
                 // Check if this is a gap-triggered rewind error
