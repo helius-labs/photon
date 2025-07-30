@@ -62,13 +62,13 @@ pub fn parse_transaction(
                 break;
             }
         }
-        
+
         if !involves_tree {
             // Return empty state update for transactions that don't involve the target tree
             return Ok(StateUpdate::new());
         }
     }
-    
+
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
