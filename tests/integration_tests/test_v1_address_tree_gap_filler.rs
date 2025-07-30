@@ -120,7 +120,7 @@ async fn test_fill_v1_address_tree_gaps() -> Result<()> {
 async fn analyze_existing_snapshot_for_all_gaps() -> Result<Vec<SequenceGap>> {
     println!("📂 Analyzing existing snapshot for ALL gaps using comprehensive gap detection...");
 
-    let snapshot_path = "/Users/ananas/dev/photon/target/snapshot_local";
+    let snapshot_path = "target/snapshot_local";
     let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(
         snapshot_path.to_string(),
     ));
@@ -200,7 +200,7 @@ async fn analyze_existing_snapshot() -> Result<Vec<SequenceGap>> {
 
 /// Build a HashSet of all slot numbers that already exist in the current snapshot
 async fn build_existing_slot_index() -> Result<HashSet<u64>> {
-    let snapshot_path = "/Users/ananas/dev/photon/target/snapshot_local";
+    let snapshot_path = "target/snapshot_local";
     let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(
         snapshot_path.to_string(),
     ));
@@ -655,7 +655,7 @@ fn validate_sequence_consistency(updates: &[IndexedTreeLeafUpdate]) -> Result<()
 async fn update_snapshot_with_missing_blocks(missing_blocks: &[BlockInfo]) -> Result<()> {
     println!("💾 Updating snapshot file with missing blocks...");
 
-    let snapshot_path = "/Users/ananas/dev/photon/target/snapshot_local";
+    let snapshot_path = "target/snapshot_local";
     let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(
         snapshot_path.to_string(),
     ));
