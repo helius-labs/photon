@@ -175,6 +175,7 @@ async fn analyze_existing_snapshot_for_all_gaps() -> Result<Vec<SequenceGap>> {
     Ok(all_gaps)
 }
 
+#[allow(unused)]
 async fn analyze_existing_snapshot() -> Result<Vec<SequenceGap>> {
     println!("📂 Analyzing existing snapshot for V1 address tree gaps...");
 
@@ -559,7 +560,7 @@ async fn fetch_missing_blocks(
     );
 
     // Phase 4: Efficient batch block fetching (even if empty)
-    let (mut missing_blocks, mut missing_updates) = if needed_slots.is_empty() {
+    let (missing_blocks, missing_updates) = if needed_slots.is_empty() {
         println!("📦 Phase 4: No new blocks to fetch from signatures");
         (Vec::new(), Vec::new())
     } else {
@@ -578,6 +579,7 @@ async fn fetch_missing_blocks(
     Ok((missing_blocks, missing_updates))
 }
 
+#[allow(unused)]
 fn validate_sequence_consistency(updates: &[IndexedTreeLeafUpdate]) -> Result<()> {
     println!("🔍 Validating sequence consistency after gap filling...");
 

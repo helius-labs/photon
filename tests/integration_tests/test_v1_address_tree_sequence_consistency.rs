@@ -39,7 +39,7 @@ pub struct SequenceGap {
 
     // Tree/context metadata
     pub tree_pubkey: Option<Pubkey>, // Tree pubkey (unified for all tree operations)
-    pub tree_type_string: Option<String>, // Tree type string (for indexed tree updates)
+    pub _tree_type_string: Option<String>, // Tree type string (for indexed tree updates)
     pub field_type: StateUpdateFieldType,
 }
 
@@ -294,7 +294,7 @@ fn detect_sequence_gaps_with_metadata(
                 before_signature: prev_sig.clone(),
                 after_signature: curr_sig.clone(),
                 tree_pubkey,
-                tree_type_string: tree_type_string.clone(),
+                _tree_type_string: tree_type_string.clone(),
                 field_type: field_type.clone(),
             });
         }
