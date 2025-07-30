@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use futures::stream;
 use photon_indexer::ingester::parser::get_compression_program_id;
 use photon_indexer::ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo};
 use photon_indexer::snapshot::{
