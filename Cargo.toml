@@ -35,7 +35,7 @@ path = "src/tools/tree_validator/main.rs"
 
 [[bin]]
 name = "photon-analyze-snapshot"
-path = "analyze_snapshot.rs"
+path = "src/tools/analyze_snapshot.rs"
 
 [dependencies]
 ark-serialize = "0.5"
