@@ -309,7 +309,8 @@ async fn test_comprehensive_state_update_validation() -> Result<()> {
     println!("🔍 Testing Comprehensive StateUpdate Sequence Consistency");
 
     // Load blocks from the created snapshot
-    let snapshot_path = "/Users/tsv/Developer/db/snapshot/old";
+    let snapshot_path =
+        std::env::var("TEST_SNAPSHOT_PATH").unwrap_or_else(|_| "test_data/snapshot".to_string());
     let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(
         snapshot_path.to_string(),
     ));
