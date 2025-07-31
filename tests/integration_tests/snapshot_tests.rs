@@ -1,12 +1,14 @@
 use futures::stream;
-
 use photon_indexer::common::typedefs::hash::Hash;
-
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use photon_indexer::snapshot::{
     create_snapshot_from_byte_stream, get_r2_bucket, get_snapshot_files_with_metadata,
     load_block_stream_from_directory_adapter, load_byte_stream_from_directory_adapter,
     update_snapshot_helper, R2BucketArgs, R2DirectoryAdapter,
+};
+
+use crate::snapshot_test_utils::{
+    create_test_snapshot_from_compression_transactions, validate_snapshot_parsing,
 };
 use s3::creds::Credentials;
 use s3::Region;
@@ -114,4 +116,39 @@ async fn test_basic_snapshotting() {
         let snapshot_blocks_v2: Vec<BlockInfo> = snapshot_blocks_v2.into_iter().flatten().collect();
         assert_eq!(snapshot_blocks_v2, blocks);
     }
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_compression_snapshot_creation_and_parsing() {
+    // Get API key from environment
+    let api_key = std::env::var("API_KEY")
+        .expect("API_KEY environment variable must be set (export API_KEY=\"your-api-key\")");
+
+    let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", api_key);
+    let snapshot_dir_path = "target/test_snapshots/devnet";
+
+    // Create snapshot from real compression transactions
+    let snapshot_dir = create_test_snapshot_from_compression_transactions(
+        &rpc_url,
+        391843372, // Target slot - fetch all compression transactions from current slot down to this slot
+        snapshot_dir_path,
+    )
+    .await
+    .expect("Failed to create test snapshot from compression transactions");
+
+    // Validate that photon can parse the snapshot
+    let blocks = validate_snapshot_parsing(&snapshot_dir)
+        .await
+        .expect("Failed to validate snapshot parsing");
+
+    assert!(!blocks.is_empty(), "Snapshot should contain blocks");
+    println!(
+        "Successfully parsed {} blocks from compression snapshot",
+        blocks.len()
+    );
+
+    println!("✓ Compression snapshot test completed successfully!");
+    println!("✓ Snapshot directory: {}", snapshot_dir);
+    println!("✓ Validated photon can parse the generated snapshot");
 }

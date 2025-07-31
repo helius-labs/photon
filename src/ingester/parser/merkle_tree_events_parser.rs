@@ -35,7 +35,7 @@ pub fn parse_merkle_tree_event(
                     parse_nullifier_event_v1(tx.signature, nullifier_event)
                 }
                 MerkleTreeEvent::V3(indexed_merkle_tree_event) => {
-                    parse_indexed_merkle_tree_update(indexed_merkle_tree_event)
+                    parse_indexed_merkle_tree_update(tx.signature, indexed_merkle_tree_event)
                 }
                 MerkleTreeEvent::BatchAppend(batch_event) => {
                     state_update
@@ -109,6 +109,7 @@ fn parse_nullifier_event_v1(tx: Signature, nullifier_event: NullifierEvent) -> S
 }
 
 fn parse_indexed_merkle_tree_update(
+    signature: Signature,
     indexed_merkle_tree_event: IndexedMerkleTreeEvent,
 ) -> StateUpdate {
     let IndexedMerkleTreeEvent {
@@ -134,6 +135,7 @@ fn parse_indexed_merkle_tree_update(
                 hash: *hash,
                 leaf: *leaf,
                 seq,
+                signature,
             };
             seq += 1;
             state_update.indexed_merkle_tree_updates.insert(
