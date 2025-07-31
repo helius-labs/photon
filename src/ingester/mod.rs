@@ -140,11 +140,6 @@ fn block_contains_tree(block: &BlockInfo, tree_filter: &solana_pubkey::Pubkey) -
             {
                 return true;
             }
-            for inner_instruction in &instruction_group.inner_instructions {
-                if inner_instruction.accounts.contains(tree_filter) {
-                    return true;
-                }
-            }
         }
     }
     false
