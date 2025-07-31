@@ -216,9 +216,9 @@ impl StateUpdateSequences {
             // Check if this is an AddressV1 tree incorrectly in batch operations
             if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
                 if info.tree_type == light_compressed_account::TreeType::AddressV1 {
-                    println!("ERROR: AddressV1 tree {} found in batch_new_addresses - this should not happen!", tree_str);
-                    println!(
-                        "  queue_index: {}, slot: {}, signature: {}",
+                    tracing::error!(
+                        "AddressV1 tree {tree_str} found in batch_new_addresses - this should not happen! \
+                        queue_index: {}, slot: {}, signature: {}",
                         address.queue_index, slot, signature
                     );
                     // Skip this invalid data
