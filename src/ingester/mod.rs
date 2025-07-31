@@ -10,34 +10,30 @@ use sea_orm::DatabaseConnection;
 use sea_orm::DatabaseTransaction;
 use sea_orm::{ConnectionTrait, QueryTrait};
 
-use sea_orm::EntityTrait;
-use sea_orm::Set;
-use sea_orm::TransactionTrait;
-
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
 use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
-use crate::ingester::detect_gaps::detect_all_sequence_gaps;
+use crate::ingester::gap::{RewindController, StateUpdateSequences};
 use crate::metric;
-pub mod detect_gaps;
+use sea_orm::EntityTrait;
+use sea_orm::Set;
+use sea_orm::TransactionTrait;
 pub mod error;
 pub mod fetchers;
+pub mod gap;
 pub mod indexer;
 pub mod parser;
 pub mod persist;
-pub mod rewind_controller;
 pub mod typedefs;
 
 fn derive_block_state_update(
     block: &BlockInfo,
-    rewind_controller: Option<&rewind_controller::RewindController>,
+    rewind_controller: Option<&RewindController>,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<StateUpdate, IngesterError> {
-    use crate::ingester::detect_gaps::StateUpdateSequences;
-
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     let mut sequences = StateUpdateSequences::default();
 
@@ -56,7 +52,7 @@ fn derive_block_state_update(
     }
 
     // Check for gaps with proper context
-    let gaps = detect_all_sequence_gaps(&sequences);
+    let gaps = sequences.detect_all_sequence_gaps();
     if !gaps.is_empty() {
         tracing::warn!(
             "Gaps detected in block {} sequences: {gaps:?}",
@@ -83,7 +79,7 @@ fn derive_block_state_update(
     }
 
     // Update sequence state with latest observed sequences
-    crate::ingester::detect_gaps::update_sequence_state(&sequences);
+    sequences.update_sequence_state();
 
     Ok(StateUpdate::merge_updates(state_updates))
 }
@@ -148,7 +144,7 @@ fn block_contains_tree(block: &BlockInfo, tree_filter: &solana_pubkey::Pubkey) -
 pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
-    rewind_controller: Option<&rewind_controller::RewindController>,
+    rewind_controller: Option<&RewindController>,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     // Pre-filter blocks if tree filter is specified
@@ -199,7 +195,7 @@ pub async fn index_block_batch(
 pub async fn index_block_batch_with_infinite_retries(
     db: &DatabaseConnection,
     block_batch: Vec<BlockInfo>,
-    rewind_controller: Option<&rewind_controller::RewindController>,
+    rewind_controller: Option<&RewindController>,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     loop {

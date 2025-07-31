@@ -5,11 +5,12 @@ use futures::{pin_mut, Stream, StreamExt};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::mpsc;
 
-use super::{rewind_controller::RewindCommand, typedefs::block_info::BlockInfo};
+use super::typedefs::block_info::BlockInfo;
 
 pub mod grpc;
 pub mod poller;
 
+use crate::ingester::gap::RewindCommand;
 use grpc::get_grpc_stream_with_rpc_fallback;
 use poller::get_block_poller_stream;
 

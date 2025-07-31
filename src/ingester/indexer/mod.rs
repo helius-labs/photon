@@ -6,13 +6,12 @@ use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
-use crate::{
-    common::fetch_current_slot_with_infinite_retry,
-    dao::generated::blocks,
-    ingester::{index_block_batch_with_infinite_retries, rewind_controller::RewindController},
-};
-
 use super::typedefs::block_info::BlockInfo;
+use crate::ingester::gap::RewindController;
+use crate::{
+    common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
+    ingester::index_block_batch_with_infinite_retries,
+};
 const POST_BACKFILL_FREQUENCY: u64 = 10;
 const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
@@ -41,7 +40,7 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
             }
             Err(e) => {
                 log::error!("Failed to fetch current slot from database: {}", e);
-                sleep(Duration::from_secs(5));
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     }

@@ -14,11 +14,9 @@ use tokio::sync::mpsc;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
+use crate::ingester::gap::RewindCommand;
 use crate::{
-    ingester::{
-        rewind_controller::RewindCommand,
-        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
-    },
+    ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };

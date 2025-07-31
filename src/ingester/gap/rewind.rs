@@ -1,4 +1,4 @@
-use crate::ingester::detect_gaps::SequenceGap;
+use crate::ingester::gap::SequenceGap;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
@@ -65,7 +65,7 @@ fn determine_rewind_slot_from_gaps(gaps: &[SequenceGap]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ingester::detect_gaps::{SequenceGap, StateUpdateFieldType};
+    use crate::ingester::gap::{SequenceGap, StateUpdateFieldType};
     use solana_pubkey::Pubkey;
 
     #[test]

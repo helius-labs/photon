@@ -22,6 +22,7 @@ use photon_indexer::migration::{
     Migrator, MigratorTrait,
 };
 
+use photon_indexer::ingester::gap::RewindController;
 use photon_indexer::monitor::continously_monitor_photon;
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_block_stream_from_directory_adapter, DirectoryAdapter,
@@ -180,7 +181,7 @@ fn continously_index_new_blocks(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     last_indexed_slot: u64,
-    rewind_controller: Option<photon_indexer::ingester::rewind_controller::RewindController>,
+    rewind_controller: Option<RewindController>,
     tree_filter: Option<Pubkey>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -296,8 +297,7 @@ async fn main() {
             };
 
             // Create rewind controller for gap detection
-            let (rewind_controller, rewind_receiver) =
-                photon_indexer::ingester::rewind_controller::RewindController::new();
+            let (rewind_controller, rewind_receiver) = RewindController::new();
 
             let tree_filter = args.tree.as_ref().map(|tree_str| {
                 tree_str
