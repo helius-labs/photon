@@ -20,6 +20,7 @@ use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
+use crate::ingester::detect_gaps::detect_all_sequence_gaps;
 use crate::metric;
 pub mod detect_gaps;
 pub mod error;
@@ -35,7 +36,7 @@ fn derive_block_state_update(
     rewind_controller: Option<&rewind_controller::RewindController>,
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<StateUpdate, IngesterError> {
-    use crate::ingester::detect_gaps::{detect_gaps_from_sequences, StateUpdateSequences};
+    use crate::ingester::detect_gaps::StateUpdateSequences;
 
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     let mut sequences = StateUpdateSequences::default();
@@ -55,7 +56,7 @@ fn derive_block_state_update(
     }
 
     // Check for gaps with proper context
-    let gaps = detect_gaps_from_sequences(&sequences);
+    let gaps = detect_all_sequence_gaps(&sequences);
     if !gaps.is_empty() {
         tracing::warn!(
             "Gaps detected in block {} sequences: {gaps:?}",
@@ -129,12 +130,9 @@ async fn index_block_metadatas(
     Ok(())
 }
 
-/// Quick check if a block might contain transactions for a specific tree
 fn block_contains_tree(block: &BlockInfo, tree_filter: &solana_pubkey::Pubkey) -> bool {
-    // Check if any transaction might involve the tree
     for tx in &block.transactions {
         for instruction_group in &tx.instruction_groups {
-            // Check outer instruction accounts
             if instruction_group
                 .outer_instruction
                 .accounts
@@ -142,8 +140,6 @@ fn block_contains_tree(block: &BlockInfo, tree_filter: &solana_pubkey::Pubkey) -
             {
                 return true;
             }
-
-            // Check inner instruction accounts
             for inner_instruction in &instruction_group.inner_instructions {
                 if inner_instruction.accounts.contains(tree_filter) {
                     return true;

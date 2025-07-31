@@ -4,6 +4,7 @@ use crate::ingester::parser::{
     tree_info::{TreeTypeSeq, QUEUE_TREE_MAPPING},
 };
 use lazy_static::lazy_static;
+use log::debug;
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -43,9 +44,7 @@ pub struct SequenceGap {
     pub before_signature: String,
     pub after_signature: String,
 
-    // Tree/context metadata
-    pub tree_pubkey: Option<Pubkey>, // Tree pubkey (unified for all tree operations)
-    //  pub tree_type_string: Option<String>, // Tree type string (for indexed tree updates)
+    pub tree_pubkey: Option<Pubkey>,
     pub field_type: StateUpdateFieldType,
 }
 
@@ -71,18 +70,13 @@ pub struct StateUpdateSequences {
 pub fn update_sequence_state(sequences: &StateUpdateSequences) {
     let mut state = SEQUENCE_STATE.lock().unwrap();
 
-    // Update indexed tree sequences
     for ((tree_pubkey, _tree_type_id), entries) in &sequences.indexed_tree_seqs {
         if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
             let tree_str = tree_pubkey.to_string();
-            // Check the actual tree type from the mapping
             if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
                 match info.tree_type {
                     light_compressed_account::TreeType::AddressV1 => {
                         state.insert(tree_str, TreeTypeSeq::AddressV1(max_entry.clone()));
-                    }
-                    light_compressed_account::TreeType::StateV1 => {
-                        state.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
                     }
                     _ => {
                         // Other tree types not handled in indexed_tree_seqs
@@ -113,18 +107,10 @@ pub fn update_sequence_state(sequences: &StateUpdateSequences) {
                 if let TreeTypeSeq::AddressV2(input_queue_entry, _) = current_seq {
                     input_queue_entry.clone()
                 } else {
-                    SequenceEntry {
-                        sequence: 0,
-                        slot: 0,
-                        signature: String::new(),
-                    }
+                    SequenceEntry::default()
                 }
             } else {
-                SequenceEntry {
-                    sequence: 0,
-                    slot: 0,
-                    signature: String::new(),
-                }
+                SequenceEntry::default()
             };
             state.insert(
                 tree_str,
@@ -152,9 +138,10 @@ pub fn update_sequence_state(sequences: &StateUpdateSequences) {
                         seq_context.output_queue_entry = Some(max_entry.clone());
                         state.insert(tree_str, TreeTypeSeq::StateV2(seq_context));
                     }
-                    _ => {
+                    light_compressed_account::TreeType::StateV1 => {
                         state.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
                     }
+                    _ => {}
                 }
             }
         }
@@ -209,7 +196,7 @@ impl StateUpdateSequences {
         // Extract batch new address queue indexes
         for address in &state_update.batch_new_addresses {
             let tree_str = address.tree.0.to_string();
-            println!(
+            debug!(
                 "DEBUG: Extracting batch_new_address for tree: {}, queue_index: {}",
                 tree_str, address.queue_index
             );
@@ -271,11 +258,6 @@ impl StateUpdateSequences {
     }
 }
 
-/// Detects gaps from a single StateUpdateSequences struct
-pub fn detect_gaps_from_sequences(sequences: &StateUpdateSequences) -> Vec<SequenceGap> {
-    detect_all_sequence_gaps(sequences)
-}
-
 /// Comprehensive gap detection function that takes a vector of StateUpdateSequences and returns ALL gaps found
 /// Aggregates sequences from multiple StateUpdates and detects gaps across all transactions
 pub fn detect_all_sequence_gaps(sequences: &StateUpdateSequences) -> Vec<SequenceGap> {
@@ -283,14 +265,14 @@ pub fn detect_all_sequence_gaps(sequences: &StateUpdateSequences) -> Vec<Sequenc
 
     // Check indexed tree updates
     for ((tree_pubkey, tree_type_id), seqs) in &sequences.indexed_tree_seqs {
-        println!(
+        debug!(
             "DEBUG: Processing indexed_tree_seqs - tree: {}, tree_type_id: {}",
             tree_pubkey, tree_type_id
         );
         let gaps = detect_sequence_gaps_with_metadata(
             seqs,
             Some(*tree_pubkey),
-            None, // TODO: use queue pubkey if we only have queue pubkey such as for outputs of batched trees
+            None,
             StateUpdateFieldType::IndexedTreeUpdate,
         );
         all_gaps.extend(gaps);
@@ -365,10 +347,6 @@ fn detect_sequence_gaps_with_metadata(
     queue_pubkey: Option<Pubkey>,
     field_type: StateUpdateFieldType,
 ) -> Vec<SequenceGap> {
-    if field_type == StateUpdateFieldType::BatchNullifyContext {
-        // For batch nullify context, we don't have tree or queue pubkey, so we can't detect gaps
-        return Vec::new();
-    }
     if sequences.len() < 2 {
         return Vec::new();
     }
@@ -381,7 +359,7 @@ fn detect_sequence_gaps_with_metadata(
 
         let state = SEQUENCE_STATE.lock().unwrap();
         if let Some(current_seq) = state.get(&tree_str) {
-            println!(
+            debug!(
                 "DEBUG: Using current sequence state for tree {}: {:?}",
                 tree_str, current_seq
             );
@@ -401,8 +379,8 @@ fn detect_sequence_gaps_with_metadata(
             TreeTypeSeq::default()
         }
     } else {
-        println!("field_type: {:?}", field_type);
-        println!(
+        debug!("field_type: {:?}", field_type);
+        debug!(
             "tree_pubkey: {:?}, queue_pubkey: {:?}",
             tree_pubkey, queue_pubkey
         );
@@ -416,14 +394,14 @@ fn detect_sequence_gaps_with_metadata(
     let (unpacked_start_seq, start_entry) = match field_type {
         StateUpdateFieldType::IndexedTreeUpdate => match start_seq {
             TreeTypeSeq::AddressV1(entry) => {
-                println!(
+                debug!(
                     "DEBUG: IndexedTreeUpdate with AddressV1, seq: {}",
                     entry.sequence
                 );
                 (entry.sequence, Some(entry))
             }
             _ => {
-                println!(
+                debug!(
                     "DEBUG: IndexedTreeUpdate with unsupported tree type: {:?}",
                     start_seq
                 );
