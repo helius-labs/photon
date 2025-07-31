@@ -6,17 +6,23 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let snapshot_dir = std::env::args()
-        .nth(1)
-        .expect("Please provide snapshot directory");
-    let target_tree = std::env::args().nth(2);
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!(
+            "Usage: {} <snapshot_directory> [target_tree_pubkey]",
+            args[0]
+        );
+        std::process::exit(1);
+    }
+    let snapshot_dir = &args[1];
+    let target_tree = args.get(2).cloned();
 
     println!("Analyzing snapshot in: {}", snapshot_dir);
     if let Some(ref tree) = target_tree {
         println!("Target tree filter: {}", tree);
     }
 
-    let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+    let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir.clone()));
     let block_stream = load_block_stream_from_directory_adapter(directory_adapter).await;
 
     let mut total_blocks = 0;
@@ -26,16 +32,18 @@ async fn main() -> anyhow::Result<()> {
     let mut blocks_with_target_tree = 0;
     let mut target_tree_txs = 0;
 
-    let target_tree_pubkey = target_tree
-        .as_ref()
-        .map(|s| s.parse::<solana_pubkey::Pubkey>().unwrap());
-
     let blocks: Vec<_> = block_stream
         .collect::<Vec<_>>()
         .await
         .into_iter()
         .flatten()
         .collect();
+
+    let target_tree_pubkey = target_tree
+        .as_ref()
+        .map(|s| s.parse::<solana_pubkey::Pubkey>())
+        .transpose()
+        .map_err(|e| anyhow::anyhow!("Invalid target tree pubkey: {}", e))?;
 
     for block in &blocks {
         total_blocks += 1;
