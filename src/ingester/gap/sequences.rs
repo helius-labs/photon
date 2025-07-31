@@ -73,13 +73,18 @@ impl StateUpdateSequences {
                 tree_str, address.queue_index
             );
 
-            // Check if this is an AddressV1 tree incorrectly in batch operations
+            // Check if this tree should not be in batch operations
             if let Some(info) = QUEUE_TREE_MAPPING.get(&tree_str) {
-                if info.tree_type == light_compressed_account::TreeType::AddressV1 {
+                // batch_new_addresses should only contain AddressV2 trees
+                if info.tree_type != light_compressed_account::TreeType::AddressV2 {
                     tracing::error!(
-                        "AddressV1 tree {tree_str} found in batch_new_addresses - this should not happen! \
+                        "{:?} wrong tree {tree_str} found in batch_new_addresses \
+                        Only AddressV2 trees should be in batch new address operations. \
                         queue_index: {}, slot: {}, signature: {}",
-                        address.queue_index, slot, signature
+                        info.tree_type,
+                        address.queue_index,
+                        slot,
+                        signature
                     );
                     // Skip this invalid data
                     continue;
@@ -150,7 +155,13 @@ impl StateUpdateSequences {
                         light_compressed_account::TreeType::AddressV1 => {
                             updates.insert(tree_str, TreeTypeSeq::AddressV1(max_entry.clone()));
                         }
-                        _ => {}
+                        tree_type => {
+                            tracing::error!(
+                                "Unhandled tree type {:?} for tree {} in indexed_tree_seqs",
+                                tree_type,
+                                tree_str
+                            );
+                        }
                     }
                 }
             }
@@ -201,7 +212,13 @@ impl StateUpdateSequences {
                         light_compressed_account::TreeType::StateV1 => {
                             updates.insert(tree_str, TreeTypeSeq::StateV1(max_entry.clone()));
                         }
-                        _ => {}
+                        tree_type => {
+                            tracing::error!(
+                                "Unhandled tree type {:?} for tree {} in out_account_leaf_indexes",
+                                tree_type,
+                                tree_str
+                            );
+                        }
                     }
                 }
             }
