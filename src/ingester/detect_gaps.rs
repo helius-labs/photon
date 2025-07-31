@@ -104,8 +104,8 @@ pub fn update_sequence_state(sequences: &StateUpdateSequences) {
     for (tree_pubkey, entries) in &sequences.batch_address_queue_indexes {
         if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
             let tree_str = tree_pubkey.to_string();
-            println!(
-                "DEBUG: Updating batch_address_queue_indexes for tree: {}, sequence: {}",
+            tracing::debug!(
+                "Updating batch_address_queue_indexes for tree: {}, sequence: {}",
                 tree_str, max_entry.sequence
             );
             let input_queue_entry = if let Some(current_seq) = state.get(&tree_str) {
