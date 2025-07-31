@@ -116,7 +116,7 @@ async fn test_reindex_fixes_wrong_zeroeth_element(
         leaf: correct_zeroeth_leaf,
         hash: correct_hash.0,
         seq: 2, // Higher seq number to ensure update
-        signature: Default::default(),
+        signature: [1u8; 64], // Mock signature for testing purposes
     };
 
     // Create HashMap with the update
