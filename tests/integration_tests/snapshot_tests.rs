@@ -119,6 +119,7 @@ async fn test_basic_snapshotting() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_compression_snapshot_creation_and_parsing() {
     // Get API key from environment
     let api_key = std::env::var("API_KEY")

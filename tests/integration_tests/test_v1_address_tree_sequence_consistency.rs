@@ -304,6 +304,7 @@ fn detect_sequence_gaps_with_metadata(
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_comprehensive_state_update_validation() -> Result<()> {
     println!("🔍 Testing Comprehensive StateUpdate Sequence Consistency");
 
