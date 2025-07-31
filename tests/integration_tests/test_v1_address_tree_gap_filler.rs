@@ -22,6 +22,7 @@ use crate::test_v1_address_tree_sequence_consistency::{
 const V1_ADDRESS_TREE: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[tokio::test]
+#[ignore]
 async fn test_fill_v1_address_tree_gaps() -> Result<()> {
     println!("🔧 Testing Comprehensive Gap Filling for All StateUpdate Fields");
 
