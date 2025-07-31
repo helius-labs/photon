@@ -29,13 +29,6 @@ impl Default for TreeTypeSeq {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct StateV2Seq {
-    pub input_queue_index: u64,
-    pub batch_event_seq: u64,
-    pub output_queue_index: u64,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct StateV2SeqWithContext {
     pub input_queue_entry: Option<SequenceEntry>,
