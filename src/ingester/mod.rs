@@ -20,7 +20,6 @@ use self::persist::MAX_SQL_INSERTS;
 use self::typedefs::block_info::BlockInfo;
 use self::typedefs::block_info::BlockMetadata;
 use crate::dao::generated::blocks;
-use crate::ingester::detect_gaps::SEQUENCE_STATE;
 use crate::metric;
 pub mod detect_gaps;
 pub mod error;
@@ -213,20 +212,6 @@ pub async fn index_block_batch_with_infinite_retries(
     tree_filter: Option<solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     loop {
-        log::info!(
-            "amt sequence state {:?}",
-            SEQUENCE_STATE
-                .lock()
-                .unwrap()
-                .get("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2")
-        );
-        log::info!(
-            "smt sequence state {:?}",
-            SEQUENCE_STATE
-                .lock()
-                .unwrap()
-                .get("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT")
-        );
         match index_block_batch(db, &block_batch, rewind_controller, tree_filter).await {
             Ok(()) => return Ok(()),
             Err(e) => {
