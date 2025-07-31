@@ -4,11 +4,10 @@ use crate::ingester::parser::{
     tree_info::{TreeTypeSeq, QUEUE_TREE_MAPPING},
 };
 use lazy_static::lazy_static;
-use log::debug;
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tracing::warn;
+use tracing::debug;
 
 // Global sequence state tracker to maintain latest observed sequences
 lazy_static! {
@@ -68,7 +67,13 @@ pub struct StateUpdateSequences {
 
 /// Updates the global sequence state with the latest observed sequences
 pub fn update_sequence_state(sequences: &StateUpdateSequences) {
-    let mut state = SEQUENCE_STATE.lock().unwrap();
+    let mut state = match SEQUENCE_STATE.lock() {
+        Ok(state) => state,
+        Err(e) => {
+            debug!("Failed to acquire sequence state lock: {}", e);
+            return;
+        }
+    };
 
     for ((tree_pubkey, _tree_type_id), entries) in &sequences.indexed_tree_seqs {
         if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
@@ -98,10 +103,9 @@ pub fn update_sequence_state(sequences: &StateUpdateSequences) {
     for (tree_pubkey, entries) in &sequences.batch_address_queue_indexes {
         if let Some(max_entry) = entries.iter().max_by_key(|e| e.sequence) {
             let tree_str = tree_pubkey.to_string();
-            tracing::debug!(
+            debug!(
                 "Updating batch_address_queue_indexes for tree: {}, sequence: {}",
-                tree_str,
-                max_entry.sequence
+                tree_str, max_entry.sequence
             );
             let input_queue_entry = if let Some(current_seq) = state.get(&tree_str) {
                 if let TreeTypeSeq::AddressV2(input_queue_entry, _) = current_seq {
@@ -197,7 +201,7 @@ impl StateUpdateSequences {
         for address in &state_update.batch_new_addresses {
             let tree_str = address.tree.0.to_string();
             debug!(
-                "DEBUG: Extracting batch_new_address for tree: {}, queue_index: {}",
+                "Extracting batch_new_address for tree: {}, queue_index: {}",
                 tree_str, address.queue_index
             );
 
@@ -266,7 +270,7 @@ pub fn detect_all_sequence_gaps(sequences: &StateUpdateSequences) -> Vec<Sequenc
     // Check indexed tree updates
     for ((tree_pubkey, tree_type_id), seqs) in &sequences.indexed_tree_seqs {
         debug!(
-            "DEBUG: Processing indexed_tree_seqs - tree: {}, tree_type_id: {}",
+            "Processing indexed_tree_seqs - tree: {}, tree_type_id: {}",
             tree_pubkey, tree_type_id
         );
         let gaps = detect_sequence_gaps_with_metadata(
@@ -354,160 +358,9 @@ fn detect_sequence_gaps_with_metadata(
     let mut sorted_sequences = sequences.to_vec();
     sorted_sequences.sort_by_key(|entry| entry.sequence);
     let mut gaps = Vec::new();
-    let start_seq = if let Some(tree) = tree_pubkey {
-        let tree_str = tree.to_string();
 
-        let state = SEQUENCE_STATE.lock().unwrap();
-        if let Some(current_seq) = state.get(&tree_str) {
-            debug!(
-                "DEBUG: Using current sequence state for tree {}: {:?}",
-                tree_str, current_seq
-            );
-            current_seq.clone()
-        } else {
-            warn!("No current sequence state found for tree {}", tree_str);
-            TreeTypeSeq::default()
-        }
-    } else if let Some(queue_pubkey) = queue_pubkey {
-        let queue_str = queue_pubkey.to_string();
-        // This could be an issue in case of batched output queue updates.
-        let state = SEQUENCE_STATE.lock().unwrap();
-        if let Some(current_seq) = state.get(&queue_str) {
-            current_seq.clone()
-        } else {
-            warn!("No current sequence state found for queue {}", queue_str);
-            TreeTypeSeq::default()
-        }
-    } else {
-        debug!("field_type: {:?}", field_type);
-        debug!(
-            "tree_pubkey: {:?}, queue_pubkey: {:?}",
-            tree_pubkey, queue_pubkey
-        );
-        warn!(
-            "No current sequence state found for queue {:?} and tree {:?}",
-            queue_pubkey, tree_pubkey
-        );
-        TreeTypeSeq::default()
-    };
-
-    let (unpacked_start_seq, start_entry) = match field_type {
-        StateUpdateFieldType::IndexedTreeUpdate => match start_seq {
-            TreeTypeSeq::AddressV1(entry) => {
-                debug!(
-                    "DEBUG: IndexedTreeUpdate with AddressV1, seq: {}",
-                    entry.sequence
-                );
-                (entry.sequence, Some(entry))
-            }
-            _ => {
-                debug!(
-                    "DEBUG: IndexedTreeUpdate with unsupported tree type: {:?}",
-                    start_seq
-                );
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        },
-        StateUpdateFieldType::BatchMerkleTreeEventAddressAppend => {
-            if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
-                (entry.sequence, Some(entry))
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::BatchNewAddress => {
-            if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
-                (entry.sequence, Some(entry))
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::BatchMerkleTreeEventAppend => {
-            if let TreeTypeSeq::StateV2(seq_context) = start_seq {
-                if let Some(entry) = &seq_context.batch_event_entry {
-                    (entry.sequence, Some(entry.clone()))
-                } else {
-                    (0, None)
-                }
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::BatchMerkleTreeEventNullify => {
-            if let TreeTypeSeq::StateV2(seq_context) = start_seq {
-                if let Some(entry) = &seq_context.batch_event_entry {
-                    (entry.sequence, Some(entry.clone()))
-                } else {
-                    (0, None)
-                }
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::LeafNullification => {
-            if let TreeTypeSeq::StateV1(entry) = start_seq {
-                (entry.sequence, Some(entry))
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::OutAccount => {
-            if let TreeTypeSeq::StateV1(entry) = start_seq {
-                (entry.sequence, Some(entry))
-            } else if let TreeTypeSeq::StateV2(seq_context) = start_seq {
-                if let Some(entry) = &seq_context.output_queue_entry {
-                    (entry.sequence, Some(entry.clone()))
-                } else {
-                    (0, None)
-                }
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-        StateUpdateFieldType::BatchNullifyContext => {
-            if let TreeTypeSeq::StateV2(seq_context) = start_seq {
-                if let Some(entry) = &seq_context.input_queue_entry {
-                    (entry.sequence, Some(entry.clone()))
-                } else {
-                    (0, None)
-                }
-            } else {
-                warn!(
-                    "No current sequence state found for queue {:?} and tree {:?}",
-                    queue_pubkey, tree_pubkey
-                );
-                (u64::MAX, None)
-            }
-        }
-    };
+    let start_seq = get_current_sequence_state(tree_pubkey, queue_pubkey, &field_type);
+    let (unpacked_start_seq, start_entry) = extract_sequence_info(&start_seq, &field_type);
 
     // Skip gap detection for tree initialization (when unpacked_start_seq == 0)
     // because there's no previous sequence to compare against
@@ -531,6 +384,7 @@ fn detect_sequence_gaps_with_metadata(
             field_type: field_type.clone(),
         });
     }
+
     for i in 1..sorted_sequences.len() {
         let prev_entry = &sorted_sequences[i - 1];
         let curr_entry = &sorted_sequences[i];
@@ -548,4 +402,146 @@ fn detect_sequence_gaps_with_metadata(
     }
 
     gaps
+}
+
+/// Gets the current sequence state from the global state tracker
+fn get_current_sequence_state(
+    tree_pubkey: Option<Pubkey>,
+    queue_pubkey: Option<Pubkey>,
+    field_type: &StateUpdateFieldType,
+) -> TreeTypeSeq {
+    let state = match SEQUENCE_STATE.lock() {
+        Ok(state) => state,
+        Err(e) => {
+            debug!("Failed to acquire sequence state lock: {}", e);
+            return TreeTypeSeq::default();
+        }
+    };
+
+    if let Some(tree) = tree_pubkey {
+        let tree_str = tree.to_string();
+        if let Some(current_seq) = state.get(&tree_str) {
+            debug!(
+                "Using current sequence state for tree {}: {:?}",
+                tree_str, current_seq
+            );
+            current_seq.clone()
+        } else {
+            debug!("No current sequence state found for tree {}", tree_str);
+            TreeTypeSeq::default()
+        }
+    } else if let Some(queue_pubkey) = queue_pubkey {
+        let queue_str = queue_pubkey.to_string();
+        if let Some(current_seq) = state.get(&queue_str) {
+            current_seq.clone()
+        } else {
+            debug!("No current sequence state found for queue {}", queue_str);
+            TreeTypeSeq::default()
+        }
+    } else {
+        debug!(
+            "No tree/queue pubkey provided for field_type: {:?}",
+            field_type
+        );
+        TreeTypeSeq::default()
+    }
+}
+
+/// Extracts sequence information based on field type and tree type
+///
+/// Returns `(sequence_number, optional_entry)` where:
+/// - `u64::MAX` indicates invalid state - tree type mismatch or unexpected configuration.
+///   Gap detection will be skipped entirely for these cases.
+/// - `0` indicates valid initial state - the expected tree type exists but the specific
+///   sequence entry hasn't been initialized yet. Gap detection remains active.
+/// - Any other value represents an actual sequence number from existing state.
+///
+/// This distinction is important because:
+/// - Invalid configurations (u64::MAX) should not trigger false-positive gap alerts
+/// - Valid but uninitialized sequences (0) should still detect gaps if the first
+///   observed sequence is > 1
+fn extract_sequence_info(
+    start_seq: &TreeTypeSeq,
+    field_type: &StateUpdateFieldType,
+) -> (u64, Option<SequenceEntry>) {
+    match field_type {
+        StateUpdateFieldType::IndexedTreeUpdate => match start_seq {
+            TreeTypeSeq::AddressV1(entry) => {
+                debug!("IndexedTreeUpdate with AddressV1, seq: {}", entry.sequence);
+                (entry.sequence, Some(entry.clone()))
+            }
+            _ => {
+                debug!(
+                    "IndexedTreeUpdate with unsupported tree type: {:?}",
+                    start_seq
+                );
+                (u64::MAX, None)
+            }
+        },
+        StateUpdateFieldType::BatchMerkleTreeEventAddressAppend
+        | StateUpdateFieldType::BatchNewAddress => {
+            if let TreeTypeSeq::AddressV2(_, entry) = start_seq {
+                (entry.sequence, Some(entry.clone()))
+            } else {
+                debug!(
+                    "Expected AddressV2 for {:?}, got {:?}",
+                    field_type, start_seq
+                );
+                (u64::MAX, None)
+            }
+        }
+        StateUpdateFieldType::BatchMerkleTreeEventAppend
+        | StateUpdateFieldType::BatchMerkleTreeEventNullify => {
+            if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+                if let Some(entry) = &seq_context.batch_event_entry {
+                    (entry.sequence, Some(entry.clone()))
+                } else {
+                    (0, None)
+                }
+            } else {
+                debug!("Expected StateV2 for {:?}, got {:?}", field_type, start_seq);
+                (u64::MAX, None)
+            }
+        }
+        StateUpdateFieldType::LeafNullification => {
+            if let TreeTypeSeq::StateV1(entry) = start_seq {
+                (entry.sequence, Some(entry.clone()))
+            } else {
+                debug!(
+                    "Expected StateV1 for LeafNullification, got {:?}",
+                    start_seq
+                );
+                (u64::MAX, None)
+            }
+        }
+        StateUpdateFieldType::OutAccount => match start_seq {
+            TreeTypeSeq::StateV1(entry) => (entry.sequence, Some(entry.clone())),
+            TreeTypeSeq::StateV2(seq_context) => {
+                if let Some(entry) = &seq_context.output_queue_entry {
+                    (entry.sequence, Some(entry.clone()))
+                } else {
+                    (0, None)
+                }
+            }
+            _ => {
+                debug!("Expected StateV1/V2 for OutAccount, got {:?}", start_seq);
+                (u64::MAX, None)
+            }
+        },
+        StateUpdateFieldType::BatchNullifyContext => {
+            if let TreeTypeSeq::StateV2(seq_context) = start_seq {
+                if let Some(entry) = &seq_context.input_queue_entry {
+                    (entry.sequence, Some(entry.clone()))
+                } else {
+                    (0, None)
+                }
+            } else {
+                debug!(
+                    "Expected StateV2 for BatchNullifyContext, got {:?}",
+                    start_seq
+                );
+                (u64::MAX, None)
+            }
+        }
+    }
 }
