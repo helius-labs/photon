@@ -1640,7 +1640,7 @@ async fn test_update_indexed_merkle_tree(
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         for (indexed_element, seq) in permutation {
             let mut indexed_leaf_updates = HashMap::new();
-            let _ = indexed_leaf_updates.insert(
+            indexed_leaf_updates.insert(
                 (tree, index as u64),
                 IndexedTreeLeafUpdate {
                     tree,
