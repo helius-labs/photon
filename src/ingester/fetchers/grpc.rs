@@ -31,7 +31,7 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::fetchers::poller::get_block_poller_stream;
-use crate::ingester::rewind_controller::RewindCommand;
+use crate::ingester::gap::RewindCommand;
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
