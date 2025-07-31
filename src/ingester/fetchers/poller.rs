@@ -20,6 +20,7 @@ use crate::{
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
+use crate::ingester::parser::get_compression_program_id;
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 
@@ -62,7 +63,8 @@ pub fn get_block_poller_stream(
             pin_mut!(block_stream);
             let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
             let mut rewind_occurred = false;
-            
+             let mut blocks_processed = 0u64;
+
             while let Some(block) = block_stream.next().await {
                 // Check for rewind commands before processing blocks
                 if let Some(ref mut receiver) = rewind_receiver {
