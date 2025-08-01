@@ -19,6 +19,7 @@ use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_
 use solana_pubkey::pubkey;
 
 static ACCOUNT_COMPRESSION_PROGRAM_ID: OnceLock<Pubkey> = OnceLock::new();
+
 pub fn get_compression_program_id() -> Pubkey {
     *ACCOUNT_COMPRESSION_PROGRAM_ID
         .get_or_init(|| pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq"))

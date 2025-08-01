@@ -15,12 +15,12 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::ingester::gap::RewindCommand;
+use crate::ingester::parser::get_compression_program_id;
 use crate::{
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
-use crate::ingester::parser::get_compression_program_id;
 
 const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
 
@@ -90,67 +90,7 @@ pub fn get_block_poller_stream(
                 }
 
                 if let Some(block) = block {
-                    // Check if this block has any compression transactions
-                    let has_compression_txs = block.transactions.iter().any(|tx| {
-                        tx.instruction_groups.iter().any(|group| {
-                            group.outer_instruction.program_id == get_compression_program_id()
-                        })
-                    });
-                    
-                    // Consider block "empty" if it has no compression transactions
-                    let is_empty_block = !has_compression_txs;
-                    
-                    // If current block is empty, check if we can optimize the cache
-                    if is_empty_block && block.metadata.slot > last_indexed_slot + 1 {
-                        // Remove any previous empty blocks that are consecutive
-                        let parent_slot = block.metadata.parent_slot;
-                        if let Some(parent_block) = block_cache.get(&parent_slot) {
-                            // Check if parent block also has no compression transactions
-                            let parent_has_compression = parent_block.transactions.iter().any(|tx| {
-                                tx.instruction_groups.iter().any(|group| {
-                                    group.outer_instruction.program_id == get_compression_program_id()
-                                })
-                            });
-                            
-                            if !parent_has_compression {
-                                // Remove the parent empty block since we have a newer empty block
-                                block_cache.remove(&parent_slot);
-                                if blocks_processed % 100 == 0 {
-                                    log::debug!("Removed non-compression block at slot {}", parent_slot);
-                                }
-                                
-                                // Also remove any other consecutive empty blocks before this
-                                let mut check_slot = parent_slot.saturating_sub(1);
-                                while check_slot > last_indexed_slot {
-                                    if let Some(check_block) = block_cache.get(&check_slot) {
-                                        let check_has_compression = check_block.transactions.iter().any(|tx| {
-                                            tx.instruction_groups.iter().any(|group| {
-                                                group.outer_instruction.program_id == get_compression_program_id()
-                                            })
-                                        });
-                                        
-                                        if !check_has_compression {
-                                            block_cache.remove(&check_slot);
-                                            check_slot = check_slot.saturating_sub(1);
-                                        } else {
-                                            break;
-                                        }
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Log warning if cache is getting large
-                    if block_cache.len() > 50000 && blocks_processed % 100 == 0 {
-                        log::warn!(
-                            "Cache size is large: {} blocks. Consider restarting with --start-slot closer to current activity",
-                            block_cache.len()
-                        );
-                    }
-                    
+                    remove_empty_blocks_from_cache(&mut block_cache, &block, last_indexed_slot, blocks_processed);
                     block_cache.insert(block.metadata.slot, block);
                 }
                 let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
@@ -161,35 +101,10 @@ pub fn get_block_poller_stream(
                 if !blocks_to_index.is_empty() {
                     yield blocks_to_index;
                 }
-                
+
                 // Log cache status periodically
                 blocks_processed += 1;
-                if blocks_processed % 1000 == 0 {
-                    if let Some(&min_cached) = block_cache.keys().min() {
-                        if let Some(&max_cached) = block_cache.keys().max() {
-                            // Count blocks with compression transactions
-                            let compression_count = block_cache.values().filter(|b| {
-                                b.transactions.iter().any(|tx| {
-                                    tx.instruction_groups.iter().any(|group| {
-                                        group.outer_instruction.program_id == get_compression_program_id()
-                                    })
-                                })
-                            }).count();
-                            let non_compression_count = block_cache.len() - compression_count;
-                            
-                            log::info!(
-                                "Block cache status - size: {} (non-compression: {}, with-compression: {}), range: {}-{}, last_indexed: {}, gap: {}",
-                                block_cache.len(),
-                                non_compression_count,
-                                compression_count,
-                                min_cached,
-                                max_cached,
-                                last_indexed_slot,
-                                min_cached.saturating_sub(last_indexed_slot)
-                            );
-                        }
-                    }
-                }
+                log_cache_status(&block_cache, last_indexed_slot, blocks_processed);
             }
 
             if !rewind_occurred {
@@ -265,5 +180,95 @@ pub async fn fetch_block_with_infinite_retries(
                 }
             }
         }
+    }
+}
+
+fn has_compression_transactions(block: &BlockInfo) -> bool {
+    block.transactions.iter().any(|tx| {
+        tx.instruction_groups
+            .iter()
+            .any(|group| group.outer_instruction.program_id == get_compression_program_id())
+    })
+}
+
+fn remove_empty_blocks_from_cache(
+    block_cache: &mut BTreeMap<u64, BlockInfo>,
+    current_block: &BlockInfo,
+    last_indexed_slot: u64,
+    blocks_processed: u64,
+) {
+    if has_compression_transactions(current_block) {
+        return;
+    }
+
+    if current_block.metadata.slot <= last_indexed_slot + 1 {
+        return;
+    }
+
+    let parent_slot = current_block.metadata.parent_slot;
+    let mut start_empty_range = parent_slot;
+
+    while start_empty_range > last_indexed_slot {
+        let check_slot = start_empty_range.saturating_sub(1);
+
+        if let Some(block) = block_cache.get(&check_slot) {
+            if has_compression_transactions(block) {
+                break;
+            }
+            start_empty_range = check_slot;
+        } else {
+            break;
+        }
+    }
+
+    let mut removed_count = 0;
+    for slot in start_empty_range..=parent_slot {
+        if block_cache.remove(&slot).is_some() {
+            removed_count += 1;
+        }
+    }
+
+    if removed_count > 0 && blocks_processed % 100 == 0 {
+        log::debug!(
+            "Removed {} consecutive non-compression blocks from cache (slots {}-{})",
+            removed_count,
+            start_empty_range,
+            parent_slot
+        );
+    }
+}
+
+fn log_cache_status(
+    block_cache: &BTreeMap<u64, BlockInfo>,
+    last_indexed_slot: u64,
+    blocks_processed: u64,
+) {
+    if blocks_processed % 1000 != 0 {
+        return;
+    }
+
+    if let (Some(&min_slot), Some(&max_slot)) = (block_cache.keys().min(), block_cache.keys().max())
+    {
+        let compression_count = block_cache
+            .values()
+            .filter(|block| has_compression_transactions(block))
+            .count();
+
+        log::info!(
+            "Block cache: {} blocks ({} compression, {} empty), slots {}-{}, gap from last indexed: {}",
+            block_cache.len(),
+            compression_count,
+            block_cache.len() - compression_count,
+            min_slot,
+            max_slot,
+            min_slot.saturating_sub(last_indexed_slot)
+        );
+    }
+
+    if block_cache.len() > 50000 && blocks_processed % 100 == 0 {
+        log::warn!(
+            "Large cache size: {} blocks. Consider --start-slot closer to current activity",
+            block_cache.len()
+        );
     }
 }
