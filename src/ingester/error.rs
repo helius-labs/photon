@@ -14,6 +14,8 @@ pub enum IngesterError {
     EmptyBatchEvent,
     #[error("Invalid event.")]
     InvalidEvent,
+    #[error("Custom error: {0}")]
+    CustomError(String),
 }
 
 impl From<sea_orm::error::DbErr> for IngesterError {

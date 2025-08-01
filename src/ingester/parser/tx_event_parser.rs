@@ -7,7 +7,7 @@ use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use anchor_lang::AnchorDeserialize;
 use light_compressed_account::TreeType;
-use log::info;
+use log::debug;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ pub fn parse_public_transaction_event_v1(
         && noop_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
     {
-        info!(
+        debug!(
             "Indexing transaction with slot {} and id {}",
             slot, tx.signature
         );

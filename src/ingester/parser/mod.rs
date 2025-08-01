@@ -19,6 +19,7 @@ use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_
 use solana_pubkey::pubkey;
 
 static ACCOUNT_COMPRESSION_PROGRAM_ID: OnceLock<Pubkey> = OnceLock::new();
+
 pub fn get_compression_program_id() -> Pubkey {
     *ACCOUNT_COMPRESSION_PROGRAM_ID
         .get_or_init(|| pubkey!("compr6CUsB5m2jS4Y3831ztGSTnDpnKJTKS95d64XVq"))
@@ -39,7 +40,36 @@ const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote11111111111111111111111111111111111
 
 const SKIP_UNKNOWN_TREES: bool = true;
 
-pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
+pub fn parse_transaction(
+    tx: &TransactionInfo,
+    slot: u64,
+    tree_filter: Option<solana_pubkey::Pubkey>,
+) -> Result<StateUpdate, IngesterError> {
+    // Early check: if tree filter is set and transaction doesn't involve the tree, return empty state update
+    if let Some(ref tree) = tree_filter {
+        let mut involves_tree = false;
+        for instruction_group in &tx.instruction_groups {
+            if instruction_group.outer_instruction.accounts.contains(tree) {
+                involves_tree = true;
+                break;
+            }
+            for inner_instruction in &instruction_group.inner_instructions {
+                if inner_instruction.accounts.contains(tree) {
+                    involves_tree = true;
+                    break;
+                }
+            }
+            if involves_tree {
+                break;
+            }
+        }
+
+        if !involves_tree {
+            // Return empty state update for transactions that don't involve the target tree
+            return Ok(StateUpdate::new());
+        }
+    }
+
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
@@ -137,6 +167,11 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         });
     }
 
+    // Apply tree filter if specified
+    if let Some(tree_pubkey) = tree_filter {
+        state_update = filter_state_update_by_tree(state_update, tree_pubkey);
+    }
+
     Ok(state_update)
 }
 
@@ -144,4 +179,44 @@ fn is_voting_transaction(tx: &TransactionInfo) -> bool {
     tx.instruction_groups
         .iter()
         .any(|group| group.outer_instruction.program_id == VOTE_PROGRAM_ID)
+}
+
+fn filter_state_update_by_tree(mut state_update: StateUpdate, tree_pubkey: Pubkey) -> StateUpdate {
+    // Filter out accounts that don't belong to the specified tree
+    state_update
+        .out_accounts
+        .retain(|account| account.account.tree.0 == tree_pubkey);
+
+    // Filter indexed merkle tree updates
+    state_update
+        .indexed_merkle_tree_updates
+        .retain(|(tree, _), _| *tree == tree_pubkey);
+
+    // Filter batch merkle tree events
+    state_update
+        .batch_merkle_tree_events
+        .retain(|tree, _| *tree == tree_pubkey.to_bytes());
+
+    // Filter batch new addresses
+    state_update
+        .batch_new_addresses
+        .retain(|address_update| address_update.tree.0 == tree_pubkey);
+
+    // Filter leaf nullifications
+    state_update
+        .leaf_nullifications
+        .retain(|nullification| nullification.tree == tree_pubkey);
+
+    // Only keep transactions if there's still relevant data after filtering
+    if state_update.out_accounts.is_empty()
+        && state_update.indexed_merkle_tree_updates.is_empty()
+        && state_update.batch_merkle_tree_events.is_empty()
+        && state_update.batch_new_addresses.is_empty()
+        && state_update.leaf_nullifications.is_empty()
+    {
+        state_update.transactions.clear();
+        state_update.account_transactions.clear();
+    }
+
+    state_update
 }

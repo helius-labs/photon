@@ -33,6 +33,10 @@ path = "src/snapshot/loader/main.rs"
 name = "photon-tree-validator"
 path = "src/tools/tree_validator/main.rs"
 
+[[bin]]
+name = "photon-analyze-snapshot"
+path = "src/tools/analyze_snapshot.rs"
+
 [dependencies]
 ark-serialize = "0.5"
 ark-bn254 = "0.5"
@@ -82,9 +86,11 @@ solana-pubkey = "2.3.0"
 solana-transaction-status = "1.18.0"
 
 light-concurrent-merkle-tree = "2.1.0"
-light-batched-merkle-tree = "0.3.0"
-light-merkle-tree-metadata = "0.3.0"
-light-compressed-account = { version = "0.3.0", features = ["anchor"] }
+light-batched-merkle-tree = { version = "0.3.0", git = "https://github.com/lightprotocol/light-protocol", rev = "341aae4dfc89a27913e6ff1af65572d626b0cc19" }
+light-merkle-tree-metadata = { version = "0.3.0", git = "https://github.com/lightprotocol/light-protocol", rev = "341aae4dfc89a27913e6ff1af65572d626b0cc19" }
+light-compressed-account = { version = "0.3.0", features = [
+    "anchor",
+], git = "https://github.com/lightprotocol/light-protocol", rev = "341aae4dfc89a27913e6ff1af65572d626b0cc19" }
 light-hasher = { version = "3.1.0" }
 
 light-poseidon = "0.3.0"

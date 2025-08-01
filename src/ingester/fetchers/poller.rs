@@ -9,10 +9,13 @@ use futures::{pin_mut, Stream, StreamExt};
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
+use tokio::sync::mpsc;
 
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
+use crate::ingester::gap::RewindCommand;
+use crate::ingester::parser::get_compression_program_id;
 use crate::{
     ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
     metric,
@@ -40,33 +43,72 @@ pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
+    mut rewind_receiver: Option<mpsc::UnboundedReceiver<RewindCommand>>,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
-        let start_slot = match last_indexed_slot {
+        let mut current_start_slot = match last_indexed_slot {
             0 => 0,
             last_indexed_slot => last_indexed_slot + 1
         };
-        let slot_stream = get_slot_stream(rpc_client.clone(), start_slot);
-        pin_mut!(slot_stream);
-        let block_stream = slot_stream
-            .map(|slot| {
-                let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
-            })
-            .buffer_unordered(max_concurrent_block_fetches);
-        pin_mut!(block_stream);
-        let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
-        while let Some(block) = block_stream.next().await {
-            if let Some(block) = block {
-                block_cache.insert(block.metadata.slot, block);
+
+        loop {
+            let slot_stream = get_slot_stream(rpc_client.clone(), current_start_slot);
+            pin_mut!(slot_stream);
+            let block_stream = slot_stream
+                .map(|slot| {
+                    let rpc_client = rpc_client.clone();
+                    async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
+                })
+                .buffer_unordered(max_concurrent_block_fetches);
+            pin_mut!(block_stream);
+            let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
+            let mut rewind_occurred = false;
+             let mut blocks_processed = 0u64;
+
+            while let Some(block) = block_stream.next().await {
+                // Check for rewind commands before processing blocks
+                if let Some(ref mut receiver) = rewind_receiver {
+                    while let Ok(command) = receiver.try_recv() {
+                        match command {
+                            RewindCommand::Rewind { to_slot, reason } => {
+                                log::error!("Rewinding block stream to {}: {}", to_slot, reason);
+                                // Clear cached blocks
+                                block_cache.clear();
+                                // Reset positions
+                                last_indexed_slot = to_slot - 1;
+                                current_start_slot = to_slot;
+                                rewind_occurred = true;
+                                log::info!("Cleared cache, restarting from slot {}", current_start_slot);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if rewind_occurred {
+                    break; // Exit inner loop to restart streams
+                }
+
+                if let Some(block) = block {
+                    remove_empty_blocks_from_cache(&mut block_cache, &block, last_indexed_slot, blocks_processed);
+                    block_cache.insert(block.metadata.slot, block);
+                }
+                let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
+                last_indexed_slot = last_indexed_slot_from_cache;
+                metric! {
+                    statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
+                }
+                if !blocks_to_index.is_empty() {
+                    yield blocks_to_index;
+                }
+
+                // Log cache status periodically
+                blocks_processed += 1;
+                log_cache_status(&block_cache, last_indexed_slot, blocks_processed);
             }
-            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
-            last_indexed_slot = last_indexed_slot_from_cache;
-            metric! {
-                statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
-            }
-            if !blocks_to_index.is_empty() {
-                yield blocks_to_index;
+
+            if !rewind_occurred {
+                break; // Normal termination
             }
         }
     }
@@ -138,5 +180,95 @@ pub async fn fetch_block_with_infinite_retries(
                 }
             }
         }
+    }
+}
+
+fn has_compression_transactions(block: &BlockInfo) -> bool {
+    block.transactions.iter().any(|tx| {
+        tx.instruction_groups
+            .iter()
+            .any(|group| group.outer_instruction.program_id == get_compression_program_id())
+    })
+}
+
+fn remove_empty_blocks_from_cache(
+    block_cache: &mut BTreeMap<u64, BlockInfo>,
+    current_block: &BlockInfo,
+    last_indexed_slot: u64,
+    blocks_processed: u64,
+) {
+    if has_compression_transactions(current_block) {
+        return;
+    }
+
+    if current_block.metadata.slot <= last_indexed_slot + 1 {
+        return;
+    }
+
+    let parent_slot = current_block.metadata.parent_slot;
+    let mut start_empty_range = parent_slot;
+
+    while start_empty_range > last_indexed_slot {
+        let check_slot = start_empty_range.saturating_sub(1);
+
+        if let Some(block) = block_cache.get(&check_slot) {
+            if has_compression_transactions(block) {
+                break;
+            }
+            start_empty_range = check_slot;
+        } else {
+            break;
+        }
+    }
+
+    let mut removed_count = 0;
+    for slot in start_empty_range..=parent_slot {
+        if block_cache.remove(&slot).is_some() {
+            removed_count += 1;
+        }
+    }
+
+    if removed_count > 0 && blocks_processed % 100 == 0 {
+        log::debug!(
+            "Removed {} consecutive non-compression blocks from cache (slots {}-{})",
+            removed_count,
+            start_empty_range,
+            parent_slot
+        );
+    }
+}
+
+fn log_cache_status(
+    block_cache: &BTreeMap<u64, BlockInfo>,
+    last_indexed_slot: u64,
+    blocks_processed: u64,
+) {
+    if blocks_processed % 1000 != 0 {
+        return;
+    }
+
+    if let (Some(&min_slot), Some(&max_slot)) = (block_cache.keys().min(), block_cache.keys().max())
+    {
+        let compression_count = block_cache
+            .values()
+            .filter(|block| has_compression_transactions(block))
+            .count();
+
+        log::info!(
+            "Block cache: {} blocks ({} compression, {} empty), slots {}-{}, gap from last indexed: {}",
+            block_cache.len(),
+            compression_count,
+            block_cache.len() - compression_count,
+            min_slot,
+            max_slot,
+            min_slot.saturating_sub(last_indexed_slot)
+        );
+    }
+
+    if block_cache.len() > 50000 && blocks_processed % 100 == 0 {
+        log::warn!(
+            "Large cache size: {} blocks. Consider --start-slot closer to current activity",
+            block_cache.len()
+        );
     }
 }
