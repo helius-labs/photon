@@ -72,9 +72,7 @@ fn derive_block_state_update(
                 ));
             }
             // Return early after requesting rewind - don't continue processing
-            return Err(IngesterError::CustomError(
-                "Gap detection triggered rewind".to_string(),
-            ));
+            return Err(IngesterError::GapDetectedRewind);
         }
     }
 
@@ -203,7 +201,7 @@ pub async fn index_block_batch_with_infinite_retries(
             Ok(()) => return Ok(()),
             Err(e) => {
                 // Check if this is a gap-triggered rewind error
-                if e.to_string().contains("Gap detection triggered rewind") {
+                if matches!(e, IngesterError::GapDetectedRewind) {
                     // Don't retry, propagate the rewind error up
                     return Err(e);
                 }
