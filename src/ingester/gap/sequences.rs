@@ -119,18 +119,19 @@ impl StateUpdateSequences {
             }
         }
 
-        // Extract out_account leaf indexes
+        // Extract out_account sequences
         for account_with_context in &state_update.out_accounts {
             let tree_pubkey = account_with_context.account.tree.0;
-            let leaf_index = account_with_context.account.leaf_index.0;
-            self.out_account_leaf_indexes
-                .entry(tree_pubkey)
-                .or_insert_with(Vec::new)
-                .push(SequenceEntry {
-                    sequence: leaf_index,
-                    slot,
-                    signature: signature.to_string(),
-                });
+            if let Some(seq_value) = account_with_context.account.seq {
+                self.out_account_leaf_indexes
+                    .entry(tree_pubkey)
+                    .or_insert_with(Vec::new)
+                    .push(SequenceEntry {
+                        sequence: seq_value.0,
+                        slot,
+                        signature: signature.to_string(),
+                    });
+            }
         }
     }
 
