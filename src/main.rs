@@ -54,7 +54,7 @@ struct Args {
     db_url: Option<String>,
 
     /// The start slot to begin indexing from. Defaults to the last indexed slot in the database plus
-    /// one.  
+    /// one.
     #[arg(short, long)]
     start_slot: Option<String>,
 
@@ -105,6 +105,11 @@ struct Args {
     /// When provided, the indexer will only process updates for this specific tree
     #[arg(long, default_value = None)]
     tree: Option<String>,
+
+    /// Disable sequence gap detection and rewind
+    /// When set, the indexer will not check for sequence gaps and will not trigger rewinds
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    disable_gap_detection: bool,
 }
 
 async fn start_api_server(
@@ -297,7 +302,13 @@ async fn main() {
             };
 
             // Create rewind controller for gap detection
-            let (rewind_controller, rewind_receiver) = RewindController::new();
+            let (rewind_controller, rewind_receiver) = if args.disable_gap_detection {
+                info!("Gap detection is disabled");
+                (None, None)
+            } else {
+                let (controller, receiver) = RewindController::new();
+                (Some(controller), Some(receiver))
+            };
 
             let tree_filter = args.tree.as_ref().map(|tree_str| {
                 tree_str
@@ -310,7 +321,7 @@ async fn main() {
                 max_concurrent_block_fetches,
                 last_indexed_slot,
                 geyser_url: args.grpc_url,
-                rewind_receiver: Some(rewind_receiver),
+                rewind_receiver,
             };
 
             (
@@ -319,7 +330,7 @@ async fn main() {
                     db_conn.clone(),
                     rpc_client.clone(),
                     last_indexed_slot,
-                    Some(rewind_controller),
+                    rewind_controller,
                     tree_filter,
                 )),
                 Some(continously_monitor_photon(
