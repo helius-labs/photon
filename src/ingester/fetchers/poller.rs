@@ -72,13 +72,11 @@ pub fn get_block_poller_stream(
                                 log::error!("Rewinding block stream to {}: {}", to_slot, reason);
                                 // Clear cached blocks
                                 block_cache.clear();
-                                // Clear sequence state to re-learn from rewound point
-                                crate::ingester::gap::clear_sequence_state();
                                 // Reset positions
                                 last_indexed_slot = to_slot - 1;
                                 current_start_slot = to_slot;
                                 rewind_occurred = true;
-                                log::info!("Cleared cache and sequence state, restarting from slot {}", current_start_slot);
+                                log::info!("Cleared cache, restarting from slot {}", current_start_slot);
                                 break;
                             }
                         }
