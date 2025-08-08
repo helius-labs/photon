@@ -451,11 +451,12 @@ pub async fn update_snapshot(
     incremental_snapshot_interval_slots: u64,
 ) {
     // Convert stream to iterator
+    let last_indexed_slot = block_stream_config.last_indexed_slot;
     let block_stream = block_stream_config.load_block_stream();
     update_snapshot_helper(
         directory_adapter,
         block_stream,
-        block_stream_config.last_indexed_slot,
+        last_indexed_slot,
         incremental_snapshot_interval_slots,
         full_snapshot_interval_slots,
     )

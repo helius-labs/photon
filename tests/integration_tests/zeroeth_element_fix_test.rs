@@ -115,7 +115,8 @@ async fn test_reindex_fixes_wrong_zeroeth_element(
         tree_type: TreeType::AddressV1,
         leaf: correct_zeroeth_leaf,
         hash: correct_hash.0,
-        seq: 2, // Higher seq number to ensure update
+        seq: 2,                      // Higher seq number to ensure update
+        signature: [1u8; 64].into(), // Mock signature for testing purposes
     };
 
     // Create HashMap with the update
@@ -211,6 +212,7 @@ async fn test_reindex_preserves_correct_zeroeth_element(
         leaf,
         hash: hash.0,
         seq: 1,
+        signature: Default::default(),
     };
 
     let mut updates = HashMap::new();
