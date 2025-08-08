@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, info};
 
 mod rewind;
 mod sequences;
@@ -48,6 +48,19 @@ pub enum StateUpdateFieldType {
     BatchMerkleTreeEventNullify,
     BatchMerkleTreeEventAddressAppend,
     OutAccount,
+}
+
+/// Clears the global sequence state - used after rewind to re-learn sequences
+pub fn clear_sequence_state() {
+    match SEQUENCE_STATE.write() {
+        Ok(mut state) => {
+            state.clear();
+            info!("Cleared sequence state after rewind");
+        }
+        Err(e) => {
+            debug!("Failed to acquire write lock to clear sequence state: {}", e);
+        }
+    }
 }
 
 /// Gets the current sequence state from the global state tracker
