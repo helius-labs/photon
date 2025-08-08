@@ -115,8 +115,6 @@ pub async fn index_block_stream(
                 if matches!(e, crate::ingester::error::IngesterError::GapDetectedRewind) {
                     // Gap detected, rewind triggered - the slot stream should handle repositioning
                     log::info!("Gap detection triggered rewind");
-                    // Clear sequence state to re-learn from the rewound point
-                    crate::ingester::gap::clear_sequence_state();
                     continue;
                 } else {
                     log::error!("Unexpected error in block processing: {}", e);

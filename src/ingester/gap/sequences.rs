@@ -350,24 +350,41 @@ impl StateUpdateSequences {
         // Skip gap detection for tree initialization (when unpacked_start_seq == 0)
         // because there's no previous sequence to compare against
         // Also skip if unpacked_start_seq is u64::MAX (no state found)
-        if unpacked_start_seq > 0
-            && unpacked_start_seq != u64::MAX
-            && sorted_sequences[0].sequence > unpacked_start_seq.saturating_add(1)
-        {
-            let (before_slot, before_signature) = if let Some(entry) = start_entry {
-                (entry.slot, entry.signature)
-            } else {
-                (0, String::new())
-            };
+        if unpacked_start_seq > 0 && unpacked_start_seq != u64::MAX {
+            // Check for any missing sequences between global state and the minimum sequence in this block
+            let min_seq_in_block = sorted_sequences[0].sequence;
+            
+            // Check if there's a gap between the global state and the sequences in this block
+            // A gap exists if the minimum sequence in the block is more than 1 away from global state
+            // AND the missing sequences are not present anywhere in this block
+            if min_seq_in_block > unpacked_start_seq.saturating_add(1) {
+                // Check if ALL missing sequences are present in this block
+                let mut has_real_gap = false;
+                for missing_seq in (unpacked_start_seq + 1)..min_seq_in_block {
+                    let found = sorted_sequences.iter().any(|e| e.sequence == missing_seq);
+                    if !found {
+                        has_real_gap = true;
+                        break;
+                    }
+                }
+                
+                if has_real_gap {
+                    let (before_slot, before_signature) = if let Some(entry) = start_entry {
+                        (entry.slot, entry.signature)
+                    } else {
+                        (0, String::new())
+                    };
 
-            gaps.push(SequenceGap {
-                before_slot,
-                after_slot: sorted_sequences[0].slot,
-                before_signature,
-                after_signature: sorted_sequences[0].signature.clone(),
-                tree_pubkey,
-                field_type: field_type.clone(),
-            });
+                    gaps.push(SequenceGap {
+                        before_slot,
+                        after_slot: sorted_sequences[0].slot,
+                        before_signature,
+                        after_signature: sorted_sequences[0].signature.clone(),
+                        tree_pubkey,
+                        field_type: field_type.clone(),
+                    });
+                }
+            }
         }
 
         for i in 1..sorted_sequences.len() {
