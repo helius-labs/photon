@@ -132,7 +132,8 @@ async fn persist_batch_nullify_event(
         .filter(
             accounts::Column::NullifierQueueIndex
                 .gte(batch_nullify_event.old_next_index)
-                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index)),
+                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index))
+                .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec())),
         )
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
@@ -176,7 +177,8 @@ async fn persist_batch_nullify_event(
         .filter(
             accounts::Column::NullifierQueueIndex
                 .gte(batch_nullify_event.old_next_index)
-                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index)),
+                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index))
+                .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec())),
         )
         .build(txn.get_database_backend());
     txn.execute(query).await?;
