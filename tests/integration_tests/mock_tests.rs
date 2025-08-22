@@ -1,6 +1,6 @@
 use crate::utils::compare_account_with_account_v2;
 use crate::utils::*;
-use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use ::borsh::to_vec;
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::{
     DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
