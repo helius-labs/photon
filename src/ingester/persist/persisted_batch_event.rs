@@ -226,34 +226,25 @@ async fn persist_batch_nullify_event(
     let expected_count =
         (batch_nullify_event.new_next_index - batch_nullify_event.old_next_index) as usize;
 
-    // Validate old_next_index matches the current state of the tree
-    let current_next_index = accounts::Entity::find()
-        .filter(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
-        .order_by_desc(accounts::Column::LeafIndex)
-        .one(txn)
-        .await?
-        .map(|acc| (acc.leaf_index + 1) as u64)
-        .unwrap_or(0);
+    // For nullify events, we don't validate against the tree's next index
+    // because nullify events update existing leaves, they don't append new ones.
+    // Instead, we check if the accounts have already been nullified.
 
-    if !validate_batch_index(
-        batch_nullify_event.old_next_index,
-        current_next_index,
-        "nullify",
-    )? {
-        return Ok(());
-    }
-
+    let queue_start = batch_nullify_event.old_next_index as i64;
+    let queue_end = batch_nullify_event.new_next_index as i64;
+    
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::NullifierQueueIndex
-                .gte(batch_nullify_event.old_next_index)
-                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index))
+                .gte(queue_start)
+                .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
                 .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
                 .and(accounts::Column::Spent.eq(true)),
         )
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
         .await?;
+    
 
     if accounts.is_empty() {
         // Check if already processed (re-indexing scenario)
@@ -287,14 +278,14 @@ async fn persist_batch_nullify_event(
         )));
     }
 
-    let mut expected_index = batch_nullify_event.old_next_index;
+    let mut expected_index = queue_start;  // Use the queue start for validation
 
     for account in &accounts {
         // Queue indices must be sequential with no gaps
         let queue_index = account.nullifier_queue_index.ok_or_else(|| {
             IngesterError::ParserError("Missing nullifier queue index".to_string())
         })?;
-        if queue_index != expected_index as i64 {
+        if queue_index != expected_index {
             return Err(IngesterError::ParserError(format!(
                 "Gap in nullifier queue: expected {}, got {}",
                 expected_index, queue_index
@@ -332,8 +323,8 @@ async fn persist_batch_nullify_event(
         .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
         .filter(
             accounts::Column::NullifierQueueIndex
-                .gte(batch_nullify_event.old_next_index)
-                .and(accounts::Column::NullifierQueueIndex.lt(batch_nullify_event.new_next_index))
+                .gte(queue_start)
+                .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
                 .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec())),
         )
         .build(txn.get_database_backend());
@@ -371,13 +362,19 @@ async fn persist_batch_address_append_event(
         return Ok(());
     }
 
+    // Address queue indices are 0-based, but batch updates use 1-based indices
+    // (because address trees have a pre-initialized zeroth element)
+    // So we need to offset by -1 when querying the queue
+    let queue_start = (batch_address_append_event.old_next_index as i64) - 1;
+    let queue_end = (batch_address_append_event.new_next_index as i64) - 1;
+    
     let addresses = address_queues::Entity::find()
         .filter(
             address_queues::Column::QueueIndex
-                .gte(batch_address_append_event.old_next_index as i64)
+                .gte(queue_start)
                 .and(
                     address_queues::Column::QueueIndex
-                        .lt(batch_address_append_event.new_next_index as i64),
+                        .lt(queue_end),
                 )
                 .and(
                     address_queues::Column::Tree
@@ -427,12 +424,12 @@ async fn persist_batch_address_append_event(
     }
 
     // Process addresses and perform per-address validations
-    let mut expected_queue_index = batch_address_append_event.old_next_index;
+    let mut expected_queue_index = queue_start;  // Use the offset queue index
     let mut address_values = Vec::with_capacity(expected_count);
 
     for address in &addresses {
         // Queue indices must be sequential with no gaps
-        if address.queue_index != expected_queue_index as i64 {
+        if address.queue_index != expected_queue_index {
             return Err(IngesterError::ParserError(format!(
                 "Gap in address queue indices: expected {}, got {}",
                 expected_queue_index, address.queue_index
@@ -464,10 +461,10 @@ async fn persist_batch_address_append_event(
     address_queues::Entity::delete_many()
         .filter(
             address_queues::Column::QueueIndex
-                .gte(batch_address_append_event.old_next_index as i64)
+                .gte(queue_start)
                 .and(
                     address_queues::Column::QueueIndex
-                        .lt(batch_address_append_event.new_next_index as i64),
+                        .lt(queue_end),
                 )
                 .and(
                     address_queues::Column::Tree
