@@ -54,12 +54,6 @@ use sea_orm::ColumnTrait;
 use solana_pubkey::Pubkey;
 use std::vec;
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
-struct Person {
-    name: String,
-    age: u64,
-}
-
 #[named]
 #[rstest]
 #[tokio::test]
