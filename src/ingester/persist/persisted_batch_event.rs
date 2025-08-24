@@ -246,17 +246,11 @@ async fn persist_batch_nullify_event(
         .await?;
 
     if accounts.is_empty() {
-        // During re-indexing, accounts might have already been processed and removed from the queue
-        // We can't reliably determine if this specific batch was processed since NullifierQueueIndex
-        // is set to NULL after processing. Log and skip to handle re-indexing gracefully.
-        tracing::warn!(
-            "Batch nullify found no accounts in queue for tree {:?} range [{}, {}). \
-            This may be a re-indexing scenario where the batch was already processed.",
-            batch_nullify_event.merkle_tree_pubkey,
-            queue_start,
-            queue_end
-        );
-        return Ok(());
+        // No accounts found in the nullifier queue for this range
+        return Err(IngesterError::ParserError(format!(
+            "Expected {} accounts in nullifier batch queue range [{}, {}), found 0",
+            expected_count, queue_start, queue_end
+        )));
     } else if accounts.len() != expected_count {
         return Err(IngesterError::ParserError(format!(
             "Expected {} accounts in nullifier batch, found {}",
@@ -300,13 +294,9 @@ async fn persist_batch_nullify_event(
         });
     }
 
-    // 2. Mark elements as nullified in tree and
-    //      remove them from the database nullifier queue.
+    // 2. Mark elements as nullified in tree.
+    //      We keep the NullifierQueueIndex to support re-indexing scenarios.
     let query = accounts::Entity::update_many()
-        .col_expr(
-            accounts::Column::NullifierQueueIndex,
-            Expr::value(Option::<i64>::None),
-        )
         .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
         .filter(
             accounts::Column::NullifierQueueIndex

@@ -73,8 +73,9 @@ pub async fn get_queue_elements(
 
     match queue_type {
         QueueType::InputStateV2 => {
-            query_condition =
-                query_condition.add(accounts::Column::NullifierQueueIndex.is_not_null());
+            query_condition = query_condition
+                .add(accounts::Column::NullifierQueueIndex.is_not_null())
+                .add(accounts::Column::NullifiedInTree.eq(false));
             if let Some(start_queue_index) = request.start_queue_index {
                 query_condition = query_condition
                     .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
