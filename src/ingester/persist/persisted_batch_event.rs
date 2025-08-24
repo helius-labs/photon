@@ -232,7 +232,7 @@ async fn persist_batch_nullify_event(
 
     let queue_start = batch_nullify_event.old_next_index as i64;
     let queue_end = batch_nullify_event.new_next_index as i64;
-    
+
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::NullifierQueueIndex
@@ -244,32 +244,19 @@ async fn persist_batch_nullify_event(
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
         .await?;
-    
 
     if accounts.is_empty() {
-        // Check if already processed (re-indexing scenario)
-        let already_nullified_in_tree = accounts::Entity::find()
-            .filter(
-                accounts::Column::Tree
-                    .eq(batch_nullify_event.merkle_tree_pubkey.to_vec())
-                    .and(accounts::Column::NullifiedInTree.eq(true))
-                    .and(accounts::Column::Spent.eq(true)),
-            )
-            .count(txn)
-            .await?;
-
-        if already_nullified_in_tree >= batch_nullify_event.new_next_index {
-            tracing::info!(
-                "Batch nullify already processed: {} accounts nullified in tree",
-                already_nullified_in_tree
-            );
-            return Ok(());
-        }
-
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} accounts in nullifier batch, found 0",
-            expected_count
-        )));
+        // During re-indexing, accounts might have already been processed and removed from the queue
+        // We can't reliably determine if this specific batch was processed since NullifierQueueIndex
+        // is set to NULL after processing. Log and skip to handle re-indexing gracefully.
+        tracing::warn!(
+            "Batch nullify found no accounts in queue for tree {:?} range [{}, {}). \
+            This may be a re-indexing scenario where the batch was already processed.",
+            batch_nullify_event.merkle_tree_pubkey,
+            queue_start,
+            queue_end
+        );
+        return Ok(());
     } else if accounts.len() != expected_count {
         return Err(IngesterError::ParserError(format!(
             "Expected {} accounts in nullifier batch, found {}",
@@ -278,7 +265,7 @@ async fn persist_batch_nullify_event(
         )));
     }
 
-    let mut expected_index = queue_start;  // Use the queue start for validation
+    let mut expected_index = queue_start; // Use the queue start for validation
 
     for account in &accounts {
         // Queue indices must be sequential with no gaps
@@ -367,15 +354,12 @@ async fn persist_batch_address_append_event(
     // So we need to offset by -1 when querying the queue
     let queue_start = (batch_address_append_event.old_next_index as i64) - 1;
     let queue_end = (batch_address_append_event.new_next_index as i64) - 1;
-    
+
     let addresses = address_queues::Entity::find()
         .filter(
             address_queues::Column::QueueIndex
                 .gte(queue_start)
-                .and(
-                    address_queues::Column::QueueIndex
-                        .lt(queue_end),
-                )
+                .and(address_queues::Column::QueueIndex.lt(queue_end))
                 .and(
                     address_queues::Column::Tree
                         .eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
@@ -424,7 +408,7 @@ async fn persist_batch_address_append_event(
     }
 
     // Process addresses and perform per-address validations
-    let mut expected_queue_index = queue_start;  // Use the offset queue index
+    let mut expected_queue_index = queue_start; // Use the offset queue index
     let mut address_values = Vec::with_capacity(expected_count);
 
     for address in &addresses {
@@ -462,10 +446,7 @@ async fn persist_batch_address_append_event(
         .filter(
             address_queues::Column::QueueIndex
                 .gte(queue_start)
-                .and(
-                    address_queues::Column::QueueIndex
-                        .lt(queue_end),
-                )
+                .and(address_queues::Column::QueueIndex.lt(queue_end))
                 .and(
                     address_queues::Column::Tree
                         .eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),

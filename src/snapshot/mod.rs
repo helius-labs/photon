@@ -408,7 +408,7 @@ pub async fn get_snapshot_files_with_metadata(
 fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
     // First try to use the system temp directory
     let mut temp_dir = temp_dir().join(dir);
-    
+
     // Try to create the temp directory, if it fails, fall back to using the snapshot directory itself
     if fs::create_dir_all(&temp_dir).is_err() {
         // Fall back to creating temp files directly in the snapshot directory
@@ -416,7 +416,7 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
         fs::create_dir_all(&temp_dir)
             .expect("Failed to create temp directory in both system temp and snapshot directory");
     }
-    
+
     let random_number = rand::random::<u64>();
     let temp_file_path = temp_dir.join(format!("temp-snapshot-{}", random_number));
     if temp_file_path.exists() {
