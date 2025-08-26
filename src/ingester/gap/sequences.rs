@@ -354,7 +354,7 @@ impl StateUpdateSequences {
         if unpacked_start_seq > 0 && unpacked_start_seq != u64::MAX {
             // Check for any missing sequences between global state and the minimum sequence in this block
             let min_seq_in_block = sorted_sequences[0].sequence;
-            
+
             // Check if there's a gap between the global state and the sequences in this block
             // A gap exists if the minimum sequence in the block is more than 1 away from global state
             // AND the missing sequences are not present anywhere in this block
@@ -368,7 +368,7 @@ impl StateUpdateSequences {
                         break;
                     }
                 }
-                
+
                 if has_real_gap {
                     let (before_slot, before_signature) = if let Some(entry) = start_entry {
                         (entry.slot, entry.signature)

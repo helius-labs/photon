@@ -58,7 +58,10 @@ pub fn clear_sequence_state() {
             info!("Cleared sequence state after rewind");
         }
         Err(e) => {
-            debug!("Failed to acquire write lock to clear sequence state: {}", e);
+            debug!(
+                "Failed to acquire write lock to clear sequence state: {}",
+                e
+            );
         }
     }
 }
