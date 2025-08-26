@@ -14,6 +14,10 @@ pub enum IngesterError {
     EmptyBatchEvent,
     #[error("Invalid event.")]
     InvalidEvent,
+    #[error("Custom error: {0}")]
+    CustomError(String),
+    #[error("Gap detected, triggering rewind")]
+    GapDetectedRewind,
 }
 
 impl From<sea_orm::error::DbErr> for IngesterError {

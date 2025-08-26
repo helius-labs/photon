@@ -6,12 +6,12 @@ use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
+use super::typedefs::block_info::BlockInfo;
+use crate::ingester::gap::RewindController;
 use crate::{
     common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
     ingester::index_block_batch_with_infinite_retries,
 };
-
-use super::typedefs::block_info::BlockInfo;
 const POST_BACKFILL_FREQUENCY: u64 = 10;
 const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
@@ -40,7 +40,7 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
             }
             Err(e) => {
                 log::error!("Failed to fetch current slot from database: {}", e);
-                sleep(Duration::from_secs(5));
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     }
@@ -52,6 +52,8 @@ pub async fn index_block_stream(
     rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
     end_slot: Option<u64>,
+    rewind_controller: Option<&RewindController>,
+    tree_filter: Option<solana_pubkey::Pubkey>,
 ) {
     pin_mut!(block_stream);
     let current_slot =
@@ -71,28 +73,54 @@ pub async fn index_block_stream(
 
     while let Some(blocks) = block_stream.next().await {
         let last_slot_in_block = blocks.last().unwrap().metadata.slot;
-        index_block_batch_with_infinite_retries(db.as_ref(), blocks).await;
-
-        for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
-            let blocks_indexed = slot - last_indexed_slot_at_start;
-            if blocks_indexed < number_of_blocks_to_backfill {
-                if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
-                    info!(
-                        "Backfilled {} / {} blocks",
-                        blocks_indexed, number_of_blocks_to_backfill
-                    );
-                }
-            } else {
-                if finished_backfill_slot.is_none() {
-                    info!("Finished backfilling historical blocks!");
-                    info!("Starting to index new blocks...");
-                    finished_backfill_slot = Some(slot);
-                }
-                if slot % POST_BACKFILL_FREQUENCY == 0 {
-                    info!("Indexed slot {}", slot);
+        match index_block_batch_with_infinite_retries(
+            db.as_ref(),
+            blocks,
+            rewind_controller,
+            tree_filter,
+        )
+        .await
+        {
+            Ok(()) => {
+                for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
+                    let blocks_indexed = slot - last_indexed_slot_at_start;
+                    if blocks_indexed < number_of_blocks_to_backfill {
+                        if blocks_indexed % PRE_BACKFILL_FREQUENCY == 0 {
+                            if tree_filter.is_some() {
+                                info!(
+                                    "Backfilled {} / {} blocks (filtering for tree: {:?})",
+                                    blocks_indexed, number_of_blocks_to_backfill, tree_filter
+                                );
+                            } else {
+                                info!(
+                                    "Backfilled {} / {} blocks",
+                                    blocks_indexed, number_of_blocks_to_backfill
+                                );
+                            }
+                        }
+                    } else {
+                        if finished_backfill_slot.is_none() {
+                            info!("Finished backfilling historical blocks!");
+                            info!("Starting to index new blocks...");
+                            finished_backfill_slot = Some(slot);
+                        }
+                        if slot % POST_BACKFILL_FREQUENCY == 0 {
+                            info!("Indexed slot {}", slot);
+                        }
+                    }
+                    last_indexed_slot = slot;
                 }
             }
-            last_indexed_slot = slot;
+            Err(e) => {
+                if matches!(e, crate::ingester::error::IngesterError::GapDetectedRewind) {
+                    // Gap detected, rewind triggered - the slot stream should handle repositioning
+                    log::info!("Gap detection triggered rewind");
+                    continue;
+                } else {
+                    log::error!("Unexpected error in block processing: {}", e);
+                    sleep(Duration::from_secs(1));
+                }
+            }
         }
     }
 }

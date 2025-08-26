@@ -77,7 +77,8 @@ pub async fn get_queue_elements(
                 query_condition.add(accounts::Column::NullifierQueueIndex.is_not_null());
             if let Some(start_queue_index) = request.start_queue_index {
                 query_condition = query_condition
-                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
+                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64))
+                    .add(accounts::Column::NullifiedInTree.eq(false));
             }
         }
         QueueType::OutputStateV2 => {

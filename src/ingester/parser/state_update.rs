@@ -63,6 +63,7 @@ pub struct IndexedTreeLeafUpdate {
     pub leaf: RawIndexedElement,
     pub hash: [u8; 32],
     pub seq: u64,
+    pub signature: Signature,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -76,7 +77,7 @@ pub struct AddressQueueUpdate {
 impl From<NewAddress> for AddressQueueUpdate {
     fn from(new_address: NewAddress) -> Self {
         AddressQueueUpdate {
-            tree: SerializablePubkey::from(new_address.mt_pubkey),
+            tree: SerializablePubkey::from(new_address.tree_pubkey),
             address: new_address.address,
             queue_index: new_address.queue_index,
         }
