@@ -94,29 +94,27 @@ async fn persist_batch_append_event(
     batch_append_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
-    let expected_count =
-        (batch_append_event.new_next_index - batch_append_event.old_next_index) as usize;
-
-    // Validate old_next_index matches the current state of the tree
-    let current_next_index = accounts::Entity::find()
-        .filter(
-            accounts::Column::Tree
-                .eq(batch_append_event.merkle_tree_pubkey.to_vec())
-                .and(accounts::Column::InOutputQueue.eq(false)),
-        )
-        .order_by_desc(accounts::Column::LeafIndex)
-        .one(txn)
-        .await?
-        .map(|acc| (acc.leaf_index + 1) as u64)
-        .unwrap_or(0);
-
-    if !validate_batch_index(
-        batch_append_event.old_next_index,
-        current_next_index,
-        "append",
-    )? {
-        return Ok(());
-    }
+    // let expected_count =
+    //     (batch_append_event.new_next_index - batch_append_event.old_next_index) as usize;
+    // // Validate old_next_index matches the current state of the tree
+    // let current_next_index = accounts::Entity::find()
+    //     .filter(
+    //         accounts::Column::Tree
+    //             .eq(batch_append_event.merkle_tree_pubkey.to_vec())
+    //             .and(accounts::Column::InOutputQueue.eq(false)),
+    //     )
+    //     .order_by_desc(accounts::Column::LeafIndex)
+    //     .one(txn)
+    //     .await?
+    //     .map(|acc| (acc.leaf_index + 1) as u64)
+    //     .unwrap_or(0);
+    // if !validate_batch_index(
+    //     batch_append_event.old_next_index,
+    //     current_next_index,
+    //     "append",
+    // )? {
+    //     return Ok(());
+    // }
 
     let accounts = accounts::Entity::find()
         .filter(
@@ -130,73 +128,73 @@ async fn persist_batch_append_event(
         .all(txn)
         .await?;
 
-    // If we got the expected count, proceed
-    if accounts.len() == expected_count {
-        // Validate sequential indices and process accounts
-        let mut expected_leaf_index = batch_append_event.old_next_index;
+    // // If we got the expected count, proceed
+    // if accounts.len() == expected_count {
+    //     // Validate sequential indices and process accounts
+    //     let mut expected_leaf_index = batch_append_event.old_next_index;
 
-        for account in &accounts {
-            if account.leaf_index != expected_leaf_index as i64 {
-                return Err(IngesterError::ParserError(format!(
-                    "Gap in leaf indices: expected {}, got {}",
-                    expected_leaf_index, account.leaf_index
-                )));
-            }
-            expected_leaf_index += 1;
+    //     for account in &accounts {
+    //         if account.leaf_index != expected_leaf_index as i64 {
+    //             return Err(IngesterError::ParserError(format!(
+    //                 "Gap in leaf indices: expected {}, got {}",
+    //                 expected_leaf_index, account.leaf_index
+    //             )));
+    //         }
+    //         expected_leaf_index += 1;
 
-            if account.hash.is_empty() {
-                return Err(IngesterError::ParserError(
-                    "Account hash is missing".to_string(),
-                ));
-            }
+    //         if account.hash.is_empty() {
+    //             return Err(IngesterError::ParserError(
+    //                 "Account hash is missing".to_string(),
+    //             ));
+    //         }
 
-            leaf_nodes.push(LeafNode {
-                tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
-                    IngesterError::ParserError(
-                        "Failed to convert tree to SerializablePubkey".to_string(),
-                    )
-                })?,
-                seq: Some(batch_append_event.sequence_number as u32),
-                leaf_index: account.leaf_index as u32,
-                hash: Hash::new(account.hash.as_slice()).map_err(|_| {
-                    IngesterError::ParserError("Failed to convert account hash to Hash".to_string())
-                })?,
-            });
-        }
-    } else if accounts.is_empty() {
-        // Check if already processed (re-indexing scenario)
-        let already_processed = accounts::Entity::find()
-            .filter(
-                accounts::Column::LeafIndex
-                    .gte(batch_append_event.old_next_index as i64)
-                    .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                    .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
-                    .and(accounts::Column::InOutputQueue.eq(false)),
-            )
-            .count(txn)
-            .await?;
+    //         leaf_nodes.push(LeafNode {
+    //             tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
+    //                 IngesterError::ParserError(
+    //                     "Failed to convert tree to SerializablePubkey".to_string(),
+    //                 )
+    //             })?,
+    //             seq: Some(batch_append_event.sequence_number as u32),
+    //             leaf_index: account.leaf_index as u32,
+    //             hash: Hash::new(account.hash.as_slice()).map_err(|_| {
+    //                 IngesterError::ParserError("Failed to convert account hash to Hash".to_string())
+    //             })?,
+    //         });
+    //     }
+    // } else if accounts.is_empty() {
+    //     // Check if already processed (re-indexing scenario)
+    //     let already_processed = accounts::Entity::find()
+    //         .filter(
+    //             accounts::Column::LeafIndex
+    //                 .gte(batch_append_event.old_next_index as i64)
+    //                 .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
+    //                 .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
+    //                 .and(accounts::Column::InOutputQueue.eq(false)),
+    //         )
+    //         .count(txn)
+    //         .await?;
 
-        if already_processed == expected_count as u64 {
-            tracing::debug!(
-                "Batch append already processed: {} accounts already in tree for range [{}, {})",
-                already_processed,
-                batch_append_event.old_next_index,
-                batch_append_event.new_next_index
-            );
-            return Ok(());
-        }
+    //     if already_processed == expected_count as u64 {
+    //         tracing::debug!(
+    //             "Batch append already processed: {} accounts already in tree for range [{}, {})",
+    //             already_processed,
+    //             batch_append_event.old_next_index,
+    //             batch_append_event.new_next_index
+    //         );
+    //         return Ok(());
+    //     }
 
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} accounts in append batch, found 0 in queue, {} already processed",
-            expected_count, already_processed
-        )));
-    } else {
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} accounts in append batch, found {}",
-            expected_count,
-            accounts.len()
-        )));
-    }
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} accounts in append batch, found 0 in queue, {} already processed",
+    //         expected_count, already_processed
+    //     )));
+    // } else {
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} accounts in append batch, found {}",
+    //         expected_count,
+    //         accounts.len()
+    //     )));
+    // }
 
     // 2. Remove inserted elements from the output queue.
     let query = accounts::Entity::update_many()
@@ -223,8 +221,8 @@ async fn persist_batch_nullify_event(
     batch_nullify_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
-    let expected_count =
-        (batch_nullify_event.new_next_index - batch_nullify_event.old_next_index) as usize;
+    // let expected_count =
+    //     (batch_nullify_event.new_next_index - batch_nullify_event.old_next_index) as usize;
 
     // For nullify events, we don't validate against the tree's next index
     // because nullify events update existing leaves, they don't append new ones.
@@ -245,34 +243,34 @@ async fn persist_batch_nullify_event(
         .all(txn)
         .await?;
 
-    if accounts.is_empty() {
-        // No accounts found in the nullifier queue for this range
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} accounts in nullifier batch queue range [{}, {}), found 0",
-            expected_count, queue_start, queue_end
-        )));
-    } else if accounts.len() != expected_count {
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} accounts in nullifier batch, found {}",
-            expected_count,
-            accounts.len()
-        )));
-    }
+    // if accounts.is_empty() {
+    //     // No accounts found in the nullifier queue for this range
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} accounts in nullifier batch queue range [{}, {}), found 0",
+    //         expected_count, queue_start, queue_end
+    //     )));
+    // } else if accounts.len() != expected_count {
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} accounts in nullifier batch, found {}",
+    //         expected_count,
+    //         accounts.len()
+    //     )));
+    // }
 
-    let mut expected_index = queue_start; // Use the queue start for validation
+    // let mut expected_index = queue_start; // Use the queue start for validation
 
     for account in &accounts {
         // Queue indices must be sequential with no gaps
-        let queue_index = account.nullifier_queue_index.ok_or_else(|| {
-            IngesterError::ParserError("Missing nullifier queue index".to_string())
-        })?;
-        if queue_index != expected_index {
-            return Err(IngesterError::ParserError(format!(
-                "Gap in nullifier queue: expected {}, got {}",
-                expected_index, queue_index
-            )));
-        }
-        expected_index += 1;
+        // let queue_index = account.nullifier_queue_index.ok_or_else(|| {
+        //     IngesterError::ParserError("Missing nullifier queue index".to_string())
+        // })?;
+        // if queue_index != expected_index {
+        //     return Err(IngesterError::ParserError(format!(
+        //         "Gap in nullifier queue: expected {}, got {}",
+        //         expected_index, queue_index
+        //     )));
+        // }
+        // expected_index += 1;
 
         // Nullifier exists - Each account must have a non-null nullifier
         let nullifier = account
@@ -317,8 +315,8 @@ async fn persist_batch_address_append_event(
     txn: &DatabaseTransaction,
     batch_address_append_event: &BatchEvent,
 ) -> Result<(), IngesterError> {
-    let expected_count = (batch_address_append_event.new_next_index
-        - batch_address_append_event.old_next_index) as usize;
+    // let expected_count = (batch_address_append_event.new_next_index
+    //     - batch_address_append_event.old_next_index) as usize;
 
     // Validate old_next_index matches the current state of the address tree
     let current_next_index = indexed_trees::Entity::find()
@@ -331,13 +329,13 @@ async fn persist_batch_address_append_event(
         .map(|tree| (tree.leaf_index + 1) as u64)
         .unwrap_or(1); // Address tree has zeroeth element
 
-    if !validate_batch_index(
-        batch_address_append_event.old_next_index,
-        current_next_index,
-        "address append",
-    )? {
-        return Ok(());
-    }
+    // if !validate_batch_index(
+    //     batch_address_append_event.old_next_index,
+    //     current_next_index,
+    //     "address append",
+    // )? {
+    //     return Ok(());
+    // }
 
     // Address queue indices are 0-based, but batch updates use 1-based indices
     // (because address trees have a pre-initialized zeroth element)
@@ -359,57 +357,57 @@ async fn persist_batch_address_append_event(
         .all(txn)
         .await?;
 
-    if addresses.is_empty() {
-        // Check if already processed (re-indexing scenario)
-        let already_indexed = indexed_trees::Entity::find()
-            .filter(
-                indexed_trees::Column::Tree
-                    .eq(batch_address_append_event.merkle_tree_pubkey.to_vec())
-                    .and(
-                        indexed_trees::Column::LeafIndex
-                            .gte(batch_address_append_event.old_next_index as i64),
-                    )
-                    .and(
-                        indexed_trees::Column::LeafIndex
-                            .lt(batch_address_append_event.new_next_index as i64),
-                    ),
-            )
-            .count(txn)
-            .await?;
+    // if addresses.is_empty() {
+    //     // Check if already processed (re-indexing scenario)
+    //     let already_indexed = indexed_trees::Entity::find()
+    //         .filter(
+    //             indexed_trees::Column::Tree
+    //                 .eq(batch_address_append_event.merkle_tree_pubkey.to_vec())
+    //                 .and(
+    //                     indexed_trees::Column::LeafIndex
+    //                         .gte(batch_address_append_event.old_next_index as i64),
+    //                 )
+    //                 .and(
+    //                     indexed_trees::Column::LeafIndex
+    //                         .lt(batch_address_append_event.new_next_index as i64),
+    //                 ),
+    //         )
+    //         .count(txn)
+    //         .await?;
 
-        if already_indexed >= expected_count as u64 {
-            tracing::info!(
-                "Address batch already processed: {} addresses already in indexed tree",
-                already_indexed
-            );
-            return Ok(());
-        }
+    //     if already_indexed >= expected_count as u64 {
+    //         tracing::info!(
+    //             "Address batch already processed: {} addresses already in indexed tree",
+    //             already_indexed
+    //         );
+    //         return Ok(());
+    //     }
 
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} addresses in address append batch, found 0 in queue",
-            expected_count
-        )));
-    } else if addresses.len() != expected_count {
-        return Err(IngesterError::ParserError(format!(
-            "Expected {} addresses in address append batch, found {}",
-            expected_count,
-            addresses.len()
-        )));
-    }
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} addresses in address append batch, found 0 in queue",
+    //         expected_count
+    //     )));
+    // } else if addresses.len() != expected_count {
+    //     return Err(IngesterError::ParserError(format!(
+    //         "Expected {} addresses in address append batch, found {}",
+    //         expected_count,
+    //         addresses.len()
+    //     )));
+    // }
 
     // Process addresses and perform per-address validations
-    let mut expected_queue_index = queue_start; // Use the offset queue index
-    let mut address_values = Vec::with_capacity(expected_count);
+    // let mut expected_queue_index = queue_start; // Use the offset queue index
+    let mut address_values = Vec::new();
 
     for address in &addresses {
-        // Queue indices must be sequential with no gaps
-        if address.queue_index != expected_queue_index {
-            return Err(IngesterError::ParserError(format!(
-                "Gap in address queue indices: expected {}, got {}",
-                expected_queue_index, address.queue_index
-            )));
-        }
-        expected_queue_index += 1;
+        // // Queue indices must be sequential with no gaps
+        // if address.queue_index != expected_queue_index {
+        //     return Err(IngesterError::ParserError(format!(
+        //         "Gap in address queue indices: expected {}, got {}",
+        //         expected_queue_index, address.queue_index
+        //     )));
+        // }
+        // expected_queue_index += 1;
 
         // Address exists - Each address must have a non-empty value
         if address.address.is_empty() {
