@@ -116,17 +116,17 @@ async fn persist_batch_append_event(
     //     return Ok(());
     // }
 
-    let accounts = accounts::Entity::find()
-        .filter(
-            accounts::Column::LeafIndex
-                .gte(batch_append_event.old_next_index as i64)
-                .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
-                .and(accounts::Column::InOutputQueue.eq(true)),
-        )
-        .order_by_asc(accounts::Column::LeafIndex)
-        .all(txn)
-        .await?;
+    // let accounts = accounts::Entity::find()
+    //     .filter(
+    //         accounts::Column::LeafIndex
+    //             .gte(batch_append_event.old_next_index as i64)
+    //             .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
+    //             .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
+    //             .and(accounts::Column::InOutputQueue.eq(true)),
+    //     )
+    //     .order_by_asc(accounts::Column::LeafIndex)
+    //     .all(txn)
+    //     .await?;
 
     // // If we got the expected count, proceed
     // if accounts.len() == expected_count {
@@ -203,7 +203,8 @@ async fn persist_batch_append_event(
             accounts::Column::LeafIndex
                 .gte(batch_append_event.old_next_index as i64)
                 .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
-                .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec())),
+                .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
+                .and(accounts::Column::InOutputQueue.eq(true)),
         )
         .build(txn.get_database_backend());
 
@@ -319,15 +320,15 @@ async fn persist_batch_address_append_event(
     //     - batch_address_append_event.old_next_index) as usize;
 
     // Validate old_next_index matches the current state of the address tree
-    let current_next_index = indexed_trees::Entity::find()
-        .filter(
-            indexed_trees::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
-        )
-        .order_by_desc(indexed_trees::Column::LeafIndex)
-        .one(txn)
-        .await?
-        .map(|tree| (tree.leaf_index + 1) as u64)
-        .unwrap_or(1); // Address tree has zeroeth element
+    // let current_next_index = indexed_trees::Entity::find()
+    //     .filter(
+    //         indexed_trees::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+    //     )
+    //     .order_by_desc(indexed_trees::Column::LeafIndex)
+    //     .one(txn)
+    //     .await?
+    //     .map(|tree| (tree.leaf_index + 1) as u64)
+    //     .unwrap_or(1); // Address tree has zeroeth element
 
     // if !validate_batch_index(
     //     batch_address_append_event.old_next_index,
