@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::{accounts, address_queues, indexed_trees};
+use crate::dao::generated::{accounts, address_queues, indexed_trees, state_trees};
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::BatchEvent;
 use crate::ingester::parser::{
@@ -11,9 +13,10 @@ use crate::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use crate::ingester::persist::MAX_SQL_INSERTS;
 use crate::migration::Expr;
 use light_batched_merkle_tree::constants::DEFAULT_BATCH_ADDRESS_TREE_HEIGHT;
+use log::{debug, warn};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QueryTrait,
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, FromQueryResult,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 
 const ZKP_BATCH_SIZE: usize = 500;
@@ -33,11 +36,9 @@ fn validate_batch_index(
         )));
     } else if old_next_index < current_index {
         // Re-indexing scenario - events already processed
-        tracing::debug!(
+        debug!(
             "Batch {} re-indexing detected: old_next_index {} < current_index {}",
-            event_type,
-            old_next_index,
-            current_index
+            event_type, old_next_index, current_index
         );
         return Ok(false);
     }
@@ -52,11 +53,118 @@ pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: BatchMerkleTreeEvents,
 ) -> Result<(), IngesterError> {
-    for (_, events) in events.iter_mut() {
+    // Track the last processed sequence number for each tree to detect gaps
+    let mut tree_last_sequences: HashMap<Vec<u8>, u64> = HashMap::new();
+
+    // Load existing max sequences for all trees we're about to process
+    for (tree_pubkey, tree_events) in events.iter() {
+        if !tree_events.is_empty() {
+            let tree_bytes = tree_pubkey.to_vec();
+
+            // Get the maximum sequence number for this tree from the database
+            let max_seq = state_trees::Entity::find()
+                .filter(state_trees::Column::Tree.eq(tree_bytes.clone()))
+                .order_by_desc(state_trees::Column::Seq)
+                .one(txn)
+                .await?
+                .and_then(|row| row.seq)
+                .map(|seq| seq as u64)
+                .unwrap_or(0);
+
+            tree_last_sequences.insert(tree_bytes, max_seq);
+        }
+    }
+
+    for (tree_pubkey, events) in events.iter_mut() {
+        // Sort by sequence
         events.sort_by(|a, b| a.0.cmp(&b.0));
 
+        let tree_name = bs58::encode(tree_pubkey).into_string();
+        let sequences_before: Vec<u64> = events.iter().map(|(seq, _)| *seq).collect();
+        debug!(
+            "Processing tree: {:?} with {} events, sequences: {:?}",
+            tree_name,
+            events.len(),
+            sequences_before
+        );
+
+        // Dedup events with the same sequence number
+        // Keep only the first occurrence of each sequence
+        let mut seen_sequences = std::collections::HashSet::new();
+        let mut deduplicated_events = Vec::new();
+        let mut duplicate_count = 0;
+
+        for (seq, event) in events.iter() {
+            if seen_sequences.insert(*seq) {
+                // First time seeing this sequence, keep it
+                deduplicated_events.push((*seq, event.clone()));
+            } else {
+                duplicate_count += 1;
+                warn!(
+                    "Duplicate sequence detected: {} for tree {}",
+                    seq, tree_name
+                );
+
+                let event_details = match event {
+                    MerkleTreeEvent::BatchNullify(e) => format!(
+                        "BatchNullify: old_idx={}, new_idx={}",
+                        e.old_next_index, e.new_next_index
+                    ),
+                    MerkleTreeEvent::BatchAppend(e) => format!(
+                        "BatchAppend: old_idx={}, new_idx={}",
+                        e.old_next_index, e.new_next_index
+                    ),
+                    MerkleTreeEvent::BatchAddressAppend(e) => format!(
+                        "BatchAddressAppend: old_idx={}, new_idx={}",
+                        e.old_next_index, e.new_next_index
+                    ),
+                    _ => format!("Unknown event type"),
+                };
+                eprintln!("   Skipping duplicate event seq={}: {}", seq, event_details);
+            }
+        }
+
+        if duplicate_count > 0 {
+            eprintln!(
+                "Deduplication complete: removed {} duplicate events for tree {}",
+                duplicate_count, tree_name
+            );
+            eprintln!(
+                "   Original count: {}, After dedup: {}",
+                events.len(),
+                deduplicated_events.len()
+            );
+
+            // Replace events with deduplicated version
+            *events = deduplicated_events;
+        }
+
+        let mut last_seq = tree_last_sequences
+            .get(&tree_pubkey.to_vec())
+            .copied()
+            .unwrap_or(0);
+
         // Process each event in sequence
-        for (_, event) in events.iter() {
+        for (event_seq, event) in events.iter() {
+            // Check for sequence gaps - each new sequence should be exactly last_seq + 1
+            // Allow processing the same sequence (idempotent re-processing)
+            if *event_seq > 0 && last_seq > 0 {
+                if *event_seq > last_seq + 1 {
+                    return Err(IngesterError::ParserError(format!(
+                        "Sequence gap detected for tree {:?}: expected sequence {} or {}, got {}",
+                        tree_pubkey,
+                        last_seq,
+                        last_seq + 1,
+                        event_seq
+                    )));
+                } else if *event_seq < last_seq {
+                    // This could be a re-indexing scenario
+                    debug!(
+                        "Processing older sequence {} for tree {:?}, current max is {}",
+                        event_seq, tree_pubkey, last_seq
+                    );
+                }
+            }
             // Batch size is 500 for batched State Merkle trees.
             let mut leaf_nodes = Vec::with_capacity(ZKP_BATCH_SIZE);
             match event {
@@ -81,6 +189,11 @@ pub async fn persist_batch_events(
                         .await?;
                 }
             }
+
+            // Update last processed sequence only if this is a new sequence
+            if *event_seq > last_seq {
+                last_seq = *event_seq;
+            }
         }
     }
     Ok(())
@@ -89,7 +202,7 @@ pub async fn persist_batch_events(
 /// Persists a batch append event.
 /// 1. Create leaf nodes with the account hash as leaf.
 /// 2. Remove inserted elements from the database output queue.
-async fn persist_batch_append_event(
+pub(crate) async fn persist_batch_append_event(
     txn: &DatabaseTransaction,
     batch_append_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
@@ -118,6 +231,30 @@ async fn persist_batch_append_event(
         return Ok(());
     }
 
+    // Verify the expected accounts exist in the output queue
+    let queue_count = accounts::Entity::find()
+        .filter(
+            accounts::Column::LeafIndex
+                .gte(batch_append_event.old_next_index as i64)
+                .and(accounts::Column::LeafIndex.lt(batch_append_event.new_next_index as i64))
+                .and(accounts::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
+                .and(accounts::Column::InOutputQueue.eq(true)),
+        )
+        .count(txn)
+        .await?;
+
+    // Verification: ensure we have exactly the expected number of accounts in the queue
+    if queue_count != expected_count as u64 {
+        return Err(IngesterError::ParserError(format!(
+               "Batch append verification failed: expected {} accounts in output queue for tree {:?} range [{}, {}), found {}",
+               expected_count,
+               bs58::encode(&batch_append_event.merkle_tree_pubkey).into_string(),
+               batch_append_event.old_next_index,
+               batch_append_event.new_next_index,
+               queue_count
+           )));
+    }
+
     let accounts = accounts::Entity::find()
         .filter(
             accounts::Column::LeafIndex
@@ -132,8 +269,30 @@ async fn persist_batch_append_event(
 
     // If we got the expected count, proceed
     if accounts.len() == expected_count {
-        // Validate sequential indices and process accounts
+        // Get the tree's actual next leaf index (not the queue index)
+        #[derive(Debug, FromQueryResult)]
+        struct MaxLeafIndex {
+            max_leaf_idx: Option<i64>,
+        }
+
+        let max_leaf_result = state_trees::Entity::find()
+            .filter(state_trees::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
+            .filter(state_trees::Column::Level.eq(0))
+            .select_only()
+            .column_as(state_trees::Column::LeafIdx.max(), "max_leaf_idx")
+            .into_model::<MaxLeafIndex>()
+            .one(txn)
+            .await?;
+
+        let tree_next_leaf_index = max_leaf_result
+            .and_then(|r| r.max_leaf_idx)
+            .map(|max_idx| (max_idx + 1) as u32)
+            .unwrap_or(0);
+
+        // Validate sequential indices and process accounts from output queue
         let mut expected_leaf_index = batch_append_event.old_next_index;
+        // Use tree's actual next index for inserting into the tree
+        let mut tree_leaf_index = tree_next_leaf_index;
 
         for account in &accounts {
             if account.leaf_index != expected_leaf_index as i64 {
@@ -150,6 +309,13 @@ async fn persist_batch_append_event(
                 ));
             }
 
+            let leaf_hash = Hash::new(account.hash.as_slice()).map_err(|_| {
+                IngesterError::ParserError("Failed to convert account hash to Hash".to_string())
+            })?;
+
+            // IMPORTANT: Include ALL accounts, even spent ones.
+            // The on-chain program includes spent accounts in the tree with their hash values.
+            // Skipping spent accounts would create gaps in the tree indices and produce incorrect roots.
             leaf_nodes.push(LeafNode {
                 tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
                     IngesterError::ParserError(
@@ -157,11 +323,10 @@ async fn persist_batch_append_event(
                     )
                 })?,
                 seq: Some(batch_append_event.sequence_number as u32),
-                leaf_index: account.leaf_index as u32,
-                hash: Hash::new(account.hash.as_slice()).map_err(|_| {
-                    IngesterError::ParserError("Failed to convert account hash to Hash".to_string())
-                })?,
+                leaf_index: tree_leaf_index,
+                hash: leaf_hash,
             });
+            tree_leaf_index += 1;
         }
     } else if accounts.is_empty() {
         // Check if already processed (re-indexing scenario)
@@ -232,6 +397,72 @@ async fn persist_batch_nullify_event(
 
     let queue_start = batch_nullify_event.old_next_index as i64;
     let queue_end = batch_nullify_event.new_next_index as i64;
+    let tree_pubkey_str = bs58::encode(&batch_nullify_event.merkle_tree_pubkey).into_string();
+
+    // First, verify the expected accounts exist with proper nullifier queue indices
+    // Look for accounts that are spent but not yet nullified in tree
+    // Note: Accounts CAN be nullified while still in the output queue
+    let queue_count = accounts::Entity::find()
+        .filter(
+            accounts::Column::NullifierQueueIndex
+                .gte(queue_start)
+                .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
+                .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
+                .and(accounts::Column::Spent.eq(true))
+                .and(accounts::Column::NullifiedInTree.eq(false)), // Not yet nullified
+        )
+        .count(txn)
+        .await?;
+
+    // Check if already processed (re-indexing scenario)
+    if queue_count != expected_count as u64 {
+        let already_nullified = accounts::Entity::find()
+            .filter(
+                accounts::Column::NullifierQueueIndex
+                    .gte(queue_start)
+                    .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
+                    .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
+                    .and(accounts::Column::NullifiedInTree.eq(true)),
+            )
+            .count(txn)
+            .await?;
+
+        if already_nullified == expected_count as u64 {
+            // All accounts are already nullified - this is a re-indexing scenario
+            tracing::info!(
+                    "Batch nullify already processed: {} accounts already nullified in tree for queue range [{}, {})",
+                    already_nullified,
+                    batch_nullify_event.old_next_index,
+                    batch_nullify_event.new_next_index
+                );
+            return Ok(());
+        }
+
+        // Check how many are in the output queue (shouldn't be nullified yet)
+        let in_queue_count = accounts::Entity::find()
+            .filter(
+                accounts::Column::NullifierQueueIndex
+                    .gte(queue_start)
+                    .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
+                    .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
+                    .and(accounts::Column::Spent.eq(true))
+                    .and(accounts::Column::InOutputQueue.eq(true)), // Still in queue
+            )
+            .count(txn)
+            .await?;
+
+        // Partial or missing accounts - this is an error
+        return Err(IngesterError::ParserError(format!(
+                "Batch nullify verification failed: expected {} accounts in nullifier queue for tree {:?} range [{}, {}), found {} ready to nullify (in tree), {} already nullified, {} still in output queue",
+                expected_count,
+                tree_pubkey_str,
+                queue_start,
+                queue_end,
+                queue_count,
+                already_nullified,
+                in_queue_count
+            )));
+    }
 
     let accounts = accounts::Entity::find()
         .filter(
@@ -239,7 +470,8 @@ async fn persist_batch_nullify_event(
                 .gte(queue_start)
                 .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
                 .and(accounts::Column::Tree.eq(batch_nullify_event.merkle_tree_pubkey.to_vec()))
-                .and(accounts::Column::Spent.eq(true)),
+                .and(accounts::Column::Spent.eq(true))
+                .and(accounts::Column::NullifiedInTree.eq(false)), // Only get accounts not yet nullified
         )
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
