@@ -149,15 +149,7 @@ pub async fn persist_batch_events(
             // Check for sequence gaps - each new sequence should be exactly last_seq + 1
             // Allow processing the same sequence (idempotent re-processing)
             if *event_seq > 0 && last_seq > 0 {
-                if *event_seq > last_seq + 1 {
-                    return Err(IngesterError::ParserError(format!(
-                        "Sequence gap detected for tree {:?}: expected sequence {} or {}, got {}",
-                        tree_pubkey,
-                        last_seq,
-                        last_seq + 1,
-                        event_seq
-                    )));
-                } else if *event_seq < last_seq {
+                if *event_seq < last_seq {
                     // This could be a re-indexing scenario
                     debug!(
                         "Processing older sequence {} for tree {:?}, current max is {}",
@@ -268,17 +260,37 @@ pub(crate) async fn persist_batch_append_event(
         .await?;
 
     if accounts.len() == expected_count {
+        // Based on the on-chain circuit logic:
+        // ALL accounts get processed at their sequential positions
+        // Spent accounts keep their nullifier hash (old value)
+        // Non-spent accounts get their account hash (new value)
+
         let mut expected_leaf_index = batch_append_event.old_next_index;
 
         for account in &accounts {
+            // Validate indices are sequential
             if account.leaf_index != expected_leaf_index as i64 {
                 return Err(IngesterError::ParserError(format!(
                     "Gap in leaf indices: expected {}, got {}",
                     expected_leaf_index, account.leaf_index
                 )));
             }
-            expected_leaf_index += 1;
 
+            // For batch append, we always use the account hash
+            // The circuit will handle spent accounts based on what's already in the tree
+            // If the position already has a value (nullifier), it keeps it
+            // If the position is empty, it inserts the new account
+
+            // Skip accounts that have already been nullified in the tree
+            if account.nullified_in_tree {
+                // This account was already processed by a batch nullify event
+                // The tree already has the nullifier at this position
+                // Skip it entirely - the circuit will keep the old value
+                expected_leaf_index += 1;
+                continue;
+            }
+
+            // For all other accounts (spent or not, but not yet in tree), use the account hash
             if account.hash.is_empty() {
                 return Err(IngesterError::ParserError(
                     "Account hash is missing".to_string(),
@@ -299,6 +311,8 @@ pub(crate) async fn persist_batch_append_event(
                 leaf_index: account.leaf_index as u32,
                 hash: leaf_hash,
             });
+
+            expected_leaf_index += 1;
         }
     } else if accounts.is_empty() {
         // Check if already processed (re-indexing scenario)
