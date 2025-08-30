@@ -15,8 +15,8 @@ use crate::migration::Expr;
 use light_batched_merkle_tree::constants::DEFAULT_BATCH_ADDRESS_TREE_HEIGHT;
 use log::{debug, warn};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, FromQueryResult,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QueryTrait,
 };
 
 const ZKP_BATCH_SIZE: usize = 500;
@@ -267,32 +267,8 @@ pub(crate) async fn persist_batch_append_event(
         .all(txn)
         .await?;
 
-    // If we got the expected count, proceed
     if accounts.len() == expected_count {
-        // Get the tree's actual next leaf index (not the queue index)
-        #[derive(Debug, FromQueryResult)]
-        struct MaxLeafIndex {
-            max_leaf_idx: Option<i64>,
-        }
-
-        let max_leaf_result = state_trees::Entity::find()
-            .filter(state_trees::Column::Tree.eq(batch_append_event.merkle_tree_pubkey.to_vec()))
-            .filter(state_trees::Column::Level.eq(0))
-            .select_only()
-            .column_as(state_trees::Column::LeafIdx.max(), "max_leaf_idx")
-            .into_model::<MaxLeafIndex>()
-            .one(txn)
-            .await?;
-
-        let tree_next_leaf_index = max_leaf_result
-            .and_then(|r| r.max_leaf_idx)
-            .map(|max_idx| (max_idx + 1) as u32)
-            .unwrap_or(0);
-
-        // Validate sequential indices and process accounts from output queue
         let mut expected_leaf_index = batch_append_event.old_next_index;
-        // Use tree's actual next index for inserting into the tree
-        let mut tree_leaf_index = tree_next_leaf_index;
 
         for account in &accounts {
             if account.leaf_index != expected_leaf_index as i64 {
@@ -313,9 +289,6 @@ pub(crate) async fn persist_batch_append_event(
                 IngesterError::ParserError("Failed to convert account hash to Hash".to_string())
             })?;
 
-            // IMPORTANT: Include ALL accounts, even spent ones.
-            // The on-chain program includes spent accounts in the tree with their hash values.
-            // Skipping spent accounts would create gaps in the tree indices and produce incorrect roots.
             leaf_nodes.push(LeafNode {
                 tree: SerializablePubkey::try_from(account.tree.clone()).map_err(|_| {
                     IngesterError::ParserError(
@@ -323,10 +296,9 @@ pub(crate) async fn persist_batch_append_event(
                     )
                 })?,
                 seq: Some(batch_append_event.sequence_number as u32),
-                leaf_index: tree_leaf_index,
+                leaf_index: account.leaf_index as u32,
                 hash: leaf_hash,
             });
-            tree_leaf_index += 1;
         }
     } else if accounts.is_empty() {
         // Check if already processed (re-indexing scenario)

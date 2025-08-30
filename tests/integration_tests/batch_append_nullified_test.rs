@@ -1,5 +1,5 @@
 use crate::utils::*;
-use photon_indexer::dao::generated::state_trees;
+use photon_indexer::dao::generated::{accounts, state_trees};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serial_test::serial;
 
@@ -48,6 +48,75 @@ async fn test_batch_append_followed_by_nullify_in_queue(
 
     // Process all transactions in order
     for (_, signature) in signatures.iter().enumerate() {
+        // Check state right before BatchAppend seq 4
+        if signature == batch_append_4 {
+            println!("\n  Checking state BEFORE BatchAppend seq 4:");
+
+            let tree_bytes = bs58::decode("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu")
+                .into_vec()
+                .unwrap();
+
+            // Check for accounts that are spent and will be processed in this batch
+            let spent_accounts = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree_bytes.clone()))
+                .filter(accounts::Column::Spent.eq(true))
+                .all(setup.db_conn.as_ref())
+                .await
+                .unwrap();
+
+            let accounts_in_queue = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree_bytes.clone()))
+                .filter(accounts::Column::InOutputQueue.eq(true))
+                .all(setup.db_conn.as_ref())
+                .await
+                .unwrap();
+
+            // Check for accounts that are spent AND in the output queue
+            let spent_in_queue = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree_bytes.clone()))
+                .filter(accounts::Column::Spent.eq(true))
+                .filter(accounts::Column::InOutputQueue.eq(true))
+                .all(setup.db_conn.as_ref())
+                .await
+                .unwrap();
+
+            println!("    - Total spent accounts: {}", spent_accounts.len());
+            println!(
+                "    - Accounts in output queue: {}",
+                accounts_in_queue.len()
+            );
+            println!(
+                "    - Spent accounts in output queue: {}",
+                spent_in_queue.len()
+            );
+
+            // Show details of accounts in the output queue
+            for (i, acc) in accounts_in_queue.iter().take(5).enumerate() {
+                println!(
+                    "      Queue account {}: spent={}, leaf_index={}, nullifier_queue_index={:?}",
+                    i + 1,
+                    acc.spent,
+                    acc.leaf_index,
+                    acc.nullifier_queue_index
+                );
+            }
+
+            // Critical assertion: There should be accounts in the queue that will be processed
+            // Some of these may have been nullified (spent=true) before being appended to the tree
+            assert!(
+                !accounts_in_queue.is_empty(),
+                "There should be accounts in the output queue for BatchAppend seq 4 to process"
+            );
+
+            // This is the key check - some of the accounts being appended were already nullified
+            if !spent_in_queue.is_empty() {
+                println!(
+                    "    ✓ Found {} spent accounts that will be appended",
+                    spent_in_queue.len()
+                );
+            }
+        }
+
         index(
             &name,
             setup.db_conn.clone(),
@@ -153,7 +222,7 @@ async fn test_batch_append_followed_by_nullify_in_queue(
         println!("  5. Nullification transactions");
         println!("  6. BatchNullify (seq 3) - nullifies accounts in queue");
         println!("  7. More compress transactions");
-        println!("  8. BatchAppend (seq 4) - processes accounts 20-30 (BUG MANIFESTS HERE)");
+        println!("  8. BatchAppend (seq 4) - processes accounts 20-30");
     } else {
         panic!("No root node found in state_trees for tree HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu - transactions were not indexed properly");
     }
