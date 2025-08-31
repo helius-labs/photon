@@ -4,6 +4,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::leaf_node::{leaf_index_to_node_index, LeafNode};
+use crate::ingester::persist::persisted_batch_event::sequence::get_current_tree_sequence;
 use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, get_proof_path, ZERO_BYTES};
 use crate::ingester::persist::MerkleProofWithContext;
 use sea_orm::QueryFilter;
@@ -19,6 +20,15 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
     if indices.is_empty() {
         return Ok(Vec::new());
     }
+
+    // Convert SerializablePubkey to [u8; 32] for the helper function
+    let tree_bytes = merkle_tree_pubkey.0.to_bytes();
+    let root_seq = get_current_tree_sequence(txn, &tree_bytes)
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to get tree sequence: {}", e))
+        })? as u32;
+    let root_seq = if root_seq == 0 { None } else { Some(root_seq) };
 
     let existing_leaves = state_trees::Entity::find()
         .filter(
@@ -46,7 +56,7 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                     tree: merkle_tree_pubkey,
                     leaf_index: idx as u32,
                     hash: Hash::try_from(existing.hash)?,
-                    seq: existing.seq.map(|s| s as u32),
+                    seq: root_seq,
                 },
                 existing.node_idx,
             ));
@@ -55,7 +65,7 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                 tree: merkle_tree_pubkey,
                 leaf_index: idx as u32,
                 hash: Hash::from(ZERO_BYTES[0]),
-                seq: None,
+                seq: root_seq,
             };
             let tree_height = TreeInfo::height(&merkle_tree_pubkey.to_string()).ok_or(
                 PhotonApiError::RecordNotFound(format!(
@@ -79,24 +89,63 @@ pub async fn get_multiple_compressed_leaf_proofs(
         return Ok(Vec::new());
     }
 
-    let leaf_nodes_with_node_index = state_trees::Entity::find()
+    let leaf_records = state_trees::Entity::find()
         .filter(
             state_trees::Column::Hash
                 .is_in(hashes.iter().map(|x| x.to_vec()).collect::<Vec<Vec<u8>>>())
                 .and(state_trees::Column::Level.eq(0)),
         )
         .all(txn)
-        .await?
+        .await?;
+
+    // Get unique trees from the leaf records
+    let unique_trees: Vec<Vec<u8>> = leaf_records
+        .iter()
+        .map(|x| x.tree.clone())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Fetch root seq for each tree using the helper function
+    let mut tree_to_root_seq = HashMap::new();
+    for tree in unique_trees {
+        // Convert Vec<u8> to [u8; 32] for the helper
+        let tree_array: [u8; 32] = tree.clone().try_into().map_err(|_| {
+            PhotonApiError::UnexpectedError("Invalid tree bytes length".to_string())
+        })?;
+
+        let root_seq = get_current_tree_sequence(txn, &tree_array)
+            .await
+            .map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to get tree sequence: {}", e))
+            })?;
+
+        let root_seq = if root_seq == 0 {
+            None
+        } else {
+            Some(root_seq as u32)
+        };
+
+        if let Ok(tree_pubkey) = SerializablePubkey::try_from(tree.clone()) {
+            log::debug!("Tree {} root seq: {:?}", tree_pubkey, root_seq);
+        }
+
+        tree_to_root_seq.insert(tree, root_seq);
+    }
+
+    let leaf_nodes_with_node_index = leaf_records
         .into_iter()
         .map(|x| {
+            let tree_bytes = x.tree.clone();
+            let root_seq = tree_to_root_seq.get(&tree_bytes).and_then(|&s| s);
             Ok((
                 LeafNode {
-                    tree: SerializablePubkey::try_from(x.tree.clone())?,
+                    tree: SerializablePubkey::try_from(tree_bytes)?,
                     leaf_index: x.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
                         "Leaf index not found".to_string(),
                     ))? as u32,
                     hash: Hash::try_from(x.hash.clone())?,
-                    seq: x.seq.map(|x| x as u32),
+                    seq: root_seq,
                 },
                 x.node_idx,
             ))
@@ -195,6 +244,13 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             let root = proof.pop().ok_or(PhotonApiError::UnexpectedError(
                 "Root node not found in proof".to_string(),
             ))?;
+
+            log::debug!(
+                "MerkleProofWithContext for tree {} leaf_index {} root_seq: {}",
+                leaf_node.tree,
+                leaf_node.leaf_index,
+                root_seq.unwrap_or(0i64) as u64
+            );
 
             Ok(MerkleProofWithContext {
                 proof,

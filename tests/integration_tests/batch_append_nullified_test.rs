@@ -427,21 +427,19 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 );
 
                 if root_hash != expected_root {
-                    println!(
-                        "ROOT MISMATCH DETECTED at sequence {}!",
-                        expected_seq
-                    );
+                    println!("ROOT MISMATCH DETECTED at sequence {}!", expected_seq);
                     println!("       Expected: {}", expected_root);
                     println!("       Got:      {}", root_hash);
                 }
-                
+
                 if actual_seq != expected_seq {
-                    println!(
-                        "SEQUENCE MISMATCH DETECTED!",
-                    );
+                    println!("SEQUENCE MISMATCH DETECTED!",);
                     println!("       Expected seq: {}", expected_seq);
                     println!("       Got seq:      {}", actual_seq);
-                    panic!("Sequence number mismatch: expected {}, got {}", expected_seq, actual_seq);
+                    panic!(
+                        "Sequence number mismatch: expected {}, got {}",
+                        expected_seq, actual_seq
+                    );
                 }
             } else {
                 println!("No root found for sequence {}", expected_seq);

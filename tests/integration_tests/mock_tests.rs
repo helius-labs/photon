@@ -1642,6 +1642,7 @@ async fn test_update_indexed_merkle_tree(
                     leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,
+                    signature: Default::default(),
                 },
             );
             persist_indexed_tree_updates(&txn, indexed_leaf_updates)

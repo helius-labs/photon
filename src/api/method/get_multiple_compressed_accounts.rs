@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use super::{super::error::PhotonApiError, utils::PAGE_LIMIT};
 use crate::common::typedefs::account::{Account, AccountV2};
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use crate::dao::helpers::{find_accounts_by_addresses, find_accounts_by_hashes};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::{
     openapi::{RefOr, Schema},
@@ -74,26 +73,13 @@ pub async fn fetch_accounts_from_hashes(
     hashes: Vec<Hash>,
     spent: bool,
 ) -> Result<Vec<Option<accounts::Model>>, PhotonApiError> {
-    let raw_hashes: Vec<Vec<u8>> = hashes.into_iter().map(|hash| hash.to_vec()).collect();
-
-    let accounts = accounts::Entity::find()
-        .filter(
-            accounts::Column::Hash
-                .is_in(raw_hashes.clone())
-                .and(accounts::Column::Spent.eq(spent)),
-        )
-        .all(conn)
+    let hash_to_account = find_accounts_by_hashes(conn, &hashes, Some(spent))
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
-    let hash_to_account: HashMap<Vec<u8>, accounts::Model> = accounts
+    Ok(hashes
         .into_iter()
-        .map(|account| (account.hash.clone(), account))
-        .collect();
-
-    Ok(raw_hashes
-        .into_iter()
-        .map(|hash| hash_to_account.get(&hash).cloned())
+        .map(|hash| hash_to_account.get(&hash.to_vec()).cloned())
         .collect())
 }
 
@@ -101,23 +87,13 @@ async fn fetch_account_from_addresses(
     conn: &DatabaseConnection,
     addresses: Vec<SerializablePubkey>,
 ) -> Result<Vec<Option<accounts::Model>>, PhotonApiError> {
-    let raw_addresses: Vec<Vec<u8>> = addresses.into_iter().map(|addr| addr.into()).collect();
-    let accounts = accounts::Entity::find()
-        .filter(
-            accounts::Column::Address
-                .is_in(raw_addresses.clone())
-                .and(accounts::Column::Spent.eq(false)),
-        )
-        .all(conn)
+    let address_to_account = find_accounts_by_addresses(conn, &addresses, Some(false))
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-    let address_to_account: HashMap<Option<Vec<u8>>, accounts::Model> = accounts
+
+    Ok(addresses
         .into_iter()
-        .map(|account| (account.address.clone(), account))
-        .collect();
-    Ok(raw_addresses
-        .into_iter()
-        .map(|addr| address_to_account.get(&Some(addr)).cloned())
+        .map(|addr| address_to_account.get(&addr.to_bytes_vec()).cloned())
         .collect())
 }
 

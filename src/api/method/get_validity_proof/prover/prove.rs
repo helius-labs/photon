@@ -96,6 +96,13 @@ pub(crate) async fn generate_proof(
         BatchedMerkleTreeMetadata::default().root_history_capacity as u64
     };
 
+    log::debug!(
+        "Queue size: state_tree_height={}, address_tree_height={}, queue_size={}",
+        state_tree_height,
+        address_tree_height,
+        queue_size
+    );
+
     let batch_inputs = HexBatchInputsForProver {
         circuit_type: circuit_type.to_string(),
         state_tree_height: state_tree_height as u32,
@@ -143,6 +150,9 @@ pub(crate) async fn generate_proof(
     let compressed_proof = compress_proof(&proof)?;
     let mut account_details = Vec::with_capacity(db_account_proofs.len());
     for acc_proof in db_account_proofs.iter() {
+        log::debug!("Proof generation: tree {} leaf_index {} root_seq {} queue_size {} root_index_mod_queue {}",
+            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, queue_size, acc_proof.root_seq % queue_size);
+
         let tree_info = TreeInfo::get(&acc_proof.merkle_tree.to_string().as_str())
             .ok_or(PhotonApiError::UnexpectedError(format!(
                 "Failed to parse TreeInfo for account tree '{}'",
