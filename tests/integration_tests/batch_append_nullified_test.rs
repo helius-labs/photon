@@ -188,7 +188,6 @@ async fn test_batch_append_followed_by_nullify_in_queue(
             println!("  Seq {}: {}{}", i, root, marker);
         }
 
-        // Get the expected root for the current sequence
         if (seq as usize) < ON_CHAIN_ROOT_HISTORY.len() {
             let expected_on_chain_root = ON_CHAIN_ROOT_HISTORY[seq as usize];
 
@@ -196,7 +195,6 @@ async fn test_batch_append_followed_by_nullify_in_queue(
             println!("  Expected on-chain root: {}", expected_on_chain_root);
             println!("  Actual indexer root:    {}", root_hash);
 
-            // Always assert that roots should match
             assert_eq!(
                 root_hash, expected_on_chain_root,
                 "\nROOT MISMATCH at sequence {}!\n\
@@ -261,7 +259,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
 
     let mut batch_events_seen = Vec::new();
 
-    // From photon.log - the key batch transactions
     let batch_nullify_1 =
         "5uc2Zz7xkiwLbk6d5bKkoBTAxCwALsFio8q8jmfR3JYJKywCA5vov9NYXerCjaYqY4ha7dN4ikWoyHHFv3H87d7w";
     let batch_nullify_2 =
@@ -273,9 +270,7 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
     let batch_append_5 =
         "4JRPve1xBXXPHkscVBafAizEgWY8pgxFYCcqn9LYyQT9SwZHiktw4xvED8ssxXr6PeLxaKMsVxs2E9gn8ccZBDMY";
 
-    // Process all transactions in order
     for (_, signature) in signatures.iter().enumerate() {
-        // Check state right before BatchAppend seq 5 (the critical one that triggered root mismatch)
         if signature == batch_append_5 {
             println!("\n  Checking state BEFORE BatchAppend seq 5:");
 
@@ -283,7 +278,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 .into_vec()
                 .unwrap();
 
-            // Check for accounts that are spent and will be processed in this batch
             let spent_accounts = accounts::Entity::find()
                 .filter(accounts::Column::Tree.eq(tree_bytes.clone()))
                 .filter(accounts::Column::Spent.eq(true))
@@ -298,7 +292,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 .await
                 .unwrap();
 
-            // Check for accounts that are spent AND in the output queue
             let spent_in_queue = accounts::Entity::find()
                 .filter(accounts::Column::Tree.eq(tree_bytes.clone()))
                 .filter(accounts::Column::Spent.eq(true))
@@ -317,7 +310,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 spent_in_queue.len()
             );
 
-            // Show details of accounts in the output queue
             for (i, acc) in accounts_in_queue.iter().take(5).enumerate() {
                 println!(
                     "      Queue account {}: spent={}, leaf_index={}, nullifier_queue_index={:?}",
@@ -328,14 +320,11 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 );
             }
 
-            // Critical assertion: There should be accounts in the queue that will be processed
-            // These accounts were nullified before being appended to the tree
             assert!(
                 !accounts_in_queue.is_empty(),
                 "There should be accounts in the output queue for BatchAppend seq 5 to process"
             );
 
-            // This is the key check - the accounts being appended were already nullified
             assert!(
                 !spent_in_queue.is_empty(),
                 "There should be spent accounts in the output queue being appended"
@@ -356,7 +345,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
         )
         .await;
 
-        // Track batch events and validate root after each one
         let mut should_check_root = false;
         let mut expected_seq = 0u64;
 
@@ -402,7 +390,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
             expected_seq = 5;
         }
 
-        // Check root after each batch event
         if should_check_root {
             let tree_bytes = bs58::decode("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu")
                 .into_vec()
@@ -415,7 +402,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
                 .await
                 .unwrap();
 
-            // On-chain root history from photon.log error message
             const ON_CHAIN_ROOT_HISTORY: &[&str] = &[
                 "4C4hXkTeb81GhLj8GBTwDxRxvBy2xZxVFh4YfthKA6XJ", // [0] - initial root
                 "3URxLevuDY3as6511nB9NjjK97AMbuW4CqHVskpUzL5z", // [1] - after BatchNullify seq 1
@@ -427,26 +413,38 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
 
             if let Some(root) = root_node {
                 let root_hash = bs58::encode(&root.hash).into_string();
+                let actual_seq = root.seq.unwrap_or(0) as u64;
                 let expected_root = ON_CHAIN_ROOT_HISTORY[expected_seq as usize];
 
                 println!(
-                    "    Root check at seq {}: indexer={}, expected={}, match={}",
+                    "    Root check at expected seq {}: indexer_seq={}, indexer_root={}, expected_root={}, root_match={}, seq_match={}",
                     expected_seq,
+                    actual_seq,
                     root_hash,
                     expected_root,
-                    root_hash == expected_root
+                    root_hash == expected_root,
+                    actual_seq == expected_seq
                 );
 
                 if root_hash != expected_root {
                     println!(
-                        "    ❌ ROOT MISMATCH DETECTED at sequence {}!",
+                        "ROOT MISMATCH DETECTED at sequence {}!",
                         expected_seq
                     );
                     println!("       Expected: {}", expected_root);
                     println!("       Got:      {}", root_hash);
                 }
+                
+                if actual_seq != expected_seq {
+                    println!(
+                        "SEQUENCE MISMATCH DETECTED!",
+                    );
+                    println!("       Expected seq: {}", expected_seq);
+                    println!("       Got seq:      {}", actual_seq);
+                    panic!("Sequence number mismatch: expected {}, got {}", expected_seq, actual_seq);
+                }
             } else {
-                println!("    ⚠️  No root found for sequence {}", expected_seq);
+                println!("No root found for sequence {}", expected_seq);
             }
         }
     }
@@ -478,8 +476,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
         println!("  Tree root hash: {}", root_hash);
         println!("  Sequence: {}", seq);
 
-        // On-chain root history from photon.log error message
-        // These are the actual roots from the on-chain account for batch_append_spent scenario
         const ON_CHAIN_ROOT_HISTORY: &[&str] = &[
             "4C4hXkTeb81GhLj8GBTwDxRxvBy2xZxVFh4YfthKA6XJ", // [0] - initial root
             "3URxLevuDY3as6511nB9NjjK97AMbuW4CqHVskpUzL5z", // [1] - after BatchNullify seq 1
@@ -495,7 +491,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
             println!("  Seq {}: {}{}", i, root, marker);
         }
 
-        // Get the expected root for the current sequence
         if (seq as usize) < ON_CHAIN_ROOT_HISTORY.len() {
             let expected_on_chain_root = ON_CHAIN_ROOT_HISTORY[seq as usize];
 
@@ -503,7 +498,6 @@ async fn test_batch_append_spent(#[values(DatabaseBackend::Sqlite)] db_backend: 
             println!("  Expected on-chain root: {}", expected_on_chain_root);
             println!("  Actual indexer root:    {}", root_hash);
 
-            // Always assert that roots should match
             assert_eq!(
                 root_hash, expected_on_chain_root,
                 "\nROOT MISMATCH at sequence {}!\n\
