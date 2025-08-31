@@ -19,8 +19,9 @@ pub async fn persist_batch_append_event(
     batch_append_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
-    let expected_count =
-        (batch_append_event.new_next_index - batch_append_event.old_next_index) as usize;
+    let expected_count = batch_append_event
+        .new_next_index
+        .saturating_sub(batch_append_event.old_next_index) as usize;
 
     let current_next_index =
         get_tree_next_index(txn, &batch_append_event.merkle_tree_pubkey.to_vec()).await?;

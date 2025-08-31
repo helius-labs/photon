@@ -22,8 +22,9 @@ pub async fn persist_batch_nullify_event(
     batch_nullify_event: &BatchEvent,
     leaf_nodes: &mut Vec<LeafNode>,
 ) -> Result<(), IngesterError> {
-    let expected_count =
-        (batch_nullify_event.new_next_index - batch_nullify_event.old_next_index) as usize;
+    let expected_count = batch_nullify_event
+        .new_next_index
+        .saturating_sub(batch_nullify_event.old_next_index) as usize;
 
     // For nullify events, we don't validate against the tree's next index
     // because nullify events update existing leaves, they don't append new ones.

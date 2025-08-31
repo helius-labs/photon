@@ -16,8 +16,10 @@ pub async fn persist_batch_address_append_event(
     txn: &DatabaseTransaction,
     batch_address_append_event: &BatchEvent,
 ) -> Result<(), IngesterError> {
-    let expected_count = (batch_address_append_event.new_next_index
-        - batch_address_append_event.old_next_index) as usize;
+    let expected_count = batch_address_append_event
+        .new_next_index
+        .saturating_sub(batch_address_append_event.old_next_index)
+        as usize;
 
     // Validate old_next_index matches the current state of the address tree
     let current_next_index = indexed_trees::Entity::find()

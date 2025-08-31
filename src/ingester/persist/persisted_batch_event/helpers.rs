@@ -125,7 +125,7 @@ pub async fn check_nullify_already_processed(
     queue_start: i64,
     queue_end: i64,
 ) -> Result<bool, IngesterError> {
-    let expected = (queue_end - queue_start) as u64;
+    let expected = queue_end.saturating_sub(queue_start) as u64;
     let nullified = accounts::Entity::find()
         .filter(
             accounts::Column::NullifierQueueIndex
