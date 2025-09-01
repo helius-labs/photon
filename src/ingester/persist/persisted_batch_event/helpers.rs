@@ -9,7 +9,8 @@ use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode, STATE_TR
 use crate::ingester::persist::MAX_SQL_INSERTS;
 use log::{debug, warn};
 use sea_orm::{
-    ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    sea_query::SimpleExpr, ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder,
 };
 
 pub const ZKP_BATCH_SIZE: usize = 500;
@@ -160,6 +161,16 @@ pub async fn count_nullify_accounts_in_output_queue(
         .map_err(Into::into)
 }
 
+/// Helper to build the common filter for accounts ready to nullify
+fn build_nullify_ready_filter(tree: &[u8], queue_start: i64, queue_end: i64) -> SimpleExpr {
+    accounts::Column::NullifierQueueIndex
+        .gte(queue_start)
+        .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
+        .and(accounts::Column::Tree.eq(tree.to_vec()))
+        .and(accounts::Column::Spent.eq(true))
+        .and(accounts::Column::NullifiedInTree.eq(false))
+}
+
 /// Counts accounts that are spent but not yet nullified in tree
 pub async fn count_accounts_ready_to_nullify(
     txn: &DatabaseTransaction,
@@ -168,14 +179,7 @@ pub async fn count_accounts_ready_to_nullify(
     queue_end: i64,
 ) -> Result<u64, IngesterError> {
     accounts::Entity::find()
-        .filter(
-            accounts::Column::NullifierQueueIndex
-                .gte(queue_start)
-                .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
-                .and(accounts::Column::Tree.eq(tree.to_vec()))
-                .and(accounts::Column::Spent.eq(true))
-                .and(accounts::Column::NullifiedInTree.eq(false)),
-        )
+        .filter(build_nullify_ready_filter(tree, queue_start, queue_end))
         .count(txn)
         .await
         .map_err(Into::into)
@@ -189,14 +193,7 @@ pub async fn fetch_accounts_to_nullify(
     queue_end: i64,
 ) -> Result<Vec<accounts::Model>, IngesterError> {
     accounts::Entity::find()
-        .filter(
-            accounts::Column::NullifierQueueIndex
-                .gte(queue_start)
-                .and(accounts::Column::NullifierQueueIndex.lt(queue_end))
-                .and(accounts::Column::Tree.eq(tree.to_vec()))
-                .and(accounts::Column::Spent.eq(true))
-                .and(accounts::Column::NullifiedInTree.eq(false)),
-        )
+        .filter(build_nullify_ready_filter(tree, queue_start, queue_end))
         .order_by_asc(accounts::Column::NullifierQueueIndex)
         .all(txn)
         .await

@@ -159,7 +159,7 @@ pub fn create_state_update_v2(
                 .iter()
                 .filter(|x| x.queue_index != u64::MAX) // Exclude AddressV1 trees
                 .map(|x| AddressQueueUpdate {
-                    tree: SerializablePubkey::from(x.tree_pubkey),
+                    tree: SerializablePubkey::from(x.mt_pubkey),
                     address: x.address,
                     queue_index: x.queue_index,
                 }),
