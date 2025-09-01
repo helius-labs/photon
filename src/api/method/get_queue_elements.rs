@@ -57,6 +57,14 @@ pub async fn get_queue_elements(
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
     let queue_type = QueueType::from(request.queue_type as u64);
+    
+    if request.limit > 1000 {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many queue elements requested {}. Maximum allowed: 1000",
+            request.limit
+        )));
+    }
+    
     let limit = request.limit;
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
