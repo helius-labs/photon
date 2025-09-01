@@ -3,6 +3,7 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::BatchEvent;
 use crate::ingester::persist::persisted_indexed_merkle_tree::multi_append;
 use light_batched_merkle_tree::constants::DEFAULT_BATCH_ADDRESS_TREE_HEIGHT;
+use log::debug;
 use sea_orm::{
     ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
 };
@@ -79,7 +80,7 @@ pub async fn persist_batch_address_append_event(
             .await?;
 
         if already_indexed >= expected_count as u64 {
-            log::debug!(
+            debug!(
                 "Address batch already processed: {} addresses already in indexed tree",
                 already_indexed
             );

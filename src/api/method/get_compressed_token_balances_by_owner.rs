@@ -59,7 +59,7 @@ pub async fn get_compressed_token_balances_by_owner(
     if let Some(cursor) = cursor {
         let bytes = cursor.0;
         let expected_cursor_length = 32;
-        let mint = if bytes.len() == expected_cursor_length {
+        let cursor_mint = if bytes.len() == expected_cursor_length {
             bytes.to_vec()
         } else {
             return Err(PhotonApiError::ValidationError(format!(
@@ -68,7 +68,14 @@ pub async fn get_compressed_token_balances_by_owner(
                 bytes.len()
             )));
         };
-        filter = filter.and(token_owner_balances::Column::Mint.gt::<Vec<u8>>(mint.into()));
+        // Only use mint > cursor_mint if we're not filtering by a specific mint
+        // If filtering by a specific mint, the cursor should be ignored or we'd get no results
+        if mint.is_none() {
+            filter =
+                filter.and(token_owner_balances::Column::Mint.gt::<Vec<u8>>(cursor_mint.into()));
+        }
+        // If a specific mint is provided, we can't paginate within that mint
+        // because there's only one record per owner-mint combination in token_owner_balances
     }
     let limit = limit.map(|l| l.value()).unwrap_or(PAGE_LIMIT);
 

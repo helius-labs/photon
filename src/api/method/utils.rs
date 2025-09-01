@@ -149,15 +149,21 @@ pub async fn fetch_token_accounts(
                 bytes.len()
             )));
         }
-        let (mint, hash) = bytes.split_at(32);
+        let (cursor_mint, cursor_hash) = bytes.split_at(32);
 
-        filter = filter.and(
-            token_accounts::Column::Mint.gt::<Vec<u8>>(mint.into()).or(
+        // If a specific mint is provided, only use hash for pagination within that mint
+        if options.mint.is_some() {
+            filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
+        } else {
+            // No specific mint, use both mint and hash for pagination
+            filter = filter.and(
                 token_accounts::Column::Mint
-                    .eq::<Vec<u8>>(mint.into())
-                    .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into())),
-            ),
-        );
+                    .gt::<Vec<u8>>(cursor_mint.into())
+                    .or(token_accounts::Column::Mint
+                        .eq::<Vec<u8>>(cursor_mint.into())
+                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
+            );
+        }
     }
     if let Some(l) = options.limit {
         limit = l.value();
@@ -169,8 +175,6 @@ pub async fn fetch_token_accounts(
         .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
         .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .limit(limit)
-        .order_by(token_accounts::Column::Mint, sea_orm::Order::Asc)
-        .order_by(token_accounts::Column::Hash, sea_orm::Order::Asc)
         .all(conn)
         .await?
         .drain(..)
@@ -685,15 +689,21 @@ pub async fn fetch_token_accounts_v2(
                 bytes.len()
             )));
         }
-        let (mint, hash) = bytes.split_at(32);
+        let (cursor_mint, cursor_hash) = bytes.split_at(32);
 
-        filter = filter.and(
-            token_accounts::Column::Mint.gt::<Vec<u8>>(mint.into()).or(
+        // If a specific mint is provided, only use hash for pagination within that mint
+        if options.mint.is_some() {
+            filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
+        } else {
+            // No specific mint, use both mint and hash for pagination
+            filter = filter.and(
                 token_accounts::Column::Mint
-                    .eq::<Vec<u8>>(mint.into())
-                    .and(token_accounts::Column::Hash.gt::<Vec<u8>>(hash.into())),
-            ),
-        );
+                    .gt::<Vec<u8>>(cursor_mint.into())
+                    .or(token_accounts::Column::Mint
+                        .eq::<Vec<u8>>(cursor_mint.into())
+                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
+            );
+        }
     }
     if let Some(l) = options.limit {
         limit = l.value();

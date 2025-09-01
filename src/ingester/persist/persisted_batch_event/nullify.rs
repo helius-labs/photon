@@ -3,6 +3,7 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::BatchEvent;
 use crate::ingester::persist::leaf_node::LeafNode;
 use crate::migration::Expr;
+use log::debug;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
 };
@@ -64,7 +65,7 @@ pub async fn persist_batch_nullify_event(
         if already_processed {
             // Re-indexing scenario: all accounts already nullified
             // Still need to update sequence to match on-chain behavior
-            log::debug!(
+            debug!(
                 "Batch nullify re-indexing: accounts already nullified for range [{}, {}), updating sequence",
                 batch_nullify_event.old_next_index,
                 batch_nullify_event.new_next_index
