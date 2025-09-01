@@ -57,6 +57,14 @@ pub async fn get_batch_address_update_info(
     conn: &DatabaseConnection,
     request: GetBatchAddressUpdateInfoRequest,
 ) -> Result<GetBatchAddressUpdateInfoResponse, PhotonApiError> {
+
+    if request.limit as usize > MAX_ADDRESSES {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many addresses requested {}. Maximum allowed: {}",
+            request.limit, MAX_ADDRESSES
+        )));
+    }
+    
     let limit = request.limit;
     let merkle_tree_pubkey = request.tree;
     let tree_info = TreeInfo::get(&merkle_tree_pubkey.to_string())
