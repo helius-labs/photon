@@ -77,6 +77,15 @@ struct Args {
     #[arg(long, default_value = None)]
     snapshot_dir: Option<String>,
 
+    /// GCS bucket name for loading snapshots. The bucket must already exist.
+    /// Credentials must be provided via Application Default Credentials (ADC) or environment variables.
+    #[arg(long)]
+    gcs_bucket: Option<String>,
+
+    /// GCS prefix for snapshot files. All snapshots will be loaded from this prefix in the GCS bucket.
+    #[arg(long, default_value = "")]
+    gcs_prefix: String,
+
     #[arg(short, long, default_value = None)]
     /// Yellowstone gRPC URL. If it's inputed, then the indexer will use gRPC to fetch new blocks
     /// instead of polling. It will still use RPC to fetch blocks if
@@ -213,8 +222,28 @@ async fn main() {
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
     let rpc_client = get_rpc_client(&args.rpc_url);
 
-    if let Some(snapshot_dir) = args.snapshot_dir {
-        let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+    // Load snapshot if provided (either from local directory or GCS)
+    let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
+        (Some(snapshot_dir), None) => {
+            Some(Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir)))
+        }
+        (None, Some(gcs_bucket)) => {
+            Some(Arc::new(
+                DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
+                    gcs_bucket,
+                    args.gcs_prefix.clone(),
+                )
+                .await,
+            ))
+        }
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            error!("Cannot specify both snapshot_dir and gcs_bucket");
+            std::process::exit(1);
+        }
+    };
+
+    if let Some(directory_adapter) = directory_adapter {
         let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
             .await
             .unwrap();
