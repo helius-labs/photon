@@ -1,6 +1,6 @@
 use crate::utils::compare_account_with_account_v2;
 use crate::utils::*;
-use ::borsh::{to_vec, BorshDeserialize, BorshSerialize};
+use ::borsh::to_vec;
 use function_name::named;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::{
     DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
@@ -53,12 +53,6 @@ use photon_indexer::common::typedefs::limit::Limit;
 use sea_orm::ColumnTrait;
 use solana_pubkey::Pubkey;
 use std::vec;
-
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
-struct Person {
-    name: String,
-    age: u64,
-}
 
 #[named]
 #[rstest]
@@ -1648,6 +1642,7 @@ async fn test_update_indexed_merkle_tree(
                     leaf: *indexed_element,
                     hash: Hash::new_unique().into(), // HACK: We don't care about the hash
                     seq: *seq as u64,
+                    signature: Default::default(),
                 },
             );
             persist_indexed_tree_updates(&txn, indexed_leaf_updates)

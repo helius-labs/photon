@@ -15,10 +15,13 @@ use crate::ingester::persist::{MerkleProofWithContext, TREE_HEIGHT_V1};
 use light_batched_merkle_tree::constants::{
     DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
 };
-use light_batched_merkle_tree::merkle_tree_metadata::BatchedMerkleTreeMetadata;
 use reqwest::Client;
 
 const STATE_TREE_QUEUE_SIZE: u64 = 2400;
+
+// TODO: we should use BatchedMerkleTreeMetadata::default().root_history_capacity instead of hardcoding.
+// It's fixed in light-batched-merkle-tree = "0.4.2", but we need to publish all the dependencies first.
+const BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY: u64 = 200;
 
 pub(crate) async fn generate_proof(
     db_account_proofs: Vec<MerkleProofWithContext>,
@@ -86,15 +89,23 @@ pub(crate) async fn generate_proof(
     } else {
         address_tree_height
     };
+
     let queue_size = if queue_determining_height == TREE_HEIGHT_V1 as usize {
         STATE_TREE_QUEUE_SIZE
     } else if queue_determining_height == 0 {
         // No proofs, default for batched (should ideally not hit if circuit_type is determined)
-        BatchedMerkleTreeMetadata::default().root_history_capacity as u64
+        BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY
     } else {
         // Batched trees
-        BatchedMerkleTreeMetadata::default().root_history_capacity as u64
+        BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY
     };
+
+    log::debug!(
+        "Queue size: state_tree_height={}, address_tree_height={}, queue_size={}",
+        state_tree_height,
+        address_tree_height,
+        queue_size
+    );
 
     let batch_inputs = HexBatchInputsForProver {
         circuit_type: circuit_type.to_string(),
@@ -143,6 +154,9 @@ pub(crate) async fn generate_proof(
     let compressed_proof = compress_proof(&proof)?;
     let mut account_details = Vec::with_capacity(db_account_proofs.len());
     for acc_proof in db_account_proofs.iter() {
+        log::debug!("Proof generation: tree {} leaf_index {} root_seq {} queue_size {} root_index_mod_queue {}",
+            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, queue_size, acc_proof.root_seq % queue_size);
+
         let tree_info = TreeInfo::get(&acc_proof.merkle_tree.to_string().as_str())
             .ok_or(PhotonApiError::UnexpectedError(format!(
                 "Failed to parse TreeInfo for account tree '{}'",

@@ -86,7 +86,6 @@ light-batched-merkle-tree = "0.3.0"
 light-merkle-tree-metadata = "0.3.0"
 light-compressed-account = { version = "0.3.0", features = ["anchor"] }
 light-hasher = { version = "3.1.0" }
-
 light-poseidon = "0.3.0"
 
 sqlx = { version = "0.6.2", features = [

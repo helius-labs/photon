@@ -9,6 +9,7 @@ pub mod m20241008_000006_init;
 pub mod m20250206_000007_init;
 pub mod m20250314_000008_init;
 pub mod m20250617_000152_fix_indexed_trees_unique_constraint;
+pub mod m20250822_000001_add_indexes;
 
 pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -21,5 +22,6 @@ pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20250206_000007_init::Migration),
         Box::new(m20250314_000008_init::Migration),
         Box::new(m20250617_000152_fix_indexed_trees_unique_constraint::Migration),
+        Box::new(m20250822_000001_add_indexes::Migration),
     ]
 }
