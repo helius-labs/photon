@@ -33,6 +33,7 @@ async fn test_basic_snapshotting() {
             Arc::new(photon_indexer::snapshot::DirectoryAdapter::new(
                 Some(filesystem_adapter),
                 None,
+                None,
             ))
         })
         .collect::<Vec<Arc<photon_indexer::snapshot::DirectoryAdapter>>>();
@@ -60,6 +61,7 @@ async fn test_basic_snapshotting() {
                 r2_bucket,
                 r2_prefix: "some_prefix".to_string(),
             }),
+            None,
         ));
         r2_directory_adapters.push(directory_adapter);
     }
