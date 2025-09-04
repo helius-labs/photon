@@ -6,6 +6,7 @@ use crate::migration::Expr;
 use log::debug;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
+    Value,
 };
 
 use super::helpers::{
@@ -134,9 +135,12 @@ pub async fn persist_batch_nullify_event(
 
     process_nullify_accounts(&accounts, batch_nullify_event, leaf_nodes)?;
 
-    // 2. Mark elements as nullified in tree.
+    // 2. Mark elements as nullified in tree and clear nullifier queue index.
+    // Since these accounts have been nullified and their nullifiers written to the tree,
+    // they are no longer in the nullifier queue.
     let query = accounts::Entity::update_many()
         .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
+        .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(Value::Int(None)))
         .filter(
             accounts::Column::NullifierQueueIndex
                 .gte(queue_start)

@@ -127,7 +127,7 @@ pub async fn get_multiple_compressed_leaf_proofs(
         };
 
         if let Ok(tree_pubkey) = SerializablePubkey::try_from(tree.clone()) {
-            log::debug!("Tree {} root seq: {:?}", tree_pubkey, root_seq);
+            log::trace!("Tree {} root seq: {:?}", tree_pubkey, root_seq);
         }
 
         tree_to_root_seq.insert(tree, root_seq);
@@ -245,7 +245,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 "Root node not found in proof".to_string(),
             ))?;
 
-            log::debug!(
+            log::trace!(
                 "MerkleProofWithContext for tree {} leaf_index {} root_seq: {}",
                 leaf_node.tree,
                 leaf_node.leaf_index,
