@@ -91,7 +91,9 @@ pub async fn get_queue_elements(
             }
         }
         QueueType::OutputStateV2 => {
-            query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
+            query_condition = query_condition
+                .add(accounts::Column::InOutputQueue.eq(true))
+                .add(accounts::Column::NullifiedInTree.eq(false));
             if let Some(start_queue_index) = request.start_queue_index {
                 query_condition =
                     query_condition.add(accounts::Column::LeafIndex.gte(start_queue_index as i64));

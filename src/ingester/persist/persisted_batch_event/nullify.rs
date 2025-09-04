@@ -135,12 +135,11 @@ pub async fn persist_batch_nullify_event(
 
     process_nullify_accounts(&accounts, batch_nullify_event, leaf_nodes)?;
 
-    // 2. Mark elements as nullified in tree and remove from output queue.
+    // 2. Mark elements as nullified in tree and clear nullifier queue index.
     // Since these accounts have been nullified and their nullifiers written to the tree,
-    // they should not be processed again by batch append from the output queue.
+    // they are no longer in the nullifier queue.
     let query = accounts::Entity::update_many()
         .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
-        .col_expr(accounts::Column::InOutputQueue, Expr::value(false))
         .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(Value::Int(None)))
         .filter(
             accounts::Column::NullifierQueueIndex
