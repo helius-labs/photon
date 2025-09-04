@@ -6,6 +6,7 @@ use crate::migration::Expr;
 use log::debug;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryTrait,
+    Value,
 };
 
 use super::helpers::{
@@ -140,6 +141,7 @@ pub async fn persist_batch_nullify_event(
     let query = accounts::Entity::update_many()
         .col_expr(accounts::Column::NullifiedInTree, Expr::value(true))
         .col_expr(accounts::Column::InOutputQueue, Expr::value(false))
+        .col_expr(accounts::Column::NullifierQueueIndex, Expr::value(Value::Int(None)))
         .filter(
             accounts::Column::NullifierQueueIndex
                 .gte(queue_start)
