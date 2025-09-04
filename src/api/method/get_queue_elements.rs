@@ -57,14 +57,14 @@ pub async fn get_queue_elements(
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
     let queue_type = QueueType::from(request.queue_type as u64);
-    
+
     if request.limit > 1000 {
         return Err(PhotonApiError::ValidationError(format!(
             "Too many queue elements requested {}. Maximum allowed: 1000",
             request.limit
         )));
     }
-    
+
     let limit = request.limit;
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
@@ -83,11 +83,11 @@ pub async fn get_queue_elements(
         QueueType::InputStateV2 => {
             query_condition = query_condition
                 .add(accounts::Column::NullifierQueueIndex.is_not_null())
-                .add(accounts::Column::NullifiedInTree.eq(false));
+                .add(accounts::Column::NullifiedInTree.eq(false))
+                .add(accounts::Column::Spent.eq(true));
             if let Some(start_queue_index) = request.start_queue_index {
                 query_condition = query_condition
-                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64))
-                    .add(accounts::Column::NullifiedInTree.eq(false));
+                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
             }
         }
         QueueType::OutputStateV2 => {
@@ -140,6 +140,7 @@ pub async fn get_queue_elements(
                 queue_type
             ))),
         }?;
+
         let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
             &tx,
             SerializablePubkey::from(request.tree.0),
@@ -171,6 +172,7 @@ pub async fn get_queue_elements(
                 .as_ref()
                 .map(|tx_hash| Hash::new(tx_hash.as_slice()).unwrap());
             let account_hash = Hash::new(queue_element.hash.as_slice()).unwrap();
+
             Ok(GetQueueElementsResponseValue {
                 proof: proof.proof,
                 root: proof.root,
