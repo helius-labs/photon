@@ -86,16 +86,23 @@ async fn verify_output_queue_hash_chains(
     let tree_pubkey_str = tree_pubkey.to_string();
     let tree_info = TreeInfo::get(&tree_pubkey_str).ok_or_else(|| vec![])?;
     let queue_pubkey = Pubkey::from(tree_info.queue.to_bytes());
-    
-    let account = rpc_client.get_account(&queue_pubkey).await.map_err(|_| vec![])?;
+
+    let account = rpc_client
+        .get_account(&queue_pubkey)
+        .await
+        .map_err(|_| vec![])?;
     let mut account_data = account.data.clone();
     let queue = BatchedQueueAccount::output_from_bytes(&mut account_data).map_err(|_| vec![])?;
 
-    let tree_account = rpc_client.get_account(&tree_pubkey).await.map_err(|_| vec![])?;
+    let tree_account = rpc_client
+        .get_account(&tree_pubkey)
+        .await
+        .map_err(|_| vec![])?;
     let mut tree_account_data = tree_account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
-    let _merkle_tree = BatchedMerkleTreeAccount::state_from_bytes(&mut tree_account_data, &light_pubkey)
-        .map_err(|_| vec![])?;
+    let _merkle_tree =
+        BatchedMerkleTreeAccount::state_from_bytes(&mut tree_account_data, &light_pubkey)
+            .map_err(|_| vec![])?;
 
     let metadata = queue.get_metadata();
     let batch_metadata = &metadata.batch_metadata;
@@ -121,7 +128,10 @@ async fn verify_input_queue_hash_chains(
     db: &DatabaseConnection,
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
-    let account = rpc_client.get_account(&tree_pubkey).await.map_err(|_| vec![])?;
+    let account = rpc_client
+        .get_account(&tree_pubkey)
+        .await
+        .map_err(|_| vec![])?;
     let mut account_data = account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
     let merkle_tree = BatchedMerkleTreeAccount::state_from_bytes(&mut account_data, &light_pubkey)
@@ -151,11 +161,15 @@ async fn verify_address_queue_hash_chains(
     db: &DatabaseConnection,
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
-    let account = rpc_client.get_account(&tree_pubkey).await.map_err(|_| vec![])?;
+    let account = rpc_client
+        .get_account(&tree_pubkey)
+        .await
+        .map_err(|_| vec![])?;
     let mut account_data = account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
-    let merkle_tree = BatchedMerkleTreeAccount::address_from_bytes(&mut account_data, &light_pubkey)
-        .map_err(|_| vec![])?;
+    let merkle_tree =
+        BatchedMerkleTreeAccount::address_from_bytes(&mut account_data, &light_pubkey)
+            .map_err(|_| vec![])?;
 
     let metadata = merkle_tree.get_metadata();
     let queue_batches = &metadata.queue_batches;
@@ -194,7 +208,7 @@ async fn verify_queue_hash_chains(
         .skip(num_inserted_zkps as usize)
         .map(|h| *h)
         .collect();
-    
+
     if on_chain_chains.is_empty() {
         return Ok(());
     }
@@ -259,25 +273,20 @@ async fn compute_hash_chains_from_db(
     } else {
         num_zkp_batches
     };
-    
+
     let total_elements = if has_incomplete_batch {
         (total_complete_batches * zkp_batch_size) + num_inserted_in_current_zkp
     } else {
         num_zkp_batches * zkp_batch_size
     };
 
-    let all_elements = fetch_queue_elements(
-        db,
-        queue_type,
-        tree_pubkey,
-        start_offset,
-        total_elements,
-    )
-    .await
-    .map_err(|e| {
-        error!("Failed to fetch queue elements: {:?}", e);
-        vec![]
-    })?;
+    let all_elements =
+        fetch_queue_elements(db, queue_type, tree_pubkey, start_offset, total_elements)
+            .await
+            .map_err(|e| {
+                error!("Failed to fetch queue elements: {:?}", e);
+                vec![]
+            })?;
 
     let mut hash_chains = Vec::new();
     for chunk in all_elements.chunks(zkp_batch_size as usize) {
@@ -301,31 +310,25 @@ async fn fetch_queue_elements(
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
 
     let query = match queue_type {
-        QueueType::InputStateV2 => {
-            accounts::Entity::find()
-                .filter(accounts::Column::Tree.eq(tree_bytes))
-                .filter(accounts::Column::NullifierQueueIndex.is_not_null())
-                .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
-                .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit) as i64))
-                .order_by_asc(accounts::Column::NullifierQueueIndex)
-                .limit(limit)
-        }
-        QueueType::OutputStateV2 => {
-            accounts::Entity::find()
-                .filter(accounts::Column::Tree.eq(tree_bytes))
-                .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
-                .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
-                .order_by_asc(accounts::Column::LeafIndex)
-                .limit(limit)
-        }
-        QueueType::AddressV2 => {
-            accounts::Entity::find()
-                .filter(accounts::Column::Tree.eq(tree_bytes))
-                .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
-                .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
-                .order_by_asc(accounts::Column::LeafIndex)
-                .limit(limit)
-        }
+        QueueType::InputStateV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::NullifierQueueIndex.is_not_null())
+            .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
+            .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::NullifierQueueIndex)
+            .limit(limit),
+        QueueType::OutputStateV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
+            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::LeafIndex)
+            .limit(limit),
+        QueueType::AddressV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
+            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::LeafIndex)
+            .limit(limit),
         _ => {
             return Err(PhotonApiError::ValidationError(format!(
                 "Unsupported queue type: {:?}",
@@ -343,30 +346,43 @@ async fn fetch_queue_elements(
     let mut result = Vec::with_capacity(elements.len());
     for element in elements.iter() {
         let mut value = [0u8; 32];
-        
+
         match queue_type {
             QueueType::InputStateV2 => {
                 // Input queues use nullifiers for hash chains
                 if let Some(ref nullifier) = element.nullifier {
                     if nullifier.len() >= 32 {
                         value.copy_from_slice(&nullifier[..32]);
+                    } else {
+                        return Err(PhotonApiError::UnexpectedError(format!(
+                            "Nullifier hash too short: expected at least 32 bytes, got {}",
+                            nullifier.len()
+                        )));
                     }
+                } else {
+                    return Err(PhotonApiError::UnexpectedError(
+                        "Missing nullifier for InputStateV2 queue".to_string(),
+                    ));
                 }
             }
             _ => {
                 // Output and Address queues use account hashes
                 if element.hash.len() >= 32 {
                     value.copy_from_slice(&element.hash[..32]);
+                } else {
+                    return Err(PhotonApiError::UnexpectedError(format!(
+                        "Account hash too short: expected at least 32 bytes, got {}",
+                        element.hash.len()
+                    )));
                 }
             }
         }
-        
+
         result.push(value);
     }
 
     Ok(result)
 }
-
 
 fn log_divergence(divergence: &HashChainDivergence) {
     error!(
@@ -381,10 +397,7 @@ fn log_divergence(divergence: &HashChainDivergence) {
         "  Expected: {}",
         hex::encode(&divergence.expected_hash_chain)
     );
-    error!(
-        "  On-chain: {}",
-        hex::encode(&divergence.actual_hash_chain)
-    );
+    error!("  On-chain: {}", hex::encode(&divergence.actual_hash_chain));
 }
 
 pub async fn collect_v2_trees() -> Vec<(Pubkey, QueueType)> {
