@@ -1,3 +1,5 @@
+mod v2_queue_monitor;
+
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -78,6 +80,17 @@ pub fn continously_monitor_photon(
             } else {
                 let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
                 validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
+                
+                let v2_trees = v2_queue_monitor::collect_v2_trees().await;
+                if !v2_trees.is_empty() {
+                    if let Err(divergences) = v2_queue_monitor::verify_v2_queues(
+                        rpc_client.as_ref(),
+                        db.as_ref(),
+                        v2_trees,
+                    ).await {
+                        error!("V2 queue verification failed with {} divergences", divergences.len());
+                    }
+                }
             }
             sleep(Duration::from_millis(5000)).await;
         }

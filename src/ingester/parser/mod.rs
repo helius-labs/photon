@@ -40,6 +40,15 @@ const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote11111111111111111111111111111111111
 const SKIP_UNKNOWN_TREES: bool = true;
 
 pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
+    if tx.error.is_some() {
+        log::debug!(
+            "Skipping failed transaction {} with error: {:?}",
+            tx.signature,
+            tx.error
+        );
+        return Ok(StateUpdate::new());
+    }
+
     let mut state_updates = Vec::new();
     let mut is_compression_transaction = false;
 
