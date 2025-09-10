@@ -6,6 +6,7 @@ pub use super::address_queues::Entity as AddressQueues;
 pub use super::blocks::Entity as Blocks;
 pub use super::indexed_trees::Entity as IndexedTrees;
 pub use super::owner_balances::Entity as OwnerBalances;
+pub use super::queue_hash_chains::Entity as QueueHashChains;
 pub use super::state_tree_histories::Entity as StateTreeHistories;
 pub use super::state_trees::Entity as StateTrees;
 pub use super::token_accounts::Entity as TokenAccounts;

@@ -81,6 +81,7 @@ solana-pubkey = "2.3.0"
 
 solana-transaction-status = "1.18.0"
 
+light-zero-copy = "0.2.0"
 light-concurrent-merkle-tree = "2.1.0"
 light-batched-merkle-tree = "0.3.0"
 light-merkle-tree-metadata = "0.3.0"

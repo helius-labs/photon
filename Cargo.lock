@@ -4599,6 +4599,7 @@ dependencies = [
  "light-merkle-tree-metadata",
  "light-merkle-tree-reference",
  "light-poseidon 0.3.0",
+ "light-zero-copy",
  "log",
  "num-bigint 0.4.6",
  "num-traits",

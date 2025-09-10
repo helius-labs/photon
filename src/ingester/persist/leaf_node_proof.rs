@@ -245,13 +245,6 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 "Root node not found in proof".to_string(),
             ))?;
 
-            log::debug!(
-                "MerkleProofWithContext for tree {} leaf_index {} root_seq: {}",
-                leaf_node.tree,
-                leaf_node.leaf_index,
-                root_seq.unwrap_or(0i64) as u64
-            );
-
             Ok(MerkleProofWithContext {
                 proof,
                 root,
