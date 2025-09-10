@@ -83,7 +83,7 @@ pub fn continously_monitor_photon(
                 if !v2_trees.is_empty() {
                     if let Err(divergences) =
                         queue_monitor::verify_queues(rpc_client.as_ref(), db.as_ref(), v2_trees)
-                            .await
+                    .await
                     {
                         error!(
                             "V2 queue verification failed with {} divergences",
