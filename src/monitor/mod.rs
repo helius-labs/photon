@@ -1,3 +1,4 @@
+mod queue_hash_cache;
 mod v2_queue_monitor;
 
 use std::{
