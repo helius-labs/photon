@@ -35,7 +35,7 @@ pub struct HashChainDivergence {
     pub zkp_batch_index: usize,
 }
 
-pub async fn verify_v2_queues(
+pub async fn verify_queues(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
     tree_pubkeys: Vec<(Pubkey, QueueType)>,
@@ -243,8 +243,8 @@ async fn verify_queue_hash_chains(
         .map(|c| (c.zkp_batch_index, c.hash_chain))
         .collect();
 
-    let mut chains_to_compute = Vec::new();
-    let mut zkp_indices = Vec::new();
+    let mut chains_to_compute = Vec::with_capacity(end_zkp_batch_idx - start_zkp_batch_idx);
+    let mut zkp_indices = Vec::with_capacity(end_zkp_batch_idx - start_zkp_batch_idx);
 
     for zkp_batch_idx in start_zkp_batch_idx..end_zkp_batch_idx {
         zkp_indices.push(zkp_batch_idx);
@@ -293,7 +293,7 @@ async fn verify_queue_hash_chains(
         }
     }
 
-    let mut computed_chains = Vec::new();
+    let mut computed_chains = Vec::with_capacity(zkp_indices.len());
     for idx in zkp_indices.iter() {
         match computed_map.get(&(*idx as i32)) {
             Some(hash) => computed_chains.push(*hash),
@@ -348,7 +348,7 @@ async fn compute_missing_hash_chains(
     zkp_batch_indices: &[usize],
     num_inserted_in_current_zkp: u64,
 ) -> Result<Vec<[u8; 32]>, Vec<HashChainDivergence>> {
-    let mut hash_chains = Vec::new();
+    let mut hash_chains = Vec::with_capacity(zkp_batch_indices.len());
     let total_elements_needed = zkp_batch_indices.len() * zkp_batch_size as usize;
 
     // Calculate start offset for state queues (AddressV2 doesn't need it)
@@ -425,7 +425,7 @@ async fn fetch_all_address_queue_elements(
     limit: usize,
 ) -> Result<Vec<[u8; 32]>, PhotonApiError> {
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(limit);
 
     let elements = address_queues::Entity::find()
         .filter(address_queues::Column::Tree.eq(tree_bytes))
@@ -457,7 +457,7 @@ async fn fetch_all_input_queue_elements(
     limit: usize,
 ) -> Result<Vec<[u8; 32]>, PhotonApiError> {
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(limit);
 
     let elements = accounts::Entity::find()
         .filter(accounts::Column::Tree.eq(tree_bytes))
@@ -498,7 +498,7 @@ async fn fetch_all_output_queue_elements(
     limit: usize,
 ) -> Result<Vec<[u8; 32]>, PhotonApiError> {
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(limit);
 
     let elements = accounts::Entity::find()
         .filter(accounts::Column::Tree.eq(tree_bytes))

@@ -11,6 +11,7 @@ pub mod m20250314_000008_init;
 pub mod m20250617_000152_fix_indexed_trees_unique_constraint;
 pub mod m20250822_000001_add_indexes;
 pub mod m20250909_000001_add_queue_hash_chains;
+pub mod m20250910_000002_add_v2_queue_indexes;
 
 pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -25,5 +26,6 @@ pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20250617_000152_fix_indexed_trees_unique_constraint::Migration),
         Box::new(m20250822_000001_add_indexes::Migration),
         Box::new(m20250909_000001_add_queue_hash_chains::Migration),
+        Box::new(m20250910_000002_add_v2_queue_indexes::Migration),
     ]
 }
