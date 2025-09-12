@@ -3,13 +3,15 @@ use light_batched_merkle_tree::{
 };
 use light_compressed_account::QueueType;
 use light_hasher::hash_chain::create_hash_chain_from_slice;
+use hex;
 use light_zero_copy::vec::ZeroCopyVecU64;
 use log::{debug, error, trace};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::dao::generated::{accounts, address_queues};
+
+use crate::dao::generated::accounts;
 
 use crate::{
     api::error::PhotonApiError,
@@ -205,6 +207,15 @@ async fn verify_queue_hash_chains(
     num_inserted_in_current_zkp: u64,
 ) -> Result<(), Vec<HashChainDivergence>> {
     let mut divergences = Vec::new();
+    
+    if num_inserted_in_current_zkp > 0 && num_inserted_in_current_zkp < zkp_batch_size {
+        debug!(
+            "Skipping ZKP verification for incomplete batch: {}/{} elements in current batch",
+            num_inserted_in_current_zkp, zkp_batch_size
+        );
+        return Ok(());
+    }
+    
     let on_chain_batch_hash_chains = &on_chain_hash_chains[pending_batch_index];
     let total_on_chain_zkps = on_chain_batch_hash_chains.len() as u64;
     if num_inserted_zkps >= total_on_chain_zkps {
@@ -230,86 +241,66 @@ async fn verify_queue_hash_chains(
         .unwrap_or(0);
     let start_offset = batch_start_index + (num_inserted_zkps * zkp_batch_size);
 
-    let cached_chains =
-        queue_hash_cache::get_cached_hash_chains(db, tree_pubkey, queue_type, batch_start_index)
-            .await
-            .unwrap_or_default();
-
-    let start_zkp_batch_idx = num_inserted_zkps as usize;
-    let end_zkp_batch_idx = start_zkp_batch_idx + on_chain_chains.len();
+    let cached_chains = queue_hash_cache::get_cached_hash_chains(
+        db,
+        tree_pubkey,
+        queue_type,
+        batch_start_index,
+    )
+    .await
+    .unwrap_or_default();
 
     let cached_map: std::collections::HashMap<i32, [u8; 32]> = cached_chains
         .into_iter()
         .map(|c| (c.zkp_batch_index, c.hash_chain))
         .collect();
 
-    let mut chains_to_compute = Vec::with_capacity(end_zkp_batch_idx - start_zkp_batch_idx);
-    let mut zkp_indices = Vec::with_capacity(end_zkp_batch_idx - start_zkp_batch_idx);
+    let start_zkp_batch_idx = num_inserted_zkps as usize;
 
-    for zkp_batch_idx in start_zkp_batch_idx..end_zkp_batch_idx {
-        zkp_indices.push(zkp_batch_idx);
-        if !cached_map.contains_key(&(zkp_batch_idx as i32)) {
-            chains_to_compute.push(zkp_batch_idx);
+    let mut computed_chains = Vec::with_capacity(on_chain_chains.len());
+    let mut chains_to_cache = Vec::new();
+
+    for zkp_batch_idx in 0..on_chain_chains.len() {
+        let actual_zkp_idx = start_zkp_batch_idx + zkp_batch_idx;
+        
+        if let Some(&cached_chain) = cached_map.get(&(actual_zkp_idx as i32)) {
+            computed_chains.push(cached_chain);
+        } else {
+            let chain_offset = start_offset + (zkp_batch_idx as u64 * zkp_batch_size);
+            let chains = compute_hash_chains_from_db(
+                db,
+                queue_type,
+                tree_pubkey,
+                chain_offset,
+                1, // Just one batch
+                zkp_batch_size,
+                if zkp_batch_idx == on_chain_chains.len() - 1 {
+                    num_inserted_in_current_zkp
+                } else {
+                    0
+                },
+            )
+            .await?;
+            
+            if !chains.is_empty() {
+                computed_chains.push(chains[0]);
+                chains_to_cache.push((actual_zkp_idx, chain_offset, chains[0]));
+            }
         }
     }
 
-    let mut computed_map = cached_map;
-
-    if !chains_to_compute.is_empty() {
-        let new_chains = compute_missing_hash_chains(
-            db,
-            queue_type,
-            tree_pubkey,
-            batch_start_index,
-            zkp_batch_size,
-            &chains_to_compute,
-            num_inserted_in_current_zkp,
-        )
-        .await?;
-
-        let chains_to_store: Vec<(usize, u64, [u8; 32])> = chains_to_compute
-            .iter()
-            .zip(new_chains.iter())
-            .map(|(zkp_idx, hash)| {
-                let offset = batch_start_index + (*zkp_idx as u64 * zkp_batch_size);
-                (*zkp_idx, offset, *hash)
-            })
-            .collect();
-
+    if !chains_to_cache.is_empty() {
         if let Err(e) = queue_hash_cache::store_hash_chains_batch(
             db,
             tree_pubkey,
             queue_type,
             batch_start_index,
-            chains_to_store,
+            chains_to_cache,
         )
         .await
         {
-            error!("Failed to store hash chains: {:?}", e);
+            error!("Failed to cache hash chains: {:?}", e);
         }
-
-        for (zkp_idx, hash) in chains_to_compute.iter().zip(new_chains.iter()) {
-            computed_map.insert(*zkp_idx as i32, *hash);
-        }
-    }
-
-    let mut computed_chains = Vec::with_capacity(zkp_indices.len());
-    for idx in zkp_indices.iter() {
-        match computed_map.get(&(*idx as i32)) {
-            Some(hash) => computed_chains.push(*hash),
-            None => {
-                error!("Missing hash chain for zkp_batch_idx={}", idx);
-                return Err(vec![]);
-            }
-        }
-    }
-
-    if computed_chains.len() != on_chain_chains.len() {
-        error!(
-            "Computed chains count mismatch: computed={}, on_chain={}",
-            computed_chains.len(),
-            on_chain_chains.len()
-        );
     }
 
     for (zkp_batch_idx, (on_chain, computed)) in on_chain_chains
@@ -339,191 +330,128 @@ async fn verify_queue_hash_chains(
     }
 }
 
-async fn compute_missing_hash_chains(
+async fn compute_hash_chains_from_db(
     db: &DatabaseConnection,
     queue_type: QueueType,
     tree_pubkey: Pubkey,
-    batch_start_index: u64,
+    start_offset: u64,
+    num_zkp_batches: u64,
     zkp_batch_size: u64,
-    zkp_batch_indices: &[usize],
     num_inserted_in_current_zkp: u64,
 ) -> Result<Vec<[u8; 32]>, Vec<HashChainDivergence>> {
-    let mut hash_chains = Vec::with_capacity(zkp_batch_indices.len());
-    let total_elements_needed = zkp_batch_indices.len() * zkp_batch_size as usize;
+    let has_incomplete_batch = num_inserted_in_current_zkp > 0;
+    let total_complete_batches = if has_incomplete_batch {
+        num_zkp_batches - 1
+    } else {
+        num_zkp_batches
+    };
 
-    // Calculate start offset for state queues (AddressV2 doesn't need it)
-    let first_zkp_batch = zkp_batch_indices.first().copied().unwrap_or(0);
-    let state_queue_offset = batch_start_index + (first_zkp_batch as u64 * zkp_batch_size);
+    let total_elements = if has_incomplete_batch {
+        (total_complete_batches * zkp_batch_size) + num_inserted_in_current_zkp
+    } else {
+        num_zkp_batches * zkp_batch_size
+    };
 
-    let all_elements = match queue_type {
-        QueueType::AddressV2 => {
-            fetch_all_address_queue_elements(db, tree_pubkey, total_elements_needed).await
-        }
-        QueueType::InputStateV2 => {
-            fetch_all_input_queue_elements(
-                db,
-                tree_pubkey,
-                state_queue_offset,
-                total_elements_needed,
-            )
+    let all_elements =
+        fetch_queue_elements(db, queue_type, tree_pubkey, start_offset, total_elements)
             .await
-        }
-        QueueType::OutputStateV2 => {
-            fetch_all_output_queue_elements(
-                db,
-                tree_pubkey,
-                state_queue_offset,
-                total_elements_needed,
-            )
-            .await
-        }
-        _ => {
-            error!("Unsupported queue type for v2 monitoring: {:?}", queue_type);
-            return Err(vec![]);
-        }
-    }
-    .map_err(|e| {
-        error!("Failed to fetch queue elements: {:?}", e);
-        vec![]
-    })?;
+            .map_err(|e| {
+                error!("Failed to fetch queue elements: {:?}", e);
+                vec![]
+            })?;
 
-    if all_elements.is_empty() {
-        error!(
-            "No elements found for queue_type={:?}, tree={}",
-            queue_type, tree_pubkey
-        );
-        return Err(vec![]);
-    }
-
-    for (idx, &zkp_batch_idx) in zkp_batch_indices.iter().enumerate() {
-        let batch_start = idx * zkp_batch_size as usize;
-        let batch_end = if zkp_batch_idx == zkp_batch_indices.last().copied().unwrap_or(0)
-            && num_inserted_in_current_zkp > 0
-        {
-            batch_start + num_inserted_in_current_zkp as usize
-        } else {
-            batch_start + zkp_batch_size as usize
-        };
-
-        let batch_end = batch_end.min(all_elements.len());
-        if batch_start >= all_elements.len() {
-            break;
-        }
-        let batch_elements = &all_elements[batch_start..batch_end];
-        let hash_chain = create_hash_chain_from_slice(batch_elements).map_err(|e| {
-            error!("Failed to create hash chain: {:?}", e);
-            vec![]
-        })?;
+    let mut hash_chains = Vec::new();
+    for chunk in all_elements.chunks(zkp_batch_size as usize) {
+        let hash_chain = create_hash_chain_from_slice(chunk).map_err(|_| vec![])?;
         hash_chains.push(hash_chain);
     }
+
     Ok(hash_chains)
 }
 
-async fn fetch_all_address_queue_elements(
+async fn fetch_queue_elements(
     db: &DatabaseConnection,
-    tree_pubkey: Pubkey,
-    limit: usize,
-) -> Result<Vec<[u8; 32]>, PhotonApiError> {
-    let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::with_capacity(limit);
-
-    let elements = address_queues::Entity::find()
-        .filter(address_queues::Column::Tree.eq(tree_bytes))
-        .order_by_asc(address_queues::Column::QueueIndex)
-        .all(db)
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-    for element in elements.iter().take(limit) {
-        if element.address.len() >= 32 {
-            let mut value = [0u8; 32];
-            value.copy_from_slice(&element.address[..32]);
-            result.push(value);
-        } else {
-            return Err(PhotonApiError::UnexpectedError(format!(
-                "Address too short: expected at least 32 bytes, got {}",
-                element.address.len()
-            )));
-        }
-    }
-
-    Ok(result)
-}
-
-async fn fetch_all_input_queue_elements(
-    db: &DatabaseConnection,
+    queue_type: QueueType,
     tree_pubkey: Pubkey,
     start_offset: u64,
-    limit: usize,
+    limit: u64,
 ) -> Result<Vec<[u8; 32]>, PhotonApiError> {
-    let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::with_capacity(limit);
+    use sea_orm::{QuerySelect};
 
-    let elements = accounts::Entity::find()
-        .filter(accounts::Column::Tree.eq(tree_bytes))
-        .filter(accounts::Column::NullifierQueueIndex.is_not_null())
-        .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
-        .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit as u64) as i64))
-        .order_by_asc(accounts::Column::NullifierQueueIndex)
+    let tree_bytes = tree_pubkey.to_bytes().to_vec();
+    let mut result = Vec::with_capacity(limit as usize);
+
+    let query = match queue_type {
+        QueueType::InputStateV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::NullifierQueueIndex.is_not_null())
+            .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
+            .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::NullifierQueueIndex)
+            .limit(limit),
+        QueueType::OutputStateV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
+            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::LeafIndex)
+            .limit(limit),
+        QueueType::AddressV2 => accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree_bytes))
+            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
+            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
+            .order_by_asc(accounts::Column::LeafIndex)
+            .limit(limit),
+        _ => {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Unsupported queue type: {:?}",
+                queue_type
+            )))
+        }
+    };
+
+    let elements = query
         .all(db)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
     for element in elements.iter() {
-        if let Some(ref nullifier) = element.nullifier {
-            if nullifier.len() >= 32 {
-                let mut value = [0u8; 32];
-                value.copy_from_slice(&nullifier[..32]);
-                result.push(value);
-            } else {
-                return Err(PhotonApiError::UnexpectedError(format!(
-                    "Nullifier hash too short: expected at least 32 bytes, got {}",
-                    nullifier.len()
-                )));
+        let mut value = [0u8; 32];
+
+        match queue_type {
+            QueueType::InputStateV2 => {
+                if let Some(ref nullifier) = element.nullifier {
+                    if nullifier.len() >= 32 {
+                        value.copy_from_slice(&nullifier[..32]);
+                    } else {
+                        return Err(PhotonApiError::UnexpectedError(format!(
+                            "Nullifier hash too short: expected at least 32 bytes, got {}",
+                            nullifier.len()
+                        )));
+                    }
+                } else {
+                    return Err(PhotonApiError::UnexpectedError(
+                        "Missing nullifier for InputStateV2 queue".to_string(),
+                    ));
+                }
             }
-        } else {
-            return Err(PhotonApiError::UnexpectedError(
-                "Missing nullifier for InputStateV2 queue".to_string(),
-            ));
+            _ => {
+                if element.hash.len() >= 32 {
+                    value.copy_from_slice(&element.hash[..32]);
+                } else {
+                    return Err(PhotonApiError::UnexpectedError(format!(
+                        "Account hash too short: expected at least 32 bytes, got {}",
+                        element.hash.len()
+                    )));
+                }
+            }
         }
+
+        result.push(value);
     }
 
     Ok(result)
 }
 
-async fn fetch_all_output_queue_elements(
-    db: &DatabaseConnection,
-    tree_pubkey: Pubkey,
-    start_offset: u64,
-    limit: usize,
-) -> Result<Vec<[u8; 32]>, PhotonApiError> {
-    let tree_bytes = tree_pubkey.to_bytes().to_vec();
-    let mut result = Vec::with_capacity(limit);
-
-    let elements = accounts::Entity::find()
-        .filter(accounts::Column::Tree.eq(tree_bytes))
-        .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
-        .filter(accounts::Column::LeafIndex.lt((start_offset + limit as u64) as i64))
-        .order_by_asc(accounts::Column::LeafIndex)
-        .all(db)
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-    for element in elements.iter() {
-        if element.hash.len() >= 32 {
-            let mut value = [0u8; 32];
-            value.copy_from_slice(&element.hash[..32]);
-            result.push(value);
-        } else {
-            return Err(PhotonApiError::UnexpectedError(format!(
-                "Account hash too short: expected at least 32 bytes, got {}",
-                element.hash.len()
-            )));
-        }
-    }
-
-    Ok(result)
-}
 
 fn log_divergence(divergence: &HashChainDivergence) {
     error!(
