@@ -4,8 +4,8 @@ use crate::{
     api::method::utils::PAGE_LIMIT,
     common::typedefs::{hash::Hash, token_data::TokenData},
     dao::generated::{
-        account_transactions, accounts, queue_hash_chains, state_tree_histories, state_trees, 
-        token_accounts, transactions,
+        account_transactions, accounts, state_tree_histories, state_trees, token_accounts,
+        transactions,
     },
     ingester::parser::state_update::Transaction,
     metric,
@@ -197,21 +197,7 @@ pub async fn persist_state_update(
         persist_account_transactions(txn, chunk).await?;
     }
 
-    let mut affected_trees = std::collections::HashSet::new();
-    
-    for account in &out_accounts {
-        affected_trees.insert(account.context.queue.to_bytes_vec());
-    }
-
-    for tree_bytes in batch_merkle_tree_events.keys() {
-        affected_trees.insert(tree_bytes.to_vec());
-    }
-    
     persist_batch_events(txn, batch_merkle_tree_events).await?;
-    
-    if !affected_trees.is_empty() {
-        invalidate_queue_hash_cache(txn, affected_trees).await?;
-    }
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);
@@ -220,26 +206,6 @@ pub async fn persist_state_update(
         statsd_count!("state_update.indexed_merkle_tree_updates", indexed_merkle_tree_updates_len as u64);
     }
 
-    Ok(())
-}
-
-async fn invalidate_queue_hash_cache(
-    txn: &DatabaseTransaction,
-    tree_pubkeys: std::collections::HashSet<Vec<u8>>,
-) -> Result<(), IngesterError> {
-    use sea_orm::DeleteResult;
-    
-    for tree_bytes in tree_pubkeys {
-        let result: DeleteResult = queue_hash_chains::Entity::delete_many()
-            .filter(queue_hash_chains::Column::TreePubkey.eq(tree_bytes.clone()))
-            .exec(txn)
-            .await?;
-        
-        if result.rows_affected > 0 {
-            debug!("Invalidated {} cached hash chains for tree", result.rows_affected);
-        }
-    }
-    
     Ok(())
 }
 

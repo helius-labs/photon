@@ -1,3 +1,6 @@
+mod queue_hash_cache;
+mod queue_monitor;
+
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -56,7 +59,12 @@ pub fn continously_monitor_photon(
         let mut has_been_healthy = false;
         start_latest_slot_updater(rpc_client.clone()).await;
 
+        // Use interval timer to ensure fixed intervals regardless of execution time
+        let mut interval = interval(Duration::from_millis(5000));
+
         loop {
+            interval.tick().await;
+
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
             let lag = if latest_slot > last_indexed_slot {
@@ -76,23 +84,43 @@ pub fn continously_monitor_photon(
                     error!("Indexing lag is too high: {}", lag);
                 }
             } else {
-                let tree_roots = load_db_tree_roots_with_infinite_retry(db.as_ref()).await;
-                validate_tree_roots(rpc_client.as_ref(), tree_roots).await;
+                let db_clone = db.clone();
+                let rpc_clone = rpc_client.clone();
 
+                tokio::spawn(async move {
+                    let tree_roots =
+                        load_db_tree_roots_with_infinite_retry(db_clone.as_ref()).await;
+                    validate_tree_roots(rpc_clone.as_ref(), tree_roots).await;
+                });
+
+                // Spawn parallel verification tasks for each V2 tree
                 let v2_trees = queue_monitor::collect_v2_trees().await;
-                if !v2_trees.is_empty() {
-                    if let Err(divergences) =
-                        queue_monitor::verify_queues(rpc_client.as_ref(), db.as_ref(), v2_trees)
-                    .await
+                for (tree_pubkey, queue_type) in v2_trees {
+                    let db_clone = db.clone();
+                    let rpc_clone = rpc_client.clone();
+
+                    tokio::spawn(async move {
+                        if let Err(divergences) = queue_monitor::verify_single_queue(
+                            rpc_clone.as_ref(),
+                            db_clone.as_ref(),
+                            tree_pubkey,
+                            queue_type,
+                        )
+                            .await
                     {
+                            if !divergences.is_empty() {
+                                for divergence in &divergences {
+                                    queue_monitor::log_divergence(divergence);
+                                }
                         error!(
-                            "V2 queue verification failed with {} divergences",
-                            divergences.len()
+                                    "Queue verification failed for tree {} type {:?} with {} divergences",
+                                    tree_pubkey, queue_type, divergences.len()
                         );
                     }
                 }
+                    });
+                }
             }
-            sleep(Duration::from_millis(5000)).await;
         }
     })
 }

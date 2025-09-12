@@ -1,15 +1,14 @@
+use hex;
 use light_batched_merkle_tree::{
     batch::Batch, merkle_tree::BatchedMerkleTreeAccount, queue::BatchedQueueAccount,
 };
 use light_compressed_account::QueueType;
 use light_hasher::hash_chain::create_hash_chain_from_slice;
-use hex;
 use light_zero_copy::vec::ZeroCopyVecU64;
-use log::{debug, error, trace};
+use log::{debug, error, trace, warn};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
-
 
 use crate::dao::generated::accounts;
 
@@ -37,77 +36,54 @@ pub struct HashChainDivergence {
     pub zkp_batch_index: usize,
 }
 
-pub async fn verify_queues(
-    rpc_client: &RpcClient,
-    db: &DatabaseConnection,
-    tree_pubkeys: Vec<(Pubkey, QueueType)>,
-) -> Result<(), Vec<HashChainDivergence>> {
-    let mut divergences = Vec::new();
-
-    for (tree_pubkey, queue_type) in tree_pubkeys {
-        let result = match queue_type {
-            QueueType::OutputStateV2 => {
-                verify_output_queue_hash_chains(rpc_client, db, tree_pubkey).await
-            }
-            QueueType::InputStateV2 => {
-                verify_input_queue_hash_chains(rpc_client, db, tree_pubkey).await
-            }
-            QueueType::AddressV2 => {
-                verify_address_queue_hash_chains(rpc_client, db, tree_pubkey).await
-            }
-            _ => {
-                trace!("Skipping non-v2 queue type: {:?}", queue_type);
-                continue;
-            }
-        };
-
-        if let Err(mut divs) = result {
-            divergences.append(&mut divs);
-        }
-    }
-
-    if !divergences.is_empty() {
-        for divergence in &divergences {
-            log_divergence(divergence);
-        }
-        metric! {
-            statsd_count!("v2_queue_divergences", divergences.len() as i64);
-        }
-        Err(divergences)
-    } else {
-        debug!("All queue hash chains verified successfully");
-        metric! {
-            statsd_count!("v2_queue_validation_success", 1);
-        }
-        Ok(())
-    }
-}
-
 async fn verify_output_queue_hash_chains(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
     let tree_pubkey_str = tree_pubkey.to_string();
-    let tree_info = TreeInfo::get(&tree_pubkey_str).ok_or_else(|| vec![])?;
+    let tree_info = match TreeInfo::get(&tree_pubkey_str) {
+        Some(info) => info,
+        None => {
+            trace!("No tree info found for {}", tree_pubkey);
+            return Ok(());
+        }
+    };
     let queue_pubkey = Pubkey::from(tree_info.queue.to_bytes());
 
-    let account = rpc_client
-        .get_account(&queue_pubkey)
-        .await
-        .map_err(|_| vec![])?;
+    let account = match rpc_client.get_account(&queue_pubkey).await {
+        Ok(acc) => acc,
+        Err(e) => {
+            trace!("Failed to fetch queue account {}: {}", queue_pubkey, e);
+            return Ok(());
+        }
+    };
     let mut account_data = account.data.clone();
-    let queue = BatchedQueueAccount::output_from_bytes(&mut account_data).map_err(|_| vec![])?;
+    let queue = match BatchedQueueAccount::output_from_bytes(&mut account_data) {
+        Ok(q) => q,
+        Err(e) => {
+            trace!("Failed to parse queue account {}: {:?}", queue_pubkey, e);
+            return Ok(());
+        }
+    };
 
-    let tree_account = rpc_client
-        .get_account(&tree_pubkey)
-        .await
-        .map_err(|_| vec![])?;
+    let tree_account = match rpc_client.get_account(&tree_pubkey).await {
+        Ok(acc) => acc,
+        Err(e) => {
+            trace!("Failed to fetch tree account {}: {}", tree_pubkey, e);
+            return Ok(());
+        }
+    };
     let mut tree_account_data = tree_account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
     let _merkle_tree =
-        BatchedMerkleTreeAccount::state_from_bytes(&mut tree_account_data, &light_pubkey)
-            .map_err(|_| vec![])?;
+        match BatchedMerkleTreeAccount::state_from_bytes(&mut tree_account_data, &light_pubkey) {
+            Ok(tree) => tree,
+            Err(e) => {
+                trace!("Failed to parse tree account {}: {:?}", tree_pubkey, e);
+                return Ok(());
+            }
+        };
 
     let metadata = queue.get_metadata();
     let batch_metadata = &metadata.batch_metadata;
@@ -133,14 +109,23 @@ async fn verify_input_queue_hash_chains(
     db: &DatabaseConnection,
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
-    let account = rpc_client
-        .get_account(&tree_pubkey)
-        .await
-        .map_err(|_| vec![])?;
+    let account = match rpc_client.get_account(&tree_pubkey).await {
+        Ok(acc) => acc,
+        Err(e) => {
+            trace!("Failed to fetch tree account {}: {}", tree_pubkey, e);
+            return Ok(());
+        }
+    };
     let mut account_data = account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
-    let merkle_tree = BatchedMerkleTreeAccount::state_from_bytes(&mut account_data, &light_pubkey)
-        .map_err(|_| vec![])?;
+    let merkle_tree =
+        match BatchedMerkleTreeAccount::state_from_bytes(&mut account_data, &light_pubkey) {
+            Ok(tree) => tree,
+            Err(e) => {
+                trace!("Failed to parse tree account {}: {:?}", tree_pubkey, e);
+                return Ok(());
+            }
+        };
 
     let metadata = merkle_tree.get_metadata();
     let queue_batches = &metadata.queue_batches;
@@ -166,15 +151,27 @@ async fn verify_address_queue_hash_chains(
     db: &DatabaseConnection,
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
-    let account = rpc_client
-        .get_account(&tree_pubkey)
-        .await
-        .map_err(|_| vec![])?;
+    let account = match rpc_client.get_account(&tree_pubkey).await {
+        Ok(acc) => acc,
+        Err(e) => {
+            trace!("Failed to fetch tree account {}: {}", tree_pubkey, e);
+            return Ok(());
+        }
+    };
     let mut account_data = account.data.clone();
     let light_pubkey = light_compressed_account::Pubkey::from(tree_pubkey.to_bytes());
     let merkle_tree =
-        BatchedMerkleTreeAccount::address_from_bytes(&mut account_data, &light_pubkey)
-            .map_err(|_| vec![])?;
+        match BatchedMerkleTreeAccount::address_from_bytes(&mut account_data, &light_pubkey) {
+            Ok(tree) => tree,
+            Err(e) => {
+                trace!(
+                    "Failed to parse address tree account {}: {:?}",
+                    tree_pubkey,
+                    e
+                );
+                return Ok(());
+            }
+        };
 
     let metadata = merkle_tree.get_metadata();
     let queue_batches = &metadata.queue_batches;
@@ -207,21 +204,21 @@ async fn verify_queue_hash_chains(
     num_inserted_in_current_zkp: u64,
 ) -> Result<(), Vec<HashChainDivergence>> {
     let mut divergences = Vec::new();
-    
+
     if num_inserted_in_current_zkp > 0 && num_inserted_in_current_zkp < zkp_batch_size {
         debug!(
-            "Skipping ZKP verification for incomplete batch: {}/{} elements in current batch",
-            num_inserted_in_current_zkp, zkp_batch_size
+            "Skipping ZKP verification for tree {} type {:?} - incomplete batch: {}/{} elements",
+            tree_pubkey, queue_type, num_inserted_in_current_zkp, zkp_batch_size
         );
         return Ok(());
     }
-    
+
     let on_chain_batch_hash_chains = &on_chain_hash_chains[pending_batch_index];
     let total_on_chain_zkps = on_chain_batch_hash_chains.len() as u64;
     if num_inserted_zkps >= total_on_chain_zkps {
         debug!(
-            "{:?}: All {} hash chains already inserted, skipping validation",
-            queue_type, total_on_chain_zkps
+            "Tree {} type {:?}: All {} hash chains already inserted, skipping validation",
+            tree_pubkey, queue_type, total_on_chain_zkps
         );
         return Ok(());
     }
@@ -241,14 +238,10 @@ async fn verify_queue_hash_chains(
         .unwrap_or(0);
     let start_offset = batch_start_index + (num_inserted_zkps * zkp_batch_size);
 
-    let cached_chains = queue_hash_cache::get_cached_hash_chains(
-        db,
-        tree_pubkey,
-        queue_type,
-        batch_start_index,
-    )
-    .await
-    .unwrap_or_default();
+    let cached_chains =
+        queue_hash_cache::get_cached_hash_chains(db, tree_pubkey, queue_type, batch_start_index)
+            .await
+            .unwrap_or_default();
 
     let cached_map: std::collections::HashMap<i32, [u8; 32]> = cached_chains
         .into_iter()
@@ -262,7 +255,7 @@ async fn verify_queue_hash_chains(
 
     for zkp_batch_idx in 0..on_chain_chains.len() {
         let actual_zkp_idx = start_zkp_batch_idx + zkp_batch_idx;
-        
+
         if let Some(&cached_chain) = cached_map.get(&(actual_zkp_idx as i32)) {
             computed_chains.push(cached_chain);
         } else {
@@ -272,16 +265,11 @@ async fn verify_queue_hash_chains(
                 queue_type,
                 tree_pubkey,
                 chain_offset,
-                1, // Just one batch
+                1,
                 zkp_batch_size,
-                if zkp_batch_idx == on_chain_chains.len() - 1 {
-                    num_inserted_in_current_zkp
-                } else {
-                    0
-                },
             )
             .await?;
-            
+
             if !chains.is_empty() {
                 computed_chains.push(chains[0]);
                 chains_to_cache.push((actual_zkp_idx, chain_offset, chains[0]));
@@ -337,33 +325,42 @@ async fn compute_hash_chains_from_db(
     start_offset: u64,
     num_zkp_batches: u64,
     zkp_batch_size: u64,
-    num_inserted_in_current_zkp: u64,
 ) -> Result<Vec<[u8; 32]>, Vec<HashChainDivergence>> {
-    let has_incomplete_batch = num_inserted_in_current_zkp > 0;
-    let total_complete_batches = if has_incomplete_batch {
-        num_zkp_batches - 1
-    } else {
-        num_zkp_batches
-    };
-
-    let total_elements = if has_incomplete_batch {
-        (total_complete_batches * zkp_batch_size) + num_inserted_in_current_zkp
-    } else {
-        num_zkp_batches * zkp_batch_size
-    };
+    let total_elements = num_zkp_batches * zkp_batch_size;
 
     let all_elements =
         fetch_queue_elements(db, queue_type, tree_pubkey, start_offset, total_elements)
             .await
             .map_err(|e| {
-                error!("Failed to fetch queue elements: {:?}", e);
+                error!(
+                    "Failed to fetch queue elements for tree {} type {:?}: {:?}",
+                    tree_pubkey, queue_type, e
+                );
                 vec![]
             })?;
 
     let mut hash_chains = Vec::new();
-    for chunk in all_elements.chunks(zkp_batch_size as usize) {
-        let hash_chain = create_hash_chain_from_slice(chunk).map_err(|_| vec![])?;
-        hash_chains.push(hash_chain);
+
+    for (i, chunk) in all_elements.chunks(zkp_batch_size as usize).enumerate() {
+        if chunk.len() == zkp_batch_size as usize {
+            let hash_chain = create_hash_chain_from_slice(chunk).map_err(|e| {
+                error!(
+                    "Failed to create hash chain for tree {} type {:?}: {:?}",
+                    tree_pubkey, queue_type, e
+                );
+                vec![]
+            })?;
+            hash_chains.push(hash_chain);
+        } else {
+            warn!(
+                "Incomplete batch {} for tree {} type {:?} with {} elements when expecting {}",
+                i,
+                tree_pubkey,
+                queue_type,
+                chunk.len(),
+                zkp_batch_size
+            );
+        }
     }
 
     Ok(hash_chains)
@@ -376,7 +373,7 @@ async fn fetch_queue_elements(
     start_offset: u64,
     limit: u64,
 ) -> Result<Vec<[u8; 32]>, PhotonApiError> {
-    use sea_orm::{QuerySelect};
+    use sea_orm::QuerySelect;
 
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
     let mut result = Vec::with_capacity(limit as usize);
@@ -452,8 +449,7 @@ async fn fetch_queue_elements(
     Ok(result)
 }
 
-
-fn log_divergence(divergence: &HashChainDivergence) {
+pub fn log_divergence(divergence: &HashChainDivergence) {
     error!(
         "Hash chain divergence: tree={} type={:?} batch={} zkp_batch={} index={}",
         divergence.queue_info.tree_pubkey,
@@ -467,6 +463,58 @@ fn log_divergence(divergence: &HashChainDivergence) {
         hex::encode(&divergence.expected_hash_chain)
     );
     error!("  On-chain: {}", hex::encode(&divergence.actual_hash_chain));
+}
+
+pub async fn verify_single_queue(
+    rpc_client: &RpcClient,
+    db: &DatabaseConnection,
+    tree_pubkey: Pubkey,
+    queue_type: QueueType,
+) -> Result<(), Vec<HashChainDivergence>> {
+    let result = match queue_type {
+        QueueType::OutputStateV2 => {
+            verify_output_queue_hash_chains(rpc_client, db, tree_pubkey).await
+        }
+        QueueType::InputStateV2 => {
+            verify_input_queue_hash_chains(rpc_client, db, tree_pubkey).await
+        }
+        QueueType::AddressV2 => verify_address_queue_hash_chains(rpc_client, db, tree_pubkey).await,
+        _ => {
+            trace!("Skipping non-v2 queue type: {:?}", queue_type);
+            Ok(())
+        }
+    };
+
+    match result {
+        Ok(()) => {
+            let tree_str = tree_pubkey.to_string();
+            let queue_type_str = format!("{:?}", queue_type);
+            metric! {
+                statsd_count!(
+                    "v2_queue_validation_success",
+                    1,
+                    "tree" => tree_str.as_str(),
+                    "queue_type" => queue_type_str.as_str()
+                );
+            }
+            Ok(())
+        }
+        Err(divergences) => {
+            if !divergences.is_empty() {
+                let tree_str = tree_pubkey.to_string();
+                let queue_type_str = format!("{:?}", queue_type);
+                metric! {
+                    statsd_count!(
+                        "v2_queue_divergences",
+                        divergences.len() as i64,
+                        "tree" => tree_str.as_str(),
+                        "queue_type" => queue_type_str.as_str()
+                    );
+                }
+            }
+            Err(divergences)
+        }
+    }
 }
 
 pub async fn collect_v2_trees() -> Vec<(Pubkey, QueueType)> {
