@@ -76,10 +76,11 @@ pub(crate) async fn generate_proof(
 
     let public_input_hash_bytes =
         get_public_input_hash(&db_account_proofs, &db_new_address_proofs)?;
-    let public_input_hash_str = if is_v2_tree_height || circuit_type == CircuitType::Combined {
+    // Only send public_input_hash for V2 circuits
+    let public_input_hash_str = if is_v2_tree_height {
         hash_to_hex(&Hash(public_input_hash_bytes))
     } else {
-        String::new() // V1 circuits might not use this if not combined or V2 height
+        String::new()
     };
 
     // Use state_tree_height for queue_size if accounts are present, otherwise assume batched default.
