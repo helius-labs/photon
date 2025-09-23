@@ -12,9 +12,6 @@ use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait, Set
 use std::cmp::max;
 use std::collections::HashMap;
 
-pub const TREE_HEIGHT_V1: u32 = 26;
-pub const STATE_TREE_HEIGHT_V2: u32 = 32;
-
 #[derive(Clone, Debug)]
 pub struct LeafNode {
     pub tree: SerializablePubkey,
@@ -84,7 +81,7 @@ pub async fn persist_leaf_nodes(
         .collect::<Vec<_>>();
 
     let node_locations_to_models =
-        get_proof_nodes(txn, leaf_locations, true, false, Some(tree_height)).await?;
+        get_proof_nodes(txn, leaf_locations, true, false, tree_height).await?;
     let mut node_locations_to_hashes_and_seq = node_locations_to_models
         .iter()
         .map(|(key, value)| (key.clone(), (value.hash.clone(), value.seq)))

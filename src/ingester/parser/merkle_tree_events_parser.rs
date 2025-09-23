@@ -7,10 +7,10 @@ use crate::ingester::parser::indexer_events::{
 use crate::ingester::parser::state_update::{
     IndexedTreeLeafUpdate, LeafNullification, StateUpdate,
 };
-use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
+use light_compressed_account::TreeType;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
@@ -120,7 +120,8 @@ fn parse_indexed_merkle_tree_update(
     let mut state_update = StateUpdate::new();
 
     let tree_pubkey = Pubkey::from(id);
-    let tree_type = TreeInfo::get_tree_type(&tree_pubkey);
+    // Default to AddressV2 for now - the actual tree type will be determined from the database during persistence
+    let tree_type = TreeType::AddressV2;
 
     for update in updates {
         for (leaf, hash) in [

@@ -14,11 +14,10 @@ use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use persisted_batch_event::persist_batch_events;
 
-use crate::common::typedefs::account::{Account, AccountWithContext};
+use crate::common::typedefs::account::AccountWithContext;
 use crate::dao::generated::address_queues;
 use crate::ingester::persist::spend::{spend_input_accounts, spend_input_accounts_batched};
 use ark_bn254::Fr;
-use borsh::BorshDeserialize;
 use cadence_macros::statsd_count;
 use error::IngesterError;
 use light_compressed_account::TreeType;
@@ -45,7 +44,7 @@ mod merkle_proof_with_context;
 mod persisted_batch_event;
 mod spend;
 
-pub use self::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
+pub use self::leaf_node::{persist_leaf_nodes, LeafNode};
 pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
@@ -157,15 +156,41 @@ pub async fn persist_state_update(
     persist_indexed_tree_updates(txn, converted_updates).await?;
 
     debug!("Persisting state nodes...");
-    for chunk in leaf_nodes_with_signatures.chunks(MAX_SQL_INSERTS) {
-        let chunk_vec = chunk.iter().cloned().collect_vec();
-        persist_state_tree_history(txn, chunk_vec.clone()).await?;
-        let leaf_nodes_chunk = chunk_vec
-            .iter()
-            .map(|(leaf_node, _)| leaf_node.clone())
-            .collect_vec();
+    // Group leaf nodes by tree to get correct heights
+    let mut nodes_by_tree: HashMap<solana_pubkey::Pubkey, Vec<(LeafNode, Signature)>> =
+        HashMap::new();
+    for (leaf_node, signature) in leaf_nodes_with_signatures {
+        let tree_pubkey = solana_pubkey::Pubkey::try_from(leaf_node.tree.to_bytes_vec().as_slice())
+            .map_err(|e| IngesterError::ParserError(format!("Invalid tree pubkey: {}", e)))?;
+        nodes_by_tree
+            .entry(tree_pubkey)
+            .or_insert_with(Vec::new)
+            .push((leaf_node, signature));
+    }
 
-        persist_leaf_nodes(txn, leaf_nodes_chunk, TREE_HEIGHT_V1 + 1).await?;
+    // Process each tree's nodes with the correct height
+    for (tree_pubkey, tree_nodes) in nodes_by_tree {
+        // Get tree height from metadata
+        let tree_info = crate::ingester::parser::tree_info::TreeInfo::get_by_pubkey(txn, &tree_pubkey)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                tree_pubkey
+            )))?;
+        let tree_height = tree_info.height + 1; // +1 for indexed trees
+
+        // Process in chunks
+        for chunk in tree_nodes.chunks(MAX_SQL_INSERTS) {
+            let chunk_vec = chunk.iter().cloned().collect_vec();
+            persist_state_tree_history(txn, chunk_vec.clone()).await?;
+            let leaf_nodes_chunk = chunk_vec
+                .iter()
+                .map(|(leaf_node, _)| leaf_node.clone())
+                .collect_vec();
+
+            persist_leaf_nodes(txn, leaf_nodes_chunk, tree_height).await?;
+        }
     }
 
     let transactions_vec = transactions.into_iter().collect::<Vec<_>>();
@@ -241,19 +266,6 @@ async fn persist_state_tree_history(
         .build(txn.get_database_backend());
     txn.execute(query).await?;
     Ok(())
-}
-
-pub fn parse_token_data(account: &Account) -> Result<Option<TokenData>, IngesterError> {
-    match account.data.clone() {
-        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
-            let data_slice = data.data.0.as_slice();
-            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
-                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
-            })?;
-            Ok(Some(token_data))
-        }
-        _ => Ok(None),
-    }
 }
 
 pub struct EnrichedTokenAccount {
@@ -437,7 +449,7 @@ async fn append_output_accounts(
             tx_hash: Default::default(), // tx hashes are only set when an account is an input
         });
 
-        if let Some(token_data) = parse_token_data(&account.account)? {
+        if let Some(token_data) = account.account.parse_token_data()? {
             token_accounts.push(EnrichedTokenAccount {
                 token_data,
                 hash: account.account.hash.clone(),

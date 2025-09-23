@@ -7,8 +7,10 @@ pub mod sequence;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::MerkleTreeEvent;
 use crate::ingester::parser::merkle_tree_events_parser::BatchMerkleTreeEvents;
+use crate::ingester::parser::tree_info::TreeInfo;
 use log::debug;
 use sea_orm::DatabaseTransaction;
+use solana_pubkey::Pubkey;
 
 use self::address::persist_batch_address_append_event;
 use self::append::persist_batch_append_event;
@@ -25,6 +27,14 @@ pub async fn persist_batch_events(
     mut events: BatchMerkleTreeEvents,
 ) -> Result<(), IngesterError> {
     for (tree_pubkey, events) in events.iter_mut() {
+        let tree_info = TreeInfo::get_by_pubkey(txn, &Pubkey::from(*tree_pubkey))
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                bs58::encode(tree_pubkey).into_string()
+            )))?;
+        let tree_height = tree_info.height;
         // Sort by sequence
         events.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -78,7 +88,7 @@ pub async fn persist_batch_events(
             }?;
 
             // Persist leaf nodes, chunking if necessary
-            persist_leaf_nodes_chunked(txn, leaf_nodes).await?;
+            persist_leaf_nodes_chunked(txn, leaf_nodes, tree_height).await?;
         }
     }
     Ok(())

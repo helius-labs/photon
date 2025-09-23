@@ -45,6 +45,14 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
         .map(|x| (x.leaf_idx.unwrap_or_default() as u64, x))
         .collect::<HashMap<_, _>>();
 
+    let tree_height = TreeInfo::height(txn, &merkle_tree_pubkey.to_string())
+        .await?
+        .ok_or(PhotonApiError::RecordNotFound(format!(
+            "Tree info not found for tree: {}",
+            merkle_tree_pubkey
+        )))?
+        + 1;
+
     // Create leaf nodes for all requested indices
     let mut leaf_nodes = Vec::new();
 
@@ -67,18 +75,12 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                 hash: Hash::from(ZERO_BYTES[0]),
                 seq: root_seq,
             };
-            let tree_height = TreeInfo::height(&merkle_tree_pubkey.to_string()).ok_or(
-                PhotonApiError::RecordNotFound(format!(
-                    "Tree info not found for tree: {}",
-                    merkle_tree_pubkey
-                )),
-            )?;
-            let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, (tree_height + 1) as u32);
+            let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, tree_height);
             leaf_nodes.push((zero_leaf.clone(), node_idx));
         }
     }
 
-    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes).await
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes, tree_height).await
 }
 
 pub async fn get_multiple_compressed_leaf_proofs(
@@ -178,12 +180,32 @@ pub async fn get_multiple_compressed_leaf_proofs(
         })
         .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
 
-    get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, leaf_nodes_with_node_index).await
+    // Get tree height from the first leaf node (all should be from the same tree or we need to handle multiple trees)
+    let tree_height = if !leaf_nodes_with_node_index.is_empty() {
+        let first_tree = &leaf_nodes_with_node_index[0].0.tree;
+        TreeInfo::height(txn, &first_tree.to_string())
+            .await?
+            .ok_or(PhotonApiError::RecordNotFound(format!(
+                "Tree info not found for tree: {}",
+                first_tree
+            )))?
+            + 1 // Add 1 for indexed trees
+    } else {
+        return Ok(Vec::new());
+    };
+
+    get_multiple_compressed_leaf_proofs_from_full_leaf_info(
+        txn,
+        leaf_nodes_with_node_index,
+        tree_height,
+    )
+    .await
 }
 
 pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     txn: &DatabaseTransaction,
     leaf_nodes_with_node_index: Vec<(LeafNode, i64)>,
+    tree_height: u32,
 ) -> Result<Vec<MerkleProofWithContext>, PhotonApiError> {
     let include_leafs = false;
     let leaf_locations_to_required_nodes = leaf_nodes_with_node_index
@@ -205,7 +227,7 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
             .collect::<Vec<(Vec<u8>, i64)>>(),
         include_leafs,
         true,
-        None,
+        tree_height,
     )
     .await?;
 

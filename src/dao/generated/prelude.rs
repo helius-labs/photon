@@ -12,3 +12,4 @@ pub use super::state_trees::Entity as StateTrees;
 pub use super::token_accounts::Entity as TokenAccounts;
 pub use super::token_owner_balances::Entity as TokenOwnerBalances;
 pub use super::transactions::Entity as Transactions;
+pub use super::tree_metadata::Entity as TreeMetadata;

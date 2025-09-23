@@ -1,7 +1,9 @@
-use lazy_static::lazy_static;
+use crate::api::error::PhotonApiError;
+use crate::dao::generated::{prelude::*, tree_metadata};
 use light_compressed_account::TreeType;
-use solana_pubkey::{pubkey, Pubkey};
-use std::collections::HashMap;
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, TransactionTrait};
+use solana_pubkey::Pubkey;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct TreeInfo {
@@ -9,297 +11,133 @@ pub struct TreeInfo {
     pub queue: Pubkey,
     pub height: u32,
     pub tree_type: TreeType,
+    pub root_history_capacity: u64,
 }
 
 impl TreeInfo {
-    pub fn get(pubkey: &str) -> Option<&TreeInfo> {
-        QUEUE_TREE_MAPPING.get(pubkey)
+    pub async fn get<T>(conn: &T, pubkey: &str) -> Result<Option<TreeInfo>, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let pubkey_parsed = Pubkey::from_str(pubkey)
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid pubkey: {}", e)))?;
+
+        Self::get_by_pubkey(conn, &pubkey_parsed).await
     }
 
-    pub fn height(pubkey: &str) -> Option<u32> {
-        Self::get(pubkey).map(|x| x.height)
+    pub async fn get_by_pubkey<T>(
+        conn: &T,
+        pubkey: &Pubkey,
+    ) -> Result<Option<TreeInfo>, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let tree_bytes = pubkey.to_bytes().to_vec();
+
+        let metadata = TreeMetadata::find()
+            .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes.clone()))
+            .one(conn)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+
+        if let Some(metadata) = metadata {
+            return Ok(Some(TreeInfo::from_metadata(metadata, *pubkey)?));
+        }
+
+        let metadata = TreeMetadata::find()
+            .filter(tree_metadata::Column::QueuePubkey.eq(tree_bytes.clone()))
+            .one(conn)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+
+        if let Some(metadata) = metadata {
+            let tree_bytes: [u8; 32] =
+                metadata.tree_pubkey.as_slice().try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError("Invalid tree pubkey length in DB".to_string())
+                })?;
+            let tree_pubkey = Pubkey::from(tree_bytes);
+            return Ok(Some(TreeInfo::from_metadata(metadata, tree_pubkey)?));
+        }
+
+        Ok(None)
     }
 
-    pub fn get_tree_type(pubkey: &Pubkey) -> TreeType {
+    pub async fn height<T>(conn: &T, pubkey: &str) -> Result<Option<u32>, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let info = Self::get(conn, pubkey).await?;
+        Ok(info.map(|x| x.height))
+    }
+
+    pub async fn get_tree_type<T>(conn: &T, pubkey: &Pubkey) -> Result<TreeType, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
         let tree_pubkey_str = pubkey.to_string();
-        Self::get(&tree_pubkey_str)
-            .map(|info| info.tree_type.clone())
-            .unwrap_or(TreeType::AddressV2)
+        let info = Self::get(conn, &tree_pubkey_str).await?;
+        Ok(info.map(|i| i.tree_type).unwrap_or(TreeType::AddressV2))
     }
 
-    pub fn get_tree_type_from_bytes(tree_bytes: &[u8; 32]) -> TreeType {
-        let pubkey = Pubkey::from(*tree_bytes);
-        Self::get_tree_type(&pubkey)
+    pub async fn get_tree_type_from_pubkey<T>(
+        conn: &T,
+        pubkey: &[u8; 32],
+    ) -> Result<TreeType, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let pubkey = Pubkey::from(*pubkey);
+        Self::get_tree_type(conn, &pubkey).await
     }
-}
 
-// TODO: add a table which stores tree metadata: tree_pubkey | queue_pubkey | type | ...
-lazy_static! {
-    pub static ref QUEUE_TREE_MAPPING: HashMap<String, TreeInfo> = {
-        let legacy_state_trees = [
-            (
-                pubkey!("smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT"),
-                pubkey!("nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148"),
-            ),
-            (
-                pubkey!("smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho"),
-                pubkey!("nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X"),
-            ),
-            (
-                pubkey!("smt3AFtReRGVcrP11D6bSLEaKdUmrGfaTNowMVccJeu"),
-                pubkey!("nfq3de4qt9d3wHxXWy1wcge3EXhid25mCr12bNWFdtV"),
-            ),
-            (
-                pubkey!("smt4vjXvdjDFzvRMUxwTWnSy4c7cKkMaHuPrGsdDH7V"),
-                pubkey!("nfq4Ncp1vk3mFnCQ9cvwidp9k2L6fxEyCo2nerYD25A"),
-            ),
-            (
-                pubkey!("smt5uPaQT9n6b1qAkgyonmzRxtuazA53Rddwntqistc"),
-                pubkey!("nfq5b5xEguPtdD6uPetZduyrB5EUqad7gcUE46rALau"),
-            ),
-            (
-                pubkey!("smt6ukQDSPPYHSshQovmiRUjG9jGFq2hW9vgrDFk5Yz"),
-                pubkey!("nfq6uzaNZ5n3EWF4t64M93AWzLGt5dXTikEA9fFRktv"),
-            ),
-            (
-                pubkey!("smt7onMFkvi3RbyhQCMajudYQkB1afAFt9CDXBQTLz6"),
-                pubkey!("nfq7yytdKkkLabu1KpvLsa5VPkvCT4jPWus5Yi74HTH"),
-            ),
-            (
-                pubkey!("smt8TYxNy8SuhAdKJ8CeLtDkr2w6dgDmdz5ruiDw9Y9"),
-                pubkey!("nfq8vExDykci3VUSpj9R1totVst87hJfFWevNK4hiFb"),
-            ),
-            (
-                pubkey!("smt9ReAYRF5eFjTd5gBJMn5aKwNRcmp3ub2CQr2vW7j"),
-                pubkey!("nfq9KFpNQL45ppP6ZG7zBpUeN18LZrNGkKyvV1kjTX2"),
-            ),
-            (
-                pubkey!("smtAvYA5UbTRyKAkAj5kHs1CmrA42t6WkVLi4c6mA1f"),
-                pubkey!("nfqAroCRkcZBgsAJDNkptKpsSWyM6cgB9XpWNNiCEC4"),
-            ),
-            (
-                pubkey!("smtBvnJx2B2u85wc3sMkF6G8rVMfN8Ek3nVKZ8gQUFn"),
-                pubkey!("nfqB3FAiiB1p3ksiWHB48LzSycpaJZ5RTp5C8RtNyUH"),
-            ),
-            (
-                pubkey!("smtB1XUpt3c7j7udurMdxmAGib7RzCyBXu95fAZoHyT"),
-                pubkey!("nfqByCmDtLy7pkKpazApswN5H3Y4RSgCVq7NpecLHza"),
-            ),
-            (
-                pubkey!("smtCEeVJsWyeeawgn5cQR5iK7dsJwnxJq7QwdQUepx8"),
-                pubkey!("nfqC5pX1HzaTgUApL2DTp7Xh8j3A5Augk42jngRCoKF"),
-            ),
-            (
-                pubkey!("smtF9XTNZeyMgGQxxWfxyS1Ff6CA4W4RgYi8X1wWxa9"),
-                pubkey!("nfqFa5ZzBYELWDnMQZe7SA3gd1x98aqtPf4sfaJZQJm"),
-            ),
-            (
-                pubkey!("smtGeMYXeGoyQVcnrDg985h74ak9aRPW4gsfdW25DVy"),
-                pubkey!("nfqGKBHxkUbDvTtkiDXNWskBhM6R9YfCeNu52baqvaf"),
-            ),
-            (
-                pubkey!("smtHxHypFJoK6z6CCgx7eP9jqDykUBE7PbrXrTVoejR"),
-                pubkey!("nfqHEE21vgXLnD7wxauCvX6pfeAs1zJbE4YyZ4YQ1rG"),
-            ),
-            (
-                pubkey!("smtJsXesAF3vEc7Kz86rvaaHnNndvRWRfTj3XhgbCyb"),
-                pubkey!("nfqJnTp7kgAa2AF2QTRi5qNVinkpAdA15gBYYqeZUgA"),
-            ),
-            (
-                pubkey!("smtKAoGiqSb6YwGhCSwsJer5tMMgk7sH1a2K5BNeNQQ"),
-                pubkey!("nfqKejGFuD6xkNLt8zzp2HaypMeRDsptBaeVGB4Utoq"),
-            ),
-            (
-                pubkey!("smtLdHZPfJfqK3cKCQ9sqQTCQaoDgZKA11MQZ9P4UFR"),
-                pubkey!("nfqLk1L9ezj8AbDyeQueeQoKUvU6Jzz9eQs28QgTEfx"),
-            ),
-            (
-                pubkey!("smtNKu3Dwsyw4YVVA7S9cWYGvLrwUVD3T593ZJnyggv"),
-                pubkey!("nfqNG4bDC6e8SzamFhvDytxwzKdzbwoTsLHZFi11AD1"),
-            ),
-            (
-                pubkey!("smta2xk2kZTeFBRzpSrtCpwmxkrQpv7LGgut1aMNsme"),
-                pubkey!("nfqa2szxnkgX4xBTVG81HYK7mzZe8pSF8wv2yMXaTTG"),
-            ),
-            (
-                pubkey!("smtb2BcLRWygF3svygXMprcRjXKUDnxvNFnseNgH6VT"),
-                pubkey!("nfqbgaRZGC1BGtFjRMvJmx79fzg8bBuSJBCEbJzoGTG"),
-            ),
-            (
-                pubkey!("smtd3wjo4AzEKd9tRE2zTanxEEWRAXAAs9AtF9NcfAs"),
-                pubkey!("nfqd5yiNJJ5mvZxitwXY9bR5dfBs2WNcTKctFBYwSuv"),
-            ),
-            (
-                pubkey!("smte57v68vyf21wT5xzxYvZpr6iiFG1WQ5dX7J1Y85E"),
-                pubkey!("nfqecsLrkXwRpdBJZEpR2bJYbXc2jrh78mqg1kRDZKm"),
-            ),
-            (
-                pubkey!("smtobNxYYVi8YfJDjzdoW1jR7xyZaVeXwmSHNgL3tA1"),
-                pubkey!("nfqoqboretu8sLtCB4mTe3HKRmzc18HAPUAkEn18axG"),
-            ),
-            (
-                pubkey!("smtpQZk7YARxMaz7VeW7zPMLNJAhbP9v1AZzLopaB2M"),
-                pubkey!("nfqp7yDaPgGenuaFFAogXLvy5A5c3Znn5pYe6TmQ9RQ"),
-            ),
-            (
-                pubkey!("smtqHbhmXHjVxeDNq5NPTMBw92L2ZsEF4q2WgNqjN7Y"),
-                pubkey!("nfqqqib2xCHLXSVABHoczoY4u495T5eFCcypZ6C22gB"),
-            ),
-            (
-                pubkey!("smtrG9ekG1obtqBRoB4mMUEwicfjTRRzZUm3z4LX8UJ"),
-                pubkey!("nfqroTsZ4EX37MuYb26Km8nPmS2WhfG3HTFgCuuwe7U"),
-            ),
-            (
-                pubkey!("smtsAZefsicmjKXz9Wtzidwt67pU3kqbhB6f2yD3rQJ"),
-                pubkey!("nfqs5Hdbd7oKtDdRmVQFy4wytRn5gDb1DPwPyQCmHS2"),
-            ),
-            (
-                pubkey!("smtt9Ra1v3mu8eSx7nrq5Q8bRqqPRf5mfpUvkpkP29L"),
-                pubkey!("nfqt3kLwwcAm8wLfNCVGPThN7fpHimPoiBegoGeRxUy"),
-            ),
-            (
-                pubkey!("smtu3VAWgucXQmMhy4S8nNojpuVJHgVrGQFkai1jXRw"),
-                pubkey!("nfqu1jDCGChJQxQpU5XWjeHUtzYWBEoKZ24VXXdKdkk"),
-            ),
-            (
-                pubkey!("smtvbupk8wjpXa48Zg29SVtTL8BpSJVrc6tfMGAA5A3"),
-                pubkey!("nfqvcYyr6TzAugHSaX398fXPBSRygmb7TfmXoXvL8Qu"),
-            ),
-            (
-                pubkey!("smtwntNZBnj3w5dw1mYjzgHBBhxAYvHjZhh5whVEaBS"),
-                pubkey!("nfqw14GHxV2LJsNwwXLGCXDyQXqnUn6GDL9DKqBbeep"),
-            ),
-            (
-                pubkey!("smtx7SjhPmjChWsUNiyZ4VF2U82zSBDf2yArGKr5BDb"),
-                pubkey!("nfqxAGA7bDoHDxqA4K25fV1wZZ5NHzGrxReiCC5Ztet"),
-            ),
-            (
-                pubkey!("smty1QArd6Z73H67TvoqpxitEc2E5A9zBtw42ZKZJkn"),
-                pubkey!("nfqy55aAqL8qG5qBRixUtLnDqNd61ft2jtXyoYGHNGb"),
-            ),
-            (
-                pubkey!("smtz1CZdRkGuMpYPZHihP2WruMj9ZHYjK6Ag9gLBzWM"),
-                pubkey!("nfqzF2r8viCVTMpzVAL5jHVKsGF45RsASxun8ZpRKnm"),
-            ),
-        ];
+    pub async fn get_by_sdk_pubkey<T>(
+        conn: &T,
+        pubkey: &solana_sdk::pubkey::Pubkey,
+    ) -> Result<Option<TreeInfo>, crate::ingester::error::IngesterError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let pubkey_bytes = pubkey.to_bytes();
+        let pubkey_converted = Pubkey::from(pubkey_bytes);
 
-        let address_trees_v1 = [(
-            pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2"),
-            pubkey!("aq1S9z4reTSQAdgWHGD2zDaS39sjGrAxbR31vxJ2F4F"),
-        )];
+        Self::get_by_pubkey(conn, &pubkey_converted)
+            .await
+            .map_err(|e| {
+                crate::ingester::error::IngesterError::ParserError(format!(
+                    "Failed to get tree info: {}",
+                    e
+                ))
+            })
+    }
 
-        let mut m = HashMap::new();
+    fn from_metadata(
+        metadata: tree_metadata::Model,
+        tree_pubkey: Pubkey,
+    ) -> Result<TreeInfo, PhotonApiError> {
+        let queue_bytes: [u8; 32] = metadata.queue_pubkey.as_slice().try_into().map_err(|_| {
+            PhotonApiError::UnexpectedError("Invalid queue pubkey length in DB".to_string())
+        })?;
+        let queue_pubkey = Pubkey::from(queue_bytes);
 
-        for (legacy_tree, legacy_queue) in legacy_state_trees.iter() {
-            m.insert(
-                legacy_queue.to_string(),
-                TreeInfo {
-                    tree: *legacy_tree,
-                    queue: *legacy_queue,
-                    height: 26,
-                    tree_type: TreeType::StateV1,
-                },
-            );
+        let tree_type = match metadata.tree_type {
+            1 => TreeType::StateV1,
+            2 => TreeType::AddressV1,
+            3 => TreeType::StateV2,
+            4 => TreeType::AddressV2,
+            _ => {
+                return Err(PhotonApiError::UnexpectedError(format!(
+                    "Unknown tree type: {}",
+                    metadata.tree_type
+                )))
+            }
+        };
 
-            m.insert(
-                legacy_tree.to_string(),
-                TreeInfo {
-                    tree: *legacy_tree,
-                    queue: *legacy_queue,
-                    height: 26,
-                    tree_type: TreeType::StateV1,
-                },
-            );
-        }
-
-        for (legacy_tree, legacy_queue) in address_trees_v1.iter() {
-            m.insert(
-                legacy_queue.to_string(),
-                TreeInfo {
-                    tree: *legacy_tree,
-                    queue: *legacy_queue,
-                    height: 26,
-                    tree_type: TreeType::AddressV1,
-                },
-            );
-
-            m.insert(
-                legacy_tree.to_string(),
-                TreeInfo {
-                    tree: *legacy_tree,
-                    queue: *legacy_queue,
-                    height: 26,
-                    tree_type: TreeType::AddressV1,
-                },
-            );
-        }
-
-        let state_trees_v2 = [
-            (
-                pubkey!("HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu"),
-                pubkey!("6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU"),
-            ),
-            (
-                pubkey!("bmt1LryLZUMmF7ZtqESaw7wifBXLfXHQYoE4GAmrahU"),
-                pubkey!("oq1na8gojfdUhsfCpyjNt6h4JaDWtHf1yQj4koBWfto"),
-            ),
-            (
-                pubkey!("bmt2UxoBxB9xWev4BkLvkGdapsz6sZGkzViPNph7VFi"),
-                pubkey!("oq2UkeMsJLfXt2QHzim242SUi3nvjJs8Pn7Eac9H9vg"),
-            ),
-            (
-                pubkey!("bmt3ccLd4bqSVZVeCJnH1F6C8jNygAhaDfxDwePyyGb"),
-                pubkey!("oq3AxjekBWgo64gpauB6QtuZNesuv19xrhaC1ZM1THQ"),
-            ),
-            (
-                pubkey!("bmt4d3p1a4YQgk9PeZv5s4DBUmbF5NxqYpk9HGjQsd8"),
-                pubkey!("oq4ypwvVGzCUMoiKKHWh4S1SgZJ9vCvKpcz6RT6A8dq"),
-            ),
-            (
-                pubkey!("bmt5yU97jC88YXTuSukYHa8Z5Bi2ZDUtmzfkDTA2mG2"),
-                pubkey!("oq5oh5ZR3yGomuQgFduNDzjtGvVWfDRGLuDVjv9a96P"),
-            ),
-        ];
-
-        let address_trees_v2 = [
-            pubkey!("EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK"),
-            pubkey!("amt2kaJA14v3urZbZvnc5v2np8jqvc4Z8zDep5wbtzx"),
-        ];
-
-        for (tree, queue) in state_trees_v2.iter() {
-            m.insert(
-                queue.to_string(),
-                TreeInfo {
-                    tree: *tree,
-                    queue: *queue,
-                    height: 32,
-                    tree_type: TreeType::StateV2,
-                },
-            );
-
-            m.insert(
-                tree.to_string(),
-                TreeInfo {
-                    tree: *tree,
-                    queue: *queue,
-                    height: 32,
-                    tree_type: TreeType::StateV2,
-                },
-            );
-        }
-
-        for tree_queue in address_trees_v2.iter() {
-            m.insert(
-                tree_queue.to_string(),
-                TreeInfo {
-                    tree: *tree_queue,
-                    queue: *tree_queue,
-                    height: 40,
-                    tree_type: TreeType::AddressV2,
-                },
-            );
-        }
-
-        m
-    };
+        Ok(TreeInfo {
+            tree: tree_pubkey,
+            queue: queue_pubkey,
+            height: metadata.height as u32,
+            tree_type,
+            root_history_capacity: metadata.root_history_capacity as u64,
+        })
+    }
 }

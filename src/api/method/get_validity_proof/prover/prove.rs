@@ -11,21 +11,18 @@ use crate::api::method::get_validity_proof::prover::structs::{
 };
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::{MerkleProofWithContext, TREE_HEIGHT_V1};
+use crate::ingester::persist::MerkleProofWithContext;
 use light_batched_merkle_tree::constants::{
     DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
 };
 use reqwest::Client;
-
-const STATE_TREE_QUEUE_SIZE: u64 = 2400;
-
-// TODO: we should use BatchedMerkleTreeMetadata::default().root_history_capacity instead of hardcoding.
-// It's fixed in light-batched-merkle-tree = "0.4.2", but we need to publish all the dependencies first.
-const BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY: u64 = 200;
+use sea_orm::DatabaseConnection;
 
 pub(crate) async fn generate_proof(
+    conn: &DatabaseConnection,
     db_account_proofs: Vec<MerkleProofWithContext>,
     db_new_address_proofs: Vec<MerkleContextWithNewAddressProof>,
+    root_history_capacity: u64,
     prover_url: &str,
 ) -> Result<ProverResult, PhotonApiError> {
     let state_tree_height = if db_account_proofs.is_empty() {
@@ -74,32 +71,18 @@ pub(crate) async fn generate_proof(
     let is_v2_tree_height = (state_tree_height == DEFAULT_BATCH_STATE_TREE_HEIGHT as usize)
         || (address_tree_height == DEFAULT_BATCH_ADDRESS_TREE_HEIGHT as usize);
 
-    let public_input_hash_bytes =
-        get_public_input_hash(&db_account_proofs, &db_new_address_proofs)?;
-    // Only send public_input_hash for V2 circuits
-    let public_input_hash_str = if is_v2_tree_height {
-        hash_to_hex(&Hash(public_input_hash_bytes))
+    // Compute and send public_input_hash for V2 circuits
+    let public_input_hash_opt = if is_v2_tree_height {
+        let public_input_hash_bytes =
+            get_public_input_hash(&db_account_proofs, &db_new_address_proofs)?;
+        Some(hash_to_hex(&Hash(public_input_hash_bytes)))
     } else {
-        String::new()
+        None
     };
 
-    // Use state_tree_height for queue_size if accounts are present, otherwise assume batched default.
-    // This logic might need refinement if address_tree_height should dictate queue_size for non-inclusion only.
-    let queue_determining_height = if state_tree_height != 0 {
-        state_tree_height
-    } else {
-        address_tree_height
-    };
-
-    let queue_size = if queue_determining_height == TREE_HEIGHT_V1 as usize {
-        STATE_TREE_QUEUE_SIZE
-    } else if queue_determining_height == 0 {
-        // No proofs, default for batched (should ideally not hit if circuit_type is determined)
-        BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY
-    } else {
-        // Batched trees
-        BATCHED_MERKLE_TREE_ROOT_HISTORY_CAPACITY
-    };
+    // Always use the actual root_history_capacity from the database
+    // Each tree (V1 or V2) has its own queue size stored as root_history_capacity
+    let queue_size = root_history_capacity;
 
     log::debug!(
         "Queue size: state_tree_height={}, address_tree_height={}, queue_size={}",
@@ -112,7 +95,7 @@ pub(crate) async fn generate_proof(
         circuit_type: circuit_type.to_string(),
         state_tree_height: state_tree_height as u32,
         address_tree_height: address_tree_height as u32,
-        public_input_hash: public_input_hash_str.clone(),
+        public_input_hash: public_input_hash_opt.clone(),
         input_compressed_accounts: convert_inclusion_proofs_to_hex(db_account_proofs.clone()),
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(db_new_address_proofs.clone()),
     };
@@ -158,12 +141,12 @@ pub(crate) async fn generate_proof(
         log::debug!("Proof generation: tree {} leaf_index {} root_seq {} queue_size {} root_index_mod_queue {}",
             acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, queue_size, acc_proof.root_seq % queue_size);
 
-        let tree_info = TreeInfo::get(&acc_proof.merkle_tree.to_string().as_str())
+        let tree_info = TreeInfo::get(conn, &acc_proof.merkle_tree.to_string())
+            .await?
             .ok_or(PhotonApiError::UnexpectedError(format!(
-                "Failed to parse TreeInfo for account tree '{}'",
+                "Failed to get TreeInfo for account tree '{}'",
                 acc_proof.merkle_tree
-            )))?
-            .clone();
+            )))?;
         account_details.push(AccountProofDetail {
             hash: acc_proof.hash.to_string(),
             root: acc_proof.root.to_string(),
@@ -176,12 +159,12 @@ pub(crate) async fn generate_proof(
 
     let mut address_details = Vec::with_capacity(db_new_address_proofs.len());
     for addr_proof in db_new_address_proofs.iter() {
-        let tree_info = TreeInfo::get(&addr_proof.merkleTree.to_string().as_str())
+        let tree_info = TreeInfo::get(conn, &addr_proof.merkleTree.to_string())
+            .await?
             .ok_or(PhotonApiError::UnexpectedError(format!(
-                "Failed to parse TreeInfo for address tree '{}'",
+                "Failed to get TreeInfo for address tree '{}'",
                 addr_proof.merkleTree
-            )))?
-            .clone();
+            )))?;
         address_details.push(AddressProofDetail {
             address: addr_proof.address.to_string(),
             root: addr_proof.root.to_string(),

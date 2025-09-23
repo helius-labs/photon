@@ -6,7 +6,7 @@ mod helpers;
 mod proof;
 
 pub use helpers::{
-    compute_hash_by_tree_height, compute_hash_by_tree_pubkey, compute_range_node_hash,
+    compute_hash_by_tree_pubkey, compute_hash_by_tree_type, compute_range_node_hash,
     compute_range_node_hash_v1, get_top_element, get_zeroeth_exclusion_range,
     get_zeroeth_exclusion_range_v1,
 };

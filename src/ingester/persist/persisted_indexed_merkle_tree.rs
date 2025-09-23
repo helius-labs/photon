@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use super::{compute_parent_hash, persisted_state_tree::ZERO_BYTES, MAX_SQL_INSERTS};
 use crate::common::format_bytes;
+use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::{
     compute_hash_by_tree_pubkey, compute_range_node_hash, compute_range_node_hash_v1,
     get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
     query_next_smallest_elements,
 };
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode, TREE_HEIGHT_V1};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::{
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
     dao::generated::{indexed_trees, state_trees},
@@ -163,13 +164,28 @@ pub async fn persist_indexed_tree_updates(
     txn: &DatabaseTransaction,
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
 ) -> Result<(), IngesterError> {
-    // Step 1: Tree Processing - Collect unique trees with their types
-    let trees: HashMap<Pubkey, TreeType> = indexed_leaf_updates
+    // Step 1: Tree Processing - Collect unique trees and look up their types from the database
+    let unique_trees: Vec<Pubkey> = indexed_leaf_updates
         .values()
-        .map(|update| (update.tree, update.tree_type))
+        .map(|update| update.tree)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
         .collect();
 
-    for (tree, tree_type) in trees {
+    let mut trees: HashMap<Pubkey, (TreeType, u32)> = HashMap::new();
+    for tree in unique_trees {
+        // Get tree info - this is required, not optional
+        let tree_info = TreeInfo::get_by_pubkey(txn, &tree)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                tree
+            )))?;
+        trees.insert(tree, (tree_info.tree_type, tree_info.height));
+    }
+
+    for (tree, (tree_type, _tree_height)) in trees.clone() {
         let sdk_tree = Pubkey::new_from_array(tree.to_bytes());
         // Step 4: Initialization Elements - Ensure required initialization elements exist
         ensure_zeroeth_element_exists(&mut indexed_leaf_updates, sdk_tree, tree, tree_type)?;
@@ -232,7 +248,17 @@ pub async fn persist_indexed_tree_updates(
             })
             .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
 
-        persist_leaf_nodes(txn, state_tree_leaf_nodes, TREE_HEIGHT_V1 + 1).await?;
+        // Get the tree height for this specific tree (+1 because indexed trees have one extra level)
+        let tree_height = trees
+            .get(&chunk[0].tree)
+            .map(|(_, height)| height + 1)
+            .ok_or_else(|| {
+                IngesterError::ParserError(format!(
+                    "Tree height not found for tree {} during persist",
+                    chunk[0].tree
+                ))
+            })?;
+        persist_leaf_nodes(txn, state_tree_leaf_nodes, tree_height).await?;
 
         let address_tree_history_models = chunk
             .iter()
@@ -304,7 +330,12 @@ pub async fn multi_append(
     let mut elements_to_update: HashMap<i64, indexed_trees::Model> = HashMap::new();
 
     if indexed_tree.is_empty() {
-        let models = if tree_height == TREE_HEIGHT_V1 + 1 {
+        let tree_pubkey = Pubkey::from(tree.clone().try_into().unwrap_or([0u8; 32]));
+        let tree_type = TreeInfo::get_tree_type(txn, &tree_pubkey)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree type: {}", e)))?;
+
+        let models = if matches!(tree_type, TreeType::AddressV1) {
             vec![
                 get_zeroeth_exclusion_range_v1(tree.clone()),
                 get_top_element(tree.clone()),
@@ -388,19 +419,18 @@ pub async fn multi_append(
         )));
     }
 
-    let leaf_nodes = elements_to_update
-        .values()
-        .map(|x| {
-            Ok(LeafNode {
-                tree: SerializablePubkey::try_from(x.tree.clone()).map_err(|e| {
-                    IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
-                })?,
-                leaf_index: x.leaf_index as u32,
-                hash: compute_hash_by_tree_pubkey(x, &tree)?,
-                seq,
-            })
-        })
-        .collect::<Result<Vec<LeafNode>, IngesterError>>()?;
+    let mut leaf_nodes = Vec::new();
+    for x in elements_to_update.values() {
+        let hash = compute_hash_by_tree_pubkey(txn, x, &tree).await?;
+        leaf_nodes.push(LeafNode {
+            tree: SerializablePubkey::try_from(x.tree.clone()).map_err(|e| {
+                IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
+            })?,
+            leaf_index: x.leaf_index as u32,
+            hash,
+            seq,
+        });
+    }
 
     persist_leaf_nodes(txn, leaf_nodes, tree_height).await?;
 

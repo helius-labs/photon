@@ -23,17 +23,19 @@ use sea_orm::{
     SqlxSqliteConnector, Statement, TransactionTrait,
 };
 
+use light_compressed_account::TreeType;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
+use photon_indexer::monitor::tree_metadata_sync::upsert_tree_metadata;
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
 use solana_sdk::account::Account as SolanaAccount;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
-    pubkey::Pubkey,
     signature::Signature,
 };
 use solana_transaction_status::{
@@ -67,6 +69,70 @@ fn setup_logging() {
 
 async fn run_migrations_from_fresh(db: &DatabaseConnection) {
     MigractorWithCustomMigrations::fresh(db).await.unwrap();
+}
+
+/// Populate common test tree metadata for tests to work
+async fn populate_test_tree_metadata(db: &DatabaseConnection) {
+    // Common test trees from the old static configuration
+    let test_trees = vec![
+        // V1 State Trees
+        (
+            "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
+            "nfq1NvQDJ2GEgnS8zt9prAe8rjjpAW1zFkrvZoBR148",
+            TreeType::StateV1,
+            26,
+            2400,
+        ),
+        (
+            "smt2rJAFdyJJupwMKAqTNAJwvjhmiZ4JYGZmbVRw1Ho",
+            "nfq2hgS7NYemXsFaFUCe3EMXSDSfnZnAe27jC6aPP1X",
+            TreeType::StateV1,
+            26,
+            2400,
+        ),
+        // V1 Address Trees
+        (
+            "amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2",
+            "aq1S9z4reTSQAdgWHGD2zDaS39sjGrAxbR31vxJ2F4F",
+            TreeType::AddressV1,
+            26,
+            2400,
+        ),
+        // V2 State Trees
+        (
+            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu",
+            "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU",
+            TreeType::StateV2,
+            32,
+            2400,
+        ),
+        // V2 Address Tree
+        (
+            "EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK",
+            "EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK",
+            TreeType::AddressV2,
+            40,
+            2400,
+        ),
+    ];
+
+    for (tree_str, queue_str, tree_type, height, root_history_capacity) in test_trees {
+        let tree_pubkey = tree_str.parse::<Pubkey>().unwrap();
+        let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
+
+        // Only insert if it doesn't already exist
+        let _ = upsert_tree_metadata(
+            db,
+            tree_pubkey,
+            root_history_capacity as i64,
+            height,
+            tree_type as i32,
+            0, // sequence_number
+            0, // next_index
+            queue_pubkey,
+        )
+        .await;
+    }
 }
 
 async fn run_one_time_setup(db: &DatabaseConnection) {
@@ -125,11 +191,13 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     match opts.db_backend {
         DatabaseBackend::Postgres => {
             reset_tables(&db_conn).await.unwrap();
+            populate_test_tree_metadata(&db_conn).await;
         }
         DatabaseBackend::Sqlite => {
             // We need to run migrations from fresh for SQLite every time since we are using an
             // in memory database that gets dropped every after test.
             run_migrations_from_fresh(&db_conn).await;
+            populate_test_tree_metadata(&db_conn).await;
         }
         _ => unimplemented!(),
     }
@@ -172,9 +240,15 @@ pub async fn setup_pg_pool(database_url: String) -> PgPool {
 }
 
 pub async fn setup_sqllite_pool() -> SqlitePool {
-    let options: SqliteConnectOptions = "sqlite::memory:".parse().unwrap();
+    // Use file-based SQLite with shared cache mode to ensure all connections see the same data
+    let db_file = format!("/tmp/photon_test_{}.db", std::process::id());
+    // Remove any existing file
+    let _ = std::fs::remove_file(&db_file);
+
+    let options: SqliteConnectOptions = format!("sqlite://{}?mode=rwc", db_file).parse().unwrap();
     SqlitePoolOptions::new()
         .min_connections(1)
+        .max_connections(5)
         .connect_with(options)
         .await
         .unwrap()
@@ -201,6 +275,10 @@ pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
     for table in tables {
         truncate_table(conn, table.to_string()).await?;
     }
+
+    // Re-populate tree metadata after resetting tables
+    populate_test_tree_metadata(conn).await;
+
     Ok(())
 }
 
@@ -443,7 +521,10 @@ pub async fn index_transaction(
     tx: &str,
 ) {
     let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
-    let state_update = parse_transaction(&tx.try_into().unwrap(), 0).unwrap();
+    let tx_info: TransactionInfo = tx.try_into().unwrap();
+    let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0)
+        .await
+        .unwrap();
     persist_state_update_using_connection(db_conn.as_ref(), state_update)
         .await
         .unwrap();
@@ -462,7 +543,9 @@ pub async fn index_multiple_transactions(
     }
     let mut state_updates = Vec::new();
     for transaction_info in transactions_infos {
-        let tx_state_update = parse_transaction(&transaction_info, 0).unwrap();
+        let tx_state_update = parse_transaction(db_conn.as_ref(), &transaction_info, 0)
+            .await
+            .unwrap();
         state_updates.push(tx_state_update);
     }
     let state_update = StateUpdate::merge_updates(state_updates);

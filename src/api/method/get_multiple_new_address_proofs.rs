@@ -78,11 +78,12 @@ pub async fn get_multiple_new_address_proofs_helper(
     let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
 
     for AddressWithTree { address, tree } in addresses {
-        let tree_and_queue = TreeInfo::get(&tree.to_string())
-            .ok_or(PhotonApiError::InvalidPubkey {
-                field: tree.to_string(),
-            })?
-            .clone();
+        let tree_and_queue =
+            TreeInfo::get(txn, &tree.to_string())
+                .await?
+                .ok_or(PhotonApiError::InvalidPubkey {
+                    field: tree.to_string(),
+                })?;
 
         // For V2 trees, check if the address is in the queue but not yet in the tree
         if check_queue && tree_and_queue.tree_type == TreeType::AddressV2 {
