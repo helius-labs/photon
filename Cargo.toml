@@ -81,12 +81,12 @@ solana-pubkey = "2.3.0"
 
 solana-transaction-status = "1.18.0"
 
-light-zero-copy = "0.2.0"
-light-concurrent-merkle-tree = "2.1.0"
-light-batched-merkle-tree = "0.3.0"
-light-merkle-tree-metadata = "0.3.0"
-light-compressed-account = { version = "0.3.0", features = ["anchor"] }
-light-hasher = { version = "3.1.0" }
+light-zero-copy = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["solana"] }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["solana"] }
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["solana"] }
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["solana"] }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["anchor"] }
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "849cc7c5f66faf05a7f1176768178241bd59d256", features = ["solana"] }
 light-poseidon = "0.3.0"
 
 sqlx = { version = "0.6.2", features = [
