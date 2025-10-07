@@ -63,13 +63,8 @@ pub async fn process_tree_account(
     pubkey: Pubkey,
     account: &mut Account,
 ) -> Result<bool, PhotonApiError> {
-    if let Ok((
-        queue_pubkey,
-        root_history_capacity,
-        height,
-        sequence_number,
-        next_index,
-    )) = process_v1_state_account(account)
+    if let Ok((queue_pubkey, root_history_capacity, height, sequence_number, next_index)) =
+        process_v1_state_account(account)
     {
         upsert_tree_metadata(
             db,
@@ -82,18 +77,15 @@ pub async fn process_tree_account(
             queue_pubkey,
         )
         .await?;
-        info!("Synced V1 state tree {} with height {}, root_history_capacity {}, seq {}, next_idx {}",
-            pubkey, height, root_history_capacity, sequence_number, next_index);
+        info!(
+            "Synced V1 state tree {} with height {}, root_history_capacity {}, seq {}, next_idx {}",
+            pubkey, height, root_history_capacity, sequence_number, next_index
+        );
         return Ok(true);
     }
 
-    if let Ok((
-        queue_pubkey,
-        root_history_capacity,
-        height,
-        sequence_number,
-        next_index,
-    )) = process_v1_address_account(account)
+    if let Ok((queue_pubkey, root_history_capacity, height, sequence_number, next_index)) =
+        process_v1_address_account(account)
     {
         upsert_tree_metadata(
             db,

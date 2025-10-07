@@ -25,6 +25,10 @@ use self::sequence::should_process_event;
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: BatchMerkleTreeEvents,
+    tree_type_cache: &std::collections::HashMap<
+        solana_pubkey::Pubkey,
+        light_compressed_account::TreeType,
+    >,
 ) -> Result<(), IngesterError> {
     for (tree_pubkey, events) in events.iter_mut() {
         let tree_info = TreeInfo::get_by_pubkey(txn, &Pubkey::from(*tree_pubkey))
@@ -82,7 +86,12 @@ pub async fn persist_batch_events(
                     persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
                 }
                 MerkleTreeEvent::BatchAddressAppend(batch_address_append_event) => {
-                    persist_batch_address_append_event(txn, batch_address_append_event).await
+                    persist_batch_address_append_event(
+                        txn,
+                        batch_address_append_event,
+                        tree_type_cache,
+                    )
+                    .await
                 }
                 _ => Err(IngesterError::InvalidEvent),
             }?;

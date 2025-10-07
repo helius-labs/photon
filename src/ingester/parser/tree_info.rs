@@ -90,6 +90,48 @@ impl TreeInfo {
         Self::get_tree_type(conn, &pubkey).await
     }
 
+    pub async fn get_tree_types_batch<T>(
+        conn: &T,
+        pubkeys: &[Pubkey],
+    ) -> Result<std::collections::HashMap<Pubkey, TreeType>, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let tree_bytes_vec: Vec<Vec<u8>> = pubkeys.iter().map(|p| p.to_bytes().to_vec()).collect();
+
+        let metadata_list = TreeMetadata::find()
+            .filter(tree_metadata::Column::TreePubkey.is_in(tree_bytes_vec))
+            .all(conn)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+
+        let mut result = std::collections::HashMap::new();
+
+        for metadata in metadata_list {
+            let tree_bytes: [u8; 32] =
+                metadata.tree_pubkey.as_slice().try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError("Invalid tree pubkey length in DB".to_string())
+                })?;
+            let tree_pubkey = Pubkey::from(tree_bytes);
+
+            let tree_type = match metadata.tree_type {
+                1 => TreeType::StateV1,
+                2 => TreeType::AddressV1,
+                3 => TreeType::StateV2,
+                4 => TreeType::AddressV2,
+                _ => TreeType::AddressV2,
+            };
+
+            result.insert(tree_pubkey, tree_type);
+        }
+
+        for pubkey in pubkeys {
+            result.entry(*pubkey).or_insert(TreeType::AddressV2);
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_by_sdk_pubkey<T>(
         conn: &T,
         pubkey: &solana_sdk::pubkey::Pubkey,

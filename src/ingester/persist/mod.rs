@@ -89,6 +89,21 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
+    let unique_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
+        indexed_merkle_tree_updates
+            .keys()
+            .map(|(pubkey, _)| *pubkey)
+            .collect();
+
+    let tree_type_cache = if !unique_tree_pubkeys.is_empty() {
+        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = unique_tree_pubkeys.into_iter().collect();
+        crate::ingester::parser::tree_info::TreeInfo::get_tree_types_batch(txn, &pubkeys_vec)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree types: {}", e)))?
+    } else {
+        std::collections::HashMap::new()
+    };
+
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
         insert_addresses_into_queues(txn, chunk).await?;
@@ -153,7 +168,7 @@ pub async fn persist_state_update(
         })
         .collect();
     // IMPORTANT: Persist indexed tree updates BEFORE state tree nodes to ensure consistency
-    persist_indexed_tree_updates(txn, converted_updates).await?;
+    persist_indexed_tree_updates(txn, converted_updates, &tree_type_cache).await?;
 
     debug!("Persisting state nodes...");
     // Group leaf nodes by tree to get correct heights
@@ -222,7 +237,7 @@ pub async fn persist_state_update(
         persist_account_transactions(txn, chunk).await?;
     }
 
-    persist_batch_events(txn, batch_merkle_tree_events).await?;
+    persist_batch_events(txn, batch_merkle_tree_events, &tree_type_cache).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);

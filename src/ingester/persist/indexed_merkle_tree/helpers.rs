@@ -43,6 +43,22 @@ where
     compute_hash_by_tree_type(range_node, tree_type)
 }
 
+pub fn compute_hash_with_cache(
+    range_node: &indexed_trees::Model,
+    tree_pubkey: &[u8],
+    tree_type_cache: &std::collections::HashMap<Pubkey, TreeType>,
+) -> Result<Hash, IngesterError> {
+    let pubkey = Pubkey::try_from(tree_pubkey)
+        .map_err(|e| IngesterError::ParserError(format!("Invalid pubkey bytes: {}", e)))?;
+
+    let tree_type = tree_type_cache
+        .get(&pubkey)
+        .copied()
+        .unwrap_or(TreeType::AddressV2);
+
+    compute_hash_by_tree_type(range_node, tree_type)
+}
+
 pub fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
     let mut poseidon = Poseidon::<Fr>::new_circom(2).unwrap();
     Hash::try_from(
