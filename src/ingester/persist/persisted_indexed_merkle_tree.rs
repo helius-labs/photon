@@ -162,9 +162,12 @@ fn ensure_top_element_exists(
 pub async fn persist_indexed_tree_updates(
     txn: &DatabaseTransaction,
     mut indexed_leaf_updates: HashMap<(Pubkey, u64), IndexedTreeLeafUpdate>,
-    _tree_type_cache: &std::collections::HashMap<solana_pubkey::Pubkey, TreeType>,
+    tree_info_cache: &std::collections::HashMap<
+        solana_pubkey::Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
-    // Step 1: Tree Processing - Collect unique trees and look up their types from the database
+    // Step 1: Tree Processing - Collect unique trees and look up their types from cache
     let unique_trees: Vec<Pubkey> = indexed_leaf_updates
         .values()
         .map(|update| update.tree)
@@ -174,10 +177,7 @@ pub async fn persist_indexed_tree_updates(
 
     let mut trees: HashMap<Pubkey, (TreeType, u32)> = HashMap::new();
     for tree in unique_trees {
-        // Get tree info - this is required, not optional
-        let tree_info = TreeInfo::get_by_pubkey(txn, &tree)
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+        let tree_info = tree_info_cache.get(&tree)
             .ok_or_else(|| IngesterError::ParserError(format!(
                 "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
                 tree
@@ -298,7 +298,7 @@ pub async fn multi_append(
     tree: Vec<u8>,
     tree_height: u32,
     seq: Option<u32>,
-    tree_type_cache: &std::collections::HashMap<solana_pubkey::Pubkey, TreeType>,
+    tree_info_cache: &std::collections::HashMap<solana_pubkey::Pubkey, TreeInfo>,
 ) -> Result<(), IngesterError> {
     if txn.get_database_backend() == DatabaseBackend::Postgres {
         txn.execute(Statement::from_string(
@@ -422,7 +422,7 @@ pub async fn multi_append(
 
     let mut leaf_nodes = Vec::new();
     for x in elements_to_update.values() {
-        let hash = compute_hash_with_cache(x, &tree, tree_type_cache)?;
+        let hash = compute_hash_with_cache(x, &tree, tree_info_cache)?;
         leaf_nodes.push(LeafNode {
             tree: SerializablePubkey::try_from(x.tree.clone()).map_err(|e| {
                 IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))

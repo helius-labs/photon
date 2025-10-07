@@ -89,17 +89,30 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
-    let unique_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
+    let mut all_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
         indexed_merkle_tree_updates
             .keys()
             .map(|(pubkey, _)| *pubkey)
             .collect();
 
-    let tree_type_cache = if !unique_tree_pubkeys.is_empty() {
-        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = unique_tree_pubkeys.into_iter().collect();
-        crate::ingester::parser::tree_info::TreeInfo::get_tree_types_batch(txn, &pubkeys_vec)
+    for account in out_accounts.iter() {
+        if account.context.tree_type == TreeType::StateV1 as u16 {
+            if let Ok(tree_pubkey) =
+                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
+            {
+                all_tree_pubkeys.insert(tree_pubkey);
+            }
+        }
+    }
+    for leaf_nullification in leaf_nullifications.iter() {
+        all_tree_pubkeys.insert(leaf_nullification.tree);
+    }
+
+    let tree_info_cache = if !all_tree_pubkeys.is_empty() {
+        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = all_tree_pubkeys.into_iter().collect();
+        crate::ingester::parser::tree_info::TreeInfo::get_tree_info_batch(txn, &pubkeys_vec)
             .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree types: {}", e)))?
+            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree info: {}", e)))?
     } else {
         std::collections::HashMap::new()
     };
@@ -167,8 +180,9 @@ pub async fn persist_state_update(
             ((sdk_pubkey, u64_val), update)
         })
         .collect();
+
     // IMPORTANT: Persist indexed tree updates BEFORE state tree nodes to ensure consistency
-    persist_indexed_tree_updates(txn, converted_updates, &tree_type_cache).await?;
+    persist_indexed_tree_updates(txn, converted_updates, &tree_info_cache).await?;
 
     debug!("Persisting state nodes...");
     // Group leaf nodes by tree to get correct heights
@@ -185,10 +199,7 @@ pub async fn persist_state_update(
 
     // Process each tree's nodes with the correct height
     for (tree_pubkey, tree_nodes) in nodes_by_tree {
-        // Get tree height from metadata
-        let tree_info = crate::ingester::parser::tree_info::TreeInfo::get_by_pubkey(txn, &tree_pubkey)
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+        let tree_info = tree_info_cache.get(&tree_pubkey)
             .ok_or_else(|| IngesterError::ParserError(format!(
                 "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
                 tree_pubkey
@@ -237,7 +248,7 @@ pub async fn persist_state_update(
         persist_account_transactions(txn, chunk).await?;
     }
 
-    persist_batch_events(txn, batch_merkle_tree_events, &tree_type_cache).await?;
+    persist_batch_events(txn, batch_merkle_tree_events, &tree_info_cache).await?;
 
     metric! {
         statsd_count!("state_update.input_accounts", input_accounts_len as u64);

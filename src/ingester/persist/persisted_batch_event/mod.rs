@@ -7,7 +7,6 @@ pub mod sequence;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::MerkleTreeEvent;
 use crate::ingester::parser::merkle_tree_events_parser::BatchMerkleTreeEvents;
-use crate::ingester::parser::tree_info::TreeInfo;
 use log::debug;
 use sea_orm::DatabaseTransaction;
 use solana_pubkey::Pubkey;
@@ -25,15 +24,14 @@ use self::sequence::should_process_event;
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: BatchMerkleTreeEvents,
-    tree_type_cache: &std::collections::HashMap<
+    tree_info_cache: &std::collections::HashMap<
         solana_pubkey::Pubkey,
-        light_compressed_account::TreeType,
+        crate::ingester::parser::tree_info::TreeInfo,
     >,
 ) -> Result<(), IngesterError> {
     for (tree_pubkey, events) in events.iter_mut() {
-        let tree_info = TreeInfo::get_by_pubkey(txn, &Pubkey::from(*tree_pubkey))
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+        let solana_pubkey = Pubkey::from(*tree_pubkey);
+        let tree_info = tree_info_cache.get(&solana_pubkey)
             .ok_or_else(|| IngesterError::ParserError(format!(
                 "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
                 bs58::encode(tree_pubkey).into_string()
@@ -89,7 +87,7 @@ pub async fn persist_batch_events(
                     persist_batch_address_append_event(
                         txn,
                         batch_address_append_event,
-                        tree_type_cache,
+                        tree_info_cache,
                     )
                     .await
                 }

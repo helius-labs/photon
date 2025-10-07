@@ -46,14 +46,17 @@ where
 pub fn compute_hash_with_cache(
     range_node: &indexed_trees::Model,
     tree_pubkey: &[u8],
-    tree_type_cache: &std::collections::HashMap<Pubkey, TreeType>,
+    tree_info_cache: &std::collections::HashMap<
+        Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<Hash, IngesterError> {
     let pubkey = Pubkey::try_from(tree_pubkey)
         .map_err(|e| IngesterError::ParserError(format!("Invalid pubkey bytes: {}", e)))?;
 
-    let tree_type = tree_type_cache
+    let tree_type = tree_info_cache
         .get(&pubkey)
-        .copied()
+        .map(|info| info.tree_type)
         .unwrap_or(TreeType::AddressV2);
 
     compute_hash_by_tree_type(range_node, tree_type)

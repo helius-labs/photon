@@ -55,8 +55,10 @@ impl TreeInfo {
                 metadata.tree_pubkey.as_slice().try_into().map_err(|_| {
                     PhotonApiError::UnexpectedError("Invalid tree pubkey length in DB".to_string())
                 })?;
-            let tree_pubkey = Pubkey::from(tree_bytes);
-            return Ok(Some(TreeInfo::from_metadata(metadata, tree_pubkey)?));
+            return Ok(Some(TreeInfo::from_metadata(
+                metadata,
+                Pubkey::from(tree_bytes),
+            )?));
         }
 
         Ok(None)
@@ -127,6 +129,37 @@ impl TreeInfo {
 
         for pubkey in pubkeys {
             result.entry(*pubkey).or_insert(TreeType::AddressV2);
+        }
+
+        Ok(result)
+    }
+
+    pub async fn get_tree_info_batch<T>(
+        conn: &T,
+        pubkeys: &[Pubkey],
+    ) -> Result<std::collections::HashMap<Pubkey, TreeInfo>, PhotonApiError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        let tree_bytes_vec: Vec<Vec<u8>> = pubkeys.iter().map(|p| p.to_bytes().to_vec()).collect();
+
+        let metadata_list = TreeMetadata::find()
+            .filter(tree_metadata::Column::TreePubkey.is_in(tree_bytes_vec))
+            .all(conn)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+
+        let mut result = std::collections::HashMap::new();
+
+        for metadata in metadata_list {
+            let tree_bytes: [u8; 32] =
+                metadata.tree_pubkey.as_slice().try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError("Invalid tree pubkey length in DB".to_string())
+                })?;
+            let tree_pubkey = Pubkey::from(tree_bytes);
+
+            let tree_info = TreeInfo::from_metadata(metadata, tree_pubkey)?;
+            result.insert(tree_pubkey, tree_info);
         }
 
         Ok(result)
