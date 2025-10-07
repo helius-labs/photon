@@ -24,7 +24,7 @@ pub struct GetCompressedAccountProofResponseV2 {
     pub value: GetCompressedAccountProofResponseValueV2,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Default, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedAccountProofResponseValueV2 {
     pub proof: Vec<Hash>,
