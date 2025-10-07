@@ -317,8 +317,6 @@ fn parse_optional_token_data_closed_account_v2(
     })
 }
 
-// parse_token_data_v2 is no longer needed - using AccountV2::parse_token_data() instead
-
 fn parse_optional_token_data_for_multiple_accounts_v2(
     accounts: Vec<AccountV2>,
 ) -> Result<Vec<AccountWithOptionalTokenDataV2>, PhotonApiError> {
