@@ -1,6 +1,6 @@
 use borsh::BorshDeserialize;
 use log::{debug, info, warn};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -236,8 +236,8 @@ fn process_v1_address_account(
     ))
 }
 
-pub async fn upsert_tree_metadata(
-    db: &DatabaseConnection,
+pub async fn upsert_tree_metadata<C>(
+    db: &C,
     tree_pubkey: Pubkey,
     root_history_capacity: i64,
     height: i32,
@@ -245,7 +245,10 @@ pub async fn upsert_tree_metadata(
     sequence_number: u64,
     next_index: u64,
     queue_pubkey: Pubkey,
-) -> Result<(), PhotonApiError> {
+) -> Result<(), PhotonApiError>
+where
+    C: ConnectionTrait,
+{
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
 
     // Check if exists

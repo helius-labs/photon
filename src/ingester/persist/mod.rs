@@ -107,6 +107,10 @@ pub async fn persist_state_update(
     for leaf_nullification in leaf_nullifications.iter() {
         all_tree_pubkeys.insert(leaf_nullification.tree);
     }
+    // Also collect trees from batch merkle tree events
+    for tree_pubkey in batch_merkle_tree_events.keys() {
+        all_tree_pubkeys.insert(solana_pubkey::Pubkey::from(*tree_pubkey));
+    }
 
     let tree_info_cache = if !all_tree_pubkeys.is_empty() {
         let pubkeys_vec: Vec<solana_pubkey::Pubkey> = all_tree_pubkeys.into_iter().collect();

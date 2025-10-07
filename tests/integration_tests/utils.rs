@@ -72,7 +72,7 @@ async fn run_migrations_from_fresh(db: &DatabaseConnection) {
 }
 
 /// Populate common test tree metadata for tests to work
-async fn populate_test_tree_metadata(db: &DatabaseConnection) {
+pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
     // Common test trees from the old static configuration
     let test_trees = vec![
         // V1 State Trees
@@ -116,13 +116,15 @@ async fn populate_test_tree_metadata(db: &DatabaseConnection) {
         ),
     ];
 
+    let txn = db.begin().await.unwrap();
+
     for (tree_str, queue_str, tree_type, height, root_history_capacity) in test_trees {
         let tree_pubkey = tree_str.parse::<Pubkey>().unwrap();
         let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
 
         // Only insert if it doesn't already exist
         let _ = upsert_tree_metadata(
-            db,
+            &txn,
             tree_pubkey,
             root_history_capacity as i64,
             height,
@@ -133,6 +135,8 @@ async fn populate_test_tree_metadata(db: &DatabaseConnection) {
         )
         .await;
     }
+
+    txn.commit().await.unwrap();
 }
 
 async fn run_one_time_setup(db: &DatabaseConnection) {
@@ -240,15 +244,18 @@ pub async fn setup_pg_pool(database_url: String) -> PgPool {
 }
 
 pub async fn setup_sqllite_pool() -> SqlitePool {
-    // Use file-based SQLite with shared cache mode to ensure all connections see the same data
-    let db_file = format!("/tmp/photon_test_{}.db", std::process::id());
-    // Remove any existing file
-    let _ = std::fs::remove_file(&db_file);
+    // Use in-memory SQLite with shared cache to ensure all connections see the same data
+    let db_name = format!("test_{}", std::process::id());
 
-    let options: SqliteConnectOptions = format!("sqlite://{}?mode=rwc", db_file).parse().unwrap();
+    let options: SqliteConnectOptions = format!("sqlite:file:{}?mode=memory&cache=shared", db_name)
+        .parse::<SqliteConnectOptions>()
+        .unwrap()
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
+
     SqlitePoolOptions::new()
         .min_connections(1)
-        .max_connections(5)
+        .max_connections(1)
         .connect_with(options)
         .await
         .unwrap()
