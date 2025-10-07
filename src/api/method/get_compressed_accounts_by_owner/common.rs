@@ -27,13 +27,6 @@ pub struct GetCompressedAccountsByOwnerRequest {
     pub limit: Option<Limit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Options {
-    pub cursor: Option<Hash>,
-    pub limit: Option<Limit>,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct Memcmp {
     pub offset: usize,

@@ -7,9 +7,7 @@ use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::{accounts, state_trees};
-use crate::ingester::persist::{
-    get_multiple_compressed_leaf_proofs, get_multiple_compressed_leaf_proofs_by_indices,
-};
+use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use jsonrpsee_core::Serialize;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
@@ -116,25 +114,18 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     } else {
         Vec::new()
     };
-
     // Process index-based proofs
     let mut index_based_result = Vec::new();
-    for (merkle_tree, indices) in index_based_proofs
-        .iter()
-        .map(|(_, tree, idx)| (tree, idx))
-        .fold(HashMap::new(), |mut acc, (tree, idx)| {
-            acc.entry(*tree).or_insert_with(Vec::new).push(*idx);
-            acc
-        })
-    {
-        let proofs =
-            get_multiple_compressed_leaf_proofs_by_indices(&tx, merkle_tree, indices).await?;
-
-        for proof in proofs {
-            let mut response_value: GetCompressedAccountProofResponseValueV2 = proof.into();
-            response_value.prove_by_index = true;
-            index_based_result.push(response_value);
-        }
+    for (hash, _, leaf_index) in index_based_proofs.iter() {
+        index_based_result.push(GetCompressedAccountProofResponseValueV2 {
+            proof: Vec::new(),
+            leaf_index: (*leaf_index).try_into().map_err(|_| {
+                PhotonApiError::RecordNotFound("Leaf Index greater than u32 max".to_string())
+            })?,
+            hash: hash.clone(),
+            prove_by_index: true,
+            ..Default::default()
+        });
     }
 
     // Combine results

@@ -81,12 +81,12 @@ solana-pubkey = "2.3.0"
 
 solana-transaction-status = "1.18.0"
 
-light-zero-copy = "0.2.0"
-light-concurrent-merkle-tree = "2.1.0"
-light-batched-merkle-tree = "0.3.0"
-light-merkle-tree-metadata = "0.3.0"
-light-compressed-account = { version = "0.3.0", features = ["anchor"] }
-light-hasher = { version = "3.1.0" }
+light-zero-copy = { version = "0.4.0", features = ["solana"] }
+light-concurrent-merkle-tree = { version = "3.0.0", features = ["solana"] }
+light-batched-merkle-tree = { version = "0.5.0", features = ["solana"] }
+light-merkle-tree-metadata = { version = "0.5.0", features = ["solana"] }
+light-compressed-account = { version = "0.5.0", features = ["anchor"] }
+light-hasher = { version = "4.0.0", features = ["solana"] }
 light-poseidon = "0.3.0"
 
 sqlx = { version = "0.6.2", features = [
@@ -131,7 +131,7 @@ rust-s3 = "0.34.0"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-merkle-tree-reference = "2.0.0"
+light-merkle-tree-reference = "3.0.0"
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.
