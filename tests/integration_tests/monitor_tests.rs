@@ -118,7 +118,7 @@ async fn test_tree_info_batch_retrieval(
             26,
         ),
         (
-            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtbQYTsixu",
+            "HLKs5NJ8FXkJg8BrzJt56adFYYuwg5etzDtBbQYTsixu",
             "6L7SzhYB3anwEQ9cphpJ1U7Scwj57bx2xueReg7R9cKU",
             TreeType::StateV2,
             32,
