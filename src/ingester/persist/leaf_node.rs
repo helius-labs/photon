@@ -172,11 +172,18 @@ pub async fn persist_leaf_nodes(
     let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
         .on_conflict(
             OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
-                .update_columns([state_trees::Column::Hash, state_trees::Column::Seq])
+                .update_columns([
+                    state_trees::Column::Hash,
+                    state_trees::Column::Seq,
+                    state_trees::Column::LeafIdx,
+                ])
                 .to_owned(),
         )
         .build(txn.get_database_backend());
-    query.sql = format!("{} WHERE excluded.seq >= state_trees.seq", query.sql);
+    query.sql = format!(
+        "{} WHERE state_trees.seq IS NULL OR excluded.seq >= state_trees.seq",
+        query.sql
+    );
     txn.execute(query).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
     })?;
