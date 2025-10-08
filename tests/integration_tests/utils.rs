@@ -1,6 +1,9 @@
 use std::{env, path::Path, str::FromStr, sync::Mutex};
 
 use once_cell::sync::Lazy;
+
+// Predefined test tree pubkeys that have metadata populated in populate_test_tree_metadata
+pub const TEST_STATE_TREE_V1_1: &str = "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT";
 use photon_indexer::api::method::utils::{TokenAccount, TokenAccountListV2, TokenAccountV2};
 use photon_indexer::common::typedefs::account::AccountV2;
 use photon_indexer::common::typedefs::hash::Hash;
@@ -244,8 +247,14 @@ pub async fn setup_pg_pool(database_url: String) -> PgPool {
 }
 
 pub async fn setup_sqllite_pool() -> SqlitePool {
-    // Use in-memory SQLite with shared cache to ensure all connections see the same data
-    let db_name = format!("test_{}", std::process::id());
+    let db_name = format!(
+        "test_{}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        rand::random::<u64>()
+    );
 
     let options: SqliteConnectOptions = format!("sqlite:file:{}?mode=memory&cache=shared", db_name)
         .parse::<SqliteConnectOptions>()
