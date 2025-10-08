@@ -18,6 +18,11 @@ pub mod tx_event_parser_v2;
 use crate::ingester::parser::tx_event_parser_v2::parse_public_transaction_event_v2;
 use solana_pubkey::pubkey;
 
+pub const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
+const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
+const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
+
+// Compression program ID can be overridden at runtime
 static ACCOUNT_COMPRESSION_PROGRAM_ID: OnceLock<Pubkey> = OnceLock::new();
 pub fn get_compression_program_id() -> Pubkey {
     *ACCOUNT_COMPRESSION_PROGRAM_ID
@@ -33,13 +38,16 @@ pub fn set_compression_program_id(program_id_str: &str) -> Result<(), String> {
     }
 }
 
-const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
-const NOOP_PROGRAM_ID: Pubkey = pubkey!("noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV");
-const VOTE_PROGRAM_ID: Pubkey = pubkey!("Vote111111111111111111111111111111111111111");
-
 const SKIP_UNKNOWN_TREES: bool = true;
 
-pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate, IngesterError> {
+pub async fn parse_transaction<T>(
+    conn: &T,
+    tx: &TransactionInfo,
+    slot: u64,
+) -> Result<StateUpdate, IngesterError>
+where
+    T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
+{
     if tx.error.is_some() {
         log::debug!(
             "Skipping failed transaction {} with error: {:?}",
@@ -70,7 +78,7 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
         if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
-            let state_update = create_state_update_v2(tx.signature, slot, event)?;
+            let state_update = create_state_update_v2(conn, tx.signature, slot, event).await?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
@@ -109,11 +117,14 @@ pub fn parse_transaction(tx: &TransactionInfo, slot: u64) -> Result<StateUpdate,
                                 && all_intermediate_are_system
                             {
                                 if let Some(state_update) = parse_public_transaction_event_v1(
+                                    conn,
                                     tx,
                                     slot,
                                     instruction,
                                     &ordered_instructions[noop_index],
-                                )? {
+                                )
+                                .await?
+                                {
                                     is_compression_transaction = true;
                                     state_updates.push(state_update);
                                 }

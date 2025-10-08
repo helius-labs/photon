@@ -6,13 +6,13 @@ use crate::dao::generated::indexed_trees;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::{
-    compute_hash_by_tree_height, compute_range_node_hash_v1, get_top_element,
+    compute_hash_by_tree_type, compute_range_node_hash_v1, get_top_element,
     get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
 };
 use crate::ingester::persist::persisted_state_tree::ZERO_BYTES;
 use crate::ingester::persist::{
     compute_parent_hash, get_multiple_compressed_leaf_proofs_from_full_leaf_info, LeafNode,
-    MerkleProofWithContext, TREE_HEIGHT_V1,
+    MerkleProofWithContext,
 };
 use light_compressed_account::TreeType;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, Statement, TransactionTrait};
@@ -33,13 +33,17 @@ pub async fn get_exclusion_range_with_proof_v2(
             ))
         })?;
     if btree.is_empty() {
-        return proof_for_empty_tree(tree, tree_height);
+        return proof_for_empty_tree(txn, tree, tree_height).await;
     }
 
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
         "No range proof found".to_string(),
     ))?;
-    let hash = compute_hash_by_tree_height(range_node, tree_height)?;
+    // Get tree type to determine which hash function to use
+    let tree_pubkey = solana_pubkey::Pubkey::from(tree.clone().try_into().unwrap_or([0u8; 32]));
+    let tree_type = TreeInfo::get_tree_type(txn, &tree_pubkey).await?;
+    let hash = compute_hash_by_tree_type(range_node, tree_type)
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
     let leaf_node = LeafNode {
         tree: SerializablePubkey::try_from(range_node.tree.clone()).map_err(|e| {
@@ -52,31 +56,35 @@ pub async fn get_exclusion_range_with_proof_v2(
     let node_index = leaf_node.node_index(tree_height);
 
     let leaf_proofs: Vec<MerkleProofWithContext> =
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)])
-            .await
-            .map_err(|proof_error| {
-                let tree_pubkey = match SerializablePubkey::try_from(range_node.tree.clone()) {
-                    Ok(pubkey) => pubkey,
-                    Err(e) => {
-                        log::error!("Failed to serialize tree pubkey: {}", e);
-                        return proof_error;
-                    }
-                };
-                let value_pubkey = match SerializablePubkey::try_from(range_node.value.clone()) {
-                    Ok(pubkey) => pubkey,
-                    Err(e) => {
-                        log::error!("Failed to serialize value pubkey: {}", e);
-                        return proof_error;
-                    }
-                };
-                log::error!(
-                    "Failed to get multiple compressed leaf proofs for {:?} for value {:?}: {}",
-                    tree_pubkey,
-                    value_pubkey,
-                    proof_error
-                );
+        get_multiple_compressed_leaf_proofs_from_full_leaf_info(
+            txn,
+            vec![(leaf_node, node_index)],
+            tree_height,
+        )
+        .await
+        .map_err(|proof_error| {
+            let tree_pubkey = match SerializablePubkey::try_from(range_node.tree.clone()) {
+                Ok(pubkey) => pubkey,
+                Err(e) => {
+                    log::error!("Failed to serialize tree pubkey: {}", e);
+                    return proof_error;
+                }
+            };
+            let value_pubkey = match SerializablePubkey::try_from(range_node.value.clone()) {
+                Ok(pubkey) => pubkey,
+                Err(e) => {
+                    log::error!("Failed to serialize value pubkey: {}", e);
+                    return proof_error;
+                }
+            };
+            log::error!(
+                "Failed to get multiple compressed leaf proofs for {:?} for value {:?}: {}",
+                tree_pubkey,
+                value_pubkey,
                 proof_error
-            })?;
+            );
+            proof_error
+        })?;
 
     let leaf_proof = leaf_proofs
         .into_iter()
@@ -88,34 +96,38 @@ pub async fn get_exclusion_range_with_proof_v2(
     Ok((range_node.clone(), leaf_proof))
 }
 
-fn proof_for_empty_tree(
+async fn proof_for_empty_tree(
+    txn: &DatabaseTransaction,
     tree: Vec<u8>,
     tree_height: u32,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
-    let tree_bytes: [u8; 32] = tree
+    let pubkey: [u8; 32] = tree
         .as_slice()
         .try_into()
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid tree pubkey length".to_string()))?;
-    let tree_type = TreeInfo::get_tree_type_from_bytes(&tree_bytes);
+    let tree_type = TreeInfo::get_tree_type_from_pubkey(txn, &pubkey).await?;
 
     let root_seq = match tree_type {
         TreeType::AddressV1 => 3,
         _ => 0,
     };
 
-    proof_for_empty_tree_with_seq(tree, tree_height, root_seq)
+    proof_for_empty_tree_with_seq(tree, tree_height, root_seq, tree_type)
 }
 
 fn proof_for_empty_tree_with_seq(
     tree: Vec<u8>,
     tree_height: u32,
     root_seq: u64,
+    tree_type: TreeType,
 ) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
     let mut proof: Vec<Hash> = vec![];
 
-    if tree_height == TREE_HEIGHT_V1 + 1 {
+    if matches!(tree_type, TreeType::AddressV1 | TreeType::StateV1) {
         let top_element = get_top_element(tree.clone());
-        let top_element_hash = compute_hash_by_tree_height(&top_element, tree_height)?;
+        let top_element_hash = compute_hash_by_tree_type(&top_element, tree_type).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+        })?;
         proof.push(top_element_hash);
 
         for i in 1..(tree_height - 1) {
@@ -129,12 +141,13 @@ fn proof_for_empty_tree_with_seq(
         }
     }
 
-    let zeroeth_element = if tree_height == TREE_HEIGHT_V1 + 1 {
+    let zeroeth_element = if matches!(tree_type, TreeType::AddressV1 | TreeType::StateV1) {
         get_zeroeth_exclusion_range_v1(tree.clone())
     } else {
         get_zeroeth_exclusion_range(tree.clone())
     };
-    let zeroeth_element_hash = compute_hash_by_tree_height(&zeroeth_element, tree_height)?;
+    let zeroeth_element_hash = compute_hash_by_tree_type(&zeroeth_element, tree_type)
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
     let mut root = zeroeth_element_hash.clone().to_vec();
 
@@ -172,7 +185,7 @@ pub async fn get_exclusion_range_with_proof_v1(
         })?;
 
     if btree.is_empty() {
-        return proof_for_empty_tree(tree, tree_height);
+        return proof_for_empty_tree(txn, tree, tree_height).await;
     }
 
     let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
@@ -192,7 +205,7 @@ pub async fn get_exclusion_range_with_proof_v1(
     let node_index = leaf_node.node_index(tree_height);
 
     let leaf_proofs: Vec<MerkleProofWithContext> =
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)])
+        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)], tree_height)
             .await
             .map_err(|proof_error| {
                 let tree_pubkey = match SerializablePubkey::try_from(range_node.tree.clone()) {

@@ -5,7 +5,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::MerkleTreeEvent;
-use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode, STATE_TREE_HEIGHT_V2};
+use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::ingester::persist::MAX_SQL_INSERTS;
 use log::{debug, warn};
 use sea_orm::{
@@ -104,16 +104,17 @@ pub fn deduplicate_events(events: &mut Vec<(u64, MerkleTreeEvent)>) {
 pub async fn persist_leaf_nodes_chunked(
     txn: &DatabaseTransaction,
     leaf_nodes: Vec<LeafNode>,
+    tree_height: u32,
 ) -> Result<(), IngesterError> {
     if leaf_nodes.is_empty() {
         return Ok(());
     }
 
     if leaf_nodes.len() <= MAX_SQL_INSERTS {
-        persist_leaf_nodes(txn, leaf_nodes, STATE_TREE_HEIGHT_V2 + 1).await
+        persist_leaf_nodes(txn, leaf_nodes, tree_height + 1).await
     } else {
         for chunk in leaf_nodes.chunks(MAX_SQL_INSERTS) {
-            persist_leaf_nodes(txn, chunk.to_vec(), STATE_TREE_HEIGHT_V2 + 1).await?;
+            persist_leaf_nodes(txn, chunk.to_vec(), tree_height + 1).await?;
         }
         Ok(())
     }

@@ -1,18 +1,14 @@
 use super::{
     super::error::PhotonApiError, get_multiple_compressed_accounts::fetch_accounts_from_hashes,
 };
-use crate::api::method::get_validity_proof::MerkleContextV2;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::account::AccountWithContext;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::{account::Account, serializable_signature::SerializableSignature};
 use crate::dao::generated::accounts::Model;
-use crate::ingester::error::IngesterError;
 use crate::ingester::parser::parse_transaction;
-use crate::ingester::persist::parse_token_data;
-use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
-use borsh::BorshDeserialize;
+use crate::ingester::typedefs::block_info::TransactionInfo;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -162,7 +158,7 @@ fn parse_optional_token_data(
 ) -> Result<AccountWithOptionalTokenData, PhotonApiError> {
     let hash = account.hash.clone();
     Ok(AccountWithOptionalTokenData {
-        optionalTokenData: parse_token_data(&account).map_err(|e| {
+        optionalTokenData: account.parse_token_data().map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to parse token data for account {}: {}",
                 hash, e
@@ -191,6 +187,24 @@ fn clone_tx(
     }
 }
 
+async fn fetch_closed_accounts(
+    conn: &DatabaseConnection,
+    in_account_hashes: Vec<Hash>,
+) -> Result<Vec<AccountWithContext>, PhotonApiError> {
+    fetch_accounts_from_hashes(conn, in_account_hashes, true)
+        .await?
+        .into_iter()
+        .map(|x| {
+            x.ok_or(PhotonApiError::RecordNotFound(
+                "Account not found".to_string(),
+            ))
+        })
+        .collect::<Result<Vec<Model>, PhotonApiError>>()?
+        .into_iter()
+        .map(TryFrom::try_from)
+        .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()
+}
+
 pub async fn get_transaction_helper(
     conn: &DatabaseConnection,
     signature: SerializableSignature,
@@ -205,32 +219,17 @@ pub async fn get_transaction_helper(
     }
     let slot = txn.slot;
 
-    let status_update = parse_transaction(
-        &clone_tx(&txn).try_into().map_err(|_e| {
-            PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
-        })?,
-        slot,
-    )
-    .map_err(|_e| {
-        PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+    let tx_info: TransactionInfo = clone_tx(&txn).try_into().map_err(|_e| {
+        PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
+    let status_update = parse_transaction(conn, &tx_info, slot)
+        .await
+        .map_err(|_e| {
+            PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+        })?;
 
-    let closed_accounts = fetch_accounts_from_hashes(
-        conn,
-        status_update.in_accounts.iter().cloned().collect(),
-        true,
-    )
-    .await?
-    .into_iter()
-    .map(|x| {
-        x.ok_or(PhotonApiError::RecordNotFound(
-            "Account not found".to_string(),
-        ))
-    })
-    .collect::<Result<Vec<Model>, PhotonApiError>>()?
-    .into_iter()
-    .map(TryFrom::try_from)
-    .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
+    let closed_accounts =
+        fetch_closed_accounts(conn, status_update.in_accounts.iter().cloned().collect()).await?;
 
     let closed_accounts = closed_accounts
         .into_iter()
@@ -252,23 +251,30 @@ pub async fn get_transaction_helper(
     })
 }
 
-pub async fn get_transaction_with_compression_info(
-    conn: &DatabaseConnection,
+async fn fetch_transaction_from_rpc(
     rpc_client: &RpcClient,
-    request: GetTransactionRequest,
-) -> Result<GetTransactionResponse, PhotonApiError> {
-    let txn: EncodedConfirmedTransactionWithStatusMeta = rpc_client
+    signature: &SerializableSignature,
+) -> Result<EncodedConfirmedTransactionWithStatusMeta, PhotonApiError> {
+    rpc_client
         .send(
             RpcRequest::GetTransaction,
-            serde_json::json!([request.signature.0.to_string(), RPC_CONFIG,]),
+            serde_json::json!([signature.0.to_string(), RPC_CONFIG,]),
         )
         .await
         .map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to fetch transaction {}: {}",
-                request.signature.0, e
+                signature.0, e
             ))
-        })?;
+        })
+}
+
+pub async fn get_transaction_with_compression_info(
+    conn: &DatabaseConnection,
+    rpc_client: &RpcClient,
+    request: GetTransactionRequest,
+) -> Result<GetTransactionResponse, PhotonApiError> {
+    let txn = fetch_transaction_from_rpc(rpc_client, &request.signature).await?;
     get_transaction_helper(conn, request.signature, txn).await
 }
 
@@ -277,7 +283,7 @@ fn parse_optional_token_data_v2(
 ) -> Result<AccountWithOptionalTokenDataV2, PhotonApiError> {
     let hash = account.hash.clone();
     Ok(AccountWithOptionalTokenDataV2 {
-        optionalTokenData: parse_token_data_v2(&account).map_err(|e| {
+        optionalTokenData: account.parse_token_data().map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to parse token data for account {}: {}",
                 hash, e
@@ -301,7 +307,7 @@ fn parse_optional_token_data_closed_account_v2(
 ) -> Result<ClosedAccountWithOptionalTokenDataV2, PhotonApiError> {
     let hash = account.account.hash.clone();
     Ok(ClosedAccountWithOptionalTokenDataV2 {
-        optionalTokenData: parse_token_data_v2(&account.account).map_err(|e| {
+        optionalTokenData: account.account.parse_token_data().map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to parse token data for account {}: {}",
                 hash, e
@@ -309,19 +315,6 @@ fn parse_optional_token_data_closed_account_v2(
         })?,
         account,
     })
-}
-
-pub fn parse_token_data_v2(account: &AccountV2) -> Result<Option<TokenData>, IngesterError> {
-    match account.data.clone() {
-        Some(data) if account.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
-            let data_slice = data.data.0.as_slice();
-            let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
-                IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
-            })?;
-            Ok(Some(token_data))
-        }
-        _ => Ok(None),
-    }
 }
 
 fn parse_optional_token_data_for_multiple_accounts_v2(
@@ -355,54 +348,23 @@ pub async fn get_transaction_helper_v2(
     }
     let slot = txn.slot;
 
-    let status_update = parse_transaction(
-        &clone_tx(&txn).try_into().map_err(|_e| {
-            PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
-        })?,
-        slot,
-    )
-    .map_err(|_e| {
-        PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+    let tx_info: TransactionInfo = clone_tx(&txn).try_into().map_err(|_e| {
+        PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
 
-    let closed_accounts = fetch_accounts_from_hashes(
-        conn,
-        status_update.in_accounts.iter().cloned().collect(),
-        true,
-    )
-    .await?
-    .into_iter()
-    .map(|x| {
-        x.ok_or(PhotonApiError::RecordNotFound(
-            "Account not found".to_string(),
-        ))
-    })
-    .collect::<Result<Vec<Model>, PhotonApiError>>()?
-    .into_iter()
-    .map(TryFrom::try_from)
-    .collect::<Result<Vec<AccountWithContext>, PhotonApiError>>()?;
+    let status_update = parse_transaction(conn, &tx_info, slot)
+        .await
+        .map_err(|_e| {
+            PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
+        })?;
+
+    let closed_accounts =
+        fetch_closed_accounts(conn, status_update.in_accounts.iter().cloned().collect()).await?;
     let closed_accounts = closed_accounts
         .into_iter()
         .map(|x| -> Result<ClosedAccountV2, PhotonApiError> {
             Ok(ClosedAccountV2 {
-                account: AccountV2 {
-                    hash: x.account.hash,
-                    address: x.account.address,
-                    data: x.account.data,
-                    owner: x.account.owner,
-                    lamports: x.account.lamports,
-                    leaf_index: x.account.leaf_index,
-                    seq: x.account.seq,
-                    slot_created: x.account.slot_created,
-                    prove_by_index: x.context.in_output_queue,
-                    merkle_context: MerkleContextV2 {
-                        tree_type: x.context.tree_type,
-                        tree: x.account.tree,
-                        queue: x.context.queue,
-                        cpi_context: None,
-                        next_tree_context: None,
-                    },
-                },
+                account: AccountV2::from(&x),
                 nullifier: x.context.nullifier.unwrap_or_default(),
                 tx_hash: x.context.tx_hash.unwrap_or_default(),
             })
@@ -412,24 +374,7 @@ pub async fn get_transaction_helper_v2(
     let out_accounts = status_update
         .out_accounts
         .into_iter()
-        .map(|x| AccountV2 {
-            hash: x.account.hash,
-            address: x.account.address,
-            data: x.account.data,
-            owner: x.account.owner,
-            lamports: x.account.lamports,
-            leaf_index: x.account.leaf_index,
-            seq: x.account.seq,
-            slot_created: x.account.slot_created,
-            prove_by_index: x.context.in_output_queue,
-            merkle_context: MerkleContextV2 {
-                tree_type: x.context.tree_type,
-                tree: x.account.tree,
-                queue: x.context.queue,
-                cpi_context: None,
-                next_tree_context: None,
-            },
-        })
+        .map(|x| AccountV2::from(&x))
         .collect::<Vec<AccountV2>>();
 
     Ok(GetTransactionResponseV2 {
@@ -448,17 +393,6 @@ pub async fn get_transaction_with_compression_info_v2(
     rpc_client: &RpcClient,
     request: GetTransactionRequest,
 ) -> Result<GetTransactionResponseV2, PhotonApiError> {
-    let txn: EncodedConfirmedTransactionWithStatusMeta = rpc_client
-        .send(
-            RpcRequest::GetTransaction,
-            serde_json::json!([request.signature.0.to_string(), RPC_CONFIG,]),
-        )
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to fetch transaction {}: {}",
-                request.signature.0, e
-            ))
-        })?;
+    let txn = fetch_transaction_from_rpc(rpc_client, &request.signature).await?;
     get_transaction_helper_v2(conn, request.signature, txn).await
 }

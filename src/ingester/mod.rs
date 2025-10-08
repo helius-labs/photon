@@ -29,10 +29,13 @@ pub mod parser;
 pub mod persist;
 pub mod typedefs;
 
-fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterError> {
+async fn derive_block_state_update(
+    conn: &DatabaseConnection,
+    block: &BlockInfo,
+) -> Result<StateUpdate, IngesterError> {
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     for transaction in &block.transactions {
-        state_updates.push(parse_transaction(transaction, block.metadata.slot)?);
+        state_updates.push(parse_transaction(conn, transaction, block.metadata.slot).await?);
     }
     Ok(StateUpdate::merge_updates(state_updates))
 }
@@ -40,7 +43,7 @@ fn derive_block_state_update(block: &BlockInfo) -> Result<StateUpdate, IngesterE
 pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    persist_state_update(&txn, derive_block_state_update(block)?).await?;
+    persist_state_update(&txn, derive_block_state_update(db, block).await?).await?;
     txn.commit().await?;
     Ok(())
 }
@@ -88,7 +91,7 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(block)?);
+        state_updates.push(derive_block_state_update(db, block).await?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {

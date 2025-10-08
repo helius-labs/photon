@@ -7,6 +7,7 @@ mod batched_address_tree_tests;
 mod batched_state_tree_tests;
 mod e2e_tests;
 mod mock_tests;
+mod monitor_tests;
 mod open_api_tests;
 mod prod_tests;
 mod snapshot_tests;

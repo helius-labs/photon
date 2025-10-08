@@ -82,8 +82,8 @@ pub struct HexBatchInputsForProver {
     pub state_tree_height: u32,
     #[serde(rename = "addressTreeHeight", skip_serializing_if = "u32::is_zero")]
     pub address_tree_height: u32,
-    #[serde(rename = "publicInputHash", skip_serializing_if = "String::is_empty")]
-    pub public_input_hash: String,
+    #[serde(rename = "publicInputHash", skip_serializing_if = "Option::is_none")]
+    pub public_input_hash: Option<String>,
     #[serde(
         rename = "inputCompressedAccounts",
         skip_serializing_if = "Vec::is_empty"

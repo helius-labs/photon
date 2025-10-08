@@ -89,7 +89,7 @@ async fn test_persist_state_update_basic(
         }),
         owner: SerializablePubkey::new_unique(),
         lamports: UnsignedInteger(1000),
-        tree: SerializablePubkey::new_unique(),
+        tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
         leaf_index: UnsignedInteger(0),
         seq: Some(UnsignedInteger(0)),
         slot_created: UnsignedInteger(0),
@@ -184,7 +184,7 @@ async fn test_multiple_accounts(
                 }),
                 owner: owner1,
                 lamports: UnsignedInteger(1000),
-                tree: SerializablePubkey::new_unique(),
+                tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
                 leaf_index: UnsignedInteger(10),
                 seq: Some(UnsignedInteger(1)),
                 slot_created: UnsignedInteger(0),
@@ -205,7 +205,7 @@ async fn test_multiple_accounts(
                 }),
                 owner: owner1,
                 lamports: UnsignedInteger(1030),
-                tree: SerializablePubkey::new_unique(),
+                tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
                 leaf_index: UnsignedInteger(11),
                 seq: Some(UnsignedInteger(2)),
                 slot_created: UnsignedInteger(0),
@@ -226,7 +226,7 @@ async fn test_multiple_accounts(
                 }),
                 owner: owner2,
                 lamports: UnsignedInteger(10020),
-                tree: SerializablePubkey::new_unique(),
+                tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
                 leaf_index: UnsignedInteger(13),
                 seq: Some(UnsignedInteger(3)),
                 slot_created: UnsignedInteger(1),
@@ -247,7 +247,7 @@ async fn test_multiple_accounts(
                 }),
                 owner: owner2,
                 lamports: UnsignedInteger(10100),
-                tree: SerializablePubkey::new_unique(),
+                tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
                 leaf_index: UnsignedInteger(23),
                 seq: Some(UnsignedInteger(1)),
                 slot_created: UnsignedInteger(0),
@@ -886,7 +886,7 @@ async fn test_persisted_state_trees(
 ) {
     let name = trim_test_name(function_name!());
     let setup = setup(name, db_backend).await;
-    let tree = SerializablePubkey::new_unique();
+    let tree = SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap());
     let num_nodes = 5;
 
     let leaf_nodes: Vec<LeafNode> = (0..num_nodes)
@@ -981,9 +981,30 @@ async fn test_indexed_merkle_trees(
     let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
     let tree_height = 33; // prev. 4
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1, Some(0))
-        .await
-        .unwrap();
+    // Create tree info cache - convert SerializablePubkey to Pubkey
+    let tree_pubkey = Pubkey::try_from(tree.to_bytes_vec().as_slice()).unwrap();
+    let mut tree_info_cache = std::collections::HashMap::new();
+    tree_info_cache.insert(
+        tree_pubkey,
+        photon_indexer::ingester::parser::tree_info::TreeInfo {
+            tree: tree_pubkey,
+            queue: tree_pubkey,
+            height: tree_height,
+            tree_type: light_compressed_account::TreeType::AddressV2,
+            root_history_capacity: 2400,
+        },
+    );
+
+    multi_append(
+        &txn,
+        values,
+        tree.to_bytes_vec(),
+        tree_height - 1,
+        Some(0),
+        &tree_info_cache,
+    )
+    .await
+    .unwrap();
 
     txn.commit().await.unwrap();
 
@@ -1013,9 +1034,16 @@ async fn test_indexed_merkle_trees(
 
     let values = vec![vec![3]];
 
-    multi_append(&txn, values, tree.to_bytes_vec(), tree_height - 1, Some(1))
-        .await
-        .unwrap();
+    multi_append(
+        &txn,
+        values,
+        tree.to_bytes_vec(),
+        tree_height - 1,
+        Some(1),
+        &tree_info_cache,
+    )
+    .await
+    .unwrap();
 
     txn.commit().await.unwrap();
 
@@ -1359,7 +1387,7 @@ async fn test_gpa_filters(
             }),
             owner: owner1,
             lamports: UnsignedInteger(1000),
-            tree: SerializablePubkey::new_unique(),
+            tree: SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap()),
             leaf_index: UnsignedInteger(10),
             seq: Some(UnsignedInteger(1)),
             slot_created: UnsignedInteger(0),
@@ -1424,7 +1452,7 @@ async fn test_persisted_state_trees_multiple_cases(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     let name = trim_test_name(function_name!());
-    let tree = SerializablePubkey::new_unique();
+    let tree = SerializablePubkey(TEST_STATE_TREE_V1_1.parse().unwrap());
     let tree_height = 32; // prev. 10
 
     info!("Test case 1: Sequential leaf nodes");
@@ -1630,6 +1658,20 @@ async fn test_update_indexed_merkle_tree(
         index,
     };
     let parameters = [(index_element_1, 0), (index_element_2, 1)];
+
+    // Create tree info cache
+    let mut tree_info_cache = std::collections::HashMap::new();
+    tree_info_cache.insert(
+        tree,
+        photon_indexer::ingester::parser::tree_info::TreeInfo {
+            tree: tree,
+            queue: tree,
+            height: 26,
+            tree_type: TreeType::AddressV1,
+            root_history_capacity: 2400,
+        },
+    );
+
     for permutation in parameters.iter().permutations(2) {
         let txn = setup.db_conn.as_ref().begin().await.unwrap();
         for (indexed_element, seq) in permutation {
@@ -1645,7 +1687,7 @@ async fn test_update_indexed_merkle_tree(
                     signature: Default::default(),
                 },
             );
-            persist_indexed_tree_updates(&txn, indexed_leaf_updates)
+            persist_indexed_tree_updates(&txn, indexed_leaf_updates, &tree_info_cache)
                 .await
                 .unwrap();
         }

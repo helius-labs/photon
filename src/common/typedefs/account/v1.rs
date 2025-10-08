@@ -3,8 +3,12 @@ use crate::api::method::utils::parse_decimal;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
+use crate::ingester::error::IngesterError;
+use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use borsh::BorshDeserialize;
 use jsonrpsee_core::Serialize;
 use utoipa::ToSchema;
 
@@ -24,6 +28,21 @@ pub struct Account {
     // 2.2. Some once it was inserted into the Merkle tree from the output queue
     pub seq: Option<UnsignedInteger>,
     pub slot_created: UnsignedInteger,
+}
+
+impl Account {
+    pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
+        match self.data.as_ref() {
+            Some(data) if self.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+                let data_slice = data.data.0.as_slice();
+                let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                    IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
+                })?;
+                Ok(Some(token_data))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]

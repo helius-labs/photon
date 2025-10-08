@@ -5,12 +5,16 @@ use crate::api::method::get_validity_proof::prover::prove::generate_proof;
 use crate::api::method::get_validity_proof::CompressedProof;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
+use crate::dao::generated::{prelude::*, tree_metadata};
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
 use jsonrpsee_core::Serialize;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
+    Statement, TransactionTrait,
+};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -111,6 +115,34 @@ pub async fn get_validity_proof(
     } else {
         Vec::new()
     };
+
+    // Fetch tree metadata for root_history_capacity
+    let tree_pubkey = if !db_account_proofs.is_empty() {
+        db_account_proofs[0].merkle_tree
+    } else if !db_new_address_proofs.is_empty() {
+        db_new_address_proofs[0].merkleTree
+    } else {
+        // This should not happen as we check for empty proofs later
+        return Err(PhotonApiError::ValidationError(
+            "No proofs available to determine tree".to_string(),
+        ));
+    };
+
+    let tree_bytes = tree_pubkey.to_bytes_vec();
+    let tree_metadata_result = TreeMetadata::find()
+        .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes))
+        .one(&tx)
+        .await?;
+
+    let root_history_capacity = tree_metadata_result
+        .map(|m| m.root_history_capacity as u64)
+        .ok_or_else(|| {
+            PhotonApiError::ValidationError(format!(
+                "Tree metadata not found for {}. Please ensure tree metadata sync has been run.",
+                tree_pubkey
+            ))
+        })?;
+
     tx.commit().await?;
 
     if db_account_proofs.is_empty() && db_new_address_proofs.is_empty() {
@@ -120,7 +152,14 @@ pub async fn get_validity_proof(
         ));
     }
 
-    let proof_result = generate_proof(db_account_proofs, db_new_address_proofs, prover_url).await?;
+    let proof_result = generate_proof(
+        conn,
+        db_account_proofs,
+        db_new_address_proofs,
+        root_history_capacity,
+        prover_url,
+    )
+    .await?;
 
     let v1_value = CompressedProofWithContext {
         compressed_proof: proof_result.compressed_proof,

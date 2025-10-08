@@ -123,8 +123,23 @@ async fn test_reindex_fixes_wrong_zeroeth_element(
     let mut updates = HashMap::new();
     updates.insert((tree_pubkey, 0u64), update);
 
+    // Create tree info cache
+    let mut tree_info_cache = HashMap::new();
+    tree_info_cache.insert(
+        tree_pubkey,
+        photon_indexer::ingester::parser::tree_info::TreeInfo {
+            tree: tree_pubkey,
+            queue: tree_pubkey,
+            height: 26,
+            tree_type: light_compressed_account::TreeType::AddressV1,
+            root_history_capacity: 2400,
+        },
+    );
+
     // Persist the update which should fix the zeroeth element
-    persist_indexed_tree_updates(&txn, updates).await.unwrap();
+    persist_indexed_tree_updates(&txn, updates, &tree_info_cache)
+        .await
+        .unwrap();
     txn.commit().await.unwrap();
 
     // Step 3: Verify the zeroeth element is now correct
@@ -218,7 +233,21 @@ async fn test_reindex_preserves_correct_zeroeth_element(
     let mut updates = HashMap::new();
     updates.insert((tree_pubkey, 0u64), update);
 
-    persist_indexed_tree_updates(&txn, updates).await.unwrap();
+    let mut tree_info_cache = HashMap::new();
+    tree_info_cache.insert(
+        tree_pubkey,
+        photon_indexer::ingester::parser::tree_info::TreeInfo {
+            tree: tree_pubkey,
+            queue: tree_pubkey,
+            height: 26,
+            tree_type: light_compressed_account::TreeType::AddressV1,
+            root_history_capacity: 2400,
+        },
+    );
+
+    persist_indexed_tree_updates(&txn, updates, &tree_info_cache)
+        .await
+        .unwrap();
     txn.commit().await.unwrap();
 
     // Verify it's still correct

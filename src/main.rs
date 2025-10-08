@@ -215,6 +215,24 @@ async fn main() {
             .await
             .unwrap();
         if !snapshot_files.is_empty() {
+            // Sync tree metadata from on-chain before processing snapshot
+            // This is REQUIRED so the indexer knows about all existing trees
+            info!("Syncing tree metadata from on-chain before loading snapshot...");
+            if let Err(e) = photon_indexer::monitor::tree_metadata_sync::sync_tree_metadata(
+                rpc_client.as_ref(),
+                db_conn.as_ref(),
+            )
+            .await
+            {
+                error!(
+                    "Failed to sync tree metadata: {}. Cannot proceed with snapshot loading.",
+                    e
+                );
+                error!("Tree metadata must be synced before loading snapshots to avoid skipping transactions.");
+                std::process::exit(1);
+            }
+            info!("Tree metadata sync completed successfully");
+
             info!("Detected snapshot files. Loading snapshot...");
             let last_slot = snapshot_files.last().unwrap().end_slot;
             let block_stream =

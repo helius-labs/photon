@@ -9,6 +9,7 @@ use crate::ingester::parser::indexer_events::MerkleTreeEvent;
 use crate::ingester::parser::merkle_tree_events_parser::BatchMerkleTreeEvents;
 use log::debug;
 use sea_orm::DatabaseTransaction;
+use solana_pubkey::Pubkey;
 
 use self::address::persist_batch_address_append_event;
 use self::append::persist_batch_append_event;
@@ -23,8 +24,19 @@ use self::sequence::should_process_event;
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
     mut events: BatchMerkleTreeEvents,
+    tree_info_cache: &std::collections::HashMap<
+        solana_pubkey::Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
     for (tree_pubkey, events) in events.iter_mut() {
+        let solana_pubkey = Pubkey::from(*tree_pubkey);
+        let tree_info = tree_info_cache.get(&solana_pubkey)
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                bs58::encode(tree_pubkey).into_string()
+            )))?;
+        let tree_height = tree_info.height;
         // Sort by sequence
         events.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -72,13 +84,18 @@ pub async fn persist_batch_events(
                     persist_batch_append_event(txn, batch_append_event, &mut leaf_nodes).await
                 }
                 MerkleTreeEvent::BatchAddressAppend(batch_address_append_event) => {
-                    persist_batch_address_append_event(txn, batch_address_append_event).await
+                    persist_batch_address_append_event(
+                        txn,
+                        batch_address_append_event,
+                        tree_info_cache,
+                    )
+                    .await
                 }
                 _ => Err(IngesterError::InvalidEvent),
             }?;
 
             // Persist leaf nodes, chunking if necessary
-            persist_leaf_nodes_chunked(txn, leaf_nodes).await?;
+            persist_leaf_nodes_chunked(txn, leaf_nodes, tree_height).await?;
         }
     }
     Ok(())

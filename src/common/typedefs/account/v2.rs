@@ -1,12 +1,16 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_validity_proof::MerkleContextV2;
 use crate::api::method::utils::parse_decimal;
-use crate::common::typedefs::account::AccountData;
+use crate::common::typedefs::account::{AccountData, AccountWithContext};
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
+use crate::ingester::error::IngesterError;
+use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use borsh::BorshDeserialize;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -32,6 +36,21 @@ pub struct AccountV2 {
     // saving one RPC roundtrip.
     pub prove_by_index: bool,
     pub merkle_context: MerkleContextV2,
+}
+
+impl AccountV2 {
+    pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
+        match self.data.as_ref() {
+            Some(data) if self.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+                let data_slice = data.data.0.as_slice();
+                let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                    IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
+                })?;
+                Ok(Some(token_data))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 impl TryFrom<Model> for AccountV2 {
@@ -75,5 +94,28 @@ impl TryFrom<Model> for AccountV2 {
                 next_tree_context: None,
             },
         })
+    }
+}
+
+impl From<&AccountWithContext> for AccountV2 {
+    fn from(x: &AccountWithContext) -> Self {
+        AccountV2 {
+            hash: x.account.hash.clone(),
+            address: x.account.address.clone(),
+            data: x.account.data.clone(),
+            owner: x.account.owner.clone(),
+            lamports: x.account.lamports,
+            leaf_index: x.account.leaf_index,
+            seq: x.account.seq,
+            slot_created: x.account.slot_created,
+            prove_by_index: x.context.in_output_queue,
+            merkle_context: MerkleContextV2 {
+                tree_type: x.context.tree_type,
+                tree: x.account.tree.clone(),
+                queue: x.context.queue.clone(),
+                cpi_context: None,
+                next_tree_context: None,
+            },
+        }
     }
 }

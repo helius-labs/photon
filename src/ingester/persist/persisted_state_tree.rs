@@ -5,13 +5,10 @@ use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseTransaction, DbErr, EntityTrait, Statement,
     TransactionTrait, Value,
 };
-use solana_program::pubkey::Pubkey;
 
 use crate::api::error::PhotonApiError;
 use crate::common::format_bytes;
 use crate::dao::generated::state_trees;
-use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::leaf_node::STATE_TREE_HEIGHT_V2;
 
 pub fn get_proof_path(index: i64, include_leaf: bool) -> Vec<i64> {
     let mut indexes = vec![];
@@ -50,7 +47,7 @@ pub async fn get_proof_nodes<T>(
     leaf_nodes_locations: Vec<(Vec<u8>, i64)>,
     include_leafs: bool,
     include_empty_leaves: bool,
-    tree_height: Option<u32>,
+    tree_height: u32,
 ) -> Result<HashMap<(Vec<u8>, i64), state_trees::Model>, DbErr>
 where
     T: ConnectionTrait + TransactionTrait,
@@ -102,28 +99,22 @@ where
         .collect::<HashMap<(Vec<u8>, i64), state_trees::Model>>();
 
     if include_empty_leaves {
-        leaf_nodes_locations.iter().for_each(|(tree, index)| {
+        for (tree, index) in leaf_nodes_locations.iter() {
             result.entry((tree.clone(), *index)).or_insert_with(|| {
-                let tree_pubkey = Pubkey::try_from(tree.clone()).unwrap();
-                let tree_height = if let Some(height) = tree_height {
-                    height
-                } else {
-                    let height = TreeInfo::height(&tree_pubkey.to_string());
-                    height.unwrap_or(STATE_TREE_HEIGHT_V2)
-                };
-                let tree_height = tree_height + 1;
+                let tree_height_with_level = tree_height + 1;
                 let model = state_trees::Model {
                     tree: tree.clone(),
-                    level: get_level_by_node_index(*index, tree_height),
+                    level: get_level_by_node_index(*index, tree_height_with_level),
                     node_idx: *index,
-                    hash: ZERO_BYTES[get_level_by_node_index(*index, tree_height) as usize]
+                    hash: ZERO_BYTES
+                        [get_level_by_node_index(*index, tree_height_with_level) as usize]
                         .to_vec(),
                     leaf_idx: None,
                     seq: None,
                 };
                 model
             });
-        });
+        }
     }
 
     Ok(result)

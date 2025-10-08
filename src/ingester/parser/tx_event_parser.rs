@@ -11,12 +11,16 @@ use log::info;
 use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 
-pub fn parse_public_transaction_event_v1(
+pub async fn parse_public_transaction_event_v1<T>(
+    conn: &T,
     tx: &TransactionInfo,
     slot: u64,
     compression_instruction: &Instruction,
     noop_instruction: &Instruction,
-) -> Result<Option<StateUpdate>, IngesterError> {
+) -> Result<Option<StateUpdate>, IngesterError>
+where
+    T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
+{
     if get_compression_program_id() == compression_instruction.program_id
         && noop_instruction.program_id == NOOP_PROGRAM_ID
         && tx.error.is_none()
@@ -35,17 +39,23 @@ pub fn parse_public_transaction_event_v1(
                 e
             ))
         })?;
-        create_state_update_v1(tx.signature, slot, public_transaction_event.into()).map(Some)
+        create_state_update_v1(conn, tx.signature, slot, public_transaction_event.into())
+            .await
+            .map(Some)
     } else {
         Ok(None)
     }
 }
 
-pub fn create_state_update_v1(
+pub async fn create_state_update_v1<T>(
+    conn: &T,
     tx: Signature,
     slot: u64,
     transaction_event: PublicTransactionEvent,
-) -> Result<StateUpdate, IngesterError> {
+) -> Result<StateUpdate, IngesterError>
+where
+    T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
+{
     let mut state_update = StateUpdate::new();
     let mut tree_to_seq_number = transaction_event
         .sequence_numbers
@@ -64,8 +74,11 @@ pub fn create_state_update_v1(
         .zip(transaction_event.output_leaf_indices.iter())
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
-        let tree_and_queue = match TreeInfo::get(&tree.to_string()) {
-            Some(info) => info.clone(),
+        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
+        {
+            Some(info) => info,
             None => {
                 if super::SKIP_UNKNOWN_TREES {
                     log::warn!("Skipping unknown tree: {}", tree.to_string());

@@ -88,6 +88,8 @@ light-merkle-tree-metadata = { version = "0.5.0", features = ["solana"] }
 light-compressed-account = { version = "0.5.0", features = ["anchor"] }
 light-hasher = { version = "4.0.0", features = ["solana"] }
 light-poseidon = "0.3.0"
+light-indexed-merkle-tree = "3.0.0"
+account-compression = "2.0.0"
 
 sqlx = { version = "0.6.2", features = [
     "macros",
