@@ -298,8 +298,23 @@ fn parse_block(block: SubscribeUpdateBlock) -> BlockInfo {
 
 fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> TransactionInfo {
     let meta = transaction.meta.unwrap();
-    let error = create_tx_error(meta.err.as_ref()).unwrap();
-    let error = error.map(|e| e.to_string());
+
+    // We attempt to decode the TransactionError, but if it fails, we log the error and set error to None.
+    let tx_error_result = create_tx_error(meta.err.as_ref());
+    
+    let error = match tx_error_result {
+        Ok(tx_error_option) => tx_error_option.map(|e| e.to_string()),
+        Err(e) => {
+            // We log the decoding error, but we don't panic.
+            // We treat this as a lack of decoded transaction error.
+            // You can use error! or info! depending on your preference.
+            error!("Failed to decode TransactionError: {}", e);
+            metric! {
+                statsd_count!("tx_error_decode_failure", 1); // It's worth adding a metric
+            }
+            None
+        }
+    };
 
     let signature = Signature::try_from(transaction.signature).unwrap();
     let message = transaction.transaction.unwrap().message.unwrap();
