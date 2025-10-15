@@ -306,8 +306,6 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
         Ok(tx_error_option) => tx_error_option.map(|e| e.to_string()),
         Err(e) => {
             // We log the decoding error, but we don't panic.
-            // We treat this as a lack of decoded transaction error.
-            // You can use error! or info! depending on your preference.
             error!("Failed to decode TransactionError: {}", e);
             metric! {
                 statsd_count!("tx_error_decode_failure", 1); // It's worth adding a metric
