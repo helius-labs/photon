@@ -10,7 +10,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOr
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::dao::generated::accounts;
+use crate::dao::generated::{accounts, address_queues};
 
 use crate::{
     api::error::PhotonApiError,
@@ -378,44 +378,24 @@ async fn fetch_queue_elements(
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
     let mut result = Vec::with_capacity(limit as usize);
 
-    let query = match queue_type {
-        QueueType::InputStateV2 => accounts::Entity::find()
-            .filter(accounts::Column::Tree.eq(tree_bytes))
-            .filter(accounts::Column::NullifierQueueIndex.is_not_null())
-            .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
-            .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit) as i64))
-            .order_by_asc(accounts::Column::NullifierQueueIndex)
-            .limit(limit),
-        QueueType::OutputStateV2 => accounts::Entity::find()
-            .filter(accounts::Column::Tree.eq(tree_bytes))
-            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
-            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
-            .order_by_asc(accounts::Column::LeafIndex)
-            .limit(limit),
-        QueueType::AddressV2 => accounts::Entity::find()
-            .filter(accounts::Column::Tree.eq(tree_bytes))
-            .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
-            .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
-            .order_by_asc(accounts::Column::LeafIndex)
-            .limit(limit),
-        _ => {
-            return Err(PhotonApiError::ValidationError(format!(
-                "Unsupported queue type: {:?}",
-                queue_type
-            )))
-        }
-    };
+    match queue_type {
+        QueueType::InputStateV2 => {
+            let query = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree_bytes))
+                .filter(accounts::Column::NullifierQueueIndex.is_not_null())
+                .filter(accounts::Column::NullifierQueueIndex.gte(start_offset as i64))
+                .filter(accounts::Column::NullifierQueueIndex.lt((start_offset + limit) as i64))
+                .order_by_asc(accounts::Column::NullifierQueueIndex)
+                .limit(limit);
 
-    let elements = query
-        .all(db)
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
+            let elements = query
+                .all(db)
+                .await
+                .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
 
-    for element in elements.iter() {
-        let mut value = [0u8; 32];
+            for element in elements.iter() {
+                let mut value = [0u8; 32];
 
-        match queue_type {
-            QueueType::InputStateV2 => {
                 if let Some(ref nullifier) = element.nullifier {
                     if nullifier.len() >= 32 {
                         value.copy_from_slice(&nullifier[..32]);
@@ -430,8 +410,26 @@ async fn fetch_queue_elements(
                         "Missing nullifier for InputStateV2 queue".to_string(),
                     ));
                 }
+
+                result.push(value);
             }
-            _ => {
+        }
+        QueueType::OutputStateV2 => {
+            let query = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree_bytes))
+                .filter(accounts::Column::LeafIndex.gte(start_offset as i64))
+                .filter(accounts::Column::LeafIndex.lt((start_offset + limit) as i64))
+                .order_by_asc(accounts::Column::LeafIndex)
+                .limit(limit);
+
+            let elements = query
+                .all(db)
+                .await
+                .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
+
+            for element in elements.iter() {
+                let mut value = [0u8; 32];
+
                 if element.hash.len() >= 32 {
                     value.copy_from_slice(&element.hash[..32]);
                 } else {
@@ -440,11 +438,45 @@ async fn fetch_queue_elements(
                         element.hash.len()
                     )));
                 }
+
+                result.push(value);
             }
         }
+        QueueType::AddressV2 => {
+            let query = address_queues::Entity::find()
+                .filter(address_queues::Column::Tree.eq(tree_bytes))
+                .filter(address_queues::Column::QueueIndex.gte(start_offset as i64))
+                .filter(address_queues::Column::QueueIndex.lt((start_offset + limit) as i64))
+                .order_by_asc(address_queues::Column::QueueIndex)
+                .limit(limit);
 
-        result.push(value);
-    }
+            let elements = query
+                .all(db)
+                .await
+                .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
+
+            for element in elements.iter() {
+                let mut value = [0u8; 32];
+
+                if element.address.len() >= 32 {
+                    value.copy_from_slice(&element.address[..32]);
+                } else {
+                    return Err(PhotonApiError::UnexpectedError(format!(
+                        "Address too short: expected at least 32 bytes, got {}",
+                        element.address.len()
+                    )));
+                }
+
+                result.push(value);
+            }
+        }
+        _ => {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Unsupported queue type: {:?}",
+                queue_type
+            )))
+        }
+    };
 
     Ok(result)
 }
