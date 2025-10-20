@@ -106,18 +106,18 @@ pub fn continously_monitor_photon(
                             tree_pubkey,
                             queue_type,
                         )
-                            .await
-                    {
+                        .await
+                        {
                             if !divergences.is_empty() {
                                 for divergence in &divergences {
                                     queue_monitor::log_divergence(divergence);
                                 }
-                        error!(
+                                error!(
                                     "Queue verification failed for tree {} type {:?} with {} divergences",
                                     tree_pubkey, queue_type, divergences.len()
                         );
-                    }
-                }
+                            }
+                        }
                     });
                 }
             }

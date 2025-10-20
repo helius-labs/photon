@@ -38,6 +38,9 @@ pub async fn persist_batch_address_append_event(
         current_next_index,
         "address append",
     )? {
+        let queue_end = (batch_address_append_event.new_next_index as i64) - 1;
+        cleanup_stale_address_queue_entries(txn, batch_address_append_event, queue_end).await?;
+
         return Ok(());
     }
 
@@ -114,15 +117,24 @@ pub async fn persist_batch_address_append_event(
 
     // 2. Remove inserted elements from the database address queue.
     address_queues::Entity::delete_many()
-        .filter(
-            address_queues::Column::QueueIndex
-                .gte(queue_start)
-                .and(address_queues::Column::QueueIndex.lt(queue_end))
-                .and(
-                    address_queues::Column::Tree
-                        .eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
-                ),
-        )
+        .filter(address_queues::Column::QueueIndex.lt(queue_end).and(
+            address_queues::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+        ))
+        .exec(txn)
+        .await?;
+
+    Ok(())
+}
+
+async fn cleanup_stale_address_queue_entries(
+    txn: &DatabaseTransaction,
+    batch_address_append_event: &BatchEvent,
+    queue_end: i64,
+) -> Result<(), IngesterError> {
+    address_queues::Entity::delete_many()
+        .filter(address_queues::Column::QueueIndex.lt(queue_end).and(
+            address_queues::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+        ))
         .exec(txn)
         .await?;
 
