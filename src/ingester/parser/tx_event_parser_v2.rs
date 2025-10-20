@@ -115,17 +115,22 @@ pub fn parse_public_transaction_event_v2(
     })
 }
 
-pub fn create_state_update_v2(
+pub async fn create_state_update_v2<T>(
+    conn: &T,
     tx: Signature,
     slot: u64,
     transaction_event: Vec<BatchPublicTransactionEvent>,
-) -> Result<StateUpdate, IngesterError> {
+) -> Result<StateUpdate, IngesterError>
+where
+    T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
+{
     if transaction_event.is_empty() {
         return Ok(StateUpdate::new());
     }
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
-        let mut state_update_event = create_state_update_v1(tx, slot, event.clone().event.into())?;
+        let mut state_update_event =
+            create_state_update_v1(conn, tx, slot, event.clone().event).await?;
 
         state_update_event
             .batch_nullify_context

@@ -16,6 +16,10 @@ use super::helpers::validate_batch_index;
 pub async fn persist_batch_address_append_event(
     txn: &DatabaseTransaction,
     batch_address_append_event: &BatchEvent,
+    tree_info_cache: &std::collections::HashMap<
+        solana_pubkey::Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
     let expected_count = batch_address_append_event
         .new_next_index
@@ -112,6 +116,7 @@ pub async fn persist_batch_address_append_event(
         batch_address_append_event.merkle_tree_pubkey.to_vec(),
         DEFAULT_BATCH_ADDRESS_TREE_HEIGHT + 1,
         Some(batch_address_append_event.sequence_number as u32),
+        tree_info_cache,
     )
     .await?;
 

@@ -1,5 +1,6 @@
 mod queue_hash_cache;
 mod queue_monitor;
+pub mod tree_metadata_sync;
 
 use std::{
     sync::{
@@ -56,6 +57,14 @@ pub fn continously_monitor_photon(
     rpc_client: Arc<RpcClient>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        if let Err(e) =
+            tree_metadata_sync::sync_tree_metadata(rpc_client.as_ref(), db.as_ref()).await
+        {
+            error!("Failed to sync tree metadata: {}", e);
+        } else {
+            info!("Tree metadata sync completed successfully");
+        }
+
         let mut has_been_healthy = false;
         start_latest_slot_updater(rpc_client.clone()).await;
 
@@ -94,7 +103,13 @@ pub fn continously_monitor_photon(
                 });
 
                 // Spawn parallel verification tasks for each V2 tree
-                let v2_trees = queue_monitor::collect_v2_trees().await;
+                let v2_trees = match queue_monitor::collect_v2_trees(db.as_ref()).await {
+                    Ok(trees) => trees,
+                    Err(e) => {
+                        error!("Failed to collect V2 trees: {:?}", e);
+                        Vec::new()
+                    }
+                };
                 for (tree_pubkey, queue_type) in v2_trees {
                     let db_clone = db.clone();
                     let rpc_clone = rpc_client.clone();

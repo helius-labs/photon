@@ -66,9 +66,9 @@ pub async fn get_batch_address_update_info(
 
     let limit = request.limit;
     let merkle_tree_pubkey = request.tree;
-    let tree_info = TreeInfo::get(&merkle_tree_pubkey.to_string())
-        .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?
-        .clone();
+    let tree_info = TreeInfo::get(conn, &merkle_tree_pubkey.to_string())
+        .await?
+        .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
 
     let merkle_tree = SerializablePubkey::from(merkle_tree_pubkey.0).to_bytes_vec();
 

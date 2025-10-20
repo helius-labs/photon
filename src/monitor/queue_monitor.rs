@@ -13,9 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::dao::generated::{accounts, address_queues};
 
 use crate::{
-    api::error::PhotonApiError,
-    ingester::parser::tree_info::{TreeInfo, QUEUE_TREE_MAPPING},
-    metric,
+    api::error::PhotonApiError, ingester::parser::tree_info::TreeInfo, metric,
     monitor::queue_hash_cache,
 };
 use cadence_macros::statsd_count;
@@ -42,7 +40,7 @@ async fn verify_output_queue_hash_chains(
     tree_pubkey: Pubkey,
 ) -> Result<(), Vec<HashChainDivergence>> {
     let tree_pubkey_str = tree_pubkey.to_string();
-    let tree_info = match TreeInfo::get(&tree_pubkey_str) {
+    let tree_info = match TreeInfo::get(db, &tree_pubkey_str).await.ok().flatten() {
         Some(info) => info,
         None => {
             trace!("No tree info found for {}", tree_pubkey);
@@ -549,23 +547,38 @@ pub async fn verify_single_queue(
     }
 }
 
-pub async fn collect_v2_trees() -> Vec<(Pubkey, QueueType)> {
-    let mut trees = Vec::new();
+pub async fn collect_v2_trees(
+    db: &DatabaseConnection,
+) -> Result<Vec<(Pubkey, QueueType)>, PhotonApiError> {
+    use crate::dao::generated::tree_metadata;
+    use light_compressed_account::TreeType;
 
-    for (_, tree_info) in QUEUE_TREE_MAPPING.iter() {
-        match tree_info.tree_type {
-            light_compressed_account::TreeType::StateV2 => {
-                let sdk_pubkey = Pubkey::from(tree_info.tree.to_bytes());
-                trees.push((sdk_pubkey, QueueType::InputStateV2));
-                trees.push((sdk_pubkey, QueueType::OutputStateV2));
+    // Query for V2 trees (StateV2 and AddressV2)
+    let v2_trees = tree_metadata::Entity::find()
+        .filter(
+            tree_metadata::Column::TreeType
+                .is_in([TreeType::StateV2 as i32, TreeType::AddressV2 as i32]),
+        )
+        .all(db)
+        .await
+        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to query V2 trees: {}", e)))?;
+
+    let mut result = Vec::new();
+    for tree in v2_trees {
+        let tree_pubkey = Pubkey::try_from(tree.tree_pubkey.as_slice())
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Invalid tree pubkey: {}", e)))?;
+
+        match tree.tree_type {
+            t if t == TreeType::StateV2 as i32 => {
+                result.push((tree_pubkey, QueueType::InputStateV2));
+                result.push((tree_pubkey, QueueType::OutputStateV2));
             }
-            light_compressed_account::TreeType::AddressV2 => {
-                let sdk_pubkey = Pubkey::from(tree_info.tree.to_bytes());
-                trees.push((sdk_pubkey, QueueType::AddressV2));
+            t if t == TreeType::AddressV2 as i32 => {
+                result.push((tree_pubkey, QueueType::AddressV2));
             }
-            _ => {}
+            _ => continue,
         }
     }
 
-    trees
+    Ok(result)
 }

@@ -699,6 +699,7 @@ async fn test_transaction_with_tree_rollover_fee(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     use photon_indexer::ingester::parser::parse_transaction;
+    use photon_indexer::ingester::typedefs::block_info::TransactionInfo;
 
     let name = trim_test_name(function_name!());
     let setup = setup_with_options(
@@ -712,7 +713,10 @@ async fn test_transaction_with_tree_rollover_fee(
     let txn =
         "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn).await;
-    let status_update = parse_transaction(&txn.try_into().unwrap(), 0).unwrap();
+    let tx_info: TransactionInfo = txn.try_into().unwrap();
+    let status_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, 0)
+        .await
+        .unwrap();
     // Assert that status update has at least one account
     assert!(status_update.out_accounts.len() > 0);
 }
