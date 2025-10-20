@@ -117,15 +117,9 @@ pub async fn persist_batch_address_append_event(
 
     // 2. Remove inserted elements from the database address queue.
     address_queues::Entity::delete_many()
-        .filter(
-            address_queues::Column::QueueIndex
-                .gte(queue_start)
-                .and(address_queues::Column::QueueIndex.lt(queue_end))
-                .and(
-                    address_queues::Column::Tree
-                        .eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
-                ),
-        )
+        .filter(address_queues::Column::QueueIndex.lt(queue_end).and(
+            address_queues::Column::Tree.eq(batch_address_append_event.merkle_tree_pubkey.to_vec()),
+        ))
         .exec(txn)
         .await?;
 
