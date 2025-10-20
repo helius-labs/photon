@@ -54,8 +54,20 @@ jobs:
         run: |
           docker run -d -p 3001:3001 docker.io/sergeytimoshin/prover:latest
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      - name: Wait for light-prover to be ready
+        run: |
+          echo "Waiting for light-prover to be ready..."
+          for i in {1..60}; do
+            if curl -f http://localhost:3001/health > /dev/null 2>&1; then
+              echo "Prover is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/60: prover not ready yet, waiting 5 seconds..."
+            sleep 10
+          done
+          echo "Prover failed to become ready within 10 minutes"
+          docker logs $(docker ps -q --filter ancestor=docker.io/sergeytimoshin/prover:latest)
+          exit 1
 
       - name: Set environment variables
         run: |
