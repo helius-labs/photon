@@ -54,8 +54,8 @@ jobs:
         run: |
           docker run -d -p 3001:3001 docker.io/sergeytimoshin/prover:latest
 
-      - name: Wait for light-prover to download data
-        run: sleep 180
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Set environment variables
         run: |
