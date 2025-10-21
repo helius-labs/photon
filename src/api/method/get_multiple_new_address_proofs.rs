@@ -1,6 +1,6 @@
 use light_compressed_account::TreeType;
 use sea_orm::{
-    ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, Statement,
+    ConnectionTrait, DatabaseConnection, DatabaseTransaction, Statement,
     TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
@@ -13,12 +13,11 @@ use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::indexed_merkle_tree::{
-    get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
-};
+use crate::ingester::persist::indexed_merkle_tree::get_multiple_exclusion_ranges_with_proofs_v2;
+use std::collections::HashMap;
 
-pub const FORESTER_MAX_ADDRESSES: usize = 500;
-pub const MAX_ADDRESSES: usize = 50;
+pub const FORESTER_MAX_ADDRESSES: usize = 4000;
+pub const MAX_ADDRESSES: usize = 1000;
 
 pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
@@ -75,9 +74,19 @@ pub async fn get_multiple_new_address_proofs_helper(
         ));
     }
 
-    let mut new_address_proofs: Vec<MerkleContextWithNewAddressProof> = Vec::new();
+    // Group addresses by tree for batching
+    let mut addresses_by_tree: HashMap<SerializablePubkey, Vec<(usize, SerializablePubkey)>> =
+        HashMap::new();
+    for (idx, AddressWithTree { address, tree }) in addresses.iter().enumerate() {
+        addresses_by_tree
+            .entry(*tree)
+            .or_insert_with(Vec::new)
+            .push((idx, *address));
+    }
 
-    for AddressWithTree { address, tree } in addresses {
+    let mut indexed_proofs: Vec<(usize, MerkleContextWithNewAddressProof)> = Vec::new();
+
+    for (tree, tree_addresses) in addresses_by_tree {
         let tree_and_queue =
             TreeInfo::get(txn, &tree.to_string())
                 .await?
@@ -85,34 +94,34 @@ pub async fn get_multiple_new_address_proofs_helper(
                     field: tree.to_string(),
                 })?;
 
-        // For V2 trees, check if the address is in the queue but not yet in the tree
+        // For V2 trees, check if addresses are in the queue but not yet in the tree
         if check_queue && tree_and_queue.tree_type == TreeType::AddressV2 {
-            // Check if the address is in the queue
+            let address_list = tree_addresses
+                .iter()
+                .map(|(_, addr)| format_bytes(addr.to_bytes_vec(), txn.get_database_backend()))
+                .collect::<Vec<_>>()
+                .join(", ");
+
             let address_queue_stmt = Statement::from_string(
                 txn.get_database_backend(),
                 format!(
-                    "SELECT COUNT(*) as count FROM address_queues
-                     WHERE tree = {} AND address = {}",
+                    "SELECT address FROM address_queues
+                     WHERE tree = {} AND address IN ({})",
                     format_bytes(tree.to_bytes_vec(), txn.get_database_backend()),
-                    format_bytes(address.to_bytes_vec(), txn.get_database_backend())
+                    address_list
                 ),
             );
 
-            let queue_result = txn.query_one(address_queue_stmt).await.map_err(|e| {
+            let queue_results = txn.query_all(address_queue_stmt).await.map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to query address queue: {}", e))
             })?;
 
-            let in_queue = match queue_result {
-                Some(row) => {
-                    let count: i64 = row.try_get("", "count").map_err(|e| {
-                        PhotonApiError::UnexpectedError(format!("Failed to get count: {}", e))
+            if !queue_results.is_empty() {
+                let queued_address: Vec<u8> =
+                    queue_results[0].try_get("", "address").map_err(|e| {
+                        PhotonApiError::UnexpectedError(format!("Failed to get address: {}", e))
                     })?;
-                    count > 0
-                }
-                None => false,
-            };
-
-            if in_queue {
+                let queued_address = SerializablePubkey::try_from(queued_address)?;
                 return Err(PhotonApiError::ValidationError(format!(
                     "Address {} already exists",
                     address
@@ -120,42 +129,49 @@ pub async fn get_multiple_new_address_proofs_helper(
             }
         }
 
-        let (model, proof) = match tree_and_queue.tree_type {
-            TreeType::AddressV1 => {
-                let address = address.to_bytes_vec();
-                let tree = tree.to_bytes_vec();
-                get_exclusion_range_with_proof_v1(txn, tree, tree_and_queue.height + 1, address)
-                    .await?
-            }
-            TreeType::AddressV2 => {
-                get_exclusion_range_with_proof_v2(
+        let address_values: Vec<Vec<u8>> = tree_addresses
+            .iter()
+            .map(|(_, addr)| addr.to_bytes_vec())
+            .collect();
+
+        let tree_bytes = tree.to_bytes_vec();
+        let tree_type = tree_and_queue.tree_type;
+
+        let results = get_multiple_exclusion_ranges_with_proofs_v2(
                     txn,
-                    tree.to_bytes_vec(),
+            tree_bytes.clone(),
                     tree_and_queue.height + 1,
-                    address.to_bytes_vec(),
+            address_values.clone(),
+            tree_type,
                 )
-                .await?
-            }
-            _ => {
-                return Err(PhotonApiError::UnexpectedError(
-                    "Invalid tree type".to_string(),
-                ));
-            }
-        };
+        .await?;
+
+        for (original_idx, address) in tree_addresses {
+            let address_bytes = address.to_bytes_vec();
+
+            let (model, proof) = results.get(&address_bytes).ok_or_else(|| {
+                PhotonApiError::RecordNotFound(format!("No proof found for address {}", address))
+            })?;
 
         let new_address_proof = MerkleContextWithNewAddressProof {
-            root: proof.root,
+                root: proof.root.clone(),
             address,
-            lowerRangeAddress: SerializablePubkey::try_from(model.value)?,
-            higherRangeAddress: SerializablePubkey::try_from(model.next_value)?,
+                lowerRangeAddress: SerializablePubkey::try_from(model.value.clone())?,
+                higherRangeAddress: SerializablePubkey::try_from(model.next_value.clone())?,
             nextIndex: model.next_index as u32,
-            proof: proof.proof,
+                proof: proof.proof.clone(),
             lowElementLeafIndex: model.leaf_index as u32,
             merkleTree: tree,
             rootSeq: proof.root_seq,
         };
-        new_address_proofs.push(new_address_proof);
+
+            indexed_proofs.push((original_idx, new_address_proof));
+        }
     }
+
+    indexed_proofs.sort_by_key(|(idx, _)| *idx);
+    let new_address_proofs = indexed_proofs.into_iter().map(|(_, proof)| proof).collect();
+
     Ok(new_address_proofs)
 }
 
@@ -190,13 +206,7 @@ pub async fn get_multiple_new_address_proofs_v2(
 ) -> Result<GetMultipleNewAddressProofsResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     let new_address_proofs =
         get_multiple_new_address_proofs_helper(&tx, addresses_with_trees.0, MAX_ADDRESSES, true)

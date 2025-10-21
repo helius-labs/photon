@@ -115,7 +115,7 @@ async fn test_tree_info_batch_retrieval(
     )
     .await;
 
-    // Insert multiple trees with different types and heights
+    // Test trees are pre-populated by populate_test_tree_metadata in setup
     let test_trees = vec![
         (
             "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",

@@ -12,7 +12,7 @@ pub use helpers::{
 };
 
 pub use proof::{
-    get_exclusion_range_with_proof_v1, get_exclusion_range_with_proof_v2,
+    get_exclusion_range_with_proof_v2, get_multiple_exclusion_ranges_with_proofs_v2,
     query_next_smallest_elements,
 };
 
