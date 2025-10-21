@@ -300,7 +300,10 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
     let meta = transaction.meta.unwrap();
     let error = create_tx_error(meta.err.as_ref());
     if let Err(e) = &error {
-        error!("Error parsing transaction error: {}. Error bytes: {:?}", e, meta.err);
+        error!(
+            "Error parsing transaction error: {}. Error bytes: {:?}",
+            e, meta.err
+        );
     }
     let error = error.unwrap();
 
