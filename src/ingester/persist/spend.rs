@@ -6,8 +6,10 @@ use crate::ingester::persist::{
 };
 use crate::migration::Expr;
 use light_event::event::BatchNullifyContext;
-use sea_orm::QueryFilter;
-use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryTrait,
+};
 
 /// 1. Mark the input accounts as spent.
 ///     (From both V1 and V2 (batched) trees)
@@ -71,10 +73,20 @@ pub async fn spend_input_accounts(
 pub async fn spend_input_accounts_batched(
     txn: &DatabaseTransaction,
     accounts: &[BatchNullifyContext],
+    slot: u64,
+    tree_info_cache: &std::collections::HashMap<
+        solana_pubkey::Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
     if accounts.is_empty() {
         return Ok(());
     }
+
+    // Track nullifier counts per tree for event publishing
+    let mut tree_nullifier_counts: std::collections::HashMap<solana_pubkey::Pubkey, usize> =
+        std::collections::HashMap::new();
+
     for account in accounts {
         accounts::Entity::update_many()
             .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
@@ -92,6 +104,41 @@ pub async fn spend_input_accounts_batched(
             )
             .exec(txn)
             .await?;
+
+        if let Some(account_model) = accounts::Entity::find()
+            .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
+            .one(txn)
+            .await?
+        {
+            if let Ok(tree_pubkey) = solana_pubkey::Pubkey::try_from(account_model.tree.as_slice())
+            {
+                *tree_nullifier_counts.entry(tree_pubkey).or_insert(0) += 1;
+            }
+        }
     }
+
+    for (tree, count) in tree_nullifier_counts {
+        if let Some(tree_info) = tree_info_cache.get(&tree) {
+            let queue_size = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree.to_bytes().to_vec()))
+                .filter(accounts::Column::NullifierQueueIndex.is_not_null())
+                .filter(accounts::Column::NullifiedInTree.eq(false))
+                .count(txn)
+                .await
+                .unwrap_or(0) as usize;
+
+            log::debug!(
+                "Publishing NullifierQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+                tree, tree_info.queue, count, queue_size, slot
+            );
+            crate::events::publish(crate::events::IngestionEvent::NullifierQueueInsert {
+                tree,
+                queue: tree_info.queue,
+                count: queue_size,
+                slot,
+            });
+        }
+    }
+
     Ok(())
 }

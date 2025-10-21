@@ -25,7 +25,8 @@ use log::debug;
 use persisted_indexed_merkle_tree::persist_indexed_tree_updates;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
-    EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
+    EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set,
+    Statement,
 };
 use solana_pubkey::{pubkey, Pubkey};
 use solana_signature::Signature;
@@ -97,14 +98,17 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
+    // Extract slot from transactions for event publishing
+    let slot = transactions.iter().next().map(|tx| tx.slot).unwrap_or(0);
+
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
-        insert_addresses_into_queues(txn, chunk).await?;
+        insert_addresses_into_queues(txn, chunk, slot, &tree_info_cache).await?;
     }
 
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
-        append_output_accounts(txn, chunk).await?;
+        append_output_accounts(txn, chunk, slot).await?;
     }
 
     debug!("Persisting spent accounts...");
@@ -116,7 +120,7 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    spend_input_accounts_batched(txn, &batch_nullify_context).await?;
+    spend_input_accounts_batched(txn, &batch_nullify_context, slot, &tree_info_cache).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -179,9 +183,11 @@ pub async fn persist_state_update(
 
     // Process each tree's nodes with the correct height
     for (tree_pubkey, tree_nodes) in nodes_by_tree {
-        let tree_info = tree_info_cache.get(&tree_pubkey).ok_or_else(|| {
-            IngesterError::ParserError(format!("Tree metadata not found for tree {}", tree_pubkey))
-        })?;
+        let tree_info = tree_info_cache.get(&tree_pubkey)
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                tree_pubkey
+            )))?;
         let tree_height = tree_info.height + 1; // +1 for indexed trees
 
         // Process in chunks
@@ -395,6 +401,11 @@ async fn execute_account_update_query_and_update_balances(
 async fn insert_addresses_into_queues(
     txn: &DatabaseTransaction,
     addresses: &[AddressQueueUpdate],
+    slot: u64,
+    tree_info_cache: &std::collections::HashMap<
+        Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
     let mut address_models = Vec::new();
 
@@ -415,12 +426,41 @@ async fn insert_addresses_into_queues(
         .build(txn.get_database_backend());
     txn.execute(query).await?;
 
+    let mut addresses_by_tree: HashMap<Pubkey, usize> = HashMap::new();
+    for address in addresses {
+        if let Ok(tree_pubkey) = Pubkey::try_from(address.tree.to_bytes_vec().as_slice()) {
+            *addresses_by_tree.entry(tree_pubkey).or_insert(0) += 1;
+        }
+    }
+
+    for (tree, count) in addresses_by_tree {
+        if let Some(tree_info) = tree_info_cache.get(&tree) {
+            let queue_size = address_queues::Entity::find()
+                .filter(address_queues::Column::Tree.eq(tree.to_bytes().to_vec()))
+                .count(txn)
+                .await
+                .unwrap_or(0) as usize;
+
+            debug!(
+                "Publishing AddressQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+                tree, tree_info.queue, count, queue_size, slot
+            );
+            crate::events::publish(crate::events::IngestionEvent::AddressQueueInsert {
+                tree,
+                queue: tree_info.queue,
+                count: queue_size,
+                slot,
+            });
+        }
+    }
+
     Ok(())
 }
 
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
     out_accounts: &[AccountWithContext],
+    slot: u64,
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
@@ -481,6 +521,41 @@ async fn append_output_accounts(
             debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;
         }
+    }
+
+    let mut accounts_by_tree_queue: HashMap<(Pubkey, Pubkey), usize> = HashMap::new();
+
+    for account in out_accounts {
+        if account.context.in_output_queue {
+            if let (Ok(tree_pubkey), Ok(queue_pubkey)) = (
+                Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice()),
+                Pubkey::try_from(account.context.queue.to_bytes_vec().as_slice()),
+            ) {
+                *accounts_by_tree_queue
+                    .entry((tree_pubkey, queue_pubkey))
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+
+    for ((tree, queue), count) in accounts_by_tree_queue {
+        let queue_size = accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree.to_bytes().to_vec()))
+            .filter(accounts::Column::InOutputQueue.eq(true))
+            .count(txn)
+            .await
+            .unwrap_or(0) as usize;
+
+        debug!(
+            "Publishing OutputQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+            tree, queue, count, queue_size, slot
+        );
+        crate::events::publish(crate::events::IngestionEvent::OutputQueueInsert {
+            tree,
+            queue,
+            count: queue_size,
+            slot,
+        });
     }
 
     Ok(())
