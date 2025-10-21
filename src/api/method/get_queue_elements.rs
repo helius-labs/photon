@@ -1,7 +1,7 @@
 use light_compressed_account::QueueType;
 use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 
 use serde::{Deserialize, Serialize};
@@ -68,13 +68,7 @@ pub async fn get_queue_elements(
     let limit = request.limit;
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     let mut query_condition =
         Condition::all().add(accounts::Column::Tree.eq(request.tree.to_vec()));

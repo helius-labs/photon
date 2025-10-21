@@ -1,4 +1,4 @@
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -51,7 +51,7 @@ pub struct GetBatchAddressUpdateInfoResponseValue {
     pub account_hash: Hash,
 }
 
-const MAX_ADDRESSES: usize = 500;
+const MAX_ADDRESSES: usize = 4000;
 
 pub async fn get_batch_address_update_info(
     conn: &DatabaseConnection,
@@ -74,13 +74,7 @@ pub async fn get_batch_address_update_info(
 
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     // 1. Get batch_start_index
     let max_index_stmt = Statement::from_string(

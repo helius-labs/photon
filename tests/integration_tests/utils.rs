@@ -125,8 +125,7 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
         let tree_pubkey = tree_str.parse::<Pubkey>().unwrap();
         let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
 
-        // Only insert if it doesn't already exist
-        let _ = upsert_tree_metadata(
+        upsert_tree_metadata(
             &txn,
             tree_pubkey,
             root_history_capacity as i64,
@@ -136,10 +135,41 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
             0, // next_index
             queue_pubkey,
         )
-        .await;
+        .await
+        .unwrap_or_else(|e| {
+            panic!("Failed to upsert tree metadata for {}: {:?}", tree_str, e);
+        });
     }
 
     txn.commit().await.unwrap();
+}
+
+/// Helper for tests to upsert tree metadata with immediate visibility.
+/// Wraps the upsert in a transaction and commits it.
+pub async fn upsert_tree_metadata_for_test(
+    db: &DatabaseConnection,
+    tree_pubkey: Pubkey,
+    root_history_capacity: i64,
+    height: i32,
+    tree_type: i32,
+    sequence_number: u64,
+    next_index: u64,
+    queue_pubkey: Pubkey,
+) -> Result<(), photon_indexer::api::error::PhotonApiError> {
+    let txn = db.begin().await.unwrap();
+    upsert_tree_metadata(
+        &txn,
+        tree_pubkey,
+        root_history_capacity,
+        height,
+        tree_type,
+        sequence_number,
+        next_index,
+        queue_pubkey,
+    )
+    .await?;
+    txn.commit().await.unwrap();
+    Ok(())
 }
 
 async fn run_one_time_setup(db: &DatabaseConnection) {
@@ -180,6 +210,9 @@ pub struct TestSetupOptions {
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
+    // Skip transaction isolation level settings in tests to avoid read-after-write visibility issues
+    env::set_var("PHOTON_SKIP_ISOLATION_LEVEL", "true");
+
     let db_conn: Arc<DatabaseConnection> = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
             let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
@@ -239,11 +272,20 @@ pub async fn setup(name: String, database_backend: DatabaseBackend) -> TestSetup
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
     let options: PgConnectOptions = database_url.parse().unwrap();
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .min_connections(1)
         .connect_with(options)
         .await
-        .unwrap()
+        .unwrap();
+
+    // Set default isolation level to READ COMMITTED for all connections in the pool
+    // This ensures each statement sees the latest committed data
+    sqlx::query("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    pool
 }
 
 pub async fn setup_sqllite_pool() -> SqlitePool {

@@ -10,8 +10,7 @@ use crate::dao::generated::{accounts, state_trees};
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use jsonrpsee_core::Serialize;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
-    Statement, TransactionTrait,
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -43,13 +42,7 @@ pub async fn get_multiple_compressed_account_proofs_v2(
     let tx = conn.begin().await?;
 
     // Set transaction isolation level for PostgreSQL
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     // Find accounts for all hashes
     let accounts = accounts::Entity::find()

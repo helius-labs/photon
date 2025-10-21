@@ -8,7 +8,7 @@ use super::{super::error::PhotonApiError, utils::PAGE_LIMIT};
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -37,13 +37,7 @@ pub async fn get_multiple_compressed_account_proofs(
     }
     let context = Context::extract(conn).await?;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
     let proofs = get_multiple_compressed_leaf_proofs(&tx, request).await?;
     tx.commit().await?;
     Ok(GetMultipleCompressedAccountProofsResponse {

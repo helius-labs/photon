@@ -1,13 +1,12 @@
 use function_name::named;
 use photon_indexer::dao::generated::{prelude::*, tree_metadata};
 use photon_indexer::ingester::parser::tree_info::TreeInfo;
-use photon_indexer::monitor::tree_metadata_sync::upsert_tree_metadata;
 use sea_orm::{ColumnTrait, DatabaseBackend, EntityTrait, QueryFilter};
 use solana_pubkey::Pubkey;
 use solana_sdk::pubkey::Pubkey as SdkPubkey;
 
 use light_compressed_account::TreeType;
-
+use serial_test::serial;
 use crate::utils::*;
 
 // Helper function to convert solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
@@ -19,6 +18,7 @@ fn to_sdk_pubkey(pubkey: &Pubkey) -> SdkPubkey {
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_upsert_and_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -39,15 +39,16 @@ async fn test_tree_metadata_upsert_and_retrieval(
         .parse::<Pubkey>()
         .unwrap();
 
-    // Test data
+    // Test data - tree is pre-populated by populate_test_tree_metadata
+    // Update it with new values to test upsert behavior
     let tree_type = TreeType::StateV1;
     let height = 26;
     let root_history_capacity = 2400;
     let sequence_number = 42;
     let next_index = 100;
 
-    // Insert tree metadata
-    upsert_tree_metadata(
+    // Update tree metadata with new sequence and index
+    upsert_tree_metadata_for_test(
         setup.db_conn.as_ref(),
         to_sdk_pubkey(&tree_pubkey),
         root_history_capacity,
@@ -90,6 +91,7 @@ async fn test_tree_metadata_upsert_and_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -103,7 +105,7 @@ async fn test_tree_info_batch_retrieval(
     )
     .await;
 
-    // Insert multiple trees with different types and heights
+    // Test trees are pre-populated by populate_test_tree_metadata in setup
     let test_trees = vec![
         (
             "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
@@ -131,25 +133,10 @@ async fn test_tree_info_batch_retrieval(
         ),
     ];
 
-    let mut tree_pubkeys = Vec::new();
-    for (tree_str, queue_str, tree_type, height) in &test_trees {
-        let tree_pubkey = tree_str.parse::<Pubkey>().unwrap();
-        let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
-        tree_pubkeys.push(tree_pubkey);
-
-        upsert_tree_metadata(
-            setup.db_conn.as_ref(),
-            to_sdk_pubkey(&tree_pubkey),
-            2400,
-            *height,
-            *tree_type as i32,
-            0,
-            0,
-            to_sdk_pubkey(&queue_pubkey),
-        )
-        .await
-        .unwrap();
-    }
+    let tree_pubkeys: Vec<Pubkey> = test_trees
+        .iter()
+        .map(|(tree_str, _, _, _)| tree_str.parse::<Pubkey>().unwrap())
+        .collect();
 
     // Test batch retrieval
     let tree_info_cache = TreeInfo::get_tree_info_batch(setup.db_conn.as_ref(), &tree_pubkeys)
@@ -179,6 +166,7 @@ async fn test_tree_info_batch_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_update(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -199,25 +187,12 @@ async fn test_tree_metadata_update(
         .parse::<Pubkey>()
         .unwrap();
 
-    // Insert initial metadata
-    upsert_tree_metadata(
-        setup.db_conn.as_ref(),
-        to_sdk_pubkey(&tree_pubkey),
-        2400,
-        26,
-        TreeType::StateV1 as i32,
-        0,
-        0,
-        to_sdk_pubkey(&queue_pubkey),
-    )
-    .await
-    .unwrap();
-
-    // Update with new sequence number and next index
+    // Tree is pre-populated by populate_test_tree_metadata with sequence=0, next_index=0
+    // Update with new sequence number and next index to test upsert behavior
     let new_sequence = 100;
     let new_next_index = 500;
 
-    upsert_tree_metadata(
+    upsert_tree_metadata_for_test(
         setup.db_conn.as_ref(),
         to_sdk_pubkey(&tree_pubkey),
         2400,
@@ -247,6 +222,7 @@ async fn test_tree_metadata_update(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_missing_tree(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -275,6 +251,7 @@ async fn test_tree_info_missing_tree(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_empty(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -300,6 +277,7 @@ async fn test_tree_info_batch_empty(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_all_tree_types(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -327,7 +305,7 @@ async fn test_all_tree_types(
         let tree_pubkey = Pubkey::from(tree_bytes);
         let queue_pubkey = Pubkey::from(queue_bytes);
 
-        upsert_tree_metadata(
+        upsert_tree_metadata_for_test(
             setup.db_conn.as_ref(),
             to_sdk_pubkey(&tree_pubkey),
             2400,

@@ -1,9 +1,6 @@
 use borsh::BorshDeserialize;
 use log::{debug, info, warn};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -254,14 +251,8 @@ where
 {
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
 
-    // Check if exists
-    let existing = TreeMetadata::find()
-        .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes.clone()))
-        .one(db)
-        .await?;
-
     let model = tree_metadata::ActiveModel {
-        tree_pubkey: Set(tree_bytes),
+        tree_pubkey: Set(tree_bytes.clone()),
         queue_pubkey: Set(queue_pubkey.to_bytes().to_vec()),
         tree_type: Set(tree_type),
         height: Set(height),
@@ -271,13 +262,24 @@ where
         last_synced_slot: Set(0),
     };
 
-    if existing.is_some() {
-        model.update(db).await?;
-        debug!("Updated tree metadata for {}", tree_pubkey);
-    } else {
-        model.insert(db).await?;
-        debug!("Inserted new tree metadata for {}", tree_pubkey);
-    }
+    TreeMetadata::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(tree_metadata::Column::TreePubkey)
+                .update_columns([
+                    tree_metadata::Column::QueuePubkey,
+                    tree_metadata::Column::TreeType,
+                    tree_metadata::Column::Height,
+                    tree_metadata::Column::RootHistoryCapacity,
+                    tree_metadata::Column::SequenceNumber,
+                    tree_metadata::Column::NextIndex,
+                    tree_metadata::Column::LastSyncedSlot,
+                ])
+                .to_owned(),
+        )
+        .exec(db)
+        .await?;
+
+    debug!("Upserted tree metadata for {}", tree_pubkey);
 
     Ok(())
 }

@@ -14,8 +14,8 @@ use crate::{
 use borsh::BorshDeserialize;
 use itertools::Itertools;
 use jsonrpsee_core::Serialize;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
-use sea_orm::{DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use utoipa::ToSchema;
@@ -139,13 +139,7 @@ pub async fn get_validity_proof_v2(
     let v2_context = Context::extract(conn).await?;
 
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     let mut accounts_for_prove_by_index_inputs: Vec<Option<AccountProofInputs>> =
         vec![None; request.hashes.len()];
