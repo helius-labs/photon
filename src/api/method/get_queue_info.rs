@@ -98,7 +98,6 @@ async fn fetch_queue_sizes(
     Ok(result)
 }
 
-
 pub async fn get_queue_info(
     db: &DatabaseConnection,
     request: GetQueueInfoRequest,

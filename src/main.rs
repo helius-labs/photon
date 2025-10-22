@@ -43,6 +43,10 @@ struct Args {
     #[arg(short, long, default_value_t = 8784)]
     port: u16,
 
+    /// Port for the gRPC API server (optional, if not provided gRPC server won't start)
+    #[arg(long)]
+    grpc_port: Option<u16>,
+
     /// URL of the RPC server
     #[arg(short, long, default_value = "http://127.0.0.1:8899")]
     rpc_url: String,
@@ -363,6 +367,19 @@ async fn main() {
         )
     };
 
+    let grpc_handle = if let Some(grpc_port) = args.grpc_port {
+        info!("Starting gRPC server with port {}...", grpc_port);
+        Some(tokio::spawn(async move {
+            if let Err(e) =
+                photon_indexer::grpc::server::run_grpc_server(db_conn.clone(), grpc_port).await
+            {
+                error!("gRPC server error: {}", e);
+            }
+        }))
+    } else {
+        None
+    };
+
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             if let Some(indexer_handle) = indexer_handle {
@@ -375,6 +392,14 @@ async fn main() {
             if let Some(api_handler) = &api_handler {
                 info!("Shutting down API server...");
                 api_handler.stop().unwrap();
+            }
+
+            if let Some(grpc_handle) = grpc_handle {
+                info!("Shutting down gRPC server...");
+                grpc_handle.abort();
+                grpc_handle
+                    .await
+                    .expect_err("gRPC server should have been aborted");
             }
 
             if let Some(monitor_handle) = monitor_handle {
