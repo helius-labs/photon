@@ -10,7 +10,6 @@ use solana_sdk::pubkey::Pubkey as SdkPubkey;
 use crate::utils::*;
 use light_compressed_account::TreeType;
 use serial_test::serial;
-
 // Helper function to convert solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
 fn to_sdk_pubkey(pubkey: &Pubkey) -> SdkPubkey {
     SdkPubkey::from(pubkey.to_bytes())
