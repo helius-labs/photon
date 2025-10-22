@@ -81,6 +81,9 @@ use crate::api::method::get_multiple_compressed_account_proofs::{
 use crate::api::method::get_queue_elements::{
     get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
 };
+use crate::api::method::get_queue_info::{
+    get_queue_info, GetQueueInfoRequest, GetQueueInfoResponse,
+};
 use crate::api::method::get_validity_proof::{
     get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
     GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
@@ -272,6 +275,13 @@ impl PhotonApi {
         request: GetQueueElementsRequest,
     ) -> Result<GetQueueElementsResponse, PhotonApiError> {
         get_queue_elements(self.db_conn.as_ref(), request).await
+    }
+
+    pub async fn get_queue_info(
+        &self,
+        request: GetQueueInfoRequest,
+    ) -> Result<GetQueueInfoResponse, PhotonApiError> {
+        get_queue_info(self.db_conn.as_ref(), request).await
     }
 
     pub async fn get_compressed_accounts_by_owner(
