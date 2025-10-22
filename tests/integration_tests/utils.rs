@@ -135,7 +135,7 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
             next_index: 0,
             owner: Pubkey::from(owner.to_bytes()),
         };
-        let _ = upsert_tree_metadata(&txn, tree_pubkey, tree_type, &data).await;
+        let _ = upsert_tree_metadata(&txn, tree_pubkey, tree_type, &data, 0).await;
     }
 
     txn.commit().await.unwrap();

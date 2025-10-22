@@ -10,9 +10,7 @@ use crate::ingester::persist::{
     MerkleProofWithContext,
 };
 use jsonrpsee_core::Serialize;
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use serde::Deserialize;
 use utoipa::ToSchema;
 

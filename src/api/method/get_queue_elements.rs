@@ -1,7 +1,7 @@
 use light_compressed_account::QueueType;
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, TransactionTrait,
 };
 
 use serde::{Deserialize, Serialize};

@@ -1287,8 +1287,7 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     .await
     .unwrap();
 
-    let tree =
-        SerializablePubkey::try_from("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2").unwrap();
+    let tree = SerializablePubkey::try_from("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2").unwrap();
 
     let leaf_nodes_1 = vec![
         LeafNode {

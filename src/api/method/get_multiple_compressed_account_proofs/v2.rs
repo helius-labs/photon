@@ -9,9 +9,7 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::{accounts, state_trees};
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use jsonrpsee_core::Serialize;
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use serde::Deserialize;
 use std::collections::HashMap;
 use utoipa::ToSchema;
