@@ -231,7 +231,6 @@ async fn load_accounts_with_infinite_retry(
 }
 
 async fn validate_tree_roots(rpc_client: &RpcClient, db_roots: Vec<(Pubkey, Hash)>) {
-    let mut root_validation_errors = 0;
     for chunk in db_roots.chunks(CHUNK_SIZE) {
         let pubkeys = chunk.iter().map(|(pubkey, _)| *pubkey).collect();
         let accounts = load_accounts_with_infinite_retry(rpc_client, pubkeys).await;
