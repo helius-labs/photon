@@ -224,18 +224,16 @@ async fn main() {
 
     // Load snapshot if provided (either from local directory or GCS)
     let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
-        (Some(snapshot_dir), None) => {
-            Some(Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir)))
-        }
-        (None, Some(gcs_bucket)) => {
-            Some(Arc::new(
-                DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
-                    gcs_bucket,
-                    args.gcs_prefix.clone(),
-                )
-                .await,
-            ))
-        }
+        (Some(snapshot_dir), None) => Some(Arc::new(DirectoryAdapter::from_local_directory(
+            snapshot_dir,
+        ))),
+        (None, Some(gcs_bucket)) => Some(Arc::new(
+            DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
+                gcs_bucket,
+                args.gcs_prefix.clone(),
+            )
+            .await,
+        )),
         (None, None) => None,
         (Some(_), Some(_)) => {
             error!("Cannot specify both snapshot_dir and gcs_bucket");
