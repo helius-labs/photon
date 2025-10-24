@@ -13,6 +13,7 @@ use crate::{
 use itertools::Itertools;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use persisted_batch_event::persist_batch_events;
+use std::collections::HashSet;
 
 use crate::common::typedefs::account::AccountWithContext;
 use crate::dao::generated::address_queues;
@@ -89,27 +90,33 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
-    let mut all_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
-        indexed_merkle_tree_updates
-            .keys()
-            .map(|(pubkey, _)| *pubkey)
-            .collect();
+    let mut all_tree_pubkeys: HashSet<Pubkey> = indexed_merkle_tree_updates
+        .keys()
+        .map(|(pubkey, _)| *pubkey)
+        .collect();
 
     for account in out_accounts.iter() {
-        if account.context.tree_type == TreeType::StateV1 as u16 {
-            if let Ok(tree_pubkey) =
-                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
-            {
-                all_tree_pubkeys.insert(tree_pubkey);
-            }
+        if let Ok(tree_pubkey) =
+            solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
+        {
+            all_tree_pubkeys.insert(tree_pubkey);
         }
     }
+
     for leaf_nullification in leaf_nullifications.iter() {
         all_tree_pubkeys.insert(leaf_nullification.tree);
     }
-    // Also collect trees from batch merkle tree events
+
     for tree_pubkey in batch_merkle_tree_events.keys() {
         all_tree_pubkeys.insert(solana_pubkey::Pubkey::from(*tree_pubkey));
+    }
+
+    for address in batch_new_addresses.iter() {
+        if let Ok(tree_pubkey) =
+            solana_pubkey::Pubkey::try_from(address.tree.to_bytes_vec().as_slice())
+        {
+            all_tree_pubkeys.insert(tree_pubkey);
+        }
     }
 
     let tree_info_cache = if !all_tree_pubkeys.is_empty() {
@@ -120,6 +127,95 @@ pub async fn persist_state_update(
     } else {
         std::collections::HashMap::new()
     };
+
+    let known_trees: std::collections::HashSet<_> = tree_info_cache.keys().cloned().collect();
+
+    let mut kept_account_hashes = std::collections::HashSet::new();
+
+    let out_accounts: Vec<_> = out_accounts
+        .into_iter()
+        .filter(|account| {
+            if let Ok(tree_pubkey) =
+                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
+            {
+                if !known_trees.contains(&tree_pubkey) {
+                    debug!("Skipping output account for unknown tree {}", tree_pubkey);
+                    return false;
+                }
+            }
+            kept_account_hashes.insert(account.account.hash.clone());
+            true
+        })
+        .collect();
+
+    let leaf_nullifications: Vec<_> = leaf_nullifications
+        .into_iter()
+        .filter(|nullification| {
+            if !known_trees.contains(&nullification.tree) {
+                debug!(
+                    "Skipping leaf nullification for unknown tree {}",
+                    nullification.tree
+                );
+                return false;
+            }
+            true
+        })
+        .collect();
+
+    let indexed_merkle_tree_updates: std::collections::HashMap<_, _> = indexed_merkle_tree_updates
+        .into_iter()
+        .filter(|((tree_pubkey, _), _)| {
+            if !known_trees.contains(tree_pubkey) {
+                debug!(
+                    "Skipping indexed merkle tree update for unknown tree {}",
+                    tree_pubkey
+                );
+                return false;
+            }
+            true
+        })
+        .collect();
+
+    let batch_merkle_tree_events: crate::ingester::parser::merkle_tree_events_parser::BatchMerkleTreeEvents = batch_merkle_tree_events
+        .into_iter()
+        .filter(|(tree_bytes, _)| {
+            let tree_pubkey = solana_pubkey::Pubkey::from(*tree_bytes);
+            if !known_trees.contains(&tree_pubkey) {
+                debug!("Skipping batch events for unknown tree {}", bs58::encode(tree_bytes).into_string());
+                return false;
+            }
+            true
+        })
+        .collect();
+
+    let batch_new_addresses: Vec<_> = batch_new_addresses
+        .into_iter()
+        .filter(|address| {
+            if let Ok(tree_pubkey) =
+                solana_pubkey::Pubkey::try_from(address.tree.to_bytes_vec().as_slice())
+            {
+                if !known_trees.contains(&tree_pubkey) {
+                    debug!("Skipping address for unknown tree {}", tree_pubkey);
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+
+    let account_transactions: std::collections::HashSet<_> = account_transactions
+        .into_iter()
+        .filter(|account_tx| {
+            if !kept_account_hashes.contains(&account_tx.hash) {
+                debug!(
+                    "Skipping account transaction for filtered account {}",
+                    account_tx.hash
+                );
+                return false;
+            }
+            true
+        })
+        .collect();
 
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
@@ -203,11 +299,9 @@ pub async fn persist_state_update(
 
     // Process each tree's nodes with the correct height
     for (tree_pubkey, tree_nodes) in nodes_by_tree {
-        let tree_info = tree_info_cache.get(&tree_pubkey)
-            .ok_or_else(|| IngesterError::ParserError(format!(
-                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
-                tree_pubkey
-            )))?;
+        let tree_info = tree_info_cache.get(&tree_pubkey).ok_or_else(|| {
+            IngesterError::ParserError(format!("Tree metadata not found for tree {}", tree_pubkey))
+        })?;
         let tree_height = tree_info.height + 1; // +1 for indexed trees
 
         // Process in chunks

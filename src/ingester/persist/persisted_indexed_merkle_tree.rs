@@ -177,11 +177,9 @@ pub async fn persist_indexed_tree_updates(
 
     let mut trees: HashMap<Pubkey, (TreeType, u32)> = HashMap::new();
     for tree in unique_trees {
-        let tree_info = tree_info_cache.get(&tree)
-            .ok_or_else(|| IngesterError::ParserError(format!(
-                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
-                tree
-            )))?;
+        let tree_info = tree_info_cache.get(&tree).ok_or_else(|| {
+            IngesterError::ParserError(format!("Tree metadata not found for tree {}", tree))
+        })?;
         trees.insert(tree, (tree_info.tree_type, tree_info.height));
     }
 

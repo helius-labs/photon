@@ -38,6 +38,11 @@ pub fn set_compression_program_id(program_id_str: &str) -> Result<(), String> {
     }
 }
 
+// Expected tree owner - only index trees owned by this pubkey (filters out external trees)
+// Set to None to disable filtering and index all trees
+pub const EXPECTED_TREE_OWNER: Option<Pubkey> =
+    Some(pubkey!("24rt4RgeyjUCWGS2eF7L7gyNMuz6JWdqYpAvb1KRoHxs"));
+
 const SKIP_UNKNOWN_TREES: bool = true;
 
 pub async fn parse_transaction<T>(

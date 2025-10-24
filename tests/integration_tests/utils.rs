@@ -15,7 +15,7 @@ use photon_indexer::{
         typedefs::{account::Account, token_data::TokenData},
     },
     ingester::{
-        parser::{parse_transaction, state_update::StateUpdate},
+        parser::{parse_transaction, state_update::StateUpdate, EXPECTED_TREE_OWNER},
         persist::persist_state_update,
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
@@ -29,7 +29,7 @@ use sea_orm::{
 use light_compressed_account::TreeType;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
-use photon_indexer::monitor::tree_metadata_sync::upsert_tree_metadata;
+use photon_indexer::monitor::tree_metadata_sync::{upsert_tree_metadata, TreeAccountData};
 pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
@@ -126,17 +126,16 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
         let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
 
         // Only insert if it doesn't already exist
-        let _ = upsert_tree_metadata(
-            &txn,
-            tree_pubkey,
-            root_history_capacity as i64,
-            height,
-            tree_type as i32,
-            0, // sequence_number
-            0, // next_index
+        let owner = EXPECTED_TREE_OWNER.expect("EXPECTED_TREE_OWNER must be set for tests");
+        let data = TreeAccountData {
             queue_pubkey,
-        )
-        .await;
+            root_history_capacity: root_history_capacity as usize,
+            height: height as u32,
+            sequence_number: 0,
+            next_index: 0,
+            owner: Pubkey::from(owner.to_bytes()),
+        };
+        let _ = upsert_tree_metadata(&txn, tree_pubkey, tree_type, &data).await;
     }
 
     txn.commit().await.unwrap();
