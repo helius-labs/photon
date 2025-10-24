@@ -7,9 +7,9 @@ use sea_orm::{ColumnTrait, DatabaseBackend, EntityTrait, QueryFilter};
 use solana_pubkey::Pubkey;
 use solana_sdk::pubkey::Pubkey as SdkPubkey;
 
-use light_compressed_account::TreeType;
-
 use crate::utils::*;
+use light_compressed_account::TreeType;
+use serial_test::serial;
 
 // Helper function to convert solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
 fn to_sdk_pubkey(pubkey: &Pubkey) -> SdkPubkey {
@@ -26,6 +26,7 @@ fn get_test_owner() -> SdkPubkey {
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_upsert_and_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -101,6 +102,7 @@ async fn test_tree_metadata_upsert_and_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -194,6 +196,7 @@ async fn test_tree_info_batch_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_update(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -270,6 +273,7 @@ async fn test_tree_metadata_update(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_missing_tree(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -298,6 +302,7 @@ async fn test_tree_info_missing_tree(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_empty(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -323,6 +328,7 @@ async fn test_tree_info_batch_empty(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_all_tree_types(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
