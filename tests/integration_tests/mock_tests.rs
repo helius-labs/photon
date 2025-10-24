@@ -1286,8 +1286,8 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
     )
     .await
     .unwrap();
-    let tree =
-        SerializablePubkey::try_from("C83cpRN6oaafjNgMQJvaYgAz592EP5wunKvbokeTKPLn").unwrap();
+
+    let tree = SerializablePubkey::try_from("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2").unwrap();
 
     let leaf_nodes_1 = vec![
         LeafNode {
@@ -1570,6 +1570,7 @@ async fn test_persist_and_verify(
 
         let state_tree_models = state_trees::Entity::find()
             .filter(state_trees::Column::Level.eq(0))
+            .filter(state_trees::Column::Tree.eq(tree.to_bytes_vec()))
             .all(setup.db_conn.as_ref())
             .await
             .unwrap();
@@ -1589,7 +1590,9 @@ async fn test_persist_and_verify(
             "hash_index_and_seq_tuples: {:#?}",
             hash_index_and_seq_tuples
         );
+
         leaf_nodes = de_duplicated_leaf_nodes;
+
         let proofs = get_multiple_compressed_leaf_proofs(
             &setup.db_conn.begin().await.unwrap(),
             leaf_nodes

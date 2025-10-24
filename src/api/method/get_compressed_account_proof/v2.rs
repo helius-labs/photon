@@ -10,10 +10,7 @@ use crate::ingester::persist::{
     MerkleProofWithContext,
 };
 use jsonrpsee_core::Serialize;
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
-    Statement, TransactionTrait,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -63,13 +60,7 @@ pub async fn get_compressed_account_proof_v2(
     let context = Context::extract(conn).await?;
     let hash = request.hash;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     let account = accounts::Entity::find()
         .filter(accounts::Column::Hash.eq(hash.to_vec()))

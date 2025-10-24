@@ -1,9 +1,6 @@
 use borsh::BorshDeserialize;
 use log::{debug, info, warn};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -51,6 +48,11 @@ pub async fn sync_tree_metadata(
     let program_id = Pubkey::from(compression_program.to_bytes());
     info!("Fetching all accounts for program: {}", program_id);
 
+    let current_slot = rpc_client.get_slot().await.map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("Failed to fetch current slot: {}", e))
+    })?;
+    info!("Current slot: {}", current_slot);
+
     let accounts = rpc_client
         .get_program_accounts(&program_id)
         .await
@@ -64,7 +66,7 @@ pub async fn sync_tree_metadata(
     let mut failed_count = 0;
 
     for (pubkey, mut account) in accounts {
-        match process_tree_account(db, pubkey, &mut account).await {
+        match process_tree_account(db, pubkey, &mut account, current_slot).await {
             Ok(true) => synced_count += 1,
             Ok(false) => {} // Not a tree account, skip
             Err(e) => {
@@ -86,6 +88,7 @@ pub async fn process_tree_account(
     db: &DatabaseConnection,
     pubkey: Pubkey,
     account: &mut Account,
+    slot: u64,
 ) -> Result<bool, PhotonApiError> {
     if let Ok(data) = process_v1_state_account(account) {
         if !check_tree_owner(&data.owner) {
@@ -96,7 +99,7 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        upsert_tree_metadata(db, pubkey, TreeType::StateV1, &data).await?;
+        upsert_tree_metadata(db, pubkey, TreeType::StateV1, &data, slot).await?;
         info!(
             "Synced V1 state tree {} with height {}, root_history_capacity {}, seq {}, next_idx {}",
             pubkey, data.height, data.root_history_capacity, data.sequence_number, data.next_index
@@ -113,7 +116,7 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        upsert_tree_metadata(db, pubkey, TreeType::AddressV1, &data).await?;
+        upsert_tree_metadata(db, pubkey, TreeType::AddressV1, &data, slot).await?;
         info!("Synced V1 address tree {} with height {}, root_history_capacity {}, seq {}, next_idx {}",
             pubkey, data.height, data.root_history_capacity, data.sequence_number, data.next_index);
         return Ok(true);
@@ -141,7 +144,7 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        upsert_tree_metadata(db, pubkey, TreeType::StateV2, &data).await?;
+        upsert_tree_metadata(db, pubkey, TreeType::StateV2, &data, slot).await?;
 
         info!(
             "Synced V2 state tree {} with root_history_capacity {}",
@@ -171,7 +174,7 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        upsert_tree_metadata(db, pubkey, TreeType::AddressV2, &data).await?;
+        upsert_tree_metadata(db, pubkey, TreeType::AddressV2, &data, slot).await?;
 
         info!(
             "Synced V2 address tree {} with root_history_capacity {}",
@@ -254,17 +257,12 @@ pub async fn upsert_tree_metadata<C>(
     tree_pubkey: Pubkey,
     tree_type: TreeType,
     data: &TreeAccountData,
+    slot: u64,
 ) -> Result<(), PhotonApiError>
 where
     C: ConnectionTrait,
 {
     let tree_bytes = tree_pubkey.to_bytes().to_vec();
-
-    // Check if exists
-    let existing = TreeMetadata::find()
-        .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes.clone()))
-        .one(db)
-        .await?;
 
     let model = tree_metadata::ActiveModel {
         tree_pubkey: Set(tree_bytes),
@@ -274,16 +272,23 @@ where
         root_history_capacity: Set(data.root_history_capacity as i64),
         sequence_number: Set(data.sequence_number as i64),
         next_index: Set(data.next_index as i64),
-        last_synced_slot: Set(0),
+        last_synced_slot: Set(slot as i64),
     };
 
-    if existing.is_some() {
-        model.update(db).await?;
-        debug!("Updated tree metadata for {}", tree_pubkey);
-    } else {
-        model.insert(db).await?;
-        debug!("Inserted new tree metadata for {}", tree_pubkey);
-    }
+    TreeMetadata::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(tree_metadata::Column::TreePubkey)
+                .update_columns([
+                    tree_metadata::Column::SequenceNumber,
+                    tree_metadata::Column::NextIndex,
+                    tree_metadata::Column::LastSyncedSlot,
+                ])
+                .to_owned(),
+        )
+        .exec(db)
+        .await?;
+
+    debug!("Upserted tree metadata for {}", tree_pubkey);
 
     Ok(())
 }

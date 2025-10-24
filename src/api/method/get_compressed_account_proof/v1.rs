@@ -4,7 +4,7 @@ use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::persist::{get_multiple_compressed_leaf_proofs, MerkleProofWithContext};
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, TransactionTrait};
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -47,13 +47,7 @@ pub async fn get_compressed_account_proof(
     let context = Context::extract(conn).await?;
     let hash = request.hash;
     let tx = conn.begin().await?;
-    if tx.get_database_backend() == DatabaseBackend::Postgres {
-        tx.execute(Statement::from_string(
-            tx.get_database_backend(),
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;".to_string(),
-        ))
-        .await?;
-    }
+    crate::api::set_transaction_isolation_if_needed(&tx).await?;
     let res = get_multiple_compressed_leaf_proofs(&tx, vec![hash])
         .await?
         .into_iter()

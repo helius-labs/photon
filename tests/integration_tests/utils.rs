@@ -135,7 +135,7 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
             next_index: 0,
             owner: Pubkey::from(owner.to_bytes()),
         };
-        let _ = upsert_tree_metadata(&txn, tree_pubkey, tree_type, &data).await;
+        let _ = upsert_tree_metadata(&txn, tree_pubkey, tree_type, &data, 0).await;
     }
 
     txn.commit().await.unwrap();
@@ -179,6 +179,9 @@ pub struct TestSetupOptions {
 }
 
 pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSetup {
+    // Skip transaction isolation level settings in tests to avoid read-after-write visibility issues
+    env::set_var("PHOTON_SKIP_ISOLATION_LEVEL", "true");
+
     let db_conn: Arc<DatabaseConnection> = Arc::new(match opts.db_backend {
         DatabaseBackend::Postgres => {
             let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");

@@ -67,6 +67,7 @@ async fn test_tree_metadata_upsert_and_retrieval(
         to_sdk_pubkey(&tree_pubkey),
         tree_type,
         &data,
+        0, // slot
     )
     .await
     .unwrap();
@@ -115,7 +116,7 @@ async fn test_tree_info_batch_retrieval(
     )
     .await;
 
-    // Insert multiple trees with different types and heights
+    // Test trees are pre-populated by populate_test_tree_metadata in setup
     let test_trees = vec![
         (
             "smt1NamzXdq4AMqS2fS2F1i5KTYPZRhoHgWx38d8WsT",
@@ -162,6 +163,7 @@ async fn test_tree_info_batch_retrieval(
             to_sdk_pubkey(&tree_pubkey),
             *tree_type,
             &data,
+            0,
         )
         .await
         .unwrap();
@@ -230,6 +232,7 @@ async fn test_tree_metadata_update(
         to_sdk_pubkey(&tree_pubkey),
         TreeType::StateV1,
         &data,
+        0,
     )
     .await
     .unwrap();
@@ -251,6 +254,7 @@ async fn test_tree_metadata_update(
         to_sdk_pubkey(&tree_pubkey),
         TreeType::StateV1,
         &data_updated,
+        0, // slot
     )
     .await
     .unwrap();
@@ -368,6 +372,7 @@ async fn test_all_tree_types(
             to_sdk_pubkey(&tree_pubkey),
             *tree_type,
             &data,
+            0, // slot
         )
         .await
         .unwrap();

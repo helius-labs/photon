@@ -6,8 +6,8 @@ use crate::dao::generated::indexed_trees;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::{
-    compute_hash_by_tree_type, compute_range_node_hash_v1, get_top_element,
-    get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
+    compute_hash_by_tree_type, get_top_element, get_zeroeth_exclusion_range,
+    get_zeroeth_exclusion_range_v1,
 };
 use crate::ingester::persist::persisted_state_tree::ZERO_BYTES;
 use crate::ingester::persist::{
@@ -16,7 +16,7 @@ use crate::ingester::persist::{
 };
 use light_compressed_account::TreeType;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, Statement, TransactionTrait};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub async fn get_exclusion_range_with_proof_v2(
     txn: &DatabaseTransaction,
@@ -172,72 +172,6 @@ fn proof_for_empty_tree_with_seq(
     Ok((zeroeth_element, merkle_proof))
 }
 
-pub async fn get_exclusion_range_with_proof_v1(
-    txn: &DatabaseTransaction,
-    tree: Vec<u8>,
-    tree_height: u32,
-    value: Vec<u8>,
-) -> Result<(indexed_trees::Model, MerkleProofWithContext), PhotonApiError> {
-    let btree = query_next_smallest_elements(txn, vec![value.clone()], tree.clone())
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to query next smallest elements: {e}"))
-        })?;
-
-    if btree.is_empty() {
-        return proof_for_empty_tree(txn, tree, tree_height).await;
-    }
-
-    let range_node = btree.values().next().ok_or(PhotonApiError::RecordNotFound(
-        "No range proof found".to_string(),
-    ))?;
-    let hash = compute_range_node_hash_v1(range_node)
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}")))?;
-
-    let leaf_node = LeafNode {
-        tree: SerializablePubkey::try_from(range_node.tree.clone()).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {e}"))
-        })?,
-        leaf_index: range_node.leaf_index as u32,
-        hash,
-        seq: range_node.seq.map(|x| x as u32),
-    };
-    let node_index = leaf_node.node_index(tree_height);
-
-    let leaf_proofs: Vec<MerkleProofWithContext> =
-        get_multiple_compressed_leaf_proofs_from_full_leaf_info(txn, vec![(leaf_node, node_index)], tree_height)
-            .await
-            .map_err(|proof_error| {
-                let tree_pubkey = match SerializablePubkey::try_from(range_node.tree.clone()) {
-                    Ok(pubkey) => pubkey,
-                    Err(e) => {
-                        log::error!("Failed to serialize tree pubkey: {e}");
-                        return proof_error;
-                    }
-                };
-                let value_pubkey = match SerializablePubkey::try_from(range_node.value.clone()) {
-                    Ok(pubkey) => pubkey,
-                    Err(e) => {
-                        log::error!("Failed to serialize value pubkey: {e}");
-                        return proof_error;
-                    }
-                };
-                log::error!(
-                    "Failed to get multiple compressed leaf proofs for {tree_pubkey:?} for value {value_pubkey:?}: {proof_error}"
-                );
-                proof_error
-            })?;
-
-    let leaf_proof = leaf_proofs
-        .into_iter()
-        .next()
-        .ok_or(PhotonApiError::RecordNotFound(
-            "No leaf proof found".to_string(),
-        ))?;
-
-    Ok((range_node.clone(), leaf_proof))
-}
-
 pub async fn query_next_smallest_elements<T>(
     txn_or_conn: &T,
     values: Vec<Vec<u8>>,
@@ -308,4 +242,99 @@ where
         indexed_tree.insert(model.value.clone(), model);
     }
     Ok(indexed_tree)
+}
+
+/// Batched version of get_exclusion_range_with_proof_v2
+/// Returns a HashMap mapping each input address to its (model, proof) tuple
+pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
+    txn: &DatabaseTransaction,
+    tree: Vec<u8>,
+    tree_height: u32,
+    addresses: Vec<Vec<u8>>,
+    tree_type: TreeType,
+) -> Result<HashMap<Vec<u8>, (indexed_trees::Model, MerkleProofWithContext)>, PhotonApiError> {
+    if addresses.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let btree = query_next_smallest_elements(txn, addresses.clone(), tree.clone())
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!(
+                "Failed to query next smallest elements: {}",
+                e
+            ))
+        })?;
+
+    let mut results = HashMap::new();
+    let mut leaf_nodes_with_indices = Vec::new();
+    let mut address_to_model: HashMap<Vec<u8>, indexed_trees::Model> = HashMap::new();
+
+    // Process addresses that have range proofs
+    for address in &addresses {
+        let range_node = btree
+            .values()
+            .filter(|node| node.value < *address)
+            .max_by(|a, b| a.value.cmp(&b.value));
+
+        if let Some(range_node) = range_node {
+            let hash = compute_hash_by_tree_type(range_node, tree_type).map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
+            })?;
+
+            let leaf_node = LeafNode {
+                tree: SerializablePubkey::try_from(range_node.tree.clone()).map_err(|e| {
+                    PhotonApiError::UnexpectedError(format!("Failed to serialize pubkey: {}", e))
+                })?,
+                leaf_index: range_node.leaf_index as u32,
+                hash,
+                seq: range_node.seq.map(|x| x as u32),
+            };
+            let node_index = leaf_node.node_index(tree_height);
+            leaf_nodes_with_indices.push((leaf_node, node_index));
+            address_to_model.insert(address.clone(), range_node.clone());
+        }
+    }
+
+    let leaf_proofs = if !leaf_nodes_with_indices.is_empty() {
+        get_multiple_compressed_leaf_proofs_from_full_leaf_info(
+            txn,
+            leaf_nodes_with_indices,
+            tree_height,
+        )
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    for (address, model) in address_to_model {
+        if let Some(proof) = leaf_proofs
+            .iter()
+            .find(|p| p.leaf_index == model.leaf_index as u32)
+        {
+            results.insert(address, (model, proof.clone()));
+        }
+    }
+
+    let addresses_needing_empty_proof: Vec<Vec<u8>> = addresses
+        .iter()
+        .filter(|addr| !results.contains_key(*addr))
+        .cloned()
+        .collect();
+
+    if !addresses_needing_empty_proof.is_empty() {
+        let root_seq = match tree_type {
+            TreeType::AddressV1 => 3,
+            _ => 0,
+        };
+
+        let (empty_model, empty_proof) =
+            proof_for_empty_tree_with_seq(tree.clone(), tree_height, root_seq, tree_type)?;
+
+        for address in addresses_needing_empty_proof {
+            results.insert(address, (empty_model.clone(), empty_proof.clone()));
+        }
+    }
+
+    Ok(results)
 }
