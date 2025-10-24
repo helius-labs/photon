@@ -264,6 +264,13 @@ impl StateUpdate {
             })
             .collect();
 
+        //   Some fields are not explicitly filtered by tree:
+        // - transactions: Contains no tree references (only signature, slot, error)
+        // - in_accounts: Just account hashes with no tree information
+        // - batch_nullify_context: References accounts by hash only. If the account doesn't
+        //   exist in the DB (filtered during creation), the subsequent UPDATE will affect 0 rows.
+        //   This achieves implicit filtering without an extra DB query.
+
         let state_update = StateUpdate {
             in_accounts: self.in_accounts,
             out_accounts,
