@@ -174,7 +174,7 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        upsert_tree_metadata(db, pubkey, TreeType::AddressV2, &data).await?;
+        upsert_tree_metadata(db, pubkey, TreeType::AddressV2, &data, slot).await?;
 
         info!(
             "Synced V2 address tree {} with root_history_capacity {}",
@@ -257,7 +257,7 @@ pub async fn upsert_tree_metadata<C>(
     tree_pubkey: Pubkey,
     tree_type: TreeType,
     data: &TreeAccountData,
-    slot: u64
+    slot: u64,
 ) -> Result<(), PhotonApiError>
 where
     C: ConnectionTrait,
@@ -266,12 +266,12 @@ where
 
     let model = tree_metadata::ActiveModel {
         tree_pubkey: Set(tree_bytes),
-        queue_pubkey: Set(queue_pubkey.to_bytes().to_vec()),
-        tree_type: Set(tree_type),
-        height: Set(height),
-        root_history_capacity: Set(root_history_capacity),
-        sequence_number: Set(sequence_number as i64),
-        next_index: Set(next_index as i64),
+        queue_pubkey: Set(data.queue_pubkey.to_bytes().to_vec()),
+        tree_type: Set(tree_type as i32),
+        height: Set(data.height as i32),
+        root_history_capacity: Set(data.root_history_capacity as i64),
+        sequence_number: Set(data.sequence_number as i64),
+        next_index: Set(data.next_index as i64),
         last_synced_slot: Set(slot as i64),
     };
 

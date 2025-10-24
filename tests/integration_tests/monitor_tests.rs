@@ -163,6 +163,7 @@ async fn test_tree_info_batch_retrieval(
             to_sdk_pubkey(&tree_pubkey),
             *tree_type,
             &data,
+            0,
         )
         .await
         .unwrap();
@@ -231,6 +232,7 @@ async fn test_tree_metadata_update(
         to_sdk_pubkey(&tree_pubkey),
         TreeType::StateV1,
         &data,
+        0,
     )
     .await
     .unwrap();

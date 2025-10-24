@@ -374,7 +374,7 @@ mod tests {
             owner: SdkPubkey::from(owner.to_bytes()),
         };
 
-        upsert_tree_metadata(db, SdkPubkey::from(tree_pk.to_bytes()), tree_type, &data)
+        upsert_tree_metadata(db, SdkPubkey::from(tree_pk.to_bytes()), tree_type, &data, 0)
             .await
             .unwrap();
 
