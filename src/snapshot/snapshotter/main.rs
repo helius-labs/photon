@@ -56,6 +56,15 @@ struct Args {
     #[arg(long, default_value = "")]
     r2_prefix: String,
 
+    /// GCS bucket name. The bucket must already exist. The credentials must be provided
+    /// via Application Default Credentials (ADC) or environment variables.
+    #[arg(long)]
+    gcs_bucket: Option<String>,
+
+    /// GCS prefix. All snapshots will be stored under this prefix in the GCS bucket.
+    #[arg(long, default_value = "")]
+    gcs_prefix: String,
+
     /// Incremental snapshot slots
     #[arg(long, default_value_t = 1000)]
     incremental_snapshot_interval_slots: u64,
@@ -204,16 +213,27 @@ async fn main() {
 
     let rpc_client = get_rpc_client(&args.rpc_url);
 
-    let directory_adapter = match (args.snapshot_dir.clone(), args.r2_bucket.clone()) {
-        (Some(snapshot_dir), None) => {
+    let directory_adapter = match (
+        args.snapshot_dir.clone(),
+        args.r2_bucket.clone(),
+        args.gcs_bucket.clone(),
+    ) {
+        (Some(snapshot_dir), None, None) => {
             Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir))
         }
-        (None, Some(r2_bucket)) => Arc::new(
+        (None, Some(r2_bucket), None) => Arc::new(
             DirectoryAdapter::from_r2_bucket_and_prefix_and_env(r2_bucket, args.r2_prefix.clone())
                 .await,
         ),
+        (None, None, Some(gcs_bucket)) => Arc::new(
+            DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
+                gcs_bucket,
+                args.gcs_prefix.clone(),
+            )
+            .await,
+        ),
         _ => {
-            error!("Either snapshot_dir or r2_bucket must be provided");
+            error!("Exactly one of snapshot_dir, r2_bucket, or gcs_bucket must be provided");
             return;
         }
     };

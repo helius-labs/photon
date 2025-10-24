@@ -19,6 +19,7 @@ use crate::ingester::{
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use async_stream::stream;
 use bytes::{BufMut, Bytes};
+use cloud_storage::Client as GcsClient;
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
 use log::info;
@@ -168,6 +169,124 @@ impl R2DirectoryAdapter {
     }
 }
 
+pub struct GCSDirectoryAdapter {
+    pub gcs_client: GcsClient,
+    pub gcs_bucket: String,
+    pub gcs_prefix: String,
+}
+
+impl GCSDirectoryAdapter {
+    async fn read_file(
+        arc_self: Arc<Self>,
+        path: String,
+    ) -> impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static {
+        stream! {
+            let gcs_adapter = arc_self.clone();
+            let full_path = if gcs_adapter.gcs_prefix.is_empty() {
+                path.clone()
+            } else {
+                format!("{}/{}", gcs_adapter.gcs_prefix, path)
+            };
+
+            let object_data = gcs_adapter.gcs_client
+                .object()
+                .download(&gcs_adapter.gcs_bucket, &full_path)
+                .await
+                .with_context(|| format!("Failed to read file from GCS: {:?}", full_path))?;
+
+            // Split the data into chunks to match the streaming behavior
+            let mut offset = 0;
+            while offset < object_data.len() {
+                let end = std::cmp::min(offset + CHUNK_SIZE, object_data.len());
+                yield Ok(Bytes::from(object_data[offset..end].to_vec()));
+                offset = end;
+            }
+        }
+    }
+
+    async fn list_files(&self) -> Result<Vec<String>> {
+        let mut list_request = cloud_storage::ListRequest::default();
+        if !self.gcs_prefix.is_empty() {
+            list_request.prefix = Some(self.gcs_prefix.clone());
+        }
+
+        let objects_stream = self
+            .gcs_client
+            .object()
+            .list(&self.gcs_bucket, list_request)
+            .await
+            .with_context(|| "Failed to create list stream for GCS")?;
+
+        let prefix_len = if self.gcs_prefix.is_empty() {
+            0
+        } else {
+            self.gcs_prefix.len() + 1
+        };
+        let mut files = Vec::new();
+
+        pin_mut!(objects_stream);
+        while let Some(object_list_result) = objects_stream.next().await {
+            let object_list =
+                object_list_result.with_context(|| "Failed to list files from GCS")?;
+            for object in object_list.items {
+                if object.name.len() > prefix_len {
+                    files.push(object.name[prefix_len..].to_string());
+                }
+            }
+        }
+        Ok(files)
+    }
+
+    async fn delete_file(&self, path: String) -> Result<()> {
+        let full_path = if self.gcs_prefix.is_empty() {
+            path
+        } else {
+            format!("{}/{}", self.gcs_prefix, path)
+        };
+
+        self.gcs_client
+            .object()
+            .delete(&self.gcs_bucket, &full_path)
+            .await
+            .with_context(|| format!("Failed to delete file from GCS: {:?}", full_path))?;
+        Ok(())
+    }
+
+    async fn write_file(
+        &self,
+        path: String,
+        byte_stream: impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static,
+    ) -> Result<()> {
+        let full_path = if self.gcs_prefix.is_empty() {
+            path
+        } else {
+            format!("{}/{}", self.gcs_prefix, path)
+        };
+
+        // Collect the stream into a Vec<u8>
+        pin_mut!(byte_stream);
+        let mut data = Vec::new();
+        while let Some(chunk) = byte_stream.next().await {
+            let chunk = chunk?;
+            data.extend_from_slice(&chunk);
+        }
+
+        // Upload to GCS
+        self.gcs_client
+            .object()
+            .create(
+                &self.gcs_bucket,
+                data,
+                &full_path,
+                "application/octet-stream",
+            )
+            .await
+            .with_context(|| format!("Failed to write file to GCS: {:?}", full_path))?;
+
+        Ok(())
+    }
+}
+
 pub struct FileSystemDirectoryApapter {
     pub snapshot_dir: String,
 }
@@ -243,27 +362,39 @@ impl FileSystemDirectoryApapter {
 pub struct DirectoryAdapter {
     filesystem_directory_adapter: Option<Arc<FileSystemDirectoryApapter>>,
     r2_directory_adapter: Option<Arc<R2DirectoryAdapter>>,
+    gcs_directory_adapter: Option<Arc<GCSDirectoryAdapter>>,
 }
 
 impl DirectoryAdapter {
     pub fn new(
         filesystem_directory_adapter: Option<FileSystemDirectoryApapter>,
         r2_directory_adapter: Option<R2DirectoryAdapter>,
+        gcs_directory_adapter: Option<GCSDirectoryAdapter>,
     ) -> Self {
-        match (&filesystem_directory_adapter, &r2_directory_adapter) {
-            (Some(_snapshot_dir), None) => {}
-            (None, Some(_r2_bucket)) => {}
-            _ => panic!("Either snapshot_dir or r2_bucket must be provided"),
+        match (
+            &filesystem_directory_adapter,
+            &r2_directory_adapter,
+            &gcs_directory_adapter,
+        ) {
+            (Some(_), None, None) => {}
+            (None, Some(_), None) => {}
+            (None, None, Some(_)) => {}
+            _ => panic!("Exactly one of snapshot_dir, r2_bucket, or gcs_bucket must be provided"),
         };
 
         Self {
             filesystem_directory_adapter: filesystem_directory_adapter.map(Arc::new),
             r2_directory_adapter: r2_directory_adapter.map(Arc::new),
+            gcs_directory_adapter: gcs_directory_adapter.map(Arc::new),
         }
     }
 
     pub fn from_local_directory(snapshot_dir: String) -> Self {
-        Self::new(Some(FileSystemDirectoryApapter { snapshot_dir }), None)
+        Self::new(
+            Some(FileSystemDirectoryApapter { snapshot_dir }),
+            None,
+            None,
+        )
     }
 
     pub async fn from_r2_bucket_and_prefix_and_env(r2_bucket: String, r2_prefix: String) -> Self {
@@ -292,6 +423,25 @@ impl DirectoryAdapter {
                 r2_bucket,
                 r2_prefix,
             }),
+            None,
+        )
+    }
+
+    pub async fn from_gcs_bucket_and_prefix_and_env(
+        gcs_bucket: String,
+        gcs_prefix: String,
+    ) -> Self {
+        // Initialize GCS client with credentials from environment
+        let gcs_client = GcsClient::default();
+
+        Self::new(
+            None,
+            None,
+            Some(GCSDirectoryAdapter {
+                gcs_client,
+                gcs_bucket,
+                gcs_prefix,
+            }),
         )
     }
 
@@ -299,6 +449,7 @@ impl DirectoryAdapter {
     async fn read_file(&self, path: String) -> impl Stream<Item = Result<Bytes>> + 'static {
         let file_system_directory_adapter = self.filesystem_directory_adapter.clone();
         let r2_directory_adapter = self.r2_directory_adapter.clone();
+        let gcs_directory_adapter = self.gcs_directory_adapter.clone();
         stream! {
             if let Some(filesystem_directory_adapter) = file_system_directory_adapter {
                 let stream = filesystem_directory_adapter.read_file(path).await;
@@ -308,6 +459,12 @@ impl DirectoryAdapter {
                 }
             } else if let Some(r2_directory_adapter) = r2_directory_adapter {
                 let stream = R2DirectoryAdapter::read_file(r2_directory_adapter, path).await;
+                pin_mut!(stream);
+                while let Some(byte) = stream.next().await {
+                    yield byte;
+                }
+            } else if let Some(gcs_directory_adapter) = gcs_directory_adapter {
+                let stream = GCSDirectoryAdapter::read_file(gcs_directory_adapter, path).await;
                 pin_mut!(stream);
                 while let Some(byte) = stream.next().await {
                     yield byte;
@@ -324,6 +481,8 @@ impl DirectoryAdapter {
             filesystem_directory_adapter.list_files().await
         } else if let Some(r2_directory_adapter) = &self.r2_directory_adapter {
             r2_directory_adapter.list_files().await
+        } else if let Some(gcs_directory_adapter) = &self.gcs_directory_adapter {
+            gcs_directory_adapter.list_files().await
         } else {
             panic!("No directory adapter provided");
         }
@@ -335,6 +494,8 @@ impl DirectoryAdapter {
             filesystem_directory_adapter.delete_file(path).await
         } else if let Some(r2_directory_adapter) = &self.r2_directory_adapter {
             r2_directory_adapter.delete_file(path).await
+        } else if let Some(gcs_directory_adapter) = &self.gcs_directory_adapter {
+            gcs_directory_adapter.delete_file(path).await
         } else {
             panic!("No directory adapter provided");
         }
@@ -350,6 +511,8 @@ impl DirectoryAdapter {
             filesystem_directory_adapter.write_file(path, bytes).await
         } else if let Some(r2_directory_adapter) = &self.r2_directory_adapter {
             r2_directory_adapter.write_file(path, bytes).await
+        } else if let Some(gcs_directory_adapter) = &self.gcs_directory_adapter {
+            gcs_directory_adapter.write_file(path, bytes).await
         } else {
             panic!("No directory adapter provided");
         }
