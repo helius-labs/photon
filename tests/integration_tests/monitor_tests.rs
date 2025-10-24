@@ -1,24 +1,32 @@
 use function_name::named;
 use photon_indexer::dao::generated::{prelude::*, tree_metadata};
 use photon_indexer::ingester::parser::tree_info::TreeInfo;
-use photon_indexer::monitor::tree_metadata_sync::upsert_tree_metadata;
+use photon_indexer::ingester::parser::EXPECTED_TREE_OWNER;
+use photon_indexer::monitor::tree_metadata_sync::{upsert_tree_metadata, TreeAccountData};
 use sea_orm::{ColumnTrait, DatabaseBackend, EntityTrait, QueryFilter};
 use solana_pubkey::Pubkey;
 use solana_sdk::pubkey::Pubkey as SdkPubkey;
 
-use light_compressed_account::TreeType;
-
 use crate::utils::*;
+use light_compressed_account::TreeType;
+use serial_test::serial;
 
 // Helper function to convert solana_pubkey::Pubkey to solana_sdk::pubkey::Pubkey
 fn to_sdk_pubkey(pubkey: &Pubkey) -> SdkPubkey {
     SdkPubkey::from(pubkey.to_bytes())
 }
 
+// Helper function to get the expected owner for tests
+fn get_test_owner() -> SdkPubkey {
+    let owner = EXPECTED_TREE_OWNER.expect("EXPECTED_TREE_OWNER must be set for tests");
+    SdkPubkey::from(owner.to_bytes())
+}
+
 /// Test that verifies tree metadata is correctly persisted and can be retrieved
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_upsert_and_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -47,15 +55,19 @@ async fn test_tree_metadata_upsert_and_retrieval(
     let next_index = 100;
 
     // Insert tree metadata
+    let data = TreeAccountData {
+        queue_pubkey: to_sdk_pubkey(&queue_pubkey),
+        root_history_capacity: root_history_capacity as usize,
+        height: height as u32,
+        sequence_number,
+        next_index,
+        owner: get_test_owner(),
+    };
     upsert_tree_metadata(
         setup.db_conn.as_ref(),
         to_sdk_pubkey(&tree_pubkey),
-        root_history_capacity,
-        height,
-        tree_type as i32,
-        sequence_number,
-        next_index,
-        to_sdk_pubkey(&queue_pubkey),
+        tree_type,
+        &data,
     )
     .await
     .unwrap();
@@ -90,6 +102,7 @@ async fn test_tree_metadata_upsert_and_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_retrieval(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -137,15 +150,19 @@ async fn test_tree_info_batch_retrieval(
         let queue_pubkey = queue_str.parse::<Pubkey>().unwrap();
         tree_pubkeys.push(tree_pubkey);
 
+        let data = TreeAccountData {
+            queue_pubkey: to_sdk_pubkey(&queue_pubkey),
+            root_history_capacity: 2400,
+            height: *height as u32,
+            sequence_number: 0,
+            next_index: 0,
+            owner: get_test_owner(),
+        };
         upsert_tree_metadata(
             setup.db_conn.as_ref(),
             to_sdk_pubkey(&tree_pubkey),
-            2400,
-            *height,
-            *tree_type as i32,
-            0,
-            0,
-            to_sdk_pubkey(&queue_pubkey),
+            *tree_type,
+            &data,
         )
         .await
         .unwrap();
@@ -179,6 +196,7 @@ async fn test_tree_info_batch_retrieval(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_metadata_update(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -200,15 +218,19 @@ async fn test_tree_metadata_update(
         .unwrap();
 
     // Insert initial metadata
+    let data = TreeAccountData {
+        queue_pubkey: to_sdk_pubkey(&queue_pubkey),
+        root_history_capacity: 2400,
+        height: 26,
+        sequence_number: 0,
+        next_index: 0,
+        owner: get_test_owner(),
+    };
     upsert_tree_metadata(
         setup.db_conn.as_ref(),
         to_sdk_pubkey(&tree_pubkey),
-        2400,
-        26,
-        TreeType::StateV1 as i32,
-        0,
-        0,
-        to_sdk_pubkey(&queue_pubkey),
+        TreeType::StateV1,
+        &data,
     )
     .await
     .unwrap();
@@ -217,15 +239,19 @@ async fn test_tree_metadata_update(
     let new_sequence = 100;
     let new_next_index = 500;
 
+    let data_updated = TreeAccountData {
+        queue_pubkey: to_sdk_pubkey(&queue_pubkey),
+        root_history_capacity: 2400,
+        height: 26,
+        sequence_number: new_sequence,
+        next_index: new_next_index,
+        owner: get_test_owner(),
+    };
     upsert_tree_metadata(
         setup.db_conn.as_ref(),
         to_sdk_pubkey(&tree_pubkey),
-        2400,
-        26,
-        TreeType::StateV1 as i32,
-        new_sequence,
-        new_next_index,
-        to_sdk_pubkey(&queue_pubkey),
+        TreeType::StateV1,
+        &data_updated,
     )
     .await
     .unwrap();
@@ -247,6 +273,7 @@ async fn test_tree_metadata_update(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_missing_tree(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -275,6 +302,7 @@ async fn test_tree_info_missing_tree(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_tree_info_batch_empty(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -300,6 +328,7 @@ async fn test_tree_info_batch_empty(
 #[named]
 #[rstest]
 #[tokio::test]
+#[serial]
 async fn test_all_tree_types(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
@@ -327,15 +356,19 @@ async fn test_all_tree_types(
         let tree_pubkey = Pubkey::from(tree_bytes);
         let queue_pubkey = Pubkey::from(queue_bytes);
 
+        let data = TreeAccountData {
+            queue_pubkey: to_sdk_pubkey(&queue_pubkey),
+            root_history_capacity: 2400,
+            height: 26,
+            sequence_number: 0,
+            next_index: 0,
+            owner: get_test_owner(),
+        };
         upsert_tree_metadata(
             setup.db_conn.as_ref(),
             to_sdk_pubkey(&tree_pubkey),
-            2400,
-            26,
-            *tree_type as i32,
-            0,
-            0,
-            to_sdk_pubkey(&queue_pubkey),
+            *tree_type,
+            &data,
         )
         .await
         .unwrap();

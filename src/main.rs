@@ -201,6 +201,10 @@ async fn main() {
         std::process::exit(1);
     }
 
+    if let Some(expected_owner) = photon_indexer::ingester::parser::EXPECTED_TREE_OWNER {
+        info!("Filtering trees by owner: {}", expected_owner);
+    }
+
     let db_conn = setup_database_connection(args.db_url.clone(), args.max_db_conn).await;
     if args.db_url.is_none() {
         info!("Running migrations...");

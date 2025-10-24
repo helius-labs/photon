@@ -62,6 +62,14 @@ pub async fn persist_state_update(
     if state_update == StateUpdate::default() {
         return Ok(());
     }
+
+    let filtered = state_update.filter_by_known_trees(txn).await.map_err(|e| {
+        IngesterError::ParserError(format!("Failed to filter by known trees: {}", e))
+    })?;
+
+    let state_update = filtered.state_update;
+    let tree_info_cache = filtered.tree_info_cache;
+
     let StateUpdate {
         // input accounts that will be nullified
         in_accounts,
@@ -88,38 +96,6 @@ pub async fn persist_state_update(
         out_accounts.len(),
         batch_new_addresses.len()
     );
-
-    let mut all_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
-        indexed_merkle_tree_updates
-            .keys()
-            .map(|(pubkey, _)| *pubkey)
-            .collect();
-
-    for account in out_accounts.iter() {
-        if account.context.tree_type == TreeType::StateV1 as u16 {
-            if let Ok(tree_pubkey) =
-                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
-            {
-                all_tree_pubkeys.insert(tree_pubkey);
-            }
-        }
-    }
-    for leaf_nullification in leaf_nullifications.iter() {
-        all_tree_pubkeys.insert(leaf_nullification.tree);
-    }
-    // Also collect trees from batch merkle tree events
-    for tree_pubkey in batch_merkle_tree_events.keys() {
-        all_tree_pubkeys.insert(solana_pubkey::Pubkey::from(*tree_pubkey));
-    }
-
-    let tree_info_cache = if !all_tree_pubkeys.is_empty() {
-        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = all_tree_pubkeys.into_iter().collect();
-        crate::ingester::parser::tree_info::TreeInfo::get_tree_info_batch(txn, &pubkeys_vec)
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree info: {}", e)))?
-    } else {
-        std::collections::HashMap::new()
-    };
 
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
@@ -203,11 +179,9 @@ pub async fn persist_state_update(
 
     // Process each tree's nodes with the correct height
     for (tree_pubkey, tree_nodes) in nodes_by_tree {
-        let tree_info = tree_info_cache.get(&tree_pubkey)
-            .ok_or_else(|| IngesterError::ParserError(format!(
-                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
-                tree_pubkey
-            )))?;
+        let tree_info = tree_info_cache.get(&tree_pubkey).ok_or_else(|| {
+            IngesterError::ParserError(format!("Tree metadata not found for tree {}", tree_pubkey))
+        })?;
         let tree_height = tree_info.height + 1; // +1 for indexed trees
 
         // Process in chunks

@@ -31,11 +31,12 @@ pub async fn persist_batch_events(
 ) -> Result<(), IngesterError> {
     for (tree_pubkey, events) in events.iter_mut() {
         let solana_pubkey = Pubkey::from(*tree_pubkey);
-        let tree_info = tree_info_cache.get(&solana_pubkey)
-            .ok_or_else(|| IngesterError::ParserError(format!(
-                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+        let tree_info = tree_info_cache.get(&solana_pubkey).ok_or_else(|| {
+            IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}",
                 bs58::encode(tree_pubkey).into_string()
-            )))?;
+            ))
+        })?;
         let tree_height = tree_info.height;
         // Sort by sequence
         events.sort_by(|a, b| a.0.cmp(&b.0));
