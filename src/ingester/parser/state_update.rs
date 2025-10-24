@@ -264,24 +264,6 @@ impl StateUpdate {
             })
             .collect();
 
-        // Filter batch_nullify_context to only include entries for accounts we kept
-        let batch_nullify_context: Vec<_> = self
-            .batch_nullify_context
-            .into_iter()
-            .filter(|context| {
-                let account_hash = Hash(context.account_hash);
-                if !kept_account_hashes.contains(&account_hash) {
-                    debug!(
-                        "Skipping batch nullify context for filtered account {}",
-                        account_hash
-                    );
-                    false
-                } else {
-                    true
-                }
-            })
-            .collect();
-
         let state_update = StateUpdate {
             in_accounts: self.in_accounts,
             out_accounts,
@@ -290,7 +272,7 @@ impl StateUpdate {
             leaf_nullifications,
             indexed_merkle_tree_updates,
             batch_merkle_tree_events,
-            batch_nullify_context,
+            batch_nullify_context: self.batch_nullify_context,
             batch_new_addresses,
         };
 
