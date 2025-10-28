@@ -90,14 +90,14 @@ fn pop_cached_blocks_to_index(
         } else if min_slot < last_indexed_slot {
             block_cache.remove(&min_slot);
         // Handle gaps in the block stream - skipped blocks in chain. 
-        } else if min_slot > last_indexed_slot + 1 {
-            log::warn!(
-                "Gap detected: Skipping slots from {} to {} to prevent buffer overflow.",
-                last_indexed_slot + 1,
-                min_slot - 1 
-            );
-            last_indexed_slot = block.metadata.parent_slot;
-            continue; 
+        // } else if min_slot > last_indexed_slot + 1 {
+        //     log::warn!(
+        //         "Gap detected: Skipping slots from {} to {} to prevent buffer overflow.",
+        //         last_indexed_slot + 1,
+        //         min_slot - 1 
+        //     );
+        //     last_indexed_slot = block.metadata.parent_slot;
+        //     continue; 
         } else {
             break;
         }
