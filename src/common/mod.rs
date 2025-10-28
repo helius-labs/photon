@@ -149,7 +149,7 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
 pub fn get_rpc_client(rpc_url: &str) -> Arc<RpcClient> {
     Arc::new(RpcClient::new_with_timeout_and_commitment(
         rpc_url.to_string(),
-        Duration::from_secs(90),
+        Duration::from_secs(200),
         CommitmentConfig::confirmed(),
     ))
 }
