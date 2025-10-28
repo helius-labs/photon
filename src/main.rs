@@ -254,81 +254,79 @@ async fn main() {
                             .unwrap(),
                     };
             info!("Last indexed slot (or start slot): {}", last_indexed_slot);
-            if let Some(snapshot_dir) = args.snapshot_dir {
-                // let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
-                let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
-                    (Some(snapshot_dir), None) => Some(Arc::new(DirectoryAdapter::from_local_directory(
-                        snapshot_dir,
-                    ))),
-                    (None, Some(gcs_bucket)) => Some(Arc::new(
-                        DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
-                            gcs_bucket,
-                            args.gcs_prefix.clone(),
-                        )
-                        .await,
-                    )),
-                    (None, None) => None,
-                    (Some(_), Some(_)) => {
-                        error!("Cannot specify both snapshot_dir and gcs_bucket");
+
+            let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
+                (Some(snapshot_dir), None) => Some(Arc::new(DirectoryAdapter::from_local_directory(
+                    snapshot_dir,
+                ))),
+                (None, Some(gcs_bucket)) => Some(Arc::new(
+                    DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
+                        gcs_bucket,
+                        args.gcs_prefix.clone(),
+                    )
+                    .await,
+                )),
+                (None, None) => None,
+                (Some(_), Some(_)) => {
+                    error!("Cannot specify both snapshot_dir and gcs_bucket");
+                    std::process::exit(1);
+                }
+            };
+
+            if let Some(directory_adapter) = directory_adapter {
+                let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
+                    .await
+                    .unwrap();
+                if !snapshot_files.is_empty() {
+                    // Sync tree metadata from on-chain before processing snapshot
+                    // This is REQUIRED so the indexer knows about all existing trees
+                    info!("Syncing tree metadata from on-chain before loading snapshot...");
+                    if let Err(e) = photon_indexer::monitor::tree_metadata_sync::sync_tree_metadata(
+                        rpc_client.as_ref(),
+                        db_conn.as_ref(),
+                    )
+                    .await
+                    {
+                        error!(
+                            "Failed to sync tree metadata: {}. Cannot proceed with snapshot loading.",
+                            e
+                        );
+                        error!("Tree metadata must be synced before loading snapshots to avoid skipping transactions.");
                         std::process::exit(1);
-                    }
-                };
+                    }                    
+                    info!("Tree metadata sync completed successfully");
 
-                if let Some(directory_adapter) = directory_adapter {
-                    let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
-                        .await
-                        .unwrap();
-                    if !snapshot_files.is_empty() {
-                        // Sync tree metadata from on-chain before processing snapshot
-                        // This is REQUIRED so the indexer knows about all existing trees
-                        info!("Syncing tree metadata from on-chain before loading snapshot...");
-                        if let Err(e) = photon_indexer::monitor::tree_metadata_sync::sync_tree_metadata(
-                            rpc_client.as_ref(),
-                            db_conn.as_ref(),
+                    info!("Detected snapshot files. Loading snapshot...");
+                    let last_slot = snapshot_files.last().unwrap().end_slot;
+                    info!("Latest snapshot ends at slot: {}", last_slot);
+                    // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
+                    let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
+                    info!("Snapshot offset is: {}", snapshot_offset);
+
+                    if snapshot_offset >= last_indexed_slot {
+                        info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
+
+                        let block_stream =
+                            load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
+                        pin_mut!(block_stream);
+                        let first_blocks = block_stream.next().await.unwrap();
+                        let last_stream_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
+                        let block_stream = stream! {
+                            yield first_blocks;
+                            while let Some(blocks) = block_stream.next().await {
+                                yield blocks;
+                            }
+                        };
+                        index_block_stream(
+                            block_stream,
+                            db_conn.clone(),
+                            rpc_client.clone(),
+                            last_stream_indexed_slot,
+                            Some(last_slot),
                         )
-                        .await
-                        {
-                            error!(
-                                "Failed to sync tree metadata: {}. Cannot proceed with snapshot loading.",
-                                e
-                            );
-                            error!("Tree metadata must be synced before loading snapshots to avoid skipping transactions.");
-                            std::process::exit(1);
-                        }                    
-                        info!("Tree metadata sync completed successfully");
-
-                        info!("Detected snapshot files. Loading snapshot...");
-                        let last_slot = snapshot_files.last().unwrap().end_slot;
-                        info!("Latest snapshot ends at slot: {}", last_slot);
-                        // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
-                        let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
-                        info!("Snapshot offset is: {}", snapshot_offset);
-
-                        if snapshot_offset >= last_indexed_slot {
-                            info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
-
-                            let block_stream =
-                                load_block_stream_from_directory_adapter(directory_adapter.clone()).await;
-                            pin_mut!(block_stream);
-                            let first_blocks = block_stream.next().await.unwrap();
-                            let last_stream_indexed_slot = first_blocks.first().unwrap().metadata.parent_slot;
-                            let block_stream = stream! {
-                                yield first_blocks;
-                                while let Some(blocks) = block_stream.next().await {
-                                    yield blocks;
-                                }
-                            };
-                            index_block_stream(
-                                block_stream,
-                                db_conn.clone(),
-                                rpc_client.clone(),
-                                last_stream_indexed_slot,
-                                Some(last_slot),
-                            )
-                            .await;
-                        } else {
-                            info!("Snapshot is already indexed. Skipping...");
-                        }
+                        .await;
+                    } else {
+                        info!("Snapshot is already indexed. Skipping...");
                     }
                 }
             }
