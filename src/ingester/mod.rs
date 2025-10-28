@@ -1,4 +1,4 @@
-use std::thread::sleep;
+use tokio::time::sleep;
 use std::time::Duration;
 
 use cadence_macros::statsd_count;
@@ -117,7 +117,7 @@ pub async fn index_block_batch_with_infinite_retries(
                     end_block,
                     e
                 );
-                sleep(Duration::from_secs(1));
+                sleep(Duration::from_secs(1)).await;
             }
         }
     }
