@@ -97,14 +97,57 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
+    // Extract slot from transactions for event publishing
+    let slot = transactions.iter().next().map(|tx| tx.slot).unwrap_or(0);
+
+    let mut all_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
+        indexed_merkle_tree_updates
+            .keys()
+            .map(|(pubkey, _)| *pubkey)
+            .collect();
+
+    for account in out_accounts.iter() {
+        if account.context.tree_type == TreeType::StateV1 as u16 {
+            if let Ok(tree_pubkey) =
+                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
+            {
+                all_tree_pubkeys.insert(tree_pubkey);
+            }
+        }
+    }
+    for leaf_nullification in leaf_nullifications.iter() {
+        all_tree_pubkeys.insert(leaf_nullification.tree);
+    }
+
+    for tree_pubkey in batch_merkle_tree_events.keys() {
+        all_tree_pubkeys.insert(solana_pubkey::Pubkey::from(*tree_pubkey));
+    }
+
+    for address in batch_new_addresses.iter() {
+        if let Ok(tree_pubkey) =
+            solana_pubkey::Pubkey::try_from(address.tree.to_bytes_vec().as_slice())
+        {
+            all_tree_pubkeys.insert(tree_pubkey);
+        }
+    }
+
+    let tree_info_cache = if !all_tree_pubkeys.is_empty() {
+        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = all_tree_pubkeys.into_iter().collect();
+        crate::ingester::parser::tree_info::TreeInfo::get_tree_info_batch(txn, &pubkeys_vec)
+            .await
+            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree info: {}", e)))?
+    } else {
+        std::collections::HashMap::new()
+    };
+
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
-        insert_addresses_into_queues(txn, chunk).await?;
+        insert_addresses_into_queues(txn, chunk, slot, &tree_info_cache).await?;
     }
 
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
-        append_output_accounts(txn, chunk).await?;
+        append_output_accounts(txn, chunk, slot).await?;
     }
 
     debug!("Persisting spent accounts...");
@@ -116,7 +159,7 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    spend_input_accounts_batched(txn, &batch_nullify_context).await?;
+    spend_input_accounts_batched(txn, &batch_nullify_context, slot, &tree_info_cache).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -397,6 +440,11 @@ async fn execute_account_update_query_and_update_balances(
 async fn insert_addresses_into_queues(
     txn: &DatabaseTransaction,
     addresses: &[AddressQueueUpdate],
+    slot: u64,
+    tree_info_cache: &std::collections::HashMap<
+        Pubkey,
+        crate::ingester::parser::tree_info::TreeInfo,
+    >,
 ) -> Result<(), IngesterError> {
     let mut address_models = Vec::new();
 
@@ -417,12 +465,31 @@ async fn insert_addresses_into_queues(
         .build(txn.get_database_backend());
     txn.execute(query).await?;
 
+    let mut addresses_by_tree: HashMap<Pubkey, usize> = HashMap::new();
+    for address in addresses {
+        if let Ok(tree_pubkey) = Pubkey::try_from(address.tree.to_bytes_vec().as_slice()) {
+            *addresses_by_tree.entry(tree_pubkey).or_insert(0) += 1;
+        }
+    }
+
+    for (tree, count) in addresses_by_tree {
+        if let Some(tree_info) = tree_info_cache.get(&tree) {
+            crate::events::publish(crate::events::IngestionEvent::AddressQueueInsert {
+                tree,
+                queue: tree_info.queue,
+                count,
+                slot,
+            });
+        }
+    }
+
     Ok(())
 }
 
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
     out_accounts: &[AccountWithContext],
+    slot: u64,
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
@@ -483,6 +550,30 @@ async fn append_output_accounts(
             debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;
         }
+    }
+
+    let mut accounts_by_tree_queue: HashMap<(Pubkey, Pubkey), usize> = HashMap::new();
+
+    for account in out_accounts {
+        if account.context.in_output_queue {
+            if let (Ok(tree_pubkey), Ok(queue_pubkey)) = (
+                Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice()),
+                Pubkey::try_from(account.context.queue.to_bytes_vec().as_slice()),
+            ) {
+                *accounts_by_tree_queue
+                    .entry((tree_pubkey, queue_pubkey))
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+
+    for ((tree, queue), count) in accounts_by_tree_queue {
+        crate::events::publish(crate::events::IngestionEvent::OutputQueueInsert {
+            tree,
+            queue,
+            count,
+            slot,
+        });
     }
 
     Ok(())

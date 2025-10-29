@@ -197,7 +197,7 @@ async fn fetch_queue(
     }
 
     let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
-    let first_value_queue_index = match queue_type {
+        let first_value_queue_index = match queue_type {
         QueueType::InputStateV2 => {
             queue_elements[0]
                 .nullifier_queue_index
@@ -214,21 +214,21 @@ async fn fetch_queue(
         }
     };
 
-    let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
+        let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
         tx,
         SerializablePubkey::from(tree.0),
-        indices.clone(),
-    )
-    .await?;
+            indices.clone(),
+        )
+        .await?;
 
-    if generated_proofs.len() != indices.len() {
-        return Err(PhotonApiError::ValidationError(format!(
-            "Expected {} proofs for {} queue elements, but got {} proofs",
-            indices.len(),
-            queue_elements.len(),
-            generated_proofs.len()
-        )));
-    }
+        if generated_proofs.len() != indices.len() {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Expected {} proofs for {} queue elements, but got {} proofs",
+                indices.len(),
+                queue_elements.len(),
+                generated_proofs.len()
+            )));
+        }
 
     let result: Vec<GetQueueElementsResponseValue> = generated_proofs
         .into_iter()

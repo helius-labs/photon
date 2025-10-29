@@ -1,3 +1,4 @@
+pub mod event_subscriber;
 pub mod queue_monitor;
 pub mod queue_service;
 pub mod server;
