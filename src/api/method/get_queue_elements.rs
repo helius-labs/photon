@@ -14,6 +14,8 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::accounts;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 
+const MAX_QUEUE_ELEMENTS: u16 = 4000;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
@@ -58,10 +60,10 @@ pub async fn get_queue_elements(
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
     let queue_type = QueueType::from(request.queue_type as u64);
 
-    if request.limit > 1000 {
+    if request.limit > MAX_QUEUE_ELEMENTS {
         return Err(PhotonApiError::ValidationError(format!(
-            "Too many queue elements requested {}. Maximum allowed: 1000",
-            request.limit
+            "Too many queue elements requested {}. Maximum allowed: {}",
+            request.limit, MAX_QUEUE_ELEMENTS
         )));
     }
 

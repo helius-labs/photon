@@ -4,6 +4,7 @@ use std::sync::Arc;
 use sea_orm::DatabaseConnection;
 use tonic::transport::Server;
 
+use super::event_subscriber::GrpcEventSubscriber;
 use super::proto::queue_service_server::QueueServiceServer;
 use super::proto::FILE_DESCRIPTOR_SET;
 use super::queue_monitor::QueueMonitor;
@@ -18,7 +19,15 @@ pub async fn run_grpc_server(
 
     let update_sender = service.get_update_sender();
 
-    let monitor = QueueMonitor::new(db, update_sender, 1000);
+    let event_receiver = crate::events::init_event_bus();
+    let event_subscriber = GrpcEventSubscriber::new(event_receiver, update_sender.clone());
+    tokio::spawn(async move {
+        event_subscriber.start().await;
+    });
+    tracing::info!("Event-driven queue updates enabled");
+
+    // Keep QueueMonitor as backup with 5s polling
+    let monitor = QueueMonitor::new(db, update_sender, 5000);
     tokio::spawn(async move {
         monitor.start().await;
     });
@@ -29,7 +38,7 @@ pub async fn run_grpc_server(
         .build_v1()?;
 
     tracing::info!("Starting gRPC server on {}", addr);
-    tracing::info!("Queue monitor started (polling every 1s)");
+    tracing::info!("Queue monitor started as backup (polling every 5s)");
 
     Server::builder()
         .add_service(QueueServiceServer::new(service))
