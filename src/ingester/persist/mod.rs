@@ -100,46 +100,6 @@ pub async fn persist_state_update(
     // Extract slot from transactions for event publishing
     let slot = transactions.iter().next().map(|tx| tx.slot).unwrap_or(0);
 
-    let mut all_tree_pubkeys: std::collections::HashSet<solana_pubkey::Pubkey> =
-        indexed_merkle_tree_updates
-            .keys()
-            .map(|(pubkey, _)| *pubkey)
-            .collect();
-
-    for account in out_accounts.iter() {
-        if account.context.tree_type == TreeType::StateV1 as u16 {
-            if let Ok(tree_pubkey) =
-                solana_pubkey::Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice())
-            {
-                all_tree_pubkeys.insert(tree_pubkey);
-            }
-        }
-    }
-    for leaf_nullification in leaf_nullifications.iter() {
-        all_tree_pubkeys.insert(leaf_nullification.tree);
-    }
-
-    for tree_pubkey in batch_merkle_tree_events.keys() {
-        all_tree_pubkeys.insert(solana_pubkey::Pubkey::from(*tree_pubkey));
-    }
-
-    for address in batch_new_addresses.iter() {
-        if let Ok(tree_pubkey) =
-            solana_pubkey::Pubkey::try_from(address.tree.to_bytes_vec().as_slice())
-        {
-            all_tree_pubkeys.insert(tree_pubkey);
-        }
-    }
-
-    let tree_info_cache = if !all_tree_pubkeys.is_empty() {
-        let pubkeys_vec: Vec<solana_pubkey::Pubkey> = all_tree_pubkeys.into_iter().collect();
-        crate::ingester::parser::tree_info::TreeInfo::get_tree_info_batch(txn, &pubkeys_vec)
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to fetch tree info: {}", e)))?
-    } else {
-        std::collections::HashMap::new()
-    };
-
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
         insert_addresses_into_queues(txn, chunk, slot, &tree_info_cache).await?;
