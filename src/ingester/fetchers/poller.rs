@@ -99,6 +99,7 @@ fn pop_cached_blocks_to_index(
         //     last_indexed_slot = block.metadata.parent_slot;
         //     continue; 
         } else {
+
             break;
         }
     }
@@ -133,6 +134,8 @@ pub async fn fetch_block_with_infinite_retries(
                 if let solana_client::client_error::ClientErrorKind::RpcError(
                     RpcError::RpcResponseError { code, .. },
                 ) = e.kind
+                log::info!("RPC error code: {}", code);
+                log::info!("Error fetching block {}: {}", slot, e);
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         metric! {
