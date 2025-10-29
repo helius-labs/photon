@@ -131,11 +131,10 @@ pub async fn fetch_block_with_infinite_retries(
                 return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
             }
             Err(e) => {
+                log::error!("Error fetching block {}: {}", slot, e);
                 if let solana_client::client_error::ClientErrorKind::RpcError(
                     RpcError::RpcResponseError { code, .. },
                 ) = e.kind
-                log::info!("RPC error code: {}", code);
-                log::info!("Error fetching block {}: {}", slot, e);
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         metric! {
