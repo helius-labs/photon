@@ -99,6 +99,7 @@ fn pop_cached_blocks_to_index(
         //     last_indexed_slot = block.metadata.parent_slot;
         //     continue; 
         } else {
+
             break;
         }
     }
