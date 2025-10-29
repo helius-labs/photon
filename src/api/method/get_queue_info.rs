@@ -116,10 +116,8 @@ pub async fn get_queue_info(
         None
     };
 
-    // Fetch queue sizes
     let queue_sizes = fetch_queue_sizes(db, tree_filter).await?;
 
-    // Get tree metadata for queue pubkeys
     let tree_pubkeys: Vec<Vec<u8>> = queue_sizes
         .keys()
         .map(|(tree, _)| tree.clone())
@@ -138,7 +136,6 @@ pub async fn get_queue_info(
         .map(|t| (t.tree_pubkey, t.queue_pubkey))
         .collect();
 
-    // Build response
     let queues: Vec<QueueInfo> = queue_sizes
         .into_iter()
         .map(|((tree_bytes, queue_type), size)| {
@@ -156,7 +153,6 @@ pub async fn get_queue_info(
         })
         .collect();
 
-    // Get current slot using standard Context
     let slot = Context::extract(db).await?.slot;
 
     Ok(GetQueueInfoResponse { queues, slot })
