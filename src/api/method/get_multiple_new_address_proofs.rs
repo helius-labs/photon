@@ -136,12 +136,12 @@ pub async fn get_multiple_new_address_proofs_helper(
         let tree_type = tree_and_queue.tree_type;
 
         let results = get_multiple_exclusion_ranges_with_proofs_v2(
-                    txn,
+            txn,
             tree_bytes.clone(),
-                    tree_and_queue.height + 1,
+            tree_and_queue.height + 1,
             address_values.clone(),
             tree_type,
-                )
+        )
         .await?;
 
         for (original_idx, address) in tree_addresses {
@@ -151,17 +151,17 @@ pub async fn get_multiple_new_address_proofs_helper(
                 PhotonApiError::RecordNotFound(format!("No proof found for address {}", address))
             })?;
 
-        let new_address_proof = MerkleContextWithNewAddressProof {
+            let new_address_proof = MerkleContextWithNewAddressProof {
                 root: proof.root.clone(),
-            address,
+                address,
                 lowerRangeAddress: SerializablePubkey::try_from(model.value.clone())?,
                 higherRangeAddress: SerializablePubkey::try_from(model.next_value.clone())?,
-            nextIndex: model.next_index as u32,
+                nextIndex: model.next_index as u32,
                 proof: proof.proof.clone(),
-            lowElementLeafIndex: model.leaf_index as u32,
-            merkleTree: tree,
-            rootSeq: proof.root_seq,
-        };
+                lowElementLeafIndex: model.leaf_index as u32,
+                merkleTree: tree,
+                rootSeq: proof.root_seq,
+            };
 
             indexed_proofs.push((original_idx, new_address_proof));
         }
