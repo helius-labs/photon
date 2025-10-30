@@ -185,6 +185,10 @@ impl StateUpdate {
         // Track which account hashes we're keeping for filtering account_transactions later
         let mut kept_account_hashes = HashSet::new();
 
+        // Add input (spent) account hashes - these don't have tree info but should be kept
+        // for account_transactions tracking
+        kept_account_hashes.extend(self.in_accounts.iter().cloned());
+
         // Filter out_accounts
         let out_accounts: Vec<_> = self
             .out_accounts
