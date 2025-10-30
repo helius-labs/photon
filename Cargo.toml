@@ -37,7 +37,7 @@ path = "src/tools/tree_validator/main.rs"
 ark-serialize = "0.5"
 ark-bn254 = "0.5"
 
-anchor-lang = "0.29.0"
+anchor-lang = "0.31.1"
 anyhow = "1.0.79"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1.85"
