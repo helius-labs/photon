@@ -11,7 +11,7 @@ use std::mem::size_of;
 pub const STATE_MERKLE_TREE_DISCRIMINATOR: [u8; 8] = [172, 43, 172, 186, 29, 73, 219, 84];
 
 /// AddressMerkleTreeAccount discriminator
-pub const ADDRESS_MERKLE_TREE_DISCRIMINATOR: [u8; 8] = [99, 100, 84, 45, 134, 159, 103, 73];
+pub const ADDRESS_MERKLE_TREE_DISCRIMINATOR: [u8; 8] = [11, 161, 175, 9, 212, 229, 73, 73];
 
 /// V1 State Merkle Tree Account structure (for deserialization)
 /// The on-chain layout is: [8 byte discriminator][metadata][tree_bytes]
@@ -30,7 +30,7 @@ impl StateMerkleTreeAccount {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
         Ok(Self {
             metadata,
-            tree_bytes: cursor[size_of::<MerkleTreeMetadata>()..].to_vec(),
+            tree_bytes: data[8 + size_of::<MerkleTreeMetadata>()..].to_vec(),
         })
     }
 
@@ -58,7 +58,7 @@ impl AddressMerkleTreeAccount {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
         Ok(Self {
             metadata,
-            tree_bytes: cursor[size_of::<MerkleTreeMetadata>()..].to_vec(),
+            tree_bytes: data[8 + size_of::<MerkleTreeMetadata>()..].to_vec(),
         })
     }
 
