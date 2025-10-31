@@ -5,7 +5,7 @@ use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
-use anchor_lang::AnchorDeserialize;
+use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use log::info;
 use solana_sdk::signature::Signature;

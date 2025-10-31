@@ -1,16 +1,16 @@
 /// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
-use anchor_lang::prelude::*;
+use borsh::{BorshDeserialize, BorshSerialize};
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
 use solana_pubkey::Pubkey;
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
     pub compressed_account: CompressedAccount,
     pub merkle_tree_index: u8,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumberV2 {
     pub tree_pubkey: Pubkey,
     pub queue_pubkey: Pubkey,
@@ -18,13 +18,13 @@ pub struct MerkleTreeSequenceNumberV2 {
     pub seq: u64,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumberV1 {
     pub pubkey: Pubkey,
     pub seq: u64,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Eq, PartialEq)]
 pub enum MerkleTreeSequenceNumber {
     V1(MerkleTreeSequenceNumberV1),
     V2(MerkleTreeSequenceNumberV2),
@@ -45,7 +45,7 @@ impl MerkleTreeSequenceNumber {
     }
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, PartialEq, Eq)]
 pub struct PublicTransactionEvent {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
     pub output_compressed_account_hashes: Vec<[u8; 32]>,
@@ -70,7 +70,7 @@ pub struct BatchPublicTransactionEvent {
     pub batch_input_accounts: Vec<BatchNullifyContext>,
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct CompressedAccount {
     pub owner: Pubkey,
     pub lamports: u64,
@@ -78,7 +78,7 @@ pub struct CompressedAccount {
     pub data: Option<CompressedAccountData>,
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct CompressedAccountData {
     pub discriminator: [u8; 8],
     pub data: Vec<u8>,
@@ -89,7 +89,7 @@ pub struct CompressedAccountData {
 /// [`StateMerkleTree`](light_merkle_tree_program::state::StateMerkleTree)
 /// change. Indexers can use this type of events to re-build a non-sparse
 /// version of the state Merkle tree.
-#[derive(AnchorDeserialize, AnchorSerialize, Clone, Eq, PartialEq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub enum MerkleTreeEvent {
     V1(ChangelogEvent),
@@ -102,14 +102,14 @@ pub enum MerkleTreeEvent {
 
 /// Node of the Merkle path with an index representing the position in a
 /// non-sparse Merkle tree.
-#[derive(AnchorDeserialize, AnchorSerialize, Clone, Debug, Eq, PartialEq)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Eq, PartialEq)]
 pub struct PathNode {
     pub node: [u8; 32],
     pub index: u32,
 }
 
 /// Version 1 of the [`ChangelogEvent`](light_merkle_tree_program::state::ChangelogEvent).
-#[derive(AnchorDeserialize, AnchorSerialize, PartialEq, Eq, Clone, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Eq, Clone, Debug)]
 pub struct ChangelogEvent {
     /// Public key of the tree.
     pub id: [u8; 32],
@@ -121,7 +121,7 @@ pub struct ChangelogEvent {
     pub index: u32,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Clone, Debug)]
 pub struct NullifierEvent {
     /// Public key of the tree.
     pub id: [u8; 32],
@@ -134,7 +134,7 @@ pub struct NullifierEvent {
     pub seq: u64,
 }
 
-#[derive(Debug, Default, Clone, Copy, AnchorSerialize, AnchorDeserialize, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, BorshSerialize, BorshDeserialize, Eq, PartialEq)]
 pub struct RawIndexedElement {
     pub value: [u8; 32],
     pub next_index: usize,
@@ -142,7 +142,7 @@ pub struct RawIndexedElement {
     pub index: usize,
 }
 
-#[derive(AnchorDeserialize, AnchorSerialize, PartialEq, Eq, Debug, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Eq, Debug, Clone)]
 pub struct IndexedMerkleTreeUpdate {
     pub new_low_element: RawIndexedElement,
     /// Leaf hash in new_low_element.index.
@@ -153,7 +153,7 @@ pub struct IndexedMerkleTreeUpdate {
     pub new_high_element_hash: [u8; 32],
 }
 
-#[derive(AnchorDeserialize, AnchorSerialize, Clone, PartialEq, Eq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, PartialEq, Eq, Debug)]
 pub struct IndexedMerkleTreeEvent {
     /// Public key of the tree.
     pub id: [u8; 32],
@@ -165,7 +165,7 @@ pub struct IndexedMerkleTreeEvent {
 }
 
 #[repr(C)]
-#[derive(AnchorDeserialize, AnchorSerialize, Debug, PartialEq, Clone, Eq)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Clone, Eq)]
 pub struct BatchEvent {
     pub merkle_tree_pubkey: [u8; 32],
     pub batch_index: u64,
