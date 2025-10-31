@@ -1,5 +1,4 @@
 //! V1 Tree Account structures for deserializing account-compression program accounts
-//! These replace the dependency on the account-compression crate.
 
 use borsh::BorshDeserialize;
 use light_concurrent_merkle_tree::zero_copy::ConcurrentMerkleTreeZeroCopy;

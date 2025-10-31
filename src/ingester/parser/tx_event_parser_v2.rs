@@ -10,7 +10,7 @@ use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
 use super::state_update::AddressQueueUpdate;
 use crate::common::typedefs::hash::Hash;
-use light_compressed_account::indexer_event::parse::event_from_light_transaction;
+use light_event::parse::event_from_light_transaction;
 use light_compressed_account::Pubkey as LightPubkey;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;

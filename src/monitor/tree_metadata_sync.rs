@@ -199,10 +199,7 @@ fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, Photon
         })?;
 
     let merkle_tree = tree_account.tree().map_err(|e| {
-        PhotonApiError::UnexpectedError(format!(
-            "Failed to parse concurrent merkle tree: {}",
-            e
-        ))
+        PhotonApiError::UnexpectedError(format!("Failed to parse concurrent merkle tree: {}", e))
     })?;
 
     Ok(TreeAccountData {
@@ -229,10 +226,7 @@ fn process_v1_address_account(account: &Account) -> Result<TreeAccountData, Phot
         })?;
 
     let indexed_tree = tree_account.tree().map_err(|e| {
-        PhotonApiError::UnexpectedError(format!(
-            "Failed to parse indexed merkle tree: {}",
-            e
-        ))
+        PhotonApiError::UnexpectedError(format!("Failed to parse indexed merkle tree: {}", e))
     })?;
 
     Ok(TreeAccountData {
