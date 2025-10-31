@@ -3773,7 +3773,6 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0985921012ffc149596eac90d1170399bb70dbebfa2212bb72b2da30a558ec6"
 dependencies = [
- "anchor-lang",
  "borsh 0.10.4",
  "bytemuck",
  "light-hasher 4.0.0",

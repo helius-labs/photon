@@ -109,7 +109,7 @@ impl From<[u8; 32]> for SerializablePubkey {
 
 impl From<LightPubkey> for SerializablePubkey {
     fn from(pubkey: LightPubkey) -> Self {
-        SerializablePubkey(pubkey.into())
+        SerializablePubkey(SolanaPubkey::from(pubkey.to_bytes()))
     }
 }
 

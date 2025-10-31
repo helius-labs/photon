@@ -15,15 +15,24 @@ use light_compressed_account::Pubkey as LightPubkey;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
+// Helper functions for pubkey conversions
+fn to_light_pubkey(pubkey: &Pubkey) -> LightPubkey {
+    LightPubkey::from(pubkey.to_bytes())
+}
+
+fn to_solana_pubkey(pubkey: &LightPubkey) -> Pubkey {
+    Pubkey::from(pubkey.to_bytes())
+}
+
 pub fn parse_public_transaction_event_v2(
     program_ids: &[Pubkey],
     instructions: &[Vec<u8>],
     accounts: Vec<Vec<Pubkey>>,
 ) -> Option<Vec<BatchPublicTransactionEvent>> {
-    let light_program_ids: Vec<LightPubkey> = program_ids.iter().map(|p| (*p).into()).collect();
+    let light_program_ids: Vec<LightPubkey> = program_ids.iter().map(|p| to_light_pubkey(p)).collect();
     let light_accounts: Vec<Vec<LightPubkey>> = accounts
         .into_iter()
-        .map(|acc_vec| acc_vec.into_iter().map(|acc| acc.into()).collect())
+        .map(|acc_vec| acc_vec.into_iter().map(|acc| to_light_pubkey(&acc)).collect())
         .collect();
     let events =
         event_from_light_transaction(&light_program_ids, instructions, light_accounts).ok()?;
@@ -44,7 +53,7 @@ pub fn parse_public_transaction_event_v2(
                         .iter()
                         .map(|x| OutputCompressedAccountWithPackedContext {
                             compressed_account: CompressedAccount {
-                                owner: x.compressed_account.owner.into(),
+                                owner: to_solana_pubkey(&x.compressed_account.owner),
                                 lamports: x.compressed_account.lamports,
                                 address: x.compressed_account.address,
                                 data: x.compressed_account.data.as_ref().map(|d| {
@@ -64,7 +73,7 @@ pub fn parse_public_transaction_event_v2(
                         .sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV1 {
-                            pubkey: x.tree_pubkey.into(),
+                            pubkey: to_solana_pubkey(&x.tree_pubkey),
                             seq: x.seq,
                         })
                         .collect(),
@@ -77,7 +86,7 @@ pub fn parse_public_transaction_event_v2(
                         .event
                         .pubkey_array
                         .into_iter()
-                        .map(|p| p.into())
+                        .map(|p| to_solana_pubkey(&p))
                         .collect(),
                     message: public_transaction_event.event.message,
                 };
@@ -89,8 +98,8 @@ pub fn parse_public_transaction_event_v2(
                         .input_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey.into(),
-                            queue_pubkey: x.queue_pubkey.into(),
+                            tree_pubkey: to_solana_pubkey(&x.tree_pubkey),
+                            queue_pubkey: to_solana_pubkey(&x.queue_pubkey),
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
@@ -99,8 +108,8 @@ pub fn parse_public_transaction_event_v2(
                         .address_sequence_numbers
                         .iter()
                         .map(|x| MerkleTreeSequenceNumberV2 {
-                            tree_pubkey: x.tree_pubkey.into(),
-                            queue_pubkey: x.queue_pubkey.into(),
+                            tree_pubkey: to_solana_pubkey(&x.tree_pubkey),
+                            queue_pubkey: to_solana_pubkey(&x.queue_pubkey),
                             tree_type: x.tree_type,
                             seq: x.seq,
                         })
