@@ -74,8 +74,11 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.82"
 
 solana-client = "3.0.8"
-solana-sdk = "3.0.0"
-solana-pubkey ={ version = "3.0.0", features = ["serde"] }
+solana-pubkey = { version = "3.0.0", features = ["serde"] }
+solana-signature = "3.1.0"
+solana-account = "3.2.0"
+solana-clock = "3.0.0"
+solana-transaction = "3.0.1"
 solana-bn254 = "3.1.2"
 solana-commitment-config = "3.0.0"
 

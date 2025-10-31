@@ -1,8 +1,8 @@
 use log::{debug, info, warn};
 use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set};
+use solana_account::Account;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::{prelude::*, tree_metadata};

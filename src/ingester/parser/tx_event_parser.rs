@@ -8,7 +8,7 @@ use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use log::info;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use std::collections::HashMap;
 
 pub async fn parse_public_transaction_event_v1<T>(

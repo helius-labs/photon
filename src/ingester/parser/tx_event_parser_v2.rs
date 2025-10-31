@@ -13,7 +13,7 @@ use crate::common::typedefs::hash::Hash;
 use light_event::parse::event_from_light_transaction;
 use light_compressed_account::Pubkey as LightPubkey;
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 // Helper function for pubkey conversion
 fn to_light_pubkey(pubkey: &Pubkey) -> LightPubkey {

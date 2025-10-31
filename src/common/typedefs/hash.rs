@@ -9,7 +9,7 @@ use serde::de::{self, Visitor};
 use serde::ser::Serializer;
 use serde::Deserializer;
 #[allow(unused_imports)]
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use thiserror::Error;
 
 // Maximum length of a 32 byte base58 encoded hash

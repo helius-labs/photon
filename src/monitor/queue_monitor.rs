@@ -8,7 +8,7 @@ use light_zero_copy::vec::ZeroCopyVecU64;
 use log::{debug, error, trace, warn};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::dao::generated::{accounts, address_queues};
 

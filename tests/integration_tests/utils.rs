@@ -34,11 +34,12 @@ pub use rstest::rstest;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
+use solana_account::Account as SolanaAccount;
+use solana_clock::Slot;
 use solana_commitment_config::CommitmentConfig;
 use solana_commitment_config::CommitmentLevel;
-use solana_sdk::account::Account as SolanaAccount;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::{clock::Slot, signature::Signature};
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, UiConfirmedBlock, UiTransactionEncoding,
 };

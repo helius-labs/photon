@@ -28,7 +28,7 @@ use sea_orm::{
     EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
 use solana_pubkey::{pubkey, Pubkey};
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use sqlx::types::Decimal;
 use std::{cmp::max, collections::HashMap};
 

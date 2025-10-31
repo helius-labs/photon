@@ -40,7 +40,7 @@ use photon_indexer::{
     },
     common::typedefs::serializable_signature::SerializableSignature,
 };
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 // Photon does not support out-of-order transactions, but it does reprocessing previous transactions.
 fn all_valid_permutations(txns: &[&str]) -> Vec<Vec<String>> {

@@ -167,7 +167,7 @@ impl TreeInfo {
 
     pub async fn get_by_sdk_pubkey<T>(
         conn: &T,
-        pubkey: &solana_sdk::pubkey::Pubkey,
+        pubkey: &Pubkey,
     ) -> Result<Option<TreeInfo>, crate::ingester::error::IngesterError>
     where
         T: ConnectionTrait + TransactionTrait,
