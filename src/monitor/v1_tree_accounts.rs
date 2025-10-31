@@ -5,6 +5,7 @@ use light_concurrent_merkle_tree::zero_copy::ConcurrentMerkleTreeZeroCopy;
 use light_hasher::Poseidon;
 use light_indexed_merkle_tree::zero_copy::IndexedMerkleTreeZeroCopy;
 use light_merkle_tree_metadata::merkle_tree::MerkleTreeMetadata;
+use std::mem::size_of;
 
 /// StateMerkleTreeAccount discriminator
 pub const STATE_MERKLE_TREE_DISCRIMINATOR: [u8; 8] = [172, 43, 172, 186, 29, 73, 219, 84];
@@ -14,7 +15,7 @@ pub const ADDRESS_MERKLE_TREE_DISCRIMINATOR: [u8; 8] = [99, 100, 84, 45, 134, 15
 
 /// V1 State Merkle Tree Account structure (for deserialization)
 /// The on-chain layout is: [8 byte discriminator][metadata][tree_bytes]
-#[derive(Debug, BorshDeserialize)]
+#[derive(Debug)]
 pub struct StateMerkleTreeAccount {
     pub metadata: MerkleTreeMetadata,
     /// Raw bytes containing the ConcurrentMerkleTree data
@@ -22,6 +23,17 @@ pub struct StateMerkleTreeAccount {
 }
 
 impl StateMerkleTreeAccount {
+    pub fn from_account_bytes(data: &[u8]) -> Result<Self, std::io::Error> {
+        check_discriminator(data, &STATE_MERKLE_TREE_DISCRIMINATOR)?;
+        let mut cursor = &data[8..];
+        let metadata = MerkleTreeMetadata::deserialize(&mut cursor)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+        Ok(Self {
+            metadata,
+            tree_bytes: cursor[size_of::<MerkleTreeMetadata>()..].to_vec(),
+        })
+    }
+
     /// Get a zero-copy view of the merkle tree
     pub fn tree(&self) -> Result<ConcurrentMerkleTreeZeroCopy<'_, Poseidon, 26>, std::io::Error> {
         ConcurrentMerkleTreeZeroCopy::from_bytes_zero_copy(&self.tree_bytes)
@@ -31,7 +43,7 @@ impl StateMerkleTreeAccount {
 
 /// V1 Address Merkle Tree Account structure (for deserialization)
 /// The on-chain layout is: [8 byte discriminator][metadata][tree_bytes]
-#[derive(Debug, BorshDeserialize)]
+#[derive(Debug)]
 pub struct AddressMerkleTreeAccount {
     pub metadata: MerkleTreeMetadata,
     /// Raw bytes containing the IndexedMerkleTree data
@@ -39,6 +51,17 @@ pub struct AddressMerkleTreeAccount {
 }
 
 impl AddressMerkleTreeAccount {
+    pub fn from_account_bytes(data: &[u8]) -> Result<Self, std::io::Error> {
+        check_discriminator(data, &ADDRESS_MERKLE_TREE_DISCRIMINATOR)?;
+        let mut cursor = &data[8..];
+        let metadata = MerkleTreeMetadata::deserialize(&mut cursor)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+        Ok(Self {
+            metadata,
+            tree_bytes: cursor[size_of::<MerkleTreeMetadata>()..].to_vec(),
+        })
+    }
+
     /// Get a zero-copy view of the indexed merkle tree
     pub fn tree(
         &self,

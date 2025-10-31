@@ -1,4 +1,3 @@
-use borsh::BorshDeserialize;
 use log::{debug, info, warn};
 use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -8,10 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::{prelude::*, tree_metadata};
 use crate::ingester::parser::{get_compression_program_id, EXPECTED_TREE_OWNER};
-use crate::monitor::v1_tree_accounts::{
-    check_discriminator, AddressMerkleTreeAccount, StateMerkleTreeAccount,
-    ADDRESS_MERKLE_TREE_DISCRIMINATOR, STATE_MERKLE_TREE_DISCRIMINATOR,
-};
+use crate::monitor::v1_tree_accounts::{AddressMerkleTreeAccount, StateMerkleTreeAccount};
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
 use light_compressed_account::TreeType;
 
@@ -186,17 +182,9 @@ pub async fn process_tree_account(
 }
 
 fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, PhotonApiError> {
-    check_discriminator(&account.data, &STATE_MERKLE_TREE_DISCRIMINATOR).map_err(|_| {
-        PhotonApiError::UnexpectedError("Invalid state merkle tree discriminator".to_string())
+    let tree_account = StateMerkleTreeAccount::from_account_bytes(&account.data).map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("Failed to deserialize state tree account: {}", e))
     })?;
-
-    let tree_account =
-        StateMerkleTreeAccount::deserialize(&mut &account.data[8..]).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to deserialize state tree account: {}",
-                e
-            ))
-        })?;
 
     let merkle_tree = tree_account.tree().map_err(|e| {
         PhotonApiError::UnexpectedError(format!("Failed to parse concurrent merkle tree: {}", e))
@@ -213,12 +201,8 @@ fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, Photon
 }
 
 fn process_v1_address_account(account: &Account) -> Result<TreeAccountData, PhotonApiError> {
-    check_discriminator(&account.data, &ADDRESS_MERKLE_TREE_DISCRIMINATOR).map_err(|_| {
-        PhotonApiError::UnexpectedError("Invalid address merkle tree discriminator".to_string())
-    })?;
-
     let tree_account =
-        AddressMerkleTreeAccount::deserialize(&mut &account.data[8..]).map_err(|e| {
+        AddressMerkleTreeAccount::from_account_bytes(&account.data).map_err(|e| {
             PhotonApiError::UnexpectedError(format!(
                 "Failed to deserialize address tree account: {}",
                 e
