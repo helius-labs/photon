@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcTransactionConfig;
 use solana_client::rpc_request::RpcRequest;
-use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+use solana_commitment_config::CommitmentConfig;
+use solana_commitment_config::CommitmentLevel;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::convert::TryFrom;
 use utoipa::{

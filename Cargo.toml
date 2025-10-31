@@ -73,12 +73,13 @@ sea-orm-migration = { version = "0.10.6", features = [
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.82"
 
-solana-client = "1.18.0"
-solana-program = "1.18.0"
-solana-sdk = "1.18.0"
-solana-pubkey ={ version = "2.3.0", features = ["serde"] }
+solana-client = "3.0.8"
+solana-sdk = "3.0.0"
+solana-pubkey ={ version = "3.0.0", features = ["serde"] }
+solana-bn254 = "3.1.2"
+solana-commitment-config = "3.0.0"
 
-solana-transaction-status = "1.18.0"
+solana-transaction-status = "3.0.8"
 
 light-zero-copy = { git = "https://github.com/Lightprotocol/light-protocol", rev = "40736887082f6f879ee73c77005adabd36ead5b6", default-features = false}
 light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "40736887082f6f879ee73c77005adabd36ead5b6", default-features = false }
@@ -120,8 +121,8 @@ utoipa = { version = "4.2.0", features = [
     "chrono",
     "non_strict_integers",
 ] }
-yellowstone-grpc-client = "1.15.0"
-yellowstone-grpc-proto = "1.14.0"
+yellowstone-grpc-client = "10.1.1"
+yellowstone-grpc-proto = "10.1.1"
 cadence = "1.4.0"
 async-stream = "0.3.5"
 rand = "0.8.5"
