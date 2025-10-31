@@ -74,19 +74,20 @@ where
         .zip(transaction_event.output_leaf_indices.iter())
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
-        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree)
+        let tree_solana = solana_pubkey::Pubkey::new_from_array(tree.to_bytes());
+        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree_solana)
             .await
             .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
         {
             Some(info) => info,
             None => {
                 if super::SKIP_UNKNOWN_TREES {
-                    log::warn!("Skipping unknown tree: {}", tree.to_string());
+                    log::warn!("Skipping unknown tree: {}", tree_solana);
                     continue;
                 } else {
                     return Err(IngesterError::ParserError(format!(
                         "Missing queue for tree: {}",
-                        tree.to_string()
+                        tree_solana
                     )));
                 }
             }

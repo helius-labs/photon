@@ -8,14 +8,12 @@ use solana_sdk::pubkey::Pubkey;
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::{prelude::*, tree_metadata};
 use crate::ingester::parser::{get_compression_program_id, EXPECTED_TREE_OWNER};
-use account_compression::utils::check_discriminator::check_discriminator;
-use account_compression::{AddressMerkleTreeAccount, StateMerkleTreeAccount};
+use crate::monitor::v1_tree_accounts::{
+    check_discriminator, AddressMerkleTreeAccount, StateMerkleTreeAccount,
+    ADDRESS_MERKLE_TREE_DISCRIMINATOR, STATE_MERKLE_TREE_DISCRIMINATOR,
+};
 use light_batched_merkle_tree::merkle_tree::BatchedMerkleTreeAccount;
 use light_compressed_account::TreeType;
-use light_concurrent_merkle_tree::light_hasher::Poseidon;
-use light_concurrent_merkle_tree::zero_copy::ConcurrentMerkleTreeZeroCopy;
-use light_indexed_merkle_tree::zero_copy::IndexedMerkleTreeZeroCopy;
-use std::mem;
 
 /// Tree account data extracted from on-chain account
 pub struct TreeAccountData {
@@ -188,7 +186,7 @@ pub async fn process_tree_account(
 }
 
 fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, PhotonApiError> {
-    check_discriminator::<StateMerkleTreeAccount>(&account.data).map_err(|_| {
+    check_discriminator(&account.data, &STATE_MERKLE_TREE_DISCRIMINATOR).map_err(|_| {
         PhotonApiError::UnexpectedError("Invalid state merkle tree discriminator".to_string())
     })?;
 
@@ -200,14 +198,12 @@ fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, Photon
             ))
         })?;
 
-    let tree_data = &account.data[8 + mem::size_of::<StateMerkleTreeAccount>()..];
-    let merkle_tree = ConcurrentMerkleTreeZeroCopy::<Poseidon, 26>::from_bytes_zero_copy(tree_data)
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to parse concurrent merkle tree: {}",
-                e
-            ))
-        })?;
+    let merkle_tree = tree_account.tree().map_err(|e| {
+        PhotonApiError::UnexpectedError(format!(
+            "Failed to parse concurrent merkle tree: {}",
+            e
+        ))
+    })?;
 
     Ok(TreeAccountData {
         queue_pubkey: Pubkey::new_from_array(tree_account.metadata.associated_queue.to_bytes()),
@@ -220,7 +216,7 @@ fn process_v1_state_account(account: &Account) -> Result<TreeAccountData, Photon
 }
 
 fn process_v1_address_account(account: &Account) -> Result<TreeAccountData, PhotonApiError> {
-    check_discriminator::<AddressMerkleTreeAccount>(&account.data).map_err(|_| {
+    check_discriminator(&account.data, &ADDRESS_MERKLE_TREE_DISCRIMINATOR).map_err(|_| {
         PhotonApiError::UnexpectedError("Invalid address merkle tree discriminator".to_string())
     })?;
 
@@ -232,15 +228,12 @@ fn process_v1_address_account(account: &Account) -> Result<TreeAccountData, Phot
             ))
         })?;
 
-    let tree_data = &account.data[8 + mem::size_of::<AddressMerkleTreeAccount>()..];
-    let indexed_tree =
-        IndexedMerkleTreeZeroCopy::<Poseidon, usize, 26, 16>::from_bytes_zero_copy(tree_data)
-            .map_err(|e| {
-                PhotonApiError::UnexpectedError(format!(
-                    "Failed to parse indexed merkle tree: {}",
-                    e
-                ))
-            })?;
+    let indexed_tree = tree_account.tree().map_err(|e| {
+        PhotonApiError::UnexpectedError(format!(
+            "Failed to parse indexed merkle tree: {}",
+            e
+        ))
+    })?;
 
     Ok(TreeAccountData {
         queue_pubkey: Pubkey::new_from_array(tree_account.metadata.associated_queue.to_bytes()),

@@ -88,7 +88,6 @@ light-compressed-account = { version = "0.5.0" }
 light-hasher = { version = "4.0.0" }
 light-poseidon = "0.3.0"
 light-indexed-merkle-tree = "3.0.0"
-account-compression = "2.0.0"
 
 sqlx = { version = "0.6.2", features = [
     "macros",

@@ -2,7 +2,7 @@
 /// to avoid having to import all of Light's dependencies.
 use borsh::{BorshDeserialize, BorshSerialize};
 use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
-use solana_pubkey::Pubkey;
+use light_compressed_account::Pubkey;
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
