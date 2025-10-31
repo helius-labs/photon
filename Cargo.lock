@@ -4058,6 +4058,7 @@ dependencies = [
  "base64 0.21.7",
  "bincode",
  "borsh 0.10.4",
+ "borsh 1.5.7",
  "bs58 0.4.0",
  "byteorder",
  "bytes",

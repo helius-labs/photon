@@ -31,22 +31,13 @@ impl SerializablePubkey {
 
 impl BorshDeserialize for SerializablePubkey {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
-        if buf.len() < 32 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "Buffer underflow",
-            ));
-        }
-        let (pubkey_bytes, rest) = buf.split_at(32);
-        *buf = rest;
-        let array: [u8; 32] = pubkey_bytes.try_into().expect("slice with incorrect length");
-        Ok(SerializablePubkey(SolanaPubkey::new_from_array(array)))
+        use borsh1::BorshDeserialize as BorshDeserialize1;
+        <SolanaPubkey as BorshDeserialize1>::deserialize(buf).map(SerializablePubkey)
     }
 
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
-        let mut buffer = [0u8; 32]; // SolanaPubkey is 32 bytes
-        reader.read_exact(&mut buffer)?;
-        Ok(SerializablePubkey(SolanaPubkey::new_from_array(buffer)))
+        use borsh1::BorshDeserialize as BorshDeserialize1;
+        <SolanaPubkey as BorshDeserialize1>::deserialize_reader(reader).map(SerializablePubkey)
     }
 }
 
