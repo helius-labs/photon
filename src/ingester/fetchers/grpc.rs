@@ -298,7 +298,12 @@ fn parse_block(block: SubscribeUpdateBlock) -> BlockInfo {
 
 fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> TransactionInfo {
     let meta = transaction.meta.unwrap();
-    let error = create_tx_error(meta.err.as_ref()).unwrap();
+    let error = create_tx_error(meta.err.as_ref());
+    if let Err(e) = &error {
+        error!("Error parsing transaction error: {}. Error bytes: {:?}", e, meta.err);
+    }
+    let error = error.unwrap();
+
     let error = error.map(|e| e.to_string());
 
     let signature = Signature::try_from(transaction.signature).unwrap();
