@@ -46,6 +46,8 @@ jobs:
 
       - name: Install additional tools
         run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
           npm install -g @apidevtools/swagger-cli
           wget https://dl.min.io/server/minio/release/linux-amd64/minio
           chmod +x minio

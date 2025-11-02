@@ -2,6 +2,8 @@
 pub mod api;
 pub mod common;
 pub mod dao;
+pub mod events;
+pub mod grpc;
 pub mod ingester;
 pub mod migration;
 pub mod monitor;
