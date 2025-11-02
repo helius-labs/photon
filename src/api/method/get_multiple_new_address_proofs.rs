@@ -122,7 +122,7 @@ pub async fn get_multiple_new_address_proofs_helper(
                 let queued_address = SerializablePubkey::try_from(queued_address)?;
                 return Err(PhotonApiError::ValidationError(format!(
                     "Address {} already exists",
-                    address
+                    queued_address
                 )));
             }
         }
