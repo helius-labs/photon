@@ -22,7 +22,7 @@ use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
 use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
 use serial_test::serial;
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::str::FromStr;
 

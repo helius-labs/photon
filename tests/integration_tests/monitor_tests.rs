@@ -5,7 +5,7 @@ use photon_indexer::ingester::parser::EXPECTED_TREE_OWNER;
 use photon_indexer::monitor::tree_metadata_sync::{upsert_tree_metadata, TreeAccountData};
 use sea_orm::{ColumnTrait, DatabaseBackend, EntityTrait, QueryFilter};
 use solana_pubkey::Pubkey;
-use solana_sdk::pubkey::Pubkey as SdkPubkey;
+use solana_pubkey::Pubkey as SdkPubkey;
 
 use crate::utils::*;
 use light_compressed_account::TreeType;

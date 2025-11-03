@@ -6,11 +6,11 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::ingester::parser::tree_info::TreeInfo;
 use borsh::{BorshDeserialize, BorshSerialize};
 use jsonrpsee_core::Serialize;
-use light_compressed_account::indexer_event::event::{BatchNullifyContext, NewAddress};
+use light_event::event::{BatchNullifyContext, NewAddress};
 use light_compressed_account::TreeType;
 use log::debug;
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 
@@ -341,7 +341,7 @@ mod tests {
     use light_compressed_account::TreeType;
     use sea_orm::DatabaseConnection;
     use sea_orm_migration::MigratorTrait;
-    use solana_sdk::pubkey::Pubkey as SdkPubkey;
+    use solana_pubkey::Pubkey as SdkPubkey;
 
     async fn setup_test_db() -> DatabaseConnection {
         let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();

@@ -24,7 +24,7 @@ use sea_orm::{
     EntityTrait, QueryFilter, QueryTrait, Set, Statement,
 };
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 /// Ensures the zeroeth element (leaf_index 0) exists if not already present
 fn ensure_zeroeth_element_exists(

@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
+use solana_clock::{Slot, UnixTimestamp};
 use solana_pubkey::Pubkey;
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    signature::Signature,
-    transaction::VersionedTransaction,
-};
+use solana_signature::Signature;
+use solana_transaction::versioned::VersionedTransaction;
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
     EncodedTransactionWithStatusMeta, UiConfirmedBlock, UiInstruction, UiTransactionStatusMeta,
@@ -189,7 +187,7 @@ pub fn parse_instruction_groups(
                 .iter()
                 .chain(loaded_addresses.readonly.iter())
             {
-                let sdk_pubkey = solana_sdk::pubkey::Pubkey::from_str(address)
+                let sdk_pubkey = Pubkey::from_str(address)
                     .map_err(|e| IngesterError::ParserError(e.to_string()))?;
                 sdk_accounts.push(sdk_pubkey);
             }

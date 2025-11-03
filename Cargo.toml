@@ -37,12 +37,12 @@ path = "src/tools/tree_validator/main.rs"
 ark-serialize = "0.5"
 ark-bn254 = "0.5"
 
-anchor-lang = "0.29.0"
 anyhow = "1.0.79"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1.85"
 base64 = "0.21.0"
 borsh = "0.10.3"
+borsh1 = { package = "borsh", version = "1.5" }
 bs58 = "0.4.0"
 byteorder = "1.5.0"
 cadence-macros = "1.2.0"
@@ -74,22 +74,26 @@ sea-orm-migration = { version = "0.10.6", features = [
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.82"
 
-solana-client = "1.18.0"
-solana-program = "1.18.0"
-solana-sdk = "1.18.0"
-solana-pubkey = "2.3.0"
+solana-client = "3.0.8"
+solana-pubkey = { version = "3.0.0", features = ["serde", "borsh"] }
+solana-signature = "3.1.0"
+solana-account = "3.2.0"
+solana-clock = "3.0.0"
+solana-transaction = "3.0.1"
+solana-bn254 = "3.1.2"
+solana-commitment-config = "3.0.0"
 
-solana-transaction-status = "1.18.0"
+solana-transaction-status = "3.0.8"
 
-light-zero-copy = { version = "0.4.0", features = ["solana"] }
-light-concurrent-merkle-tree = { version = "3.0.0", features = ["solana"] }
-light-batched-merkle-tree = { version = "0.5.0", features = ["solana"] }
-light-merkle-tree-metadata = { version = "0.5.0", features = ["solana"] }
-light-compressed-account = { version = "0.5.0", features = ["anchor"] }
-light-hasher = { version = "4.0.0", features = ["solana"] }
+light-zero-copy = { version = "0.5",default-features = false}
+light-concurrent-merkle-tree = {version = "4", default-features = false }
+light-batched-merkle-tree = { version = "0.6", default-features = false}
+light-merkle-tree-metadata = { version = "0.6", default-features = false }
+light-compressed-account = { version = "0.6", default-features = false }
+light-hasher = { version = "5", features = ["poseidon", "keccak", "sha256"], default-features = false}
 light-poseidon = "0.3.0"
-light-indexed-merkle-tree = "3.0.0"
-account-compression = "2.0.0"
+light-indexed-merkle-tree = { version = "4", default-features = false }
+light-event = "0.1"
 
 sqlx = { version = "0.6.2", features = [
     "macros",
@@ -121,8 +125,8 @@ utoipa = { version = "4.2.0", features = [
     "chrono",
     "non_strict_integers",
 ] }
-yellowstone-grpc-client = "1.15.0"
-yellowstone-grpc-proto = "1.14.0"
+yellowstone-grpc-client = "10.1.1"
+yellowstone-grpc-proto = "10.1.1"
 cadence = "1.4.0"
 async-stream = "0.3.5"
 rand = "0.8.5"
@@ -134,7 +138,7 @@ cloud-storage = "0.11.1"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-merkle-tree-reference = "3.0.0"
+light-merkle-tree-reference = "4"
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.

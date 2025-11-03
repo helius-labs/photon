@@ -1,6 +1,6 @@
 use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
-use solana_program::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::migration::model::table::Accounts;

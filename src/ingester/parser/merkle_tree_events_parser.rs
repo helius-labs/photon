@@ -12,7 +12,7 @@ use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use solana_pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 
 /// A map of merkle tree events and sequence numbers by merkle tree pubkey.
 /// We keep sequence number to order the events.

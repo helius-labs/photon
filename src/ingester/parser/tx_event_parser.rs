@@ -5,10 +5,10 @@ use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
-use anchor_lang::AnchorDeserialize;
+use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use log::info;
-use solana_sdk::signature::Signature;
+use solana_signature::Signature;
 use std::collections::HashMap;
 
 pub async fn parse_public_transaction_event_v1<T>(
@@ -74,19 +74,20 @@ where
         .zip(transaction_event.output_leaf_indices.iter())
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
-        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree)
+        let tree_solana = solana_pubkey::Pubkey::new_from_array(tree.to_bytes());
+        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree_solana)
             .await
             .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
         {
             Some(info) => info,
             None => {
                 if super::SKIP_UNKNOWN_TREES {
-                    log::warn!("Skipping unknown tree: {}", tree.to_string());
+                    log::warn!("Skipping unknown tree: {}", tree_solana);
                     continue;
                 } else {
                     return Err(IngesterError::ParserError(format!(
                         "Missing queue for tree: {}",
-                        tree.to_string()
+                        tree_solana
                     )));
                 }
             }

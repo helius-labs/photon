@@ -29,19 +29,19 @@ impl SerializablePubkey {
     }
 }
 
-impl anchor_lang::AnchorDeserialize for SerializablePubkey {
+impl BorshDeserialize for SerializablePubkey {
     fn deserialize(buf: &mut &[u8]) -> Result<Self, std::io::Error> {
-        <SolanaPubkey as BorshDeserialize>::deserialize(buf).map(SerializablePubkey)
+        use borsh1::BorshDeserialize as BorshDeserialize1;
+        <SolanaPubkey as BorshDeserialize1>::deserialize(buf).map(SerializablePubkey)
     }
 
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self, std::io::Error> {
-        let mut buffer = [0u8; 32]; // SolanaPubkey is 32 bytes
-        reader.read_exact(&mut buffer)?;
-        Ok(SerializablePubkey(SolanaPubkey::new_from_array(buffer)))
+        use borsh1::BorshDeserialize as BorshDeserialize1;
+        <SolanaPubkey as BorshDeserialize1>::deserialize_reader(reader).map(SerializablePubkey)
     }
 }
 
-impl anchor_lang::AnchorSerialize for SerializablePubkey {
+impl borsh::BorshSerialize for SerializablePubkey {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         writer.write_all(&self.0.to_bytes())
     }
@@ -109,7 +109,7 @@ impl From<[u8; 32]> for SerializablePubkey {
 
 impl From<LightPubkey> for SerializablePubkey {
     fn from(pubkey: LightPubkey) -> Self {
-        SerializablePubkey(pubkey.into())
+        SerializablePubkey(SolanaPubkey::from(pubkey.to_bytes()))
     }
 }
 

@@ -5,7 +5,7 @@ use crate::ingester::persist::{
     execute_account_update_query_and_update_balances, AccountType, ModificationType,
 };
 use crate::migration::Expr;
-use light_compressed_account::indexer_event::event::BatchNullifyContext;
+use light_event::event::BatchNullifyContext;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
 

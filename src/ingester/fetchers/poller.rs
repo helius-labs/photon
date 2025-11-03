@@ -10,7 +10,7 @@ use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
 };
 
-use solana_sdk::commitment_config::CommitmentConfig;
+use solana_commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
@@ -123,7 +123,7 @@ pub async fn fetch_block_with_infinite_retries(
             Err(e) => {
                 if let solana_client::client_error::ClientErrorKind::RpcError(
                     RpcError::RpcResponseError { code, .. },
-                ) = e.kind
+                ) = *e.kind
                 {
                     if SKIPPED_BLOCK_ERRORS.contains(&code) {
                         metric! {

@@ -1,7 +1,7 @@
 use light_compressed_account::QueueType;
 use log::debug;
 use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::dao::generated::{prelude::QueueHashChains, queue_hash_chains};
 
