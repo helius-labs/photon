@@ -81,14 +81,14 @@ solana-pubkey = "3.0"
 
 solana-transaction-status = "3.0"
 
-light-zero-copy = { version = "0.5.0", features = ["solana"] }
-light-concurrent-merkle-tree = { version = "4.0.0", features = ["solana"] }
-light-batched-merkle-tree = { version = "0.6.0", features = ["solana"] }
-light-merkle-tree-metadata = { version = "0.6.0", features = ["solana"] }
-light-compressed-account = { version = "0.6.1", features = ["anchor"] }
-light-hasher = { version = "5.0.0", features = ["solana"] }
-light-poseidon = "0.4.0"
-light-indexed-merkle-tree = "4.0.1"
+light-zero-copy = { version = "0.4.0", features = ["solana"] }
+light-concurrent-merkle-tree = { version = "3.0.0", features = ["solana"] }
+light-batched-merkle-tree = { version = "0.5.0", features = ["solana"] }
+light-merkle-tree-metadata = { version = "0.5.0", features = ["solana"] }
+light-compressed-account = { version = "0.5.0", features = ["anchor"] }
+light-hasher = { version = "4.0.0", features = ["solana"] }
+light-poseidon = "0.3.0"
+light-indexed-merkle-tree = "3.0.0"
 account-compression = "2.0.0"
 
 sqlx = { version = "0.6.2", features = [
