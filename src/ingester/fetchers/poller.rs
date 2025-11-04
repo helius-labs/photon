@@ -90,6 +90,7 @@ fn pop_cached_blocks_to_index(
         } else if min_slot < last_indexed_slot {
             block_cache.remove(&min_slot);
         } else {
+
             break;
         }
     }
@@ -121,6 +122,7 @@ pub async fn fetch_block_with_infinite_retries(
                 return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
             }
             Err(e) => {
+                log::error!("Error fetching block {}: {}", slot, e);
                 if let solana_client::client_error::ClientErrorKind::RpcError(
                     RpcError::RpcResponseError { code, .. },
                 ) = e.kind

@@ -253,13 +253,31 @@ async fn main() {
                             .try_into()
                             .unwrap(),
                     };
-            if let Some(snapshot_dir) = args.snapshot_dir {
-                let directory_adapter = Arc::new(DirectoryAdapter::from_local_directory(snapshot_dir));
+            info!("Last indexed slot (or start slot): {}", last_indexed_slot);
+
+            let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
+                (Some(snapshot_dir), None) => Some(Arc::new(DirectoryAdapter::from_local_directory(
+                    snapshot_dir,
+                ))),
+                (None, Some(gcs_bucket)) => Some(Arc::new(
+                    DirectoryAdapter::from_gcs_bucket_and_prefix_and_env(
+                        gcs_bucket,
+                        args.gcs_prefix.clone(),
+                    )
+                    .await,
+                )),
+                (None, None) => None,
+                (Some(_), Some(_)) => {
+                    error!("Cannot specify both snapshot_dir and gcs_bucket");
+                    std::process::exit(1);
+                }
+            };
+
+            if let Some(directory_adapter) = directory_adapter {
                 let snapshot_files = get_snapshot_files_with_metadata(&directory_adapter)
                     .await
                     .unwrap();
                 if !snapshot_files.is_empty() {
-
                     // Sync tree metadata from on-chain before processing snapshot
                     // This is REQUIRED so the indexer knows about all existing trees
                     info!("Syncing tree metadata from on-chain before loading snapshot...");
@@ -275,13 +293,15 @@ async fn main() {
                         );
                         error!("Tree metadata must be synced before loading snapshots to avoid skipping transactions.");
                         std::process::exit(1);
-                    }
+                    }                    
                     info!("Tree metadata sync completed successfully");
 
                     info!("Detected snapshot files. Loading snapshot...");
                     let last_slot = snapshot_files.last().unwrap().end_slot;
+                    info!("Latest snapshot ends at slot: {}", last_slot);
                     // Compute the snapshot offset, if the snapshot is not more recent than this offset then don't fetch the snapshot
                     let snapshot_offset = last_slot - args.snapshot_offset.unwrap_or(0);
+                    info!("Snapshot offset is: {}", snapshot_offset);
 
                     if snapshot_offset >= last_indexed_slot {
                         info!("Snapshot is newer than the last indexed slot. Loading snapshot...");
@@ -310,7 +330,6 @@ async fn main() {
                     }
                 }
             }
-
 
             // For localnet we can safely use a large batch size to speed up indexing.
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
