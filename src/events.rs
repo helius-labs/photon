@@ -1,3 +1,4 @@
+use cadence_macros::statsd_count;
 use once_cell::sync::OnceCell;
 use solana_pubkey::Pubkey;
 
@@ -69,8 +70,29 @@ pub fn init_event_bus() -> EventSubscriber {
 /// This is a fire-and-forget operation. If no subscribers are listening,
 /// the event is silently dropped.
 pub fn publish(event: IngestionEvent) {
+    let event_type = match &event {
+        IngestionEvent::OutputQueueInsert { .. } => "output_queue_insert",
+        IngestionEvent::AddressQueueInsert { .. } => "address_queue_insert",
+        IngestionEvent::NullifierQueueInsert { .. } => "nullifier_queue_insert",
+    };
+
     if let Some(publisher) = EVENT_PUBLISHER.get() {
-        // Ignore send errors - if channel is closed, we just skip the event
-        let _ = publisher.send(event);
+        if let Err(e) = publisher.send(event) {
+            tracing::warn!(
+                "Failed to publish ingestion event to event bus: {} (event bus may be closed or full)",
+                e
+            );
+            crate::metric! {
+                statsd_count!("events.publish.failed", 1, "event_type" => event_type);
+            }
+        } else {
+            crate::metric! {
+                statsd_count!("events.publish.success", 1, "event_type" => event_type);
+            }
+        }
+    } else {
+        crate::metric! {
+            statsd_count!("events.publish.not_initialized", 1, "event_type" => event_type);
+        }
     }
 }

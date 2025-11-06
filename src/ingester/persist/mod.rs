@@ -25,7 +25,8 @@ use log::debug;
 use persisted_indexed_merkle_tree::persist_indexed_tree_updates;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
-    EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
+    EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set,
+    Statement,
 };
 use solana_pubkey::{pubkey, Pubkey};
 use solana_signature::Signature;
@@ -434,10 +435,20 @@ async fn insert_addresses_into_queues(
 
     for (tree, count) in addresses_by_tree {
         if let Some(tree_info) = tree_info_cache.get(&tree) {
+            let queue_size = address_queues::Entity::find()
+                .filter(address_queues::Column::Tree.eq(tree.to_bytes().to_vec()))
+                .count(txn)
+                .await
+                .unwrap_or(0) as usize;
+
+            debug!(
+                "Publishing AddressQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+                tree, tree_info.queue, count, queue_size, slot
+            );
             crate::events::publish(crate::events::IngestionEvent::AddressQueueInsert {
                 tree,
                 queue: tree_info.queue,
-                count,
+                count: queue_size,
                 slot,
             });
         }
@@ -528,10 +539,21 @@ async fn append_output_accounts(
     }
 
     for ((tree, queue), count) in accounts_by_tree_queue {
+        let queue_size = accounts::Entity::find()
+            .filter(accounts::Column::Tree.eq(tree.to_bytes().to_vec()))
+            .filter(accounts::Column::InOutputQueue.eq(true))
+            .count(txn)
+            .await
+            .unwrap_or(0) as usize;
+
+        debug!(
+            "Publishing OutputQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+            tree, queue, count, queue_size, slot
+        );
         crate::events::publish(crate::events::IngestionEvent::OutputQueueInsert {
             tree,
             queue,
-            count,
+            count: queue_size,
             slot,
         });
     }
