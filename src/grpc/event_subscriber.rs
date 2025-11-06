@@ -1,3 +1,4 @@
+use cadence_macros::statsd_count;
 use light_compressed_account::QueueType::{InputStateV2, OutputStateV2};
 use light_compressed_account::TreeType::AddressV2;
 use tokio::sync::broadcast;
@@ -26,6 +27,7 @@ impl GrpcEventSubscriber {
         loop {
             match self.event_receiver.recv().await {
                 Some(event) => {
+                    tracing::trace!("GrpcEventSubscriber received event: {:?}", event);
                     let update = match event {
                         IngestionEvent::AddressQueueInsert {
                             tree,
@@ -76,7 +78,19 @@ impl GrpcEventSubscriber {
                         },
                     };
 
-                    let _ = self.update_sender.send(update);
+                    if let Err(e) = self.update_sender.send(update) {
+                        tracing::warn!(
+                            "Failed to send gRPC queue update to broadcast channel: {} (likely no active subscribers)",
+                            e
+                        );
+                        crate::metric! {
+                            statsd_count!("grpc.event_subscriber.broadcast_failed", 1);
+                        }
+                    } else {
+                        crate::metric! {
+                            statsd_count!("grpc.event_subscriber.broadcast_success", 1);
+                        }
+                    }
                 }
                 None => {
                     tracing::info!("Event channel closed, GrpcEventSubscriber shutting down");

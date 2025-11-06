@@ -6,8 +6,10 @@ use crate::ingester::persist::{
 };
 use crate::migration::Expr;
 use light_compressed_account::indexer_event::event::BatchNullifyContext;
-use sea_orm::QueryFilter;
-use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryTrait};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryTrait,
+};
 
 /// 1. Mark the input accounts as spent.
 ///     (From both V1 and V2 (batched) trees)
@@ -117,10 +119,22 @@ pub async fn spend_input_accounts_batched(
 
     for (tree, count) in tree_nullifier_counts {
         if let Some(tree_info) = tree_info_cache.get(&tree) {
+            let queue_size = accounts::Entity::find()
+                .filter(accounts::Column::Tree.eq(tree.to_bytes().to_vec()))
+                .filter(accounts::Column::NullifierQueueIndex.is_not_null())
+                .filter(accounts::Column::NullifiedInTree.eq(false))
+                .count(txn)
+                .await
+                .unwrap_or(0) as usize;
+
+            log::debug!(
+                "Publishing NullifierQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
+                tree, tree_info.queue, count, queue_size, slot
+            );
             crate::events::publish(crate::events::IngestionEvent::NullifierQueueInsert {
                 tree,
                 queue: tree_info.queue,
-                count,
+                count: queue_size,
                 slot,
             });
         }
