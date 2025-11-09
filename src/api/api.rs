@@ -81,6 +81,9 @@ use crate::api::method::get_multiple_compressed_account_proofs::{
 use crate::api::method::get_queue_elements::{
     get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
 };
+use crate::api::method::get_queue_elements_v2::{
+    get_queue_elements_v2, GetQueueElementsV2Request, GetQueueElementsV2Response,
+};
 use crate::api::method::get_queue_info::{
     get_queue_info, GetQueueInfoRequest, GetQueueInfoResponse,
 };
@@ -277,6 +280,13 @@ impl PhotonApi {
         get_queue_elements(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_queue_elements_v2(
+        &self,
+        request: GetQueueElementsV2Request,
+    ) -> Result<GetQueueElementsV2Response, PhotonApiError> {
+        get_queue_elements_v2(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_queue_info(
         &self,
         request: GetQueueInfoRequest,
@@ -409,6 +419,11 @@ impl PhotonApi {
                 name: "getQueueElements".to_string(),
                 request: Some(GetQueueElementsRequest::schema().1),
                 response: GetQueueElementsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getQueueElementsV2".to_string(),
+                request: Some(GetQueueElementsV2Request::schema().1),
+                response: GetQueueElementsV2Response::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedAccount".to_string(),

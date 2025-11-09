@@ -68,7 +68,6 @@ struct QueueElement {
     nullifier: Option<Vec<u8>>,
 }
 
-
 pub async fn get_queue_elements(
     conn: &DatabaseConnection,
     request: GetQueueElementsRequest,
@@ -96,7 +95,7 @@ pub async fn get_queue_elements(
                 request.output_queue_start_index,
                 limit,
             )
-                .await?;
+            .await?;
             (Some(elements), Some(first_idx))
         } else {
             (None, None)
@@ -111,7 +110,7 @@ pub async fn get_queue_elements(
                 request.input_queue_start_index,
                 limit,
             )
-                .await?;
+            .await?;
             (Some(elements), Some(first_idx))
         } else {
             (None, None)
@@ -127,7 +126,6 @@ pub async fn get_queue_elements(
         input_queue_index: input_first_queue_index,
     })
 }
-
 
 async fn fetch_queue(
     tx: &sea_orm::DatabaseTransaction,
