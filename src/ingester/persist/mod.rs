@@ -434,14 +434,32 @@ async fn insert_addresses_into_queues(
     }
 
     for (tree, count) in addresses_by_tree {
-        if let Some(tree_info) = tree_info_cache.get(&tree) {
+        // Try to get tree_info from cache first, otherwise query database
+        let tree_info = if let Some(info) = tree_info_cache.get(&tree) {
+            Some(info.clone())
+        } else {
+            // Tree not in cache - query database directly
+            match crate::ingester::parser::tree_info::TreeInfo::get_by_pubkey(txn, &tree).await {
+                Ok(info) => info,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to get tree info for address queue event (tree={}): {}",
+                        tree,
+                        e
+                    );
+                    None
+                }
+            }
+        };
+
+        if let Some(tree_info) = tree_info {
             let queue_size = address_queues::Entity::find()
                 .filter(address_queues::Column::Tree.eq(tree.to_bytes().to_vec()))
                 .count(txn)
                 .await
                 .unwrap_or(0) as usize;
 
-            debug!(
+            tracing::info!(
                 "Publishing AddressQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
                 tree, tree_info.queue, count, queue_size, slot
             );
@@ -451,6 +469,11 @@ async fn insert_addresses_into_queues(
                 count: queue_size,
                 slot,
             });
+        } else {
+            tracing::warn!(
+                "Skipping AddressQueueInsert event for unknown tree: {}",
+                tree
+            );
         }
     }
 
