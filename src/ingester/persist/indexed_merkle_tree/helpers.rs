@@ -9,14 +9,6 @@ use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 use solana_pubkey::Pubkey;
 
-/// Hardcoded initial root for AddressV2 trees with height 40.
-/// This must match ADDRESS_TREE_INIT_ROOT_40 from batched-merkle-tree constants.
-/// See: program-libs/batched-merkle-tree/src/constants.rs
-pub const ADDRESS_TREE_INIT_ROOT_40: [u8; 32] = [
-    28, 65, 107, 255, 208, 234, 51, 3, 131, 95, 62, 130, 202, 177, 176, 26, 216, 81, 64, 184, 200,
-    25, 95, 124, 248, 129, 44, 109, 229, 146, 106, 76,
-];
-
 /// Computes range node hash based on tree type
 pub fn compute_hash_by_tree_type(
     range_node: &indexed_trees::Model,
@@ -115,9 +107,7 @@ pub fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
         tree,
         leaf_index: 0,
         value: vec![0; 32],
-        // next_index is 0 initially (not 1!), matching IndexedArray::new behavior
         next_index: 0,
-        // Use bigint_to_be_bytes_array to properly encode as 32 bytes (right-aligned)
         next_value: bigint_to_be_bytes_array::<32>(&HIGHEST_ADDRESS_PLUS_ONE)
             .unwrap()
             .to_vec(),
@@ -138,13 +128,6 @@ pub fn get_zeroeth_exclusion_range_v1(tree: Vec<u8>) -> indexed_trees::Model {
             .to_vec(),
         seq: Some(0),
     }
-}
-
-/// Alias for compute_range_node_hash_v2 to maintain backwards compatibility.
-/// Defaults to AddressV2 behavior (2-field hash).
-/// For AddressV1, use compute_range_node_hash_v1 directly.
-pub fn compute_range_node_hash(node: &indexed_trees::Model) -> Result<Hash, IngesterError> {
-    compute_range_node_hash_v2(node)
 }
 
 pub fn get_top_element(tree: Vec<u8>) -> indexed_trees::Model {
