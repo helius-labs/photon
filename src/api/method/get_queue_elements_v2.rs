@@ -30,7 +30,12 @@ const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 /// Level 0 = leaves, Level (tree_height-1) = root
 #[inline]
 fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
-    debug_assert!(level < tree_height, "level {} >= tree_height {}", level, tree_height);
+    debug_assert!(
+        level < tree_height,
+        "level {} >= tree_height {}",
+        level,
+        tree_height
+    );
     ((level as u64) << 56) | position
 }
 
@@ -294,12 +299,9 @@ async fn fetch_queue_v2(
         .await?
         .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
 
-    let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
-        tx,
-        serializable_tree,
-        indices.clone(),
-    )
-    .await?;
+    let generated_proofs =
+        get_multiple_compressed_leaf_proofs_by_indices(tx, serializable_tree, indices.clone())
+            .await?;
 
     if generated_proofs.len() != indices.len() {
         return Err(PhotonApiError::ValidationError(format!(
@@ -493,7 +495,8 @@ async fn fetch_address_queue_v2(
             pos /= 2;
         }
 
-        let leaf_idx = encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
+        let leaf_idx =
+            encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
         let hashed_leaf = compute_indexed_leaf_hash(&low_value, &next_value)?;
         nodes_map.insert(leaf_idx, hashed_leaf);
     }
@@ -579,14 +582,11 @@ async fn fetch_address_queue_v2(
                 let mut decoded = Vec::with_capacity(batch_size);
                 for pk in slice {
                     let bytes = pk.to_bytes_vec();
-                    let arr: [u8; 32] = bytes
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| {
-                            PhotonApiError::UnexpectedError(
-                                "Invalid address pubkey length for hash chain".to_string(),
-                            )
-                        })?;
+                    let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+                        PhotonApiError::UnexpectedError(
+                            "Invalid address pubkey length for hash chain".to_string(),
+                        )
+                    })?;
                     decoded.push(arr);
                 }
 
