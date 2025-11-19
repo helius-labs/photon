@@ -7,7 +7,7 @@ use crate::ingester::error::IngesterError;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::{
     compute_hash_by_tree_type, get_top_element, get_zeroeth_exclusion_range,
-    get_zeroeth_exclusion_range_v1, ADDRESS_TREE_INIT_ROOT_40,
+    get_zeroeth_exclusion_range_v1,
 };
 use crate::ingester::persist::persisted_state_tree::ZERO_BYTES;
 use crate::ingester::persist::{
@@ -149,20 +149,12 @@ fn proof_for_empty_tree_with_seq(
     let zeroeth_element_hash = compute_hash_by_tree_type(&zeroeth_element, tree_type)
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
-    // For AddressV2 trees with height 40, use the hardcoded initial root
-    // instead of computing it, to match the on-chain initialization.
-    let root = if tree_type == TreeType::AddressV2 && tree_height == 40 {
-        ADDRESS_TREE_INIT_ROOT_40.to_vec()
-    } else {
-        // For other tree types, compute the root from the zeroeth element
-        let mut computed_root = zeroeth_element_hash.clone().to_vec();
-        for elem in proof.iter() {
-            computed_root = compute_parent_hash(computed_root, elem.to_vec()).map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}"))
-            })?;
-        }
-        computed_root
-    };
+    let mut root = zeroeth_element_hash.clone().to_vec();
+    for elem in proof.iter() {
+        root = compute_parent_hash(root, elem.to_vec()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}"))
+        })?;
+    }
 
     let merkle_proof = MerkleProofWithContext {
         proof,

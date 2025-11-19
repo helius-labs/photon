@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use super::{compute_parent_hash, persisted_state_tree::ZERO_BYTES, MAX_SQL_INSERTS};
 use crate::common::format_bytes;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::indexed_merkle_tree::{
-    compute_hash_with_cache, compute_range_node_hash, compute_range_node_hash_v1, get_top_element,
-    get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1, query_next_smallest_elements,
-};
+use crate::ingester::persist::indexed_merkle_tree::{compute_hash_with_cache, compute_range_node_hash_v1, compute_range_node_hash_v2, get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1, query_next_smallest_elements};
 use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::{
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},
@@ -48,7 +45,7 @@ fn ensure_zeroeth_element_exists(
             }
             _ => {
                 let leaf = get_zeroeth_exclusion_range(sdk_tree.to_bytes().to_vec());
-                let hash = compute_range_node_hash(&leaf).map_err(|e| {
+                let hash = compute_range_node_hash_v2(&leaf).map_err(|e| {
                     IngesterError::ParserError(format!(
                         "Failed to compute zeroeth element hash: {}",
                         e
@@ -491,13 +488,13 @@ pub async fn validate_tree(db_conn: &sea_orm::DatabaseConnection, tree: Serializ
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ingester::persist::indexed_merkle_tree::compute_range_node_hash;
+    use crate::ingester::persist::indexed_merkle_tree::compute_range_node_hash_v2;
 
     #[test]
     fn test_zeroeth_element_hash_is_not_zero_bytes_0() {
         let dummy_tree_id = vec![1u8; 32];
         let zeroeth_element = get_zeroeth_exclusion_range(dummy_tree_id.clone());
-        let zeroeth_element_hash_result = compute_range_node_hash(&zeroeth_element);
+        let zeroeth_element_hash_result = compute_range_node_hash_v2(&zeroeth_element);
         assert!(
             zeroeth_element_hash_result.is_ok(),
             "Failed to compute zeroeth_element_hash: {:?}",
