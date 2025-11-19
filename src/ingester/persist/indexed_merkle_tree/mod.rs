@@ -5,10 +5,14 @@ use std::str::FromStr;
 mod helpers;
 mod proof;
 
+#[cfg(test)]
+mod test_address_tree_init;
+
 pub use helpers::{
     compute_hash_by_tree_pubkey, compute_hash_by_tree_type, compute_hash_with_cache,
-    compute_range_node_hash, compute_range_node_hash_v1, get_top_element,
-    get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
+    compute_range_node_hash, compute_range_node_hash_v1, compute_range_node_hash_v2,
+    get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
+    ADDRESS_TREE_INIT_ROOT_40,
 };
 
 pub use proof::{
