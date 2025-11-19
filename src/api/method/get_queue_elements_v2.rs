@@ -24,14 +24,13 @@ use crate::{ingester::persist::persisted_state_tree::get_subtrees, monitor::queu
 use solana_sdk::pubkey::Pubkey;
 
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
-const TREE_HEIGHT: u8 = 32;
 
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
-/// Level 0 = leaves, Level 31 = root
+/// Level 0 = leaves, Level (tree_height-1) = root
 #[inline]
-fn encode_node_index(level: u8, position: u64) -> u64 {
-    debug_assert!(level < TREE_HEIGHT);
+fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
+    debug_assert!(level < tree_height, "level {} >= tree_height {}", level, tree_height);
     ((level as u64) << 56) | position
 }
 
@@ -289,9 +288,15 @@ async fn fetch_queue_v2(
         _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
     };
 
+    let serializable_tree = SerializablePubkey::from(tree.0);
+
+    let tree_info = TreeInfo::get(tx, &serializable_tree.to_string())
+        .await?
+        .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
+
     let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
         tx,
-        SerializablePubkey::from(tree.0),
+        serializable_tree,
         indices.clone(),
     )
     .await?;
@@ -305,7 +310,7 @@ async fn fetch_queue_v2(
         )));
     }
 
-    let (nodes, node_hashes) = deduplicate_nodes(&generated_proofs);
+    let (nodes, node_hashes) = deduplicate_nodes(&generated_proofs, tree_info.height as u8);
 
     let initial_root = generated_proofs[0].root.clone();
 
@@ -483,12 +488,12 @@ async fn fetch_address_queue_v2(
         let mut pos = proof.lowElementLeafIndex as u64;
         for (level, node_hash) in proof.proof.iter().enumerate() {
             let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let node_idx = encode_node_index(level as u8, sibling_pos);
+            let node_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
             nodes_map.insert(node_idx, node_hash.clone());
             pos /= 2;
         }
 
-        let leaf_idx = encode_node_index(0, proof.lowElementLeafIndex as u64);
+        let leaf_idx = encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
         let hashed_leaf = compute_indexed_leaf_hash(&low_value, &next_value)?;
         nodes_map.insert(leaf_idx, hashed_leaf);
     }
@@ -519,13 +524,41 @@ async fn fetch_address_queue_v2(
     .await
     .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
 
-    if !cached.is_empty() {
+    let expected_batch_count = if !addresses.is_empty() && zkp_batch_size > 0 {
+        addresses.len() / zkp_batch_size as usize
+    } else {
+        0
+    };
+
+    log::debug!(
+        "Address queue hash chain cache: batch_start_index={}, cached_count={}, expected_count={}, addresses={}, zkp_batch_size={}",
+        batch_start_index,
+        cached.len(),
+        expected_batch_count,
+        addresses.len(),
+        zkp_batch_size
+    );
+
+    // use cached chains if we have enough to cover all addresses
+    if !cached.is_empty() && cached.len() >= expected_batch_count {
+        log::debug!(
+            "Using {} cached hash chains for batch_start_index={}",
+            cached.len(),
+            batch_start_index
+        );
         let mut sorted = cached;
         sorted.sort_by_key(|c| c.zkp_batch_index);
         for entry in sorted {
             leaves_hash_chains.push(Hash::from(entry.hash_chain));
         }
     } else if !addresses.is_empty() {
+        if cached.is_empty() {
+            log::debug!(
+                "No cached hash chains found, creating {} new chains for batch_start_index={}",
+                expected_batch_count,
+                batch_start_index
+            );
+        }
         if zkp_batch_size == 0 {
             return Err(PhotonApiError::ValidationError(
                 "Address queue ZKP batch size must be greater than zero".to_string(),
@@ -601,6 +634,7 @@ async fn fetch_address_queue_v2(
 /// Returns parallel arrays: (node_indices, node_hashes)
 fn deduplicate_nodes(
     proofs: &[crate::ingester::persist::MerkleProofWithContext],
+    tree_height: u8,
 ) -> (Vec<u64>, Vec<Hash>) {
     let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
 
@@ -609,12 +643,12 @@ fn deduplicate_nodes(
 
         for (level, node_hash) in proof_ctx.proof.iter().enumerate() {
             let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let node_idx = encode_node_index(level as u8, sibling_pos);
+            let node_idx = encode_node_index(level as u8, sibling_pos, tree_height);
             nodes_map.insert(node_idx, node_hash.clone());
             pos = pos / 2;
         }
 
-        let leaf_idx = encode_node_index(0, proof_ctx.leaf_index as u64);
+        let leaf_idx = encode_node_index(0, proof_ctx.leaf_index as u64, tree_height);
         nodes_map.insert(leaf_idx, proof_ctx.hash.clone());
     }
 
