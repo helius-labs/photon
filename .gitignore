@@ -13,3 +13,5 @@ test-ledger/
 minio
 test.db
 docker-compose.yml
+
+proto/**/*.bin
