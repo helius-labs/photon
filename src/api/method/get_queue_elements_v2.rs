@@ -236,7 +236,8 @@ async fn fetch_queue_v2(
         QueueType::InputStateV2 => {
             query_condition = query_condition
                 .add(accounts::Column::NullifierQueueIndex.is_not_null())
-                .add(accounts::Column::NullifiedInTree.eq(false));
+                .add(accounts::Column::NullifiedInTree.eq(false))
+                .add(accounts::Column::Spent.eq(true));
             if let Some(start_queue_index) = start_index {
                 query_condition = query_condition
                     .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
@@ -334,13 +335,23 @@ async fn fetch_queue_v2(
             first_queue_index,
         }),
         QueueType::InputStateV2 => {
-            let tx_hashes: Vec<Hash> = queue_elements
+            let tx_hashes: Result<Vec<Hash>, PhotonApiError> = queue_elements
                 .iter()
-                .map(|e| {
+                .enumerate()
+                .map(|(idx, e)| {
                     e.tx_hash
                         .as_ref()
-                        .map(|tx| Hash::new(tx.as_slice()).unwrap())
-                        .unwrap_or_default()
+                        .ok_or_else(|| {
+                            PhotonApiError::UnexpectedError(format!(
+                                "Missing tx_hash for spent queue element at index {} (leaf_index={}). This should not happen if spent=true filter is working correctly.",
+                                idx, e.leaf_index
+                            ))
+                        })
+                        .and_then(|tx| {
+                            Hash::new(tx.as_slice()).map_err(|e| {
+                                PhotonApiError::UnexpectedError(format!("Invalid tx_hash: {}", e))
+                            })
+                        })
                 })
                 .collect();
 
@@ -348,7 +359,7 @@ async fn fetch_queue_v2(
                 leaf_indices,
                 account_hashes,
                 leaves,
-                tx_hashes,
+                tx_hashes: tx_hashes?,
                 nodes,
                 node_hashes,
                 initial_root,
