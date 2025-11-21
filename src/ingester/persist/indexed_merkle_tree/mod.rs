@@ -7,8 +7,8 @@ mod proof;
 
 pub use helpers::{
     compute_hash_by_tree_pubkey, compute_hash_by_tree_type, compute_hash_with_cache,
-    compute_range_node_hash_v1, compute_range_node_hash_v2,
-    get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
+    compute_range_node_hash_v1, compute_range_node_hash_v2, get_top_element,
+    get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
 };
 
 pub use proof::{
