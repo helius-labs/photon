@@ -3739,24 +3739,29 @@ paths:
                   type: object
                   required:
                   - tree
-                  - numElements
-                  - queueType
                   properties:
-                    numElements:
-                      type: integer
-                      format: uint16
-                      minimum: 0
-                    queueType:
-                      type: integer
-                      format: uint8
-                      minimum: 0
-                    startOffset:
+                    tree:
+                      $ref: '#/components/schemas/Hash'
+                    outputQueueStartIndex:
                       type: integer
                       format: uint64
                       nullable: true
                       minimum: 0
-                    tree:
-                      $ref: '#/components/schemas/Hash'
+                    outputQueueLimit:
+                      type: integer
+                      format: uint16
+                      nullable: true
+                      minimum: 0
+                    inputQueueStartIndex:
+                      type: integer
+                      format: uint64
+                      nullable: true
+                      minimum: 0
+                    inputQueueLimit:
+                      type: integer
+                      format: uint16
+                      nullable: true
+                      minimum: 0
                   additionalProperties: false
         required: true
       responses:
@@ -3791,19 +3796,29 @@ paths:
                     type: object
                     required:
                     - context
-                    - value
-                    - firstValueQueueIndex
                     properties:
                       context:
                         $ref: '#/components/schemas/Context'
-                      firstValueQueueIndex:
-                        type: integer
-                        format: uint64
-                        minimum: 0
-                      value:
+                      outputQueueElements:
                         type: array
+                        nullable: true
                         items:
                           $ref: '#/components/schemas/GetQueueElementsResponseValue'
+                      outputQueueIndex:
+                        type: integer
+                        format: uint64
+                        nullable: true
+                        minimum: 0
+                      inputQueueElements:
+                        type: array
+                        nullable: true
+                        items:
+                          $ref: '#/components/schemas/GetQueueElementsResponseValue'
+                      inputQueueIndex:
+                        type: integer
+                        format: uint64
+                        nullable: true
+                        minimum: 0
                     additionalProperties: false
         '429':
           description: Exceeded rate limit.
