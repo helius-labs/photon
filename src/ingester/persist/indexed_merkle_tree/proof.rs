@@ -151,9 +151,8 @@ fn proof_for_empty_tree_with_seq(
 
     let mut root = zeroeth_element_hash.clone().to_vec();
     for elem in proof.iter() {
-        root = compute_parent_hash(root, elem.to_vec()).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}"))
-        })?;
+        root = compute_parent_hash(root, elem.to_vec())
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}")))?;
     }
 
     let merkle_proof = MerkleProofWithContext {

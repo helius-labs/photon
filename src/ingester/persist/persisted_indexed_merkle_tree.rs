@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use super::{compute_parent_hash, persisted_state_tree::ZERO_BYTES, MAX_SQL_INSERTS};
 use crate::common::format_bytes;
 use crate::ingester::parser::tree_info::TreeInfo;
-use crate::ingester::persist::indexed_merkle_tree::{compute_hash_with_cache, compute_range_node_hash_v1, compute_range_node_hash_v2, get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1, query_next_smallest_elements};
+use crate::ingester::persist::indexed_merkle_tree::{
+    compute_hash_with_cache, compute_range_node_hash_v1, compute_range_node_hash_v2,
+    get_top_element, get_zeroeth_exclusion_range, get_zeroeth_exclusion_range_v1,
+    query_next_smallest_elements,
+};
 use crate::ingester::persist::leaf_node::{persist_leaf_nodes, LeafNode};
 use crate::{
     common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey},

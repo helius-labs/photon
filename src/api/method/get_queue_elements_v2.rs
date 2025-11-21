@@ -1,4 +1,6 @@
-use light_batched_merkle_tree::constants::DEFAULT_ADDRESS_ZKP_BATCH_SIZE;
+use light_batched_merkle_tree::constants::{
+    DEFAULT_ADDRESS_ZKP_BATCH_SIZE, DEFAULT_ZKP_BATCH_SIZE,
+};
 use light_compressed_account::QueueType;
 use light_hasher::{Hasher, Poseidon};
 use sea_orm::{
@@ -51,9 +53,13 @@ pub struct GetQueueElementsV2Request {
 
     pub output_queue_start_index: Option<u64>,
     pub output_queue_limit: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_queue_zkp_batch_size: Option<u16>,
 
     pub input_queue_start_index: Option<u64>,
     pub input_queue_limit: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_queue_zkp_batch_size: Option<u16>,
 
     pub address_queue_start_index: Option<u64>,
     pub address_queue_limit: Option<u16>,
@@ -155,12 +161,14 @@ pub async fn get_queue_elements_v2(
     crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     let output_queue = if let Some(limit) = request.output_queue_limit {
+        let zkp_hint = request.output_queue_zkp_batch_size;
         match fetch_queue_v2(
             &tx,
             &request.tree,
             QueueType::OutputStateV2,
             request.output_queue_start_index,
             limit,
+            zkp_hint,
         )
         .await?
         {
@@ -172,12 +180,14 @@ pub async fn get_queue_elements_v2(
     };
 
     let input_queue = if let Some(limit) = request.input_queue_limit {
+        let zkp_hint = request.input_queue_zkp_batch_size;
         match fetch_queue_v2(
             &tx,
             &request.tree,
             QueueType::InputStateV2,
             request.input_queue_start_index,
             limit,
+            zkp_hint,
         )
         .await?
         {
@@ -222,6 +232,7 @@ async fn fetch_queue_v2(
     queue_type: QueueType,
     start_index: Option<u64>,
     limit: u16,
+    zkp_batch_size_hint: Option<u16>,
 ) -> Result<QueueDataV2, PhotonApiError> {
     if limit > MAX_QUEUE_ELEMENTS {
         return Err(PhotonApiError::ValidationError(format!(
@@ -264,7 +275,7 @@ async fn fetch_queue_v2(
         }
     };
 
-    let queue_elements: Vec<QueueElement> = query
+    let mut queue_elements: Vec<QueueElement> = query
         .limit(limit as u64)
         .into_model::<QueueElement>()
         .all(tx)
@@ -281,7 +292,7 @@ async fn fetch_queue_v2(
         });
     }
 
-    let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
+    let mut indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
     let first_queue_index = match queue_type {
         QueueType::InputStateV2 => {
             queue_elements[0]
@@ -293,12 +304,39 @@ async fn fetch_queue_v2(
         QueueType::OutputStateV2 => queue_elements[0].leaf_index as u64,
         _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
     };
+    if let Some(start) = start_index {
+        if first_queue_index > start {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Requested start_index {} but first_queue_index {} is later (possible pruning)",
+                start, first_queue_index
+            )));
+        }
+    }
 
     let serializable_tree = SerializablePubkey::from(tree.0);
 
     let tree_info = TreeInfo::get(tx, &serializable_tree.to_string())
         .await?
         .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
+
+    let zkp_batch_size = zkp_batch_size_hint
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_ZKP_BATCH_SIZE as u16) as usize;
+    if zkp_batch_size > 0 {
+        let full_batches = indices.len() / zkp_batch_size;
+        let allowed = full_batches * zkp_batch_size;
+        if allowed == 0 {
+            return Ok(match queue_type {
+                QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2::default()),
+                QueueType::InputStateV2 => QueueDataV2::Input(InputQueueDataV2::default()),
+                _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
+            });
+        }
+        if indices.len() > allowed {
+            indices.truncate(allowed);
+            queue_elements.truncate(allowed);
+        }
+    }
 
     let generated_proofs =
         get_multiple_compressed_leaf_proofs_by_indices(tx, serializable_tree, indices.clone())

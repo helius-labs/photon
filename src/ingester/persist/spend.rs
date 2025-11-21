@@ -100,10 +100,7 @@ pub async fn spend_input_accounts_batched(
                 accounts::Column::TxHash,
                 Expr::value(account.tx_hash.to_vec()),
             )
-            .col_expr(
-                accounts::Column::Spent,
-                Expr::value(true),
-            )
+            .col_expr(accounts::Column::Spent, Expr::value(true))
             .exec(txn)
             .await?;
 
