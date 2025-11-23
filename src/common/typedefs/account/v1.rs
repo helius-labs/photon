@@ -12,6 +12,10 @@ use borsh::BorshDeserialize;
 use jsonrpsee_core::Serialize;
 use utoipa::ToSchema;
 
+pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
+pub const C_TOKEN_DISCRIMINATOR_V2: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
+pub const C_TOKEN_DISCRIMINATOR_V3: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 4];
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Account {
@@ -33,7 +37,9 @@ pub struct Account {
 impl Account {
     pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
         match self.data.as_ref() {
-            Some(data) if self.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+            Some(data)
+                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
+            {
                 let data_slice = data.data.0.as_slice();
                 let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
                     IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
@@ -51,6 +57,15 @@ pub struct AccountData {
     pub discriminator: UnsignedInteger,
     pub data: Base64String,
     pub data_hash: Hash,
+}
+
+impl AccountData {
+    pub fn is_c_token_discriminator(&self) -> bool {
+        let bytes = self.discriminator.0.to_le_bytes();
+        bytes == C_TOKEN_DISCRIMINATOR_V1
+            || bytes == C_TOKEN_DISCRIMINATOR_V2
+            || bytes == C_TOKEN_DISCRIMINATOR_V3
+    }
 }
 
 impl TryFrom<Model> for Account {
