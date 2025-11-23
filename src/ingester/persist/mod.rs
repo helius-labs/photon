@@ -103,7 +103,7 @@ pub async fn persist_state_update(
 
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
-        insert_addresses_into_queues(txn, chunk, slot, &tree_info_cache).await?;
+        insert_addresses_into_queues(txn, chunk).await?;
     }
 
     debug!("Persisting output accounts...");
@@ -120,7 +120,7 @@ pub async fn persist_state_update(
         spend_input_accounts(txn, chunk).await?;
     }
 
-    spend_input_accounts_batched(txn, &batch_nullify_context, slot, &tree_info_cache).await?;
+    spend_input_accounts_batched(txn, &batch_nullify_context).await?;
 
     let account_to_transaction = account_transactions
         .iter()
@@ -401,11 +401,6 @@ async fn execute_account_update_query_and_update_balances(
 async fn insert_addresses_into_queues(
     txn: &DatabaseTransaction,
     addresses: &[AddressQueueUpdate],
-    slot: u64,
-    tree_info_cache: &std::collections::HashMap<
-        Pubkey,
-        crate::ingester::parser::tree_info::TreeInfo,
-    >,
 ) -> Result<(), IngesterError> {
     let mut address_models = Vec::new();
 
@@ -430,50 +425,6 @@ async fn insert_addresses_into_queues(
     for address in addresses {
         if let Ok(tree_pubkey) = Pubkey::try_from(address.tree.to_bytes_vec().as_slice()) {
             *addresses_by_tree.entry(tree_pubkey).or_insert(0) += 1;
-        }
-    }
-
-    for (tree, count) in addresses_by_tree {
-        // Try to get tree_info from cache first, otherwise query database
-        let tree_info = if let Some(info) = tree_info_cache.get(&tree) {
-            Some(info.clone())
-        } else {
-            // Tree not in cache - query database directly
-            match crate::ingester::parser::tree_info::TreeInfo::get_by_pubkey(txn, &tree).await {
-                Ok(info) => info,
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to get tree info for address queue event (tree={}): {}",
-                        tree,
-                        e
-                    );
-                    None
-                }
-            }
-        };
-
-        if let Some(tree_info) = tree_info {
-            let queue_size = address_queues::Entity::find()
-                .filter(address_queues::Column::Tree.eq(tree.to_bytes().to_vec()))
-                .count(txn)
-                .await
-                .unwrap_or(0) as usize;
-
-            tracing::info!(
-                "Publishing AddressQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
-                tree, tree_info.queue, count, queue_size, slot
-            );
-            crate::events::publish(crate::events::IngestionEvent::AddressQueueInsert {
-                tree,
-                queue: tree_info.queue,
-                count: queue_size,
-                slot,
-            });
-        } else {
-            tracing::warn!(
-                "Skipping AddressQueueInsert event for unknown tree: {}",
-                tree
-            );
         }
     }
 
@@ -573,12 +524,6 @@ async fn append_output_accounts(
             "Publishing OutputQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
             tree, queue, count, queue_size, slot
         );
-        crate::events::publish(crate::events::IngestionEvent::OutputQueueInsert {
-            tree,
-            queue,
-            count: queue_size,
-            slot,
-        });
     }
 
     Ok(())

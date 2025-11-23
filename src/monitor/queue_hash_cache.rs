@@ -1,6 +1,6 @@
 use light_compressed_account::QueueType;
 use log::debug;
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
+use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, Set};
 use solana_pubkey::Pubkey;
 
 use crate::dao::generated::{prelude::QueueHashChains, queue_hash_chains};
@@ -11,13 +11,16 @@ pub struct CachedHashChain {
 }
 
 /// Store multiple hash chains in a single transaction
-pub async fn store_hash_chains_batch(
-    db: &DatabaseConnection,
+pub async fn store_hash_chains_batch<C>(
+    db: &C,
     tree_pubkey: Pubkey,
     queue_type: QueueType,
     batch_start_index: u64,
     hash_chains: Vec<(usize, u64, [u8; 32])>, // (zkp_batch_index, start_offset, hash_chain)
-) -> Result<(), DbErr> {
+) -> Result<(), DbErr>
+where
+    C: ConnectionTrait,
+{
     if hash_chains.is_empty() {
         return Ok(());
     }
@@ -63,12 +66,15 @@ pub async fn store_hash_chains_batch(
 }
 
 /// Retrieve cached hash chains for a specific tree and queue type
-pub async fn get_cached_hash_chains(
-    db: &DatabaseConnection,
+pub async fn get_cached_hash_chains<C>(
+    db: &C,
     tree_pubkey: Pubkey,
     queue_type: QueueType,
     batch_start_index: u64,
-) -> Result<Vec<CachedHashChain>, DbErr> {
+) -> Result<Vec<CachedHashChain>, DbErr>
+where
+    C: ConnectionTrait,
+{
     let queue_type_int = queue_type as i32;
 
     let results = QueueHashChains::find()

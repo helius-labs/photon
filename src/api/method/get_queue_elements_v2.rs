@@ -1,16 +1,3 @@
-use light_batched_merkle_tree::constants::{
-    DEFAULT_ADDRESS_ZKP_BATCH_SIZE, DEFAULT_ZKP_BATCH_SIZE,
-};
-use light_compressed_account::QueueType;
-use light_hasher::{Hasher, Poseidon};
-use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult,
-    QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
-};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use utoipa::ToSchema;
-
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::{
     get_multiple_new_address_proofs_helper, AddressWithTree, MAX_ADDRESSES,
@@ -23,7 +10,19 @@ use crate::dao::generated::accounts;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 use crate::{ingester::persist::persisted_state_tree::get_subtrees, monitor::queue_hash_cache};
-use solana_sdk::pubkey::Pubkey;
+use light_batched_merkle_tree::constants::{
+    DEFAULT_ADDRESS_ZKP_BATCH_SIZE, DEFAULT_ZKP_BATCH_SIZE,
+};
+use light_compressed_account::QueueType;
+use light_hasher::{Hasher, Poseidon};
+use sea_orm::{
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
+};
+use serde::{Deserialize, Serialize};
+use solana_pubkey::Pubkey;
+use std::collections::HashMap;
+use utoipa::ToSchema;
 
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 

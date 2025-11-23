@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use solana_pubkey::Pubkey;
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
@@ -6,7 +7,6 @@ use crate::common::typedefs::context::Context;
 use crate::dao::generated::{accounts, address_queues, tree_metadata};
 use light_compressed_account::{QueueType, TreeType};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
-use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

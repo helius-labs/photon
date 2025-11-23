@@ -71,11 +71,6 @@ pub async fn spend_input_accounts(
 pub async fn spend_input_accounts_batched(
     txn: &DatabaseTransaction,
     accounts: &[BatchNullifyContext],
-    slot: u64,
-    tree_info_cache: &std::collections::HashMap<
-        solana_pubkey::Pubkey,
-        crate::ingester::parser::tree_info::TreeInfo,
-    >,
 ) -> Result<(), IngesterError> {
     if accounts.is_empty() {
         return Ok(());
@@ -113,17 +108,6 @@ pub async fn spend_input_accounts_batched(
             {
                 *tree_nullifier_counts.entry(tree_pubkey).or_insert(0) += 1;
             }
-        }
-    }
-
-    for (tree, count) in tree_nullifier_counts {
-        if let Some(tree_info) = tree_info_cache.get(&tree) {
-            crate::events::publish(crate::events::IngestionEvent::NullifierQueueInsert {
-                tree,
-                queue: tree_info.queue,
-                count,
-                slot,
-            });
         }
     }
 
