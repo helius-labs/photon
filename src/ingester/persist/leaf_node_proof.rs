@@ -21,7 +21,6 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
         return Ok(Vec::new());
     }
 
-    // Convert SerializablePubkey to [u8; 32] for the helper function
     let tree_bytes = merkle_tree_pubkey.0.to_bytes();
     let root_seq = get_current_tree_sequence(txn, &tree_bytes)
         .await

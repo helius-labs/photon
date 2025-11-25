@@ -41,9 +41,14 @@ fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
     ((level as u64) << 56) | position
 }
 
+struct StateQueueProofData {
+    proofs: Vec<crate::ingester::persist::MerkleProofWithContext>,
+    tree_height: u8,
+}
+
 enum QueueDataV2 {
-    Output(OutputQueueDataV2),
-    Input(InputQueueDataV2),
+    Output(OutputQueueDataV2, Option<StateQueueProofData>),
+    Input(InputQueueDataV2, Option<StateQueueProofData>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -74,13 +79,32 @@ pub struct GetQueueElementsV2Response {
     pub context: Context,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_queue: Option<StateQueueDataV2>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_queue: Option<AddressQueueDataV2>,
+}
+
+/// State queue data with shared tree nodes for output and input queues
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct StateQueueDataV2 {
+    /// Shared deduplicated tree nodes for state queues (output + input)
+    /// node_index encoding: (level << 56) | position
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub nodes: Vec<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub node_hashes: Vec<Hash>,
+    /// Initial root for the state tree (shared by output and input queues)
+    pub initial_root: Hash,
+    /// Sequence number of the root
+    pub root_seq: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_queue: Option<OutputQueueDataV2>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_queue: Option<InputQueueDataV2>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address_queue: Option<AddressQueueDataV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -89,13 +113,6 @@ pub struct OutputQueueDataV2 {
     pub leaf_indices: Vec<u64>,
     pub account_hashes: Vec<Hash>,
     pub leaves: Vec<Hash>,
-
-    /// Deduplicated tree nodes
-    /// node_index encoding: (level << 56) | position
-    pub nodes: Vec<u64>,
-    pub node_hashes: Vec<Hash>,
-
-    pub initial_root: Hash,
     pub first_queue_index: u64,
     pub next_index: u64,
     pub leaves_hash_chains: Vec<Hash>,
@@ -108,12 +125,6 @@ pub struct InputQueueDataV2 {
     pub account_hashes: Vec<Hash>,
     pub leaves: Vec<Hash>,
     pub tx_hashes: Vec<Hash>,
-
-    /// Deduplicated tree nodes
-    pub nodes: Vec<u64>,
-    pub node_hashes: Vec<Hash>,
-
-    pub initial_root: Hash,
     pub first_queue_index: u64,
     pub leaves_hash_chains: Vec<Hash>,
 }
@@ -134,6 +145,7 @@ pub struct AddressQueueDataV2 {
     pub initial_root: Hash,
     pub start_index: u64,
     pub subtrees: Vec<Hash>,
+    pub root_seq: u64,
 }
 
 #[derive(FromQueryResult, Debug)]
@@ -164,7 +176,8 @@ pub async fn get_queue_elements_v2(
     let tx = conn.begin().await?;
     crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
-    let output_queue = if let Some(limit) = request.output_queue_limit {
+    // Fetch output and input queues with their proof data
+    let (output_queue, output_proof_data) = if let Some(limit) = request.output_queue_limit {
         let zkp_hint = request.output_queue_zkp_batch_size;
         match fetch_queue_v2(
             &tx,
@@ -176,14 +189,14 @@ pub async fn get_queue_elements_v2(
         )
         .await?
         {
-            QueueDataV2::Output(data) => Some(data),
-            QueueDataV2::Input(_) => unreachable!("OutputStateV2 should return Output"),
+            QueueDataV2::Output(data, proof_data) => (Some(data), proof_data),
+            QueueDataV2::Input(_, _) => unreachable!("OutputStateV2 should return Output"),
         }
     } else {
-        None
+        (None, None)
     };
 
-    let input_queue = if let Some(limit) = request.input_queue_limit {
+    let (input_queue, input_proof_data) = if let Some(limit) = request.input_queue_limit {
         let zkp_hint = request.input_queue_zkp_batch_size;
         match fetch_queue_v2(
             &tx,
@@ -195,9 +208,25 @@ pub async fn get_queue_elements_v2(
         )
         .await?
         {
-            QueueDataV2::Input(data) => Some(data),
-            QueueDataV2::Output(_) => unreachable!("InputStateV2 should return Input"),
+            QueueDataV2::Input(data, proof_data) => (Some(data), proof_data),
+            QueueDataV2::Output(_, _) => unreachable!("InputStateV2 should return Input"),
         }
+    } else {
+        (None, None)
+    };
+
+    let state_queue = if has_output_request || has_input_request {
+        let (nodes, node_hashes, initial_root, root_seq) =
+            merge_state_queue_proofs(&output_proof_data, &input_proof_data)?;
+
+        Some(StateQueueDataV2 {
+            nodes,
+            node_hashes,
+            initial_root,
+            root_seq,
+            output_queue,
+            input_queue,
+        })
     } else {
         None
     };
@@ -224,10 +253,59 @@ pub async fn get_queue_elements_v2(
 
     Ok(GetQueueElementsV2Response {
         context,
-        output_queue,
-        input_queue,
+        state_queue,
         address_queue,
     })
+}
+
+fn merge_state_queue_proofs(
+    output_proof_data: &Option<StateQueueProofData>,
+    input_proof_data: &Option<StateQueueProofData>,
+) -> Result<(Vec<u64>, Vec<Hash>, Hash, u64), PhotonApiError> {
+    let mut all_proofs: Vec<&crate::ingester::persist::MerkleProofWithContext> = Vec::new();
+    let mut tree_height: Option<u8> = None;
+    let mut initial_root: Option<Hash> = None;
+    let mut root_seq: Option<u64> = None;
+
+    // Collect proofs from output queue
+    if let Some(ref proof_data) = output_proof_data {
+        tree_height = Some(proof_data.tree_height);
+        for proof in &proof_data.proofs {
+            if initial_root.is_none() {
+                initial_root = Some(proof.root.clone());
+                root_seq = Some(proof.root_seq);
+            }
+            all_proofs.push(proof);
+        }
+    }
+
+    // Collect proofs from input queue
+    if let Some(ref proof_data) = input_proof_data {
+        if tree_height.is_none() {
+            tree_height = Some(proof_data.tree_height);
+        }
+        for proof in &proof_data.proofs {
+            if initial_root.is_none() {
+                initial_root = Some(proof.root.clone());
+                root_seq = Some(proof.root_seq);
+            }
+            all_proofs.push(proof);
+        }
+    }
+
+    if all_proofs.is_empty() || tree_height.is_none() {
+        return Ok((Vec::new(), Vec::new(), Hash::default(), 0));
+    }
+
+    let height = tree_height.unwrap();
+    let (nodes, node_hashes) = deduplicate_nodes_from_refs(&all_proofs, height);
+
+    Ok((
+        nodes,
+        node_hashes,
+        initial_root.unwrap_or_default(),
+        root_seq.unwrap_or_default(),
+    ))
 }
 
 async fn fetch_queue_v2(
@@ -290,8 +368,8 @@ async fn fetch_queue_v2(
 
     if queue_elements.is_empty() {
         return Ok(match queue_type {
-            QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2::default()),
-            QueueType::InputStateV2 => QueueDataV2::Input(InputQueueDataV2::default()),
+            QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2::default(), None),
+            QueueType::InputStateV2 => QueueDataV2::Input(InputQueueDataV2::default(), None),
             _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
         });
     }
@@ -341,8 +419,8 @@ async fn fetch_queue_v2(
         let allowed = full_batches * zkp_batch_size;
         if allowed == 0 {
             return Ok(match queue_type {
-                QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2::default()),
-                QueueType::InputStateV2 => QueueDataV2::Input(InputQueueDataV2::default()),
+                QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2::default(), None),
+                QueueType::InputStateV2 => QueueDataV2::Input(InputQueueDataV2::default(), None),
                 _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
             });
         }
@@ -365,9 +443,11 @@ async fn fetch_queue_v2(
         )));
     }
 
-    let (nodes, node_hashes) = deduplicate_nodes(&generated_proofs, tree_info.height as u8);
-
-    let initial_root = generated_proofs[0].root.clone();
+    // Return proofs for merging at response level
+    let proof_data = Some(StateQueueProofData {
+        proofs: generated_proofs.clone(),
+        tree_height: tree_info.height as u8,
+    });
 
     let leaf_indices = indices.clone();
     let account_hashes: Vec<Hash> = queue_elements
@@ -411,17 +491,17 @@ async fn fetch_queue_v2(
     };
 
     Ok(match queue_type {
-        QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2 {
-            leaf_indices,
-            account_hashes,
-            leaves,
-            nodes,
-            node_hashes,
-            initial_root,
-            first_queue_index,
-            next_index,
-            leaves_hash_chains,
-        }),
+        QueueType::OutputStateV2 => QueueDataV2::Output(
+            OutputQueueDataV2 {
+                leaf_indices,
+                account_hashes,
+                leaves,
+                first_queue_index,
+                next_index,
+                leaves_hash_chains,
+            },
+            proof_data,
+        ),
         QueueType::InputStateV2 => {
             let tx_hashes: Result<Vec<Hash>, PhotonApiError> = queue_elements
                 .iter()
@@ -443,17 +523,17 @@ async fn fetch_queue_v2(
                 })
                 .collect();
 
-            QueueDataV2::Input(InputQueueDataV2 {
-                leaf_indices,
-                account_hashes,
-                leaves,
-                tx_hashes: tx_hashes?,
-                nodes,
-                node_hashes,
-                initial_root,
-                first_queue_index,
-                leaves_hash_chains,
-            })
+            QueueDataV2::Input(
+                InputQueueDataV2 {
+                    leaf_indices,
+                    account_hashes,
+                    leaves,
+                    tx_hashes: tx_hashes?,
+                    first_queue_index,
+                    leaves_hash_chains,
+                },
+                proof_data,
+            )
         }
         _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
     })
@@ -685,6 +765,10 @@ async fn fetch_address_queue_v2(
         .first()
         .map(|proof| proof.root.clone())
         .unwrap_or_default();
+    let root_seq = non_inclusion_proofs
+        .first()
+        .map(|proof| proof.rootSeq)
+        .unwrap_or_default();
 
     let mut leaves_hash_chains = Vec::new();
     let tree_pubkey_bytes: [u8; 32] = serializable_tree
@@ -801,13 +885,14 @@ async fn fetch_address_queue_v2(
         initial_root,
         start_index: batch_start_index as u64,
         subtrees,
+        root_seq,
     })
 }
 
-/// Deduplicate nodes across all merkle proofs
+/// Deduplicate nodes across all merkle proofs (takes references to proofs)
 /// Returns parallel arrays: (node_indices, node_hashes)
-fn deduplicate_nodes(
-    proofs: &[crate::ingester::persist::MerkleProofWithContext],
+fn deduplicate_nodes_from_refs(
+    proofs: &[&crate::ingester::persist::MerkleProofWithContext],
     tree_height: u8,
 ) -> (Vec<u64>, Vec<Hash>) {
     let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
