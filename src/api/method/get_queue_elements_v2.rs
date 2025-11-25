@@ -125,6 +125,7 @@ pub struct InputQueueDataV2 {
     pub account_hashes: Vec<Hash>,
     pub leaves: Vec<Hash>,
     pub tx_hashes: Vec<Hash>,
+    pub nullifiers: Vec<Hash>,
     pub first_queue_index: u64,
     pub leaves_hash_chains: Vec<Hash>,
 }
@@ -523,12 +524,33 @@ async fn fetch_queue_v2(
                 })
                 .collect();
 
+            let nullifiers: Result<Vec<Hash>, PhotonApiError> = queue_elements
+                .iter()
+                .enumerate()
+                .map(|(idx, e)| {
+                    e.nullifier
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PhotonApiError::UnexpectedError(format!(
+                                "Missing nullifier for spent queue element at index {} (leaf_index={})",
+                                idx, e.leaf_index
+                            ))
+                        })
+                        .and_then(|n| {
+                            Hash::new(n.as_slice()).map_err(|e| {
+                                PhotonApiError::UnexpectedError(format!("Invalid nullifier: {}", e))
+                            })
+                        })
+                })
+                .collect();
+
             QueueDataV2::Input(
                 InputQueueDataV2 {
                     leaf_indices,
                     account_hashes,
                     leaves,
                     tx_hashes: tx_hashes?,
+                    nullifiers: nullifiers?,
                     first_queue_index,
                     leaves_hash_chains,
                 },
