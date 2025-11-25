@@ -96,6 +96,10 @@ pub struct OutputQueueDataV2 {
 
     pub initial_root: Hash,
     pub first_queue_index: u64,
+    /// The tree's next_index - where new leaves will be appended
+    pub next_index: u64,
+    /// Pre-computed hash chains per ZKP batch (from on-chain)
+    pub leaves_hash_chains: Vec<Hash>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -112,6 +116,8 @@ pub struct InputQueueDataV2 {
 
     pub initial_root: Hash,
     pub first_queue_index: u64,
+    /// Pre-computed hash chains per ZKP batch (from on-chain)
+    pub leaves_hash_chains: Vec<Hash>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
@@ -138,6 +144,7 @@ struct QueueElement {
     hash: Vec<u8>,
     tx_hash: Option<Vec<u8>>,
     nullifier_queue_index: Option<i64>,
+    nullifier: Option<Vec<u8>>,
 }
 
 pub async fn get_queue_elements_v2(
@@ -318,6 +325,16 @@ async fn fetch_queue_v2(
         .await?
         .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
 
+    // For output queue, next_index is where the elements will be appended.
+    // This is the minimum leaf_index of the queued elements (first_queue_index).
+    // We cannot use tree_metadata.next_index because it's only updated by the monitor,
+    // not by the ingester when processing batch events.
+    let next_index = if queue_type == QueueType::OutputStateV2 {
+        first_queue_index
+    } else {
+        0
+    };
+
     let zkp_batch_size = zkp_batch_size_hint
         .filter(|v| *v > 0)
         .unwrap_or(DEFAULT_ZKP_BATCH_SIZE as u16) as usize;
@@ -350,16 +367,129 @@ async fn fetch_queue_v2(
         )));
     }
 
+    // No additional proofs needed - the deduplicated nodes from the queried proofs
+    // are sufficient for the forester to reconstruct and apply updates.
+    // The forester trusts the initial_root from the indexer and sets it manually.
+
     let (nodes, node_hashes) = deduplicate_nodes(&generated_proofs, tree_info.height as u8);
 
     let initial_root = generated_proofs[0].root.clone();
 
-    let leaf_indices = indices;
+    log::debug!(
+        "Queue v2 response: {} query proofs, {} deduplicated nodes, initial_root={:?}[..4]",
+        generated_proofs.len(),
+        nodes.len(),
+        &initial_root.0[..4]
+    );
+
+    // Log first few leaves to verify
+    for (i, proof) in generated_proofs.iter().take(3).enumerate() {
+        log::debug!(
+            "  Proof {}: leaf_idx={}, hash={:?}[..4], root={:?}[..4]",
+            i,
+            proof.leaf_index,
+            &proof.hash.0[..4],
+            &proof.root.0[..4]
+        );
+    }
+
+    // Validate that all proofs have the same root (consistency check)
+    let mut unique_roots: Vec<(usize, Hash)> = Vec::new();
+    for (idx, proof) in generated_proofs.iter().enumerate() {
+        if !unique_roots.iter().any(|(_, r)| *r == proof.root) {
+            unique_roots.push((idx, proof.root.clone()));
+        }
+    }
+
+    if unique_roots.len() > 1 {
+        log::error!(
+            "INCONSISTENT ROOTS DETECTED in {} proofs! Unique roots: {:?}",
+            generated_proofs.len(),
+            unique_roots
+                .iter()
+                .map(|(idx, root)| format!("idx={} root={:?}[..4] root_seq={}", idx, &root.0[..4], generated_proofs[*idx].root_seq))
+                .collect::<Vec<_>>()
+        );
+        // Also log proof details
+        for (idx, proof) in generated_proofs.iter().enumerate() {
+            log::error!(
+                "  Proof {}: leaf_index={} root={:?}[..4] root_seq={} hash={:?}[..4]",
+                idx,
+                proof.leaf_index,
+                &proof.root.0[..4],
+                proof.root_seq,
+                &proof.hash.0[..4]
+            );
+        }
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Inconsistent merkle proof roots detected! Found {} different roots across {} proofs. \
+            This indicates the database has inconsistent state. First root: {:?}[..4], conflicting roots at indices: {}",
+            unique_roots.len(),
+            generated_proofs.len(),
+            &initial_root.0[..4],
+            unique_roots[1..]
+                .iter()
+                .map(|(idx, root)| format!("{}({:?}[..4])", idx, &root.0[..4]))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
+
+    let leaf_indices = indices.clone();
     let account_hashes: Vec<Hash> = queue_elements
         .iter()
         .map(|e| Hash::new(e.hash.as_slice()).unwrap())
         .collect();
     let leaves: Vec<Hash> = generated_proofs.iter().map(|p| p.hash.clone()).collect();
+
+    // Fetch hash chains from cache (these are copied from on-chain during monitoring)
+    // The cache key is (tree, queue_type, batch_start_index)
+    // For state queues, we need to determine the on-chain batch's start_index
+    let tree_pubkey_bytes: [u8; 32] = serializable_tree
+        .to_bytes_vec()
+        .as_slice()
+        .try_into()
+        .map_err(|_| PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string()))?;
+    let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
+
+    // For state queues, the batch_start_index is the first_queue_index (start of the batch)
+    let batch_start_index = first_queue_index;
+    let cached = queue_hash_cache::get_cached_hash_chains(
+        tx,
+        tree_pubkey,
+        queue_type,
+        batch_start_index,
+    )
+    .await
+    .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
+
+    let expected_batch_count = indices.len() / zkp_batch_size;
+    let leaves_hash_chains = if !cached.is_empty() && cached.len() >= expected_batch_count {
+        log::debug!(
+            "Using {} cached hash chains for {:?} queue (batch_start_index={}, expected={})",
+            cached.len(),
+            queue_type,
+            batch_start_index,
+            expected_batch_count
+        );
+        let mut sorted = cached;
+        sorted.sort_by_key(|c| c.zkp_batch_index);
+        sorted
+            .into_iter()
+            .take(expected_batch_count)
+            .map(|entry| Hash::from(entry.hash_chain))
+            .collect()
+    } else {
+        // Fall back to computing locally if cache is empty (e.g., monitor hasn't run yet)
+        log::warn!(
+            "No cached hash chains for {:?} queue (batch_start_index={}, cached={}, expected={}), computing locally",
+            queue_type,
+            batch_start_index,
+            cached.len(),
+            expected_batch_count
+        );
+        compute_state_queue_hash_chains(&queue_elements, queue_type, zkp_batch_size)?
+    };
 
     Ok(match queue_type {
         QueueType::OutputStateV2 => QueueDataV2::Output(OutputQueueDataV2 {
@@ -370,6 +500,8 @@ async fn fetch_queue_v2(
             node_hashes,
             initial_root,
             first_queue_index,
+            next_index,
+            leaves_hash_chains,
         }),
         QueueType::InputStateV2 => {
             let tx_hashes: Result<Vec<Hash>, PhotonApiError> = queue_elements
@@ -401,10 +533,96 @@ async fn fetch_queue_v2(
                 node_hashes,
                 initial_root,
                 first_queue_index,
+                leaves_hash_chains,
             })
         }
         _ => unreachable!("Only OutputStateV2 and InputStateV2 are supported"),
     })
+}
+
+/// Compute hash chains for state queue elements (OutputStateV2 and InputStateV2).
+/// For OutputStateV2: hash chain is computed from account hashes
+/// For InputStateV2: hash chain is computed from nullifiers
+fn compute_state_queue_hash_chains(
+    queue_elements: &[QueueElement],
+    queue_type: QueueType,
+    zkp_batch_size: usize,
+) -> Result<Vec<Hash>, PhotonApiError> {
+    use light_compressed_account::hash_chain::create_hash_chain_from_slice;
+
+    if zkp_batch_size == 0 || queue_elements.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let batch_count = queue_elements.len() / zkp_batch_size;
+    if batch_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut hash_chains = Vec::with_capacity(batch_count);
+
+    for batch_idx in 0..batch_count {
+        let start = batch_idx * zkp_batch_size;
+        let end = start + zkp_batch_size;
+        let batch_elements = &queue_elements[start..end];
+
+        let mut values: Vec<[u8; 32]> = Vec::with_capacity(zkp_batch_size);
+
+        for element in batch_elements {
+            let value: [u8; 32] = match queue_type {
+                QueueType::OutputStateV2 => {
+                    // For output queue, use account hash
+                    element.hash.as_slice().try_into().map_err(|_| {
+                        PhotonApiError::UnexpectedError(format!(
+                            "Invalid hash length: expected 32 bytes, got {}",
+                            element.hash.len()
+                        ))
+                    })?
+                }
+                QueueType::InputStateV2 => {
+                    // For input queue, use nullifier
+                    element
+                        .nullifier
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PhotonApiError::UnexpectedError(
+                                "Missing nullifier for InputStateV2 queue element".to_string(),
+                            )
+                        })?
+                        .as_slice()
+                        .try_into()
+                        .map_err(|_| {
+                            PhotonApiError::UnexpectedError(
+                                "Invalid nullifier length: expected 32 bytes".to_string(),
+                            )
+                        })?
+                }
+                _ => {
+                    return Err(PhotonApiError::ValidationError(format!(
+                        "Unsupported queue type for hash chain computation: {:?}",
+                        queue_type
+                    )))
+                }
+            };
+            values.push(value);
+        }
+
+        let hash_chain = create_hash_chain_from_slice(&values).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Hash chain computation error: {}", e))
+        })?;
+
+        hash_chains.push(Hash::from(hash_chain));
+    }
+
+    log::debug!(
+        "Computed {} hash chains for {:?} queue with {} elements (zkp_batch_size={})",
+        hash_chains.len(),
+        queue_type,
+        queue_elements.len(),
+        zkp_batch_size
+    );
+
+    Ok(hash_chains)
 }
 
 async fn fetch_address_queue_v2(
@@ -558,6 +776,31 @@ async fn fetch_address_queue_v2(
         .map(|proof| proof.root.clone())
         .unwrap_or_default();
 
+    // Validate that all proofs have the same root (consistency check)
+    let mut unique_roots: Vec<(usize, Hash)> = Vec::new();
+    for (idx, proof) in non_inclusion_proofs.iter().enumerate() {
+        if !unique_roots.iter().any(|(_, r)| *r == proof.root) {
+            unique_roots.push((idx, proof.root.clone()));
+        }
+    }
+
+    if unique_roots.len() > 1 {
+        log::error!(
+            "INCONSISTENT ROOTS DETECTED in {} address proofs! Unique roots: {:?}",
+            non_inclusion_proofs.len(),
+            unique_roots
+                .iter()
+                .map(|(idx, root)| format!("idx={} root={:?}[..4]", idx, &root.0[..4]))
+                .collect::<Vec<_>>()
+        );
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Inconsistent address proof roots detected! Found {} different roots across {} proofs. \
+            This indicates the database has inconsistent state.",
+            unique_roots.len(),
+            non_inclusion_proofs.len()
+        )));
+    }
+
     // Fetch cached hash chains for this batch
     let mut leaves_hash_chains = Vec::new();
     let tree_pubkey_bytes: [u8; 32] = serializable_tree
@@ -688,16 +931,46 @@ fn deduplicate_nodes(
 
     for proof_ctx in proofs {
         let mut pos = proof_ctx.leaf_index as u64;
+        let mut current_hash = proof_ctx.hash.clone();
 
-        for (level, node_hash) in proof_ctx.proof.iter().enumerate() {
+        // Store the leaf itself
+        let leaf_idx = encode_node_index(0, pos, tree_height);
+        nodes_map.insert(leaf_idx, current_hash.clone());
+
+        // Walk up the proof path, storing BOTH the sibling AND the current node at each level
+        for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
             let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let node_idx = encode_node_index(level as u8, sibling_pos, tree_height);
-            nodes_map.insert(node_idx, node_hash.clone());
+
+            // Store the sibling (from proof)
+            let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);
+            nodes_map.insert(sibling_idx, sibling_hash.clone());
+
+            // Compute and store the parent node on the path
+            // This allows MerkleTree::update_upper_layers() to read both children
+            let parent_hash = if pos % 2 == 0 {
+                // Current is left, sibling is right
+                Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
+            } else {
+                // Sibling is left, current is right
+                Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
+            };
+
+            match parent_hash {
+                Ok(hash) => {
+                    current_hash = Hash::from(hash);
+                    // Store the parent at the next level
+                    let parent_pos = pos / 2;
+                    let parent_idx = encode_node_index((level + 1) as u8, parent_pos, tree_height);
+                    nodes_map.insert(parent_idx, current_hash.clone());
+                }
+                Err(_) => {
+                    // If hash fails, we can't compute parent, stop here
+                    break;
+                }
+            }
+
             pos = pos / 2;
         }
-
-        let leaf_idx = encode_node_index(0, proof_ctx.leaf_index as u64, tree_height);
-        nodes_map.insert(leaf_idx, proof_ctx.hash.clone());
     }
 
     let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();

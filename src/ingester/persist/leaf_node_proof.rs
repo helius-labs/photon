@@ -30,6 +30,13 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
         })? as u32;
     let root_seq = if root_seq == 0 { None } else { Some(root_seq) };
 
+    log::debug!(
+        "Fetching proofs for {} indices on tree {}, current root_seq: {:?}",
+        indices.len(),
+        merkle_tree_pubkey,
+        root_seq
+    );
+
     let existing_leaves = state_trees::Entity::find()
         .filter(
             state_trees::Column::LeafIdx
@@ -259,13 +266,34 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
                 .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
 
             let root_seq = match node_to_model.get(&(leaf_node.tree.to_bytes_vec(), 1)) {
-                Some(root) => root.seq,
-                None => None,
+                Some(root) => {
+                    log::debug!(
+                        "Found root node in proof for leaf {}: hash={:?}[..4], seq={:?}",
+                        leaf_node.leaf_index,
+                        &root.hash[..4.min(root.hash.len())],
+                        root.seq
+                    );
+                    root.seq
+                }
+                None => {
+                    log::warn!(
+                        "Root node (node_idx=1) NOT FOUND in node_to_model for leaf {} proof!",
+                        leaf_node.leaf_index
+                    );
+                    None
+                }
             };
 
             let root = proof.pop().ok_or(PhotonApiError::UnexpectedError(
                 "Root node not found in proof".to_string(),
             ))?;
+
+            if root.0 == [0u8; 32] {
+                log::warn!(
+                    "Root in proof for leaf {} is all zeros! This likely means the root was not fetched from DB.",
+                    leaf_node.leaf_index
+                );
+            }
 
             Ok(MerkleProofWithContext {
                 proof,
@@ -283,5 +311,30 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     // for proof in proofs.iter() {
     //     validate_proof(proof)?;
     // }
+
+    if !proofs.is_empty() {
+        let unique_root_seqs: Vec<u64> = proofs
+            .iter()
+            .map(|p| p.root_seq)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        if unique_root_seqs.len() > 1 {
+            log::warn!(
+                "Generated {} proofs with {} different root_seqs: {:?}",
+                proofs.len(),
+                unique_root_seqs.len(),
+                unique_root_seqs
+            );
+        } else {
+            log::debug!(
+                "Generated {} proofs, all with root_seq: {:?}",
+                proofs.len(),
+                unique_root_seqs.first()
+            );
+        }
+    }
+
     Ok(proofs)
 }
