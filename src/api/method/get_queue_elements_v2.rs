@@ -13,6 +13,7 @@ use crate::{ingester::persist::persisted_state_tree::get_subtrees, monitor::queu
 use light_batched_merkle_tree::constants::{
     DEFAULT_ADDRESS_ZKP_BATCH_SIZE, DEFAULT_ZKP_BATCH_SIZE,
 };
+use light_compressed_account::hash_chain::create_hash_chain_from_slice;
 use light_compressed_account::QueueType;
 use light_hasher::{Hasher, Poseidon};
 use sea_orm::{
@@ -96,9 +97,7 @@ pub struct OutputQueueDataV2 {
 
     pub initial_root: Hash,
     pub first_queue_index: u64,
-    /// The tree's next_index - where new leaves will be appended
     pub next_index: u64,
-    /// Pre-computed hash chains per ZKP batch (from on-chain)
     pub leaves_hash_chains: Vec<Hash>,
 }
 
@@ -116,7 +115,6 @@ pub struct InputQueueDataV2 {
 
     pub initial_root: Hash,
     pub first_queue_index: u64,
-    /// Pre-computed hash chains per ZKP batch (from on-chain)
     pub leaves_hash_chains: Vec<Hash>,
 }
 
@@ -367,73 +365,9 @@ async fn fetch_queue_v2(
         )));
     }
 
-    // No additional proofs needed - the deduplicated nodes from the queried proofs
-    // are sufficient for the forester to reconstruct and apply updates.
-    // The forester trusts the initial_root from the indexer and sets it manually.
-
     let (nodes, node_hashes) = deduplicate_nodes(&generated_proofs, tree_info.height as u8);
 
     let initial_root = generated_proofs[0].root.clone();
-
-    log::debug!(
-        "Queue v2 response: {} query proofs, {} deduplicated nodes, initial_root={:?}[..4]",
-        generated_proofs.len(),
-        nodes.len(),
-        &initial_root.0[..4]
-    );
-
-    // Log first few leaves to verify
-    for (i, proof) in generated_proofs.iter().take(3).enumerate() {
-        log::debug!(
-            "  Proof {}: leaf_idx={}, hash={:?}[..4], root={:?}[..4]",
-            i,
-            proof.leaf_index,
-            &proof.hash.0[..4],
-            &proof.root.0[..4]
-        );
-    }
-
-    // Validate that all proofs have the same root (consistency check)
-    let mut unique_roots: Vec<(usize, Hash)> = Vec::new();
-    for (idx, proof) in generated_proofs.iter().enumerate() {
-        if !unique_roots.iter().any(|(_, r)| *r == proof.root) {
-            unique_roots.push((idx, proof.root.clone()));
-        }
-    }
-
-    if unique_roots.len() > 1 {
-        log::error!(
-            "INCONSISTENT ROOTS DETECTED in {} proofs! Unique roots: {:?}",
-            generated_proofs.len(),
-            unique_roots
-                .iter()
-                .map(|(idx, root)| format!("idx={} root={:?}[..4] root_seq={}", idx, &root.0[..4], generated_proofs[*idx].root_seq))
-                .collect::<Vec<_>>()
-        );
-        // Also log proof details
-        for (idx, proof) in generated_proofs.iter().enumerate() {
-            log::error!(
-                "  Proof {}: leaf_index={} root={:?}[..4] root_seq={} hash={:?}[..4]",
-                idx,
-                proof.leaf_index,
-                &proof.root.0[..4],
-                proof.root_seq,
-                &proof.hash.0[..4]
-            );
-        }
-        return Err(PhotonApiError::UnexpectedError(format!(
-            "Inconsistent merkle proof roots detected! Found {} different roots across {} proofs. \
-            This indicates the database has inconsistent state. First root: {:?}[..4], conflicting roots at indices: {}",
-            unique_roots.len(),
-            generated_proofs.len(),
-            &initial_root.0[..4],
-            unique_roots[1..]
-                .iter()
-                .map(|(idx, root)| format!("{}({:?}[..4])", idx, &root.0[..4]))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )));
-    }
 
     let leaf_indices = indices.clone();
     let account_hashes: Vec<Hash> = queue_elements
@@ -442,9 +376,6 @@ async fn fetch_queue_v2(
         .collect();
     let leaves: Vec<Hash> = generated_proofs.iter().map(|p| p.hash.clone()).collect();
 
-    // Fetch hash chains from cache (these are copied from on-chain during monitoring)
-    // The cache key is (tree, queue_type, batch_start_index)
-    // For state queues, we need to determine the on-chain batch's start_index
     let tree_pubkey_bytes: [u8; 32] = serializable_tree
         .to_bytes_vec()
         .as_slice()
@@ -452,26 +383,14 @@ async fn fetch_queue_v2(
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string()))?;
     let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
 
-    // For state queues, the batch_start_index is the first_queue_index (start of the batch)
     let batch_start_index = first_queue_index;
-    let cached = queue_hash_cache::get_cached_hash_chains(
-        tx,
-        tree_pubkey,
-        queue_type,
-        batch_start_index,
-    )
-    .await
-    .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
+    let cached =
+        queue_hash_cache::get_cached_hash_chains(tx, tree_pubkey, queue_type, batch_start_index)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
 
     let expected_batch_count = indices.len() / zkp_batch_size;
     let leaves_hash_chains = if !cached.is_empty() && cached.len() >= expected_batch_count {
-        log::debug!(
-            "Using {} cached hash chains for {:?} queue (batch_start_index={}, expected={})",
-            cached.len(),
-            queue_type,
-            batch_start_index,
-            expected_batch_count
-        );
         let mut sorted = cached;
         sorted.sort_by_key(|c| c.zkp_batch_index);
         sorted
@@ -482,7 +401,7 @@ async fn fetch_queue_v2(
     } else {
         // Fall back to computing locally if cache is empty (e.g., monitor hasn't run yet)
         log::warn!(
-            "No cached hash chains for {:?} queue (batch_start_index={}, cached={}, expected={}), computing locally",
+            "No cached hash chains for {:?} queue (batch_start_index={}, cached={}, expected={})",
             queue_type,
             batch_start_index,
             cached.len(),
@@ -512,7 +431,7 @@ async fn fetch_queue_v2(
                         .as_ref()
                         .ok_or_else(|| {
                             PhotonApiError::UnexpectedError(format!(
-                                "Missing tx_hash for spent queue element at index {} (leaf_index={}). This should not happen if spent=true filter is working correctly.",
+                                "Missing tx_hash for spent queue element at index {} (leaf_index={})",
                                 idx, e.leaf_index
                             ))
                         })
@@ -540,9 +459,6 @@ async fn fetch_queue_v2(
     })
 }
 
-/// Compute hash chains for state queue elements (OutputStateV2 and InputStateV2).
-/// For OutputStateV2: hash chain is computed from account hashes
-/// For InputStateV2: hash chain is computed from nullifiers
 fn compute_state_queue_hash_chains(
     queue_elements: &[QueueElement],
     queue_type: QueueType,
@@ -570,33 +486,27 @@ fn compute_state_queue_hash_chains(
 
         for element in batch_elements {
             let value: [u8; 32] = match queue_type {
-                QueueType::OutputStateV2 => {
-                    // For output queue, use account hash
-                    element.hash.as_slice().try_into().map_err(|_| {
-                        PhotonApiError::UnexpectedError(format!(
-                            "Invalid hash length: expected 32 bytes, got {}",
-                            element.hash.len()
-                        ))
+                QueueType::OutputStateV2 => element.hash.as_slice().try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError(format!(
+                        "Invalid hash length: expected 32 bytes, got {}",
+                        element.hash.len()
+                    ))
+                })?,
+                QueueType::InputStateV2 => element
+                    .nullifier
+                    .as_ref()
+                    .ok_or_else(|| {
+                        PhotonApiError::UnexpectedError(
+                            "Missing nullifier for InputStateV2 queue element".to_string(),
+                        )
                     })?
-                }
-                QueueType::InputStateV2 => {
-                    // For input queue, use nullifier
-                    element
-                        .nullifier
-                        .as_ref()
-                        .ok_or_else(|| {
-                            PhotonApiError::UnexpectedError(
-                                "Missing nullifier for InputStateV2 queue element".to_string(),
-                            )
-                        })?
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| {
-                            PhotonApiError::UnexpectedError(
-                                "Invalid nullifier length: expected 32 bytes".to_string(),
-                            )
-                        })?
-                }
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| {
+                        PhotonApiError::UnexpectedError(
+                            "Invalid nullifier length: expected 32 bytes".to_string(),
+                        )
+                    })?,
                 _ => {
                     return Err(PhotonApiError::ValidationError(format!(
                         "Unsupported queue type for hash chain computation: {:?}",
@@ -776,32 +686,6 @@ async fn fetch_address_queue_v2(
         .map(|proof| proof.root.clone())
         .unwrap_or_default();
 
-    // Validate that all proofs have the same root (consistency check)
-    let mut unique_roots: Vec<(usize, Hash)> = Vec::new();
-    for (idx, proof) in non_inclusion_proofs.iter().enumerate() {
-        if !unique_roots.iter().any(|(_, r)| *r == proof.root) {
-            unique_roots.push((idx, proof.root.clone()));
-        }
-    }
-
-    if unique_roots.len() > 1 {
-        log::error!(
-            "INCONSISTENT ROOTS DETECTED in {} address proofs! Unique roots: {:?}",
-            non_inclusion_proofs.len(),
-            unique_roots
-                .iter()
-                .map(|(idx, root)| format!("idx={} root={:?}[..4]", idx, &root.0[..4]))
-                .collect::<Vec<_>>()
-        );
-        return Err(PhotonApiError::UnexpectedError(format!(
-            "Inconsistent address proof roots detected! Found {} different roots across {} proofs. \
-            This indicates the database has inconsistent state.",
-            unique_roots.len(),
-            non_inclusion_proofs.len()
-        )));
-    }
-
-    // Fetch cached hash chains for this batch
     let mut leaves_hash_chains = Vec::new();
     let tree_pubkey_bytes: [u8; 32] = serializable_tree
         .to_bytes_vec()
@@ -833,7 +717,6 @@ async fn fetch_address_queue_v2(
         zkp_batch_size
     );
 
-    // use cached chains if we have enough to cover all addresses
     if !cached.is_empty() && cached.len() >= expected_batch_count {
         log::debug!(
             "Using {} cached hash chains for batch_start_index={}",
@@ -986,4 +869,3 @@ fn compute_indexed_leaf_hash(low_value: &Hash, next_value: &Hash) -> Result<Hash
     })?;
     Ok(Hash::from(hashed))
 }
-use light_compressed_account::hash_chain::create_hash_chain_from_slice;

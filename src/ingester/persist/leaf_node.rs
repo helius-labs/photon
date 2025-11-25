@@ -170,7 +170,10 @@ pub async fn persist_leaf_nodes(
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
     let update_count = models_to_updates.len();
-    let mut seq_values: Vec<Option<i64>> = models_to_updates.values().map(|m| m.seq.clone().unwrap()).collect();
+    let mut seq_values: Vec<Option<i64>> = models_to_updates
+        .values()
+        .map(|m| m.seq.clone().unwrap())
+        .collect();
     seq_values.sort();
     let min_seq = seq_values.first().and_then(|s| *s);
     let max_seq = seq_values.last().and_then(|s| *s);

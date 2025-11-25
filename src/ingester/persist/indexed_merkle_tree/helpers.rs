@@ -5,6 +5,7 @@ use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::HIGHEST_ADDRESS_PLUS_ONE;
 use ark_bn254::Fr;
 use light_compressed_account::TreeType;
+use light_hasher::bigint::bigint_to_be_bytes_array;
 use light_poseidon::{Poseidon, PoseidonBytesHasher};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 use solana_pubkey::Pubkey;
@@ -101,8 +102,6 @@ pub fn compute_range_node_hash_v2(node: &indexed_trees::Model) -> Result<Hash, I
 }
 
 pub fn get_zeroeth_exclusion_range(tree: Vec<u8>) -> indexed_trees::Model {
-    use light_hasher::bigint::bigint_to_be_bytes_array;
-
     indexed_trees::Model {
         tree,
         leaf_index: 0,
