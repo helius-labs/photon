@@ -194,28 +194,11 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         api.get_queue_elements(payload).await.map_err(Into::into)
     })?;
 
-    module.register_async_method("getQueueElementsV2", |rpc_params, rpc_context| async move {
-        let api = rpc_context.as_ref();
-        let payload = rpc_params.parse()?;
-        api.get_queue_elements_v2(payload).await.map_err(Into::into)
-    })?;
-
     module.register_async_method("getQueueInfo", |rpc_params, rpc_context| async move {
         let api = rpc_context.as_ref();
         let payload = rpc_params.parse()?;
         api.get_queue_info(payload).await.map_err(Into::into)
     })?;
-
-    module.register_async_method(
-        "getBatchAddressUpdateInfo",
-        |rpc_params, rpc_context| async move {
-            let api = rpc_context.as_ref();
-            let payload = rpc_params.parse()?;
-            api.get_batch_address_update_info(payload)
-                .await
-                .map_err(Into::into)
-        },
-    )?;
 
     module.register_async_method(
         "getCompressedAccountsByOwner",
