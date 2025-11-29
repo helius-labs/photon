@@ -765,18 +765,41 @@ async fn fetch_address_queue_v2(
         low_element_next_values.push(next_value.clone());
         low_element_proofs.push(proof.proof.clone());
 
-        let mut pos = proof.lowElementLeafIndex as u64;
-        for (level, node_hash) in proof.proof.iter().enumerate() {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let node_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
-            nodes_map.insert(node_idx, node_hash.clone());
-            pos /= 2;
-        }
-
         let leaf_idx =
             encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
         let hashed_leaf = compute_indexed_leaf_hash(&low_value, &next_value)?;
-        nodes_map.insert(leaf_idx, hashed_leaf);
+        nodes_map.insert(leaf_idx, hashed_leaf.clone());
+
+        let mut pos = proof.lowElementLeafIndex as u64;
+        let mut current_hash = hashed_leaf;
+
+        for (level, sibling_hash) in proof.proof.iter().enumerate() {
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+
+            let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
+            nodes_map.insert(sibling_idx, sibling_hash.clone());
+
+            let parent_hash = if pos % 2 == 0 {
+                Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
+            } else {
+                Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
+            };
+
+            match parent_hash {
+                Ok(hash) => {
+                    current_hash = Hash::from(hash);
+                    let parent_pos = pos / 2;
+                    let parent_idx =
+                        encode_node_index((level + 1) as u8, parent_pos, tree_info.height as u8);
+                    nodes_map.insert(parent_idx, current_hash.clone());
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+
+            pos /= 2;
+        }
     }
 
     let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();
