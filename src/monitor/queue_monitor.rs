@@ -503,17 +503,6 @@ pub async fn verify_single_queue(
     tree_pubkey: Pubkey,
     queue_type: QueueType,
 ) -> Result<(), Vec<HashChainDivergence>> {
-    // TODO: Fix AddressV2 queue hash chain computation
-    // Currently skipping validation because raw address bytes don't match on-chain hash chains
-    // Need to investigate correct hash format for address queue elements
-    if queue_type == QueueType::AddressV2 {
-        debug!(
-            "Temporarily skipping AddressV2 queue hash chain validation for tree {}",
-            tree_pubkey
-        );
-        return Ok(());
-    }
-
     let result = match queue_type {
         QueueType::OutputStateV2 => {
             verify_output_queue_hash_chains(rpc_client, db, tree_pubkey).await
