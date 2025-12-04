@@ -20,6 +20,9 @@ use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountL
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
+use crate::api::method::get_queue_elements::{
+    AddressQueueData, InputQueueData, OutputQueueData, StateQueueData,
+};
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
     AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
@@ -80,6 +83,10 @@ const JSON_CONTENT_TYPE: &str = "application/json";
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(
+    InputQueueData,
+    OutputQueueData,
+    AddressQueueData,
+    StateQueueData,
     AccountProofInputs,
     AddressProofInputs,
     SerializablePubkey,

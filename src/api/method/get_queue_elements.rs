@@ -29,12 +29,12 @@ const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
-/// Level 0 = leaves, Level (tree_height-1) = root
+/// Level 0 = leaves, Level tree_height-1 = root
 #[inline]
 fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
     debug_assert!(
-        level < tree_height,
-        "level {} >= tree_height {}",
+        level <= tree_height - 1,
+        "level {} > tree_height {}",
         level,
         tree_height
     );
@@ -952,7 +952,11 @@ fn deduplicate_nodes_from_refs(
 
         // Walk up the proof path, storing BOTH the sibling AND the current node at each level
         for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
-            let sibling_pos = if pos.is_multiple_of(2) { pos + 1 } else { pos - 1 };
+            let sibling_pos = if pos.is_multiple_of(2) {
+                pos + 1
+            } else {
+                pos - 1
+            };
 
             // Store the sibling (from proof)
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);
