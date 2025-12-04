@@ -497,35 +497,6 @@ async fn append_output_accounts(
         }
     }
 
-    let mut accounts_by_tree_queue: HashMap<(Pubkey, Pubkey), usize> = HashMap::new();
-
-    for account in out_accounts {
-        if account.context.in_output_queue {
-            if let (Ok(tree_pubkey), Ok(queue_pubkey)) = (
-                Pubkey::try_from(account.account.tree.to_bytes_vec().as_slice()),
-                Pubkey::try_from(account.context.queue.to_bytes_vec().as_slice()),
-            ) {
-                *accounts_by_tree_queue
-                    .entry((tree_pubkey, queue_pubkey))
-                    .or_insert(0) += 1;
-            }
-        }
-    }
-
-    for ((tree, queue), count) in accounts_by_tree_queue {
-        let queue_size = accounts::Entity::find()
-            .filter(accounts::Column::Tree.eq(tree.to_bytes().to_vec()))
-            .filter(accounts::Column::InOutputQueue.eq(true))
-            .count(txn)
-            .await
-            .unwrap_or(0) as usize;
-
-        debug!(
-            "Publishing OutputQueueInsert event: tree={}, queue={}, delta={}, total_queue_size={}, slot={}",
-            tree, queue, count, queue_size, slot
-        );
-    }
-
     Ok(())
 }
 
