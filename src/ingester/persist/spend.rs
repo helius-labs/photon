@@ -76,10 +76,6 @@ pub async fn spend_input_accounts_batched(
         return Ok(());
     }
 
-    // Track nullifier counts per tree for event publishing
-    let mut tree_nullifier_counts: std::collections::HashMap<solana_pubkey::Pubkey, usize> =
-        std::collections::HashMap::new();
-
     for account in accounts {
         accounts::Entity::update_many()
             .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
@@ -98,17 +94,6 @@ pub async fn spend_input_accounts_batched(
             .col_expr(accounts::Column::Spent, Expr::value(true))
             .exec(txn)
             .await?;
-
-        if let Some(account_model) = accounts::Entity::find()
-            .filter(accounts::Column::Hash.eq(account.account_hash.to_vec()))
-            .one(txn)
-            .await?
-        {
-            if let Ok(tree_pubkey) = solana_pubkey::Pubkey::try_from(account_model.tree.as_slice())
-            {
-                *tree_nullifier_counts.entry(tree_pubkey).or_insert(0) += 1;
-            }
-        }
     }
 
     Ok(())

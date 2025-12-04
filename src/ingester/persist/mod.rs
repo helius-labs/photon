@@ -25,8 +25,7 @@ use log::debug;
 use persisted_indexed_merkle_tree::persist_indexed_tree_updates;
 use sea_orm::{
     sea_query::OnConflict, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
-    EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set,
-    Statement,
+    EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set, Statement,
 };
 use solana_pubkey::{pubkey, Pubkey};
 use solana_signature::Signature;
@@ -98,9 +97,6 @@ pub async fn persist_state_update(
         batch_new_addresses.len()
     );
 
-    // Extract slot from transactions for event publishing
-    let slot = transactions.iter().next().map(|tx| tx.slot).unwrap_or(0);
-
     debug!("Persisting addresses...");
     for chunk in batch_new_addresses.chunks(MAX_SQL_INSERTS) {
         insert_addresses_into_queues(txn, chunk).await?;
@@ -108,7 +104,7 @@ pub async fn persist_state_update(
 
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
-        append_output_accounts(txn, chunk, slot).await?;
+        append_output_accounts(txn, chunk).await?;
     }
 
     debug!("Persisting spent accounts...");
@@ -421,20 +417,12 @@ async fn insert_addresses_into_queues(
         .build(txn.get_database_backend());
     txn.execute(query).await?;
 
-    let mut addresses_by_tree: HashMap<Pubkey, usize> = HashMap::new();
-    for address in addresses {
-        if let Ok(tree_pubkey) = Pubkey::try_from(address.tree.to_bytes_vec().as_slice()) {
-            *addresses_by_tree.entry(tree_pubkey).or_insert(0) += 1;
-        }
-    }
-
     Ok(())
 }
 
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
     out_accounts: &[AccountWithContext],
-    slot: u64,
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
