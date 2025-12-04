@@ -33,7 +33,7 @@ const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 #[inline]
 fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
     debug_assert!(
-        level <= tree_height - 1,
+        level <= tree_height,
         "level {} > tree_height {}",
         level,
         tree_height
