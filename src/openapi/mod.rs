@@ -21,7 +21,7 @@ use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_queue_elements::{
-    AddressQueueData, InputQueueData, OutputQueueData, StateQueueData,
+    AddressQueueData, InputQueueData, Node, OutputQueueData, QueueRequest, StateQueueData,
 };
 use crate::api::method::get_queue_info::QueueInfo;
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
@@ -88,6 +88,8 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OutputQueueData,
     AddressQueueData,
     StateQueueData,
+    Node,
+    QueueRequest,
     QueueInfo,
     AccountProofInputs,
     AddressProofInputs,

@@ -6,7 +6,7 @@ use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
 use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
-use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
+use photon_indexer::api::method::get_queue_elements::{GetQueueElementsRequest, QueueRequest};
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
@@ -239,15 +239,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                output_queue_start_index: None,
-                output_queue_limit: Some(100),
-                output_queue_zkp_batch_size: None,
-                input_queue_start_index: None,
-                input_queue_limit: None,
-                input_queue_zkp_batch_size: None,
-                address_queue_start_index: None,
-                address_queue_limit: None,
-                address_queue_zkp_batch_size: None,
+                output_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                input_queue: None,
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -255,15 +253,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                output_queue_start_index: None,
-                output_queue_limit: None,
-                output_queue_zkp_batch_size: None,
-                input_queue_start_index: None,
-                input_queue_limit: Some(100),
-                input_queue_zkp_batch_size: None,
-                address_queue_start_index: None,
-                address_queue_limit: None,
-                address_queue_zkp_batch_size: None,
+                output_queue: None,
+                input_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -280,15 +276,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                output_queue_start_index: None,
-                output_queue_limit: Some(100),
-                output_queue_zkp_batch_size: None,
-                input_queue_start_index: None,
-                input_queue_limit: None,
-                input_queue_zkp_batch_size: None,
-                address_queue_start_index: None,
-                address_queue_limit: None,
-                address_queue_zkp_batch_size: None,
+                output_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                input_queue: None,
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -296,15 +290,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                output_queue_start_index: None,
-                output_queue_limit: None,
-                output_queue_zkp_batch_size: None,
-                input_queue_start_index: None,
-                input_queue_limit: Some(100),
-                input_queue_zkp_batch_size: None,
-                address_queue_start_index: None,
-                address_queue_limit: None,
-                address_queue_zkp_batch_size: None,
+                output_queue: None,
+                input_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -462,15 +454,13 @@ async fn test_batched_tree_transactions(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            output_queue_start_index: None,
-            output_queue_limit: Some(100),
-            output_queue_zkp_batch_size: None,
-            input_queue_start_index: None,
-            input_queue_limit: None,
-            input_queue_zkp_batch_size: None,
-            address_queue_start_index: None,
-            address_queue_limit: None,
-            address_queue_zkp_batch_size: None,
+            output_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
+            input_queue: None,
+            address_queue: None,
         })
         .await
         .unwrap();
@@ -488,15 +478,13 @@ async fn test_batched_tree_transactions(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            output_queue_start_index: None,
-            output_queue_limit: None,
-            output_queue_zkp_batch_size: None,
-            input_queue_start_index: None,
-            input_queue_limit: Some(100),
-            input_queue_zkp_batch_size: None,
-            address_queue_start_index: None,
-            address_queue_limit: None,
-            address_queue_zkp_batch_size: None,
+            output_queue: None,
+            input_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
+            address_queue: None,
         })
         .await
         .unwrap();

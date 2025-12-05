@@ -6,7 +6,7 @@ use num_bigint::BigUint;
 use photon_indexer::api::method::get_multiple_new_address_proofs::{
     AddressListWithTrees, AddressWithTree,
 };
-use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
+use photon_indexer::api::method::get_queue_elements::{GetQueueElementsRequest, QueueRequest};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
@@ -165,15 +165,13 @@ async fn run_batched_address_test(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            output_queue_start_index: None,
-            output_queue_limit: None,
-            output_queue_zkp_batch_size: None,
-            input_queue_start_index: None,
-            input_queue_limit: None,
-            input_queue_zkp_batch_size: None,
-            address_queue_start_index: None,
-            address_queue_limit: Some(100),
-            address_queue_zkp_batch_size: None,
+            output_queue: None,
+            input_queue: None,
+            address_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
         })
         .await
         .expect("Failed to get address queue elements before batch update");
@@ -224,15 +222,13 @@ async fn run_batched_address_test(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            output_queue_start_index: None,
-            output_queue_limit: None,
-            output_queue_zkp_batch_size: None,
-            input_queue_start_index: None,
-            input_queue_limit: None,
-            input_queue_zkp_batch_size: None,
-            address_queue_start_index: None,
-            address_queue_limit: Some(100),
-            address_queue_zkp_batch_size: None,
+            output_queue: None,
+            input_queue: None,
+            address_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
         })
         .await
         .expect("Failed to get address queue elements after batch update");

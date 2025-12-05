@@ -59,26 +59,30 @@ enum QueueData {
     Input(InputQueueData, Option<StateQueueProofData>),
 }
 
+/// Parameters for requesting queue elements
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct QueueRequest {
+    pub limit: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_index: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zkp_batch_size: Option<u16>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
     pub tree: Hash,
 
-    pub output_queue_start_index: Option<u64>,
-    pub output_queue_limit: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_queue_zkp_batch_size: Option<u16>,
-
-    pub input_queue_start_index: Option<u64>,
-    pub input_queue_limit: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_queue_zkp_batch_size: Option<u16>,
-
-    pub address_queue_start_index: Option<u64>,
-    pub address_queue_limit: Option<u16>,
+    pub output_queue: Option<QueueRequest>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub address_queue_zkp_batch_size: Option<u16>,
+    pub input_queue: Option<QueueRequest>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_queue: Option<QueueRequest>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -93,16 +97,22 @@ pub struct GetQueueElementsResponse {
     pub address_queue: Option<AddressQueueData>,
 }
 
+/// A tree node with its encoded index and hash
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Node {
+    /// Encoded node index: (level << 56) | position
+    pub index: u64,
+    pub hash: Hash,
+}
+
 /// State queue data with shared tree nodes for output and input queues
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct StateQueueData {
     /// Shared deduplicated tree nodes for state queues (output + input)
-    /// node_index encoding: (level << 56) | position
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub nodes: Vec<u64>,
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub node_hashes: Vec<Hash>,
+    pub nodes: Vec<Node>,
     /// Initial root for the state tree (shared by output and input queues)
     pub initial_root: Hash,
     /// Sequence number of the root
@@ -143,8 +153,7 @@ pub struct InputQueueData {
 pub struct AddressQueueData {
     pub addresses: Vec<SerializablePubkey>,
     pub queue_indices: Vec<u64>,
-    pub nodes: Vec<u64>,
-    pub node_hashes: Vec<Hash>,
+    pub nodes: Vec<Node>,
     pub low_element_indices: Vec<u64>,
     pub low_element_values: Vec<Hash>,
     pub low_element_next_indices: Vec<u64>,
@@ -170,9 +179,9 @@ pub async fn get_queue_elements(
     conn: &DatabaseConnection,
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
-    let has_output_request = request.output_queue_limit.is_some();
-    let has_input_request = request.input_queue_limit.is_some();
-    let has_address_request = request.address_queue_limit.is_some();
+    let has_output_request = request.output_queue.is_some();
+    let has_input_request = request.input_queue.is_some();
+    let has_address_request = request.address_queue.is_some();
 
     if !has_output_request && !has_input_request && !has_address_request {
         return Err(PhotonApiError::ValidationError(
@@ -186,15 +195,14 @@ pub async fn get_queue_elements(
     crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
     // Fetch output and input queues with their proof data
-    let (output_queue, output_proof_data) = if let Some(limit) = request.output_queue_limit {
-        let zkp_hint = request.output_queue_zkp_batch_size;
+    let (output_queue, output_proof_data) = if let Some(ref req) = request.output_queue {
         match fetch_queue(
             &tx,
             &request.tree,
             QueueType::OutputStateV2,
-            request.output_queue_start_index,
-            limit,
-            zkp_hint,
+            req.start_index,
+            req.limit,
+            req.zkp_batch_size,
         )
         .await?
         {
@@ -205,15 +213,14 @@ pub async fn get_queue_elements(
         (None, None)
     };
 
-    let (input_queue, input_proof_data) = if let Some(limit) = request.input_queue_limit {
-        let zkp_hint = request.input_queue_zkp_batch_size;
+    let (input_queue, input_proof_data) = if let Some(ref req) = request.input_queue {
         match fetch_queue(
             &tx,
             &request.tree,
             QueueType::InputStateV2,
-            request.input_queue_start_index,
-            limit,
-            zkp_hint,
+            req.start_index,
+            req.limit,
+            req.zkp_batch_size,
         )
         .await?
         {
@@ -225,12 +232,11 @@ pub async fn get_queue_elements(
     };
 
     let state_queue = if has_output_request || has_input_request {
-        let (nodes, node_hashes, initial_root, root_seq) =
+        let (nodes, initial_root, root_seq) =
             merge_state_queue_proofs(&output_proof_data, &input_proof_data)?;
 
         Some(StateQueueData {
             nodes,
-            node_hashes,
             initial_root,
             root_seq,
             output_queue,
@@ -240,17 +246,17 @@ pub async fn get_queue_elements(
         None
     };
 
-    let address_zkp_batch_size = request
-        .address_queue_zkp_batch_size
-        .unwrap_or(DEFAULT_ADDRESS_ZKP_BATCH_SIZE as u16);
-    let address_queue = if let Some(limit) = request.address_queue_limit {
+    let address_queue = if let Some(ref req) = request.address_queue {
+        let zkp_batch_size = req
+            .zkp_batch_size
+            .unwrap_or(DEFAULT_ADDRESS_ZKP_BATCH_SIZE as u16);
         Some(
             fetch_address_queue_v2(
                 &tx,
                 &request.tree,
-                request.address_queue_start_index,
-                limit,
-                address_zkp_batch_size,
+                req.start_index,
+                req.limit,
+                zkp_batch_size,
             )
             .await?,
         )
@@ -270,7 +276,7 @@ pub async fn get_queue_elements(
 fn merge_state_queue_proofs(
     output_proof_data: &Option<StateQueueProofData>,
     input_proof_data: &Option<StateQueueProofData>,
-) -> Result<(Vec<u64>, Vec<Hash>, Hash, u64), PhotonApiError> {
+) -> Result<(Vec<Node>, Hash, u64), PhotonApiError> {
     let mut all_proofs: Vec<&crate::ingester::persist::MerkleProofWithContext> = Vec::new();
     let mut all_path_nodes: HashMap<i64, Hash> = HashMap::new();
     let mut tree_height: Option<u8> = None;
@@ -306,15 +312,14 @@ fn merge_state_queue_proofs(
     }
 
     if all_proofs.is_empty() || tree_height.is_none() {
-        return Ok((Vec::new(), Vec::new(), Hash::default(), 0));
+        return Ok((Vec::new(), Hash::default(), 0));
     }
 
     let height = tree_height.unwrap();
-    let (nodes, node_hashes) = deduplicate_nodes_from_refs(&all_proofs, height, &all_path_nodes);
+    let nodes = deduplicate_nodes_from_refs(&all_proofs, height, &all_path_nodes);
 
     Ok((
         nodes,
-        node_hashes,
         initial_root.unwrap_or_default(),
         root_seq.unwrap_or_default(),
     ))
@@ -829,7 +834,10 @@ async fn fetch_address_queue_v2(
 
     let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();
     sorted_nodes.sort_by_key(|(idx, _)| *idx);
-    let (nodes, node_hashes): (Vec<u64>, Vec<Hash>) = sorted_nodes.into_iter().unzip();
+    let nodes: Vec<Node> = sorted_nodes
+        .into_iter()
+        .map(|(index, hash)| Node { index, hash })
+        .collect();
 
     let initial_root = non_inclusion_proofs
         .first()
@@ -945,7 +953,6 @@ async fn fetch_address_queue_v2(
         addresses,
         queue_indices,
         nodes,
-        node_hashes,
         low_element_indices,
         low_element_values,
         low_element_next_indices,
@@ -960,13 +967,13 @@ async fn fetch_address_queue_v2(
 }
 
 /// Deduplicate nodes across all merkle proofs using pre-fetched path nodes from DB.
-/// Returns parallel arrays: (node_indices, node_hashes)
+/// Returns a Vec<Node> sorted by index.
 /// Uses path_nodes (DB node_idx -> hash) for parent hashes instead of computing them.
 fn deduplicate_nodes_from_refs(
     proofs: &[&crate::ingester::persist::MerkleProofWithContext],
     tree_height: u8,
     path_nodes: &HashMap<i64, Hash>,
-) -> (Vec<u64>, Vec<Hash>) {
+) -> Vec<Node> {
     let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
     let tree_height_u32 = tree_height as u32 + 1;
 
@@ -1001,8 +1008,10 @@ fn deduplicate_nodes_from_refs(
     let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();
     sorted_nodes.sort_by_key(|(idx, _)| *idx);
 
-    let (nodes, node_hashes): (Vec<u64>, Vec<Hash>) = sorted_nodes.into_iter().unzip();
-    (nodes, node_hashes)
+    sorted_nodes
+        .into_iter()
+        .map(|(index, hash)| Node { index, hash })
+        .collect()
 }
 
 fn compute_indexed_leaf_hash(low_value: &Hash, next_value: &Hash) -> Result<Hash, PhotonApiError> {
