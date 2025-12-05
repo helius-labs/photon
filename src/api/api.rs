@@ -395,6 +395,11 @@ impl PhotonApi {
                 response: GetQueueElementsResponse::schema().1,
             },
             OpenApiSpec {
+                name: "getQueueInfo".to_string(),
+                request: Some(GetQueueInfoRequest::schema().1),
+                response: GetQueueInfoResponse::schema().1,
+            },
+            OpenApiSpec {
                 name: "getCompressedAccount".to_string(),
                 request: Some(CompressedAccountRequest::adjusted_schema()),
                 response: AccountResponse::schema().1,

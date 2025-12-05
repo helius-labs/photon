@@ -23,6 +23,7 @@ use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAdd
 use crate::api::method::get_queue_elements::{
     AddressQueueData, InputQueueData, OutputQueueData, StateQueueData,
 };
+use crate::api::method::get_queue_info::QueueInfo;
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
     AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
@@ -87,6 +88,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     OutputQueueData,
     AddressQueueData,
     StateQueueData,
+    QueueInfo,
     AccountProofInputs,
     AddressProofInputs,
     SerializablePubkey,
