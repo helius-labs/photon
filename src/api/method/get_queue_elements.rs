@@ -6,7 +6,7 @@ use crate::common::format_bytes;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::accounts;
+use crate::dao::generated::{accounts, state_trees};
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
 use crate::{ingester::persist::persisted_state_tree::get_subtrees, monitor::queue_hash_cache};
@@ -41,9 +41,17 @@ fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
     ((level as u64) << 56) | position
 }
 
+/// Convert leaf_index to node_index in binary tree format (root=1, children of N are 2N and 2N+1)
+#[inline]
+fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
+    2_i64.pow(tree_height - 1) + leaf_index as i64
+}
+
 struct StateQueueProofData {
     proofs: Vec<crate::ingester::persist::MerkleProofWithContext>,
     tree_height: u8,
+    /// Path nodes from DB: maps (node_idx in DB format) -> hash
+    path_nodes: HashMap<i64, Hash>,
 }
 
 enum QueueData {
@@ -264,13 +272,15 @@ fn merge_state_queue_proofs(
     input_proof_data: &Option<StateQueueProofData>,
 ) -> Result<(Vec<u64>, Vec<Hash>, Hash, u64), PhotonApiError> {
     let mut all_proofs: Vec<&crate::ingester::persist::MerkleProofWithContext> = Vec::new();
+    let mut all_path_nodes: HashMap<i64, Hash> = HashMap::new();
     let mut tree_height: Option<u8> = None;
     let mut initial_root: Option<Hash> = None;
     let mut root_seq: Option<u64> = None;
 
-    // Collect proofs from output queue
+    // Collect proofs and path nodes from output queue
     if let Some(ref proof_data) = output_proof_data {
         tree_height = Some(proof_data.tree_height);
+        all_path_nodes.extend(proof_data.path_nodes.clone());
         for proof in &proof_data.proofs {
             if initial_root.is_none() {
                 initial_root = Some(proof.root.clone());
@@ -280,11 +290,12 @@ fn merge_state_queue_proofs(
         }
     }
 
-    // Collect proofs from input queue
+    // Collect proofs and path nodes from input queue
     if let Some(ref proof_data) = input_proof_data {
         if tree_height.is_none() {
             tree_height = Some(proof_data.tree_height);
         }
+        all_path_nodes.extend(proof_data.path_nodes.clone());
         for proof in &proof_data.proofs {
             if initial_root.is_none() {
                 initial_root = Some(proof.root.clone());
@@ -299,7 +310,7 @@ fn merge_state_queue_proofs(
     }
 
     let height = tree_height.unwrap();
-    let (nodes, node_hashes) = deduplicate_nodes_from_refs(&all_proofs, height);
+    let (nodes, node_hashes) = deduplicate_nodes_from_refs(&all_proofs, height, &all_path_nodes);
 
     Ok((
         nodes,
@@ -444,17 +455,31 @@ async fn fetch_queue(
         )));
     }
 
+    // Fetch path nodes (ancestors) from DB for all leaves
+    let tree_height_u32 = tree_info.height as u32 + 1;
+    let path_nodes =
+        fetch_path_nodes_from_db(tx, &serializable_tree, &indices, tree_height_u32).await?;
+
     // Return proofs for merging at response level
     let proof_data = Some(StateQueueProofData {
         proofs: generated_proofs.clone(),
         tree_height: tree_info.height as u8,
+        path_nodes,
     });
 
     let leaf_indices = indices.clone();
     let account_hashes: Vec<Hash> = queue_elements
         .iter()
-        .map(|e| Hash::new(e.hash.as_slice()).unwrap())
-        .collect();
+        .enumerate()
+        .map(|(idx, e)| {
+            Hash::new(e.hash.as_slice()).map_err(|err| {
+                PhotonApiError::UnexpectedError(format!(
+                    "Invalid hash for queue element at index {} (leaf_index={}): {}",
+                    idx, e.leaf_index, err
+                ))
+            })
+        })
+        .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
     let leaves: Vec<Hash> = generated_proofs.iter().map(|p| p.hash.clone()).collect();
 
     let tree_pubkey_bytes: [u8; 32] = serializable_tree
@@ -934,59 +959,42 @@ async fn fetch_address_queue_v2(
     })
 }
 
-/// Deduplicate nodes across all merkle proofs (takes references to proofs)
+/// Deduplicate nodes across all merkle proofs using pre-fetched path nodes from DB.
 /// Returns parallel arrays: (node_indices, node_hashes)
+/// Uses path_nodes (DB node_idx -> hash) for parent hashes instead of computing them.
 fn deduplicate_nodes_from_refs(
     proofs: &[&crate::ingester::persist::MerkleProofWithContext],
     tree_height: u8,
+    path_nodes: &HashMap<i64, Hash>,
 ) -> (Vec<u64>, Vec<Hash>) {
     let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
+    let tree_height_u32 = tree_height as u32 + 1;
 
     for proof_ctx in proofs {
         let mut pos = proof_ctx.leaf_index as u64;
-        let mut current_hash = proof_ctx.hash.clone();
+        let mut db_node_idx = leaf_index_to_node_index(proof_ctx.leaf_index, tree_height_u32);
 
         // Store the leaf itself
         let leaf_idx = encode_node_index(0, pos, tree_height);
-        nodes_map.insert(leaf_idx, current_hash.clone());
+        nodes_map.insert(leaf_idx, proof_ctx.hash.clone());
 
-        // Walk up the proof path, storing BOTH the sibling AND the current node at each level
+        // Walk up the proof path, storing sibling hashes and path node hashes from DB
         for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
-            let sibling_pos = if pos.is_multiple_of(2) {
-                pos + 1
-            } else {
-                pos - 1
-            };
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
 
             // Store the sibling (from proof)
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);
             nodes_map.insert(sibling_idx, sibling_hash.clone());
 
-            // Compute and store the parent node on the path
-            // This allows MerkleTree::update_upper_layers() to read both children
-            let parent_hash = if pos.is_multiple_of(2) {
-                // Current is left, sibling is right
-                Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
-            } else {
-                // Sibling is left, current is right
-                Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
-            };
-
-            match parent_hash {
-                Ok(hash) => {
-                    current_hash = Hash::from(hash);
-                    // Store the parent at the next level
-                    let parent_pos = pos / 2;
-                    let parent_idx = encode_node_index((level + 1) as u8, parent_pos, tree_height);
-                    nodes_map.insert(parent_idx, current_hash.clone());
-                }
-                Err(_) => {
-                    // If hash fails, we can't compute parent, stop here
-                    break;
-                }
-            }
-
+            // Move to parent
+            db_node_idx >>= 1;
             pos /= 2;
+
+            // Store the parent hash from DB (if available)
+            if let Some(parent_hash) = path_nodes.get(&db_node_idx) {
+                let parent_idx = encode_node_index((level + 1) as u8, pos, tree_height);
+                nodes_map.insert(parent_idx, parent_hash.clone());
+            }
         }
     }
 
@@ -1002,4 +1010,63 @@ fn compute_indexed_leaf_hash(low_value: &Hash, next_value: &Hash) -> Result<Hash
         PhotonApiError::UnexpectedError(format!("Failed to hash indexed leaf: {}", e))
     })?;
     Ok(Hash::from(hashed))
+}
+
+/// Fetch path nodes (all ancestors from leaf to root) from the database.
+/// Returns a map from node_idx (in DB binary tree format) to hash.
+async fn fetch_path_nodes_from_db(
+    tx: &sea_orm::DatabaseTransaction,
+    tree: &SerializablePubkey,
+    leaf_indices: &[u64],
+    tree_height: u32,
+) -> Result<HashMap<i64, Hash>, PhotonApiError> {
+    use itertools::Itertools;
+
+    if leaf_indices.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let tree_bytes = tree.to_bytes_vec();
+
+    let all_path_indices: Vec<i64> = leaf_indices
+        .iter()
+        .flat_map(|&leaf_idx| {
+            let node_idx = leaf_index_to_node_index(leaf_idx as u32, tree_height);
+            let mut path = vec![node_idx];
+            let mut current = node_idx;
+            while current > 1 {
+                current >>= 1;
+                path.push(current);
+            }
+            path
+        })
+        .sorted()
+        .dedup()
+        .collect();
+
+    if all_path_indices.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let path_nodes = state_trees::Entity::find()
+        .filter(
+            state_trees::Column::Tree
+                .eq(tree_bytes)
+                .and(state_trees::Column::NodeIdx.is_in(all_path_indices)),
+        )
+        .all(tx)
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
+        })?;
+
+    let mut result = HashMap::new();
+    for node in path_nodes {
+        let hash = Hash::try_from(node.hash).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
+        })?;
+        result.insert(node.node_idx, hash);
+    }
+
+    Ok(result)
 }

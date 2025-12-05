@@ -15,7 +15,7 @@ use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::indexed_merkle_tree::get_multiple_exclusion_ranges_with_proofs_v2;
 use std::collections::HashMap;
 
-pub const MAX_ADDRESSES: usize = 30_000;
+pub const MAX_ADDRESSES: usize = 1000;
 
 pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
@@ -78,7 +78,7 @@ pub async fn get_multiple_new_address_proofs_helper(
     for (idx, AddressWithTree { address, tree }) in addresses.iter().enumerate() {
         addresses_by_tree
             .entry(*tree)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((idx, *address));
     }
 

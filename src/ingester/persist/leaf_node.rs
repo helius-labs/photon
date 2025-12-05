@@ -170,13 +170,16 @@ pub async fn persist_leaf_nodes(
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
     let update_count = models_to_updates.len();
-    let mut seq_values: Vec<Option<i64>> = models_to_updates
+    let mut seq_values: Vec<i64> = models_to_updates
         .values()
-        .map(|m| m.seq.clone().unwrap())
+        .filter_map(|m| match &m.seq {
+            sea_orm::ActiveValue::Set(opt) => *opt,
+            _ => None,
+        })
         .collect();
     seq_values.sort();
-    let min_seq = seq_values.first().and_then(|s| *s);
-    let max_seq = seq_values.last().and_then(|s| *s);
+    let min_seq = seq_values.first().copied();
+    let max_seq = seq_values.last().copied();
 
     log::debug!(
         "Persisting {} tree nodes (seq range: {:?} to {:?}) for tree {:?}",
