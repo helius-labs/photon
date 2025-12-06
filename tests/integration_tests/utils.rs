@@ -31,10 +31,10 @@ use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::typedefs::block_info::BlockMetadata;
 use photon_indexer::monitor::tree_metadata_sync::{upsert_tree_metadata, TreeAccountData};
 pub use rstest::rstest;
+use solana_account::Account as SolanaAccount;
 use solana_client::{
     nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig, rpc_request::RpcRequest,
 };
-use solana_account::Account as SolanaAccount;
 use solana_clock::Slot;
 use solana_commitment_config::CommitmentConfig;
 use solana_commitment_config::CommitmentLevel;
@@ -240,11 +240,20 @@ pub async fn setup(name: String, database_backend: DatabaseBackend) -> TestSetup
 
 pub async fn setup_pg_pool(database_url: String) -> PgPool {
     let options: PgConnectOptions = database_url.parse().unwrap();
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .min_connections(1)
         .connect_with(options)
         .await
-        .unwrap()
+        .unwrap();
+
+    // Set default isolation level to READ COMMITTED for all connections in the pool
+    // This ensures each statement sees the latest committed data
+    sqlx::query("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    pool
 }
 
 pub async fn setup_sqllite_pool() -> SqlitePool {

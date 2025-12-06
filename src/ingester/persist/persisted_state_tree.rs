@@ -186,7 +186,7 @@ pub async fn get_subtrees(
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to query nodes: {}", e)))?;
 
     if results.is_empty() {
-        return Ok(EMPTY_SUBTREES.to_vec());
+        return Ok(EMPTY_SUBTREES[..tree_height].to_vec());
     }
 
     for row in results {

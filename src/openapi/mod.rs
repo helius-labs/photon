@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use crate::api::api::PhotonApi;
-use crate::api::method::get_batch_address_update_info::AddressQueueIndex;
 use crate::api::method::get_compressed_account_proof::{
     GetCompressedAccountProofResponseValue, GetCompressedAccountProofResponseValueV2,
 };
@@ -21,7 +20,10 @@ use crate::api::method::get_multiple_compressed_accounts::{AccountList, AccountL
 use crate::api::method::get_multiple_new_address_proofs::AddressListWithTrees;
 use crate::api::method::get_multiple_new_address_proofs::AddressWithTree;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
-use crate::api::method::get_queue_elements::GetQueueElementsResponseValue;
+use crate::api::method::get_queue_elements::{
+    AddressQueueData, InputQueueData, Node, OutputQueueData, QueueRequest, StateQueueData,
+};
+use crate::api::method::get_queue_info::QueueInfo;
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
     AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
@@ -82,9 +84,15 @@ const JSON_CONTENT_TYPE: &str = "application/json";
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(
+    InputQueueData,
+    OutputQueueData,
+    AddressQueueData,
+    StateQueueData,
+    Node,
+    QueueRequest,
+    QueueInfo,
     AccountProofInputs,
     AddressProofInputs,
-    AddressQueueIndex,
     SerializablePubkey,
     Context,
     Hash,
@@ -95,7 +103,6 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     AccountContext,
     AccountWithContext,
     AccountV2,
-    GetQueueElementsResponseValue,
     TokenAccountList,
     TokenAccountListV2,
     TokenAccount,

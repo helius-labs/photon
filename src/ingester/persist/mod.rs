@@ -179,9 +179,11 @@ pub async fn persist_state_update(
 
     // Process each tree's nodes with the correct height
     for (tree_pubkey, tree_nodes) in nodes_by_tree {
-        let tree_info = tree_info_cache.get(&tree_pubkey).ok_or_else(|| {
-            IngesterError::ParserError(format!("Tree metadata not found for tree {}", tree_pubkey))
-        })?;
+        let tree_info = tree_info_cache.get(&tree_pubkey)
+            .ok_or_else(|| IngesterError::ParserError(format!(
+                "Tree metadata not found for tree {}. Tree metadata must be synced before indexing.",
+                tree_pubkey
+            )))?;
         let tree_height = tree_info.height + 1; // +1 for indexed trees
 
         // Process in chunks

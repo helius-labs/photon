@@ -29,6 +29,7 @@ use s3::{bucket::Bucket, BucketConfiguration};
 use s3_utils::multipart_upload::put_object_stream_custom;
 use tokio::io::{AsyncRead, ReadBuf};
 
+pub mod gcs_utils;
 pub mod s3_utils;
 
 pub const MEGABYTE: usize = 1024 * 1024;
@@ -258,30 +259,24 @@ impl GCSDirectoryAdapter {
         byte_stream: impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static,
     ) -> Result<()> {
         let full_path = if self.gcs_prefix.is_empty() {
-            path
+            path.clone()
         } else {
             format!("{}/{}", self.gcs_prefix, path)
         };
 
-        // Collect the stream into a Vec<u8>
-        pin_mut!(byte_stream);
-        let mut data = Vec::new();
-        while let Some(chunk) = byte_stream.next().await {
-            let chunk = chunk?;
-            data.extend_from_slice(&chunk);
-        }
-
-        // Upload to GCS
-        self.gcs_client
-            .object()
-            .create(
-                &self.gcs_bucket,
-                data,
-                &full_path,
-                "application/octet-stream",
-            )
+        // Use resumable upload for reliable large file uploads
+        let access_token = gcs_utils::resumable_upload::get_access_token()
             .await
-            .with_context(|| format!("Failed to write file to GCS: {:?}", full_path))?;
+            .with_context(|| "Failed to get GCS access token")?;
+
+        gcs_utils::resumable_upload::resumable_upload(
+            &self.gcs_bucket,
+            &full_path,
+            byte_stream,
+            &access_token,
+        )
+        .await
+        .with_context(|| format!("Failed to write file to GCS: {:?}", full_path))?;
 
         Ok(())
     }

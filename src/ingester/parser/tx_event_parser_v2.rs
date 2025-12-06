@@ -10,8 +10,8 @@ use crate::ingester::parser::tx_event_parser::create_state_update_v1;
 
 use super::state_update::AddressQueueUpdate;
 use crate::common::typedefs::hash::Hash;
-use light_event::parse::event_from_light_transaction;
 use light_compressed_account::Pubkey as LightPubkey;
+use light_event::parse::event_from_light_transaction;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
@@ -25,10 +25,16 @@ pub fn parse_public_transaction_event_v2(
     instructions: &[Vec<u8>],
     accounts: Vec<Vec<Pubkey>>,
 ) -> Option<Vec<BatchPublicTransactionEvent>> {
-    let light_program_ids: Vec<LightPubkey> = program_ids.iter().map(|p| to_light_pubkey(p)).collect();
+    let light_program_ids: Vec<LightPubkey> =
+        program_ids.iter().map(|p| to_light_pubkey(p)).collect();
     let light_accounts: Vec<Vec<LightPubkey>> = accounts
         .into_iter()
-        .map(|acc_vec| acc_vec.into_iter().map(|acc| to_light_pubkey(&acc)).collect())
+        .map(|acc_vec| {
+            acc_vec
+                .into_iter()
+                .map(|acc| to_light_pubkey(&acc))
+                .collect()
+        })
         .collect();
     let events =
         event_from_light_transaction(&light_program_ids, instructions, light_accounts).ok()?;
@@ -78,9 +84,7 @@ pub fn parse_public_transaction_event_v2(
                     compression_lamports: public_transaction_event
                         .event
                         .compress_or_decompress_lamports,
-                    pubkey_array: public_transaction_event
-                        .event
-                        .pubkey_array,
+                    pubkey_array: public_transaction_event.event.pubkey_array,
                     message: public_transaction_event.event.message,
                 };
 

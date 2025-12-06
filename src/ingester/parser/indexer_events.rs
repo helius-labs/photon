@@ -1,8 +1,8 @@
 /// Copied from the Light repo. We copy them instead of importing from the Light repo in order
 /// to avoid having to import all of Light's dependencies.
 use borsh::{BorshDeserialize, BorshSerialize};
-use light_event::event::{BatchNullifyContext, NewAddress};
 use light_compressed_account::Pubkey;
+use light_event::event::{BatchNullifyContext, NewAddress};
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {

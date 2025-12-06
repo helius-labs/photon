@@ -61,10 +61,6 @@ use super::{
         get_indexer_slot::get_indexer_slot,
     },
 };
-use crate::api::method::get_batch_address_update_info::{
-    get_batch_address_update_info, GetBatchAddressUpdateInfoRequest,
-    GetBatchAddressUpdateInfoResponse,
-};
 use crate::api::method::get_compressed_account_proof::{
     get_compressed_account_proof_v2, GetCompressedAccountProofResponseV2,
 };
@@ -80,6 +76,9 @@ use crate::api::method::get_multiple_compressed_account_proofs::{
 };
 use crate::api::method::get_queue_elements::{
     get_queue_elements, GetQueueElementsRequest, GetQueueElementsResponse,
+};
+use crate::api::method::get_queue_info::{
+    get_queue_info, GetQueueInfoRequest, GetQueueInfoResponse,
 };
 use crate::api::method::get_validity_proof::{
     get_validity_proof, get_validity_proof_v2, GetValidityProofRequest,
@@ -274,6 +273,13 @@ impl PhotonApi {
         get_queue_elements(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_queue_info(
+        &self,
+        request: GetQueueInfoRequest,
+    ) -> Result<GetQueueInfoResponse, PhotonApiError> {
+        get_queue_info(self.db_conn.as_ref(), request).await
+    }
+
     pub async fn get_compressed_accounts_by_owner(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
@@ -381,24 +387,17 @@ impl PhotonApi {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_batch_address_update_info(
-        &self,
-        request: GetBatchAddressUpdateInfoRequest,
-    ) -> Result<GetBatchAddressUpdateInfoResponse, PhotonApiError> {
-        get_batch_address_update_info(self.db_conn.as_ref(), request).await
-    }
-
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
-            OpenApiSpec {
-                name: "getBatchAddressUpdateInfo".to_string(),
-                request: Some(GetBatchAddressUpdateInfoRequest::schema().1),
-                response: GetBatchAddressUpdateInfoResponse::schema().1,
-            },
             OpenApiSpec {
                 name: "getQueueElements".to_string(),
                 request: Some(GetQueueElementsRequest::schema().1),
                 response: GetQueueElementsResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getQueueInfo".to_string(),
+                request: Some(GetQueueInfoRequest::schema().1),
+                response: GetQueueInfoResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getCompressedAccount".to_string(),

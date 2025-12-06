@@ -1,6 +1,6 @@
 use light_compressed_account::QueueType;
 use log::debug;
-use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
+use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, Set};
 use solana_pubkey::Pubkey;
 
 use crate::dao::generated::{prelude::QueueHashChains, queue_hash_chains};
@@ -11,13 +11,16 @@ pub struct CachedHashChain {
 }
 
 /// Store multiple hash chains in a single transaction
-pub async fn store_hash_chains_batch(
-    db: &DatabaseConnection,
+pub async fn store_hash_chains_batch<C>(
+    db: &C,
     tree_pubkey: Pubkey,
     queue_type: QueueType,
     batch_start_index: u64,
     hash_chains: Vec<(usize, u64, [u8; 32])>, // (zkp_batch_index, start_offset, hash_chain)
-) -> Result<(), DbErr> {
+) -> Result<(), DbErr>
+where
+    C: ConnectionTrait,
+{
     if hash_chains.is_empty() {
         return Ok(());
     }
@@ -63,12 +66,15 @@ pub async fn store_hash_chains_batch(
 }
 
 /// Retrieve cached hash chains for a specific tree and queue type
-pub async fn get_cached_hash_chains(
-    db: &DatabaseConnection,
+pub async fn get_cached_hash_chains<C>(
+    db: &C,
     tree_pubkey: Pubkey,
     queue_type: QueueType,
     batch_start_index: u64,
-) -> Result<Vec<CachedHashChain>, DbErr> {
+) -> Result<Vec<CachedHashChain>, DbErr>
+where
+    C: ConnectionTrait,
+{
     let queue_type_int = queue_type as i32;
 
     let results = QueueHashChains::find()
@@ -93,4 +99,32 @@ pub async fn get_cached_hash_chains(
 
     chains.sort_by_key(|c| c.zkp_batch_index);
     Ok(chains)
+}
+
+pub async fn delete_hash_chains<C>(
+    db: &C,
+    tree_pubkey: Pubkey,
+    queue_type: QueueType,
+    batch_start_index: u64,
+    zkp_batch_indices: Vec<i32>,
+) -> Result<u64, DbErr>
+where
+    C: ConnectionTrait,
+{
+    if zkp_batch_indices.is_empty() {
+        return Ok(0);
+    }
+
+    let queue_type_int = queue_type as i32;
+    let tree_bytes = tree_pubkey.to_bytes().to_vec();
+
+    let result = queue_hash_chains::Entity::delete_many()
+        .filter(queue_hash_chains::Column::TreePubkey.eq(tree_bytes))
+        .filter(queue_hash_chains::Column::QueueType.eq(queue_type_int))
+        .filter(queue_hash_chains::Column::BatchStartIndex.eq(batch_start_index as i64))
+        .filter(queue_hash_chains::Column::ZkpBatchIndex.is_in(zkp_batch_indices))
+        .exec(db)
+        .await?;
+
+    Ok(result.rows_affected)
 }

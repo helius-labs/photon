@@ -78,7 +78,7 @@ pub async fn get_multiple_new_address_proofs_helper(
     for (idx, AddressWithTree { address, tree }) in addresses.iter().enumerate() {
         addresses_by_tree
             .entry(*tree)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((idx, *address));
     }
 

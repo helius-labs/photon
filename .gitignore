@@ -16,3 +16,4 @@ docker-compose.yml
 
 .cursor
 **/photon.log
+proto/**/*.bin
