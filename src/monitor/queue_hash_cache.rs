@@ -100,3 +100,31 @@ where
     chains.sort_by_key(|c| c.zkp_batch_index);
     Ok(chains)
 }
+
+pub async fn delete_hash_chains<C>(
+    db: &C,
+    tree_pubkey: Pubkey,
+    queue_type: QueueType,
+    batch_start_index: u64,
+    zkp_batch_indices: Vec<i32>,
+) -> Result<u64, DbErr>
+where
+    C: ConnectionTrait,
+{
+    if zkp_batch_indices.is_empty() {
+        return Ok(0);
+    }
+
+    let queue_type_int = queue_type as i32;
+    let tree_bytes = tree_pubkey.to_bytes().to_vec();
+
+    let result = queue_hash_chains::Entity::delete_many()
+        .filter(queue_hash_chains::Column::TreePubkey.eq(tree_bytes))
+        .filter(queue_hash_chains::Column::QueueType.eq(queue_type_int))
+        .filter(queue_hash_chains::Column::BatchStartIndex.eq(batch_start_index as i64))
+        .filter(queue_hash_chains::Column::ZkpBatchIndex.is_in(zkp_batch_indices))
+        .exec(db)
+        .await?;
+
+    Ok(result.rows_affected)
+}

@@ -234,7 +234,15 @@ async fn verify_queue_hash_chains(
     let batch_start_index = on_chain_batches
         .map(|batches| batches[pending_batch_index].start_index)
         .unwrap_or(0);
-    let start_offset = batch_start_index + (num_inserted_zkps * zkp_batch_size);
+
+    // For AddressV2 queues, batch.start_index is 1-based (tree leaf index) but
+    // address_queues.queue_index is 0-based. Apply -1 offset when querying.
+    // See: src/ingester/persist/persisted_batch_event/address.rs lines 51-55
+    let start_offset = if queue_type == QueueType::AddressV2 {
+        batch_start_index.saturating_sub(1) + (num_inserted_zkps * zkp_batch_size)
+    } else {
+        batch_start_index + (num_inserted_zkps * zkp_batch_size)
+    };
 
     let cached_chains =
         queue_hash_cache::get_cached_hash_chains(db, tree_pubkey, queue_type, batch_start_index)
@@ -249,13 +257,15 @@ async fn verify_queue_hash_chains(
     let start_zkp_batch_idx = num_inserted_zkps as usize;
 
     let mut computed_chains = Vec::with_capacity(on_chain_chains.len());
-    let mut chains_to_cache = Vec::new();
+    let mut newly_computed: Vec<(usize, u64, [u8; 32])> = Vec::new();
+    let mut used_cached_indices: Vec<i32> = Vec::new();
 
     for zkp_batch_idx in 0..on_chain_chains.len() {
         let actual_zkp_idx = start_zkp_batch_idx + zkp_batch_idx;
 
         if let Some(&cached_chain) = cached_map.get(&(actual_zkp_idx as i32)) {
             computed_chains.push(cached_chain);
+            used_cached_indices.push(actual_zkp_idx as i32);
         } else {
             let chain_offset = start_offset + (zkp_batch_idx as u64 * zkp_batch_size);
             let chains = compute_hash_chains_from_db(
@@ -270,30 +280,22 @@ async fn verify_queue_hash_chains(
 
             if !chains.is_empty() {
                 computed_chains.push(chains[0]);
-                chains_to_cache.push((actual_zkp_idx, chain_offset, chains[0]));
+                newly_computed.push((actual_zkp_idx, chain_offset, chains[0]));
             }
         }
     }
 
-    if !chains_to_cache.is_empty() {
-        if let Err(e) = queue_hash_cache::store_hash_chains_batch(
-            db,
-            tree_pubkey,
-            queue_type,
-            batch_start_index,
-            chains_to_cache,
-        )
-        .await
-        {
-            error!("Failed to cache hash chains: {:?}", e);
-        }
-    }
+    // Validate computed chains against on-chain values BEFORE caching
+    let mut valid_chains_to_cache: Vec<(usize, u64, [u8; 32])> = Vec::new();
+    let mut invalid_cached_indices: Vec<i32> = Vec::new();
 
     for (zkp_batch_idx, (on_chain, computed)) in on_chain_chains
         .iter()
         .zip(computed_chains.iter())
         .enumerate()
     {
+        let actual_zkp_idx = start_zkp_batch_idx + zkp_batch_idx;
+
         if on_chain != computed {
             divergences.push(HashChainDivergence {
                 queue_info: QueueHashChainInfo {
@@ -306,6 +308,55 @@ async fn verify_queue_hash_chains(
                 actual_hash_chain: *on_chain,
                 zkp_batch_index: zkp_batch_idx,
             });
+
+            // If this was from cache, mark for deletion
+            if used_cached_indices.contains(&(actual_zkp_idx as i32)) {
+                invalid_cached_indices.push(actual_zkp_idx as i32);
+            }
+        } else {
+            // Only cache newly computed chains that match on-chain
+            if let Some(entry) = newly_computed
+                .iter()
+                .find(|(idx, _, _)| *idx == actual_zkp_idx)
+            {
+                valid_chains_to_cache.push(*entry);
+            }
+        }
+    }
+
+    // Delete invalid cached chains
+    if !invalid_cached_indices.is_empty() {
+        debug!(
+            "Deleting {} invalid cached hash chains for tree {} type {:?}",
+            invalid_cached_indices.len(),
+            tree_pubkey,
+            queue_type
+        );
+        if let Err(e) = queue_hash_cache::delete_hash_chains(
+            db,
+            tree_pubkey,
+            queue_type,
+            batch_start_index,
+            invalid_cached_indices,
+        )
+        .await
+        {
+            error!("Failed to delete invalid cached hash chains: {:?}", e);
+        }
+    }
+
+    // Only cache validated chains
+    if !valid_chains_to_cache.is_empty() {
+        if let Err(e) = queue_hash_cache::store_hash_chains_batch(
+            db,
+            tree_pubkey,
+            queue_type,
+            batch_start_index,
+            valid_chains_to_cache,
+        )
+        .await
+        {
+            error!("Failed to cache hash chains: {:?}", e);
         }
     }
 

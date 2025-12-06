@@ -1,6 +1,6 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, AddressWithTree, MAX_ADDRESSES,
+    get_multiple_new_address_proofs_helper, AddressWithTree,
 };
 use crate::common::format_bytes;
 use crate::common::typedefs::context::Context;
@@ -26,6 +26,10 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
+// SQLite has a limit of 999 SQL variables. Each address proof requires ~26 nodes (tree height),
+// and each node needs 2 params (tree, node_idx). So max addresses ≈ 999 / (26 * 2) ≈ 19.
+// We use 15 to be safe and account for other query overhead.
+const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 15;
 
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
@@ -674,10 +678,14 @@ async fn fetch_address_queue_v2(
     limit: u16,
     zkp_batch_size: u16,
 ) -> Result<AddressQueueData, PhotonApiError> {
-    if limit as usize > MAX_ADDRESSES {
+    let max_allowed = match tx.get_database_backend() {
+        sea_orm::DatabaseBackend::Sqlite => MAX_QUEUE_ELEMENTS_SQLITE,
+        _ => MAX_QUEUE_ELEMENTS,
+    };
+    if limit > max_allowed {
         return Err(PhotonApiError::ValidationError(format!(
             "Too many addresses requested {}. Maximum allowed: {}",
-            limit, MAX_ADDRESSES
+            limit, max_allowed
         )));
     }
 
@@ -761,9 +769,13 @@ async fn fetch_address_queue_v2(
         });
     }
 
-    let non_inclusion_proofs =
-        get_multiple_new_address_proofs_helper(tx, addresses_with_trees, MAX_ADDRESSES, false)
-            .await?;
+    let non_inclusion_proofs = get_multiple_new_address_proofs_helper(
+        tx,
+        addresses_with_trees,
+        max_allowed as usize,
+        false,
+    )
+    .await?;
 
     if non_inclusion_proofs.len() != queue_results.len() {
         return Err(PhotonApiError::ValidationError(format!(
