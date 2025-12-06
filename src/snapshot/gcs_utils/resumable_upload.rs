@@ -322,16 +322,18 @@ pub async fn get_access_token() -> Result<String> {
     // Use gcloud auth to get the token, or parse the service account JSON
     // The cloud-storage crate handles this internally, but we need to do it manually for reqwest
 
-    // First try to get the token from the metadata service (when running on GCP)
-    if let Ok(token) = get_token_from_metadata_service().await {
-        return Ok(token);
+    // First try service account file if GOOGLE_APPLICATION_CREDENTIALS is set
+    // This ensures we use the correct OAuth scopes defined in get_token_from_service_account
+    if let Ok(credentials_path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+        if let Ok(token) = get_token_from_service_account(&credentials_path).await {
+            return Ok(token);
+        }
     }
 
-    // Fall back to service account file
-    let credentials_path = std::env::var("GOOGLE_APPLICATION_CREDENTIALS")
-        .context("GOOGLE_APPLICATION_CREDENTIALS environment variable not set")?;
-
-    get_token_from_service_account(&credentials_path).await
+    // Fall back to metadata service (when running on GCP without explicit credentials)
+    get_token_from_metadata_service()
+        .await
+        .context("Failed to get access token from metadata service or service account file")
 }
 
 async fn get_token_from_metadata_service() -> Result<String> {
