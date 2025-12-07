@@ -154,11 +154,14 @@ pub struct InputQueueData {
 pub struct AddressQueueData {
     pub addresses: Vec<SerializablePubkey>,
     pub queue_indices: Vec<u64>,
+    /// Deduplicated tree nodes - clients reconstruct proofs from these using low_element_indices
     pub nodes: Vec<Node>,
     pub low_element_indices: Vec<u64>,
     pub low_element_values: Vec<Hash>,
     pub low_element_next_indices: Vec<u64>,
     pub low_element_next_values: Vec<Hash>,
+    /// Original full proofs (for debugging - will be removed after validation)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub low_element_proofs: Vec<Vec<Hash>>,
     pub leaves_hash_chains: Vec<Hash>,
     pub initial_root: Hash,
@@ -742,7 +745,6 @@ async fn fetch_address_queue_v2(
         return Ok(AddressQueueData {
             start_index: batch_start_index as u64,
             subtrees,
-            low_element_proofs: Vec::new(),
             ..Default::default()
         });
     }
@@ -788,7 +790,11 @@ async fn fetch_address_queue_v2(
     let mut low_element_values = Vec::with_capacity(non_inclusion_proofs.len());
     let mut low_element_next_indices = Vec::with_capacity(non_inclusion_proofs.len());
     let mut low_element_next_values = Vec::with_capacity(non_inclusion_proofs.len());
-    let mut low_element_proofs = Vec::with_capacity(non_inclusion_proofs.len());
+    // Collect original proofs for debugging
+    let mut low_element_proofs: Vec<Vec<Hash>> = Vec::with_capacity(non_inclusion_proofs.len());
+
+    // Track which low_element_leaf_indices we've already processed to avoid redundant hash computations
+    let mut processed_leaf_indices: std::collections::HashSet<u32> = std::collections::HashSet::new();
 
     for proof in &non_inclusion_proofs {
         let low_value = Hash::new(&proof.lowerRangeAddress.to_bytes_vec()).map_err(|e| {
@@ -802,7 +808,15 @@ async fn fetch_address_queue_v2(
         low_element_values.push(low_value.clone());
         low_element_next_indices.push(proof.nextIndex as u64);
         low_element_next_values.push(next_value.clone());
+        // Collect the original proof for debugging
         low_element_proofs.push(proof.proof.clone());
+
+        // Skip node computation if we've already processed this leaf index
+        // This is a huge optimization for empty/sparse trees where many addresses share the same low element
+        if processed_leaf_indices.contains(&proof.lowElementLeafIndex) {
+            continue;
+        }
+        processed_leaf_indices.insert(proof.lowElementLeafIndex);
 
         let leaf_idx =
             encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
