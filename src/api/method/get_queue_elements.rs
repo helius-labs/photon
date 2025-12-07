@@ -26,10 +26,7 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
-// SQLite has a limit of 999 SQL variables. Each address proof requires ~26 nodes (tree height),
-// and each node needs 2 params (tree, node_idx). So max addresses ≈ 999 / (26 * 2) ≈ 19.
-// We use 15 to be safe and account for other query overhead.
-const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 15;
+const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 500;
 
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
