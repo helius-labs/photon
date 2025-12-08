@@ -160,9 +160,6 @@ pub struct AddressQueueData {
     pub low_element_values: Vec<Hash>,
     pub low_element_next_indices: Vec<u64>,
     pub low_element_next_values: Vec<Hash>,
-    /// Original full proofs (for debugging - will be removed after validation)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub low_element_proofs: Vec<Vec<Hash>>,
     pub leaves_hash_chains: Vec<Hash>,
     pub initial_root: Hash,
     pub start_index: u64,
@@ -790,8 +787,6 @@ async fn fetch_address_queue_v2(
     let mut low_element_values = Vec::with_capacity(non_inclusion_proofs.len());
     let mut low_element_next_indices = Vec::with_capacity(non_inclusion_proofs.len());
     let mut low_element_next_values = Vec::with_capacity(non_inclusion_proofs.len());
-    // Collect original proofs for debugging
-    let mut low_element_proofs: Vec<Vec<Hash>> = Vec::with_capacity(non_inclusion_proofs.len());
 
     // Track which low_element_leaf_indices we've already processed to avoid redundant hash computations
     let mut processed_leaf_indices: std::collections::HashSet<u32> = std::collections::HashSet::new();
@@ -808,8 +803,6 @@ async fn fetch_address_queue_v2(
         low_element_values.push(low_value.clone());
         low_element_next_indices.push(proof.nextIndex as u64);
         low_element_next_values.push(next_value.clone());
-        // Collect the original proof for debugging
-        low_element_proofs.push(proof.proof.clone());
 
         // Skip node computation if we've already processed this leaf index
         // This is a huge optimization for empty/sparse trees where many addresses share the same low element
@@ -980,7 +973,6 @@ async fn fetch_address_queue_v2(
         low_element_values,
         low_element_next_indices,
         low_element_next_values,
-        low_element_proofs,
         leaves_hash_chains,
         initial_root,
         start_index: batch_start_index as u64,
