@@ -789,7 +789,8 @@ async fn fetch_address_queue_v2(
     let mut low_element_next_values = Vec::with_capacity(non_inclusion_proofs.len());
 
     // Track which low_element_leaf_indices we've already processed to avoid redundant hash computations
-    let mut processed_leaf_indices: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut processed_leaf_indices: std::collections::HashSet<u32> =
+        std::collections::HashSet::new();
 
     for proof in &non_inclusion_proofs {
         let low_value = Hash::new(&proof.lowerRangeAddress.to_bytes_vec()).map_err(|e| {

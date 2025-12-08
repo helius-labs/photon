@@ -208,7 +208,9 @@ where
                     ))
                     .await
                     .map_err(|e| {
-                        IngesterError::DatabaseError(format!("Failed to execute indexed query: {e}"))
+                        IngesterError::DatabaseError(format!(
+                            "Failed to execute indexed query: {e}"
+                        ))
                     })?;
                 all_results.extend(chunk_results);
             }
@@ -272,7 +274,8 @@ where
     }
 
     let tree_bytes = format_bytes(tree.clone(), txn_or_conn.get_database_backend());
-    let mut indexed_tree: HashMap<Vec<u8>, indexed_trees::Model> = HashMap::with_capacity(values.len());
+    let mut indexed_tree: HashMap<Vec<u8>, indexed_trees::Model> =
+        HashMap::with_capacity(values.len());
 
     match txn_or_conn.get_database_backend() {
         DatabaseBackend::Postgres => {
@@ -300,7 +303,9 @@ where
                     ))
                     .await
                     .map_err(|e| {
-                        IngesterError::DatabaseError(format!("Failed to execute indexed query: {e}"))
+                        IngesterError::DatabaseError(format!(
+                            "Failed to execute indexed query: {e}"
+                        ))
                     })?;
 
                 for row in chunk_results {
@@ -372,14 +377,15 @@ pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
     }
 
     // Query returns HashMap<input_address, range_node> - O(1) lookup per address
-    let address_to_range = query_next_smallest_elements_by_address(txn, addresses.clone(), tree.clone())
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to query next smallest elements: {}",
-                e
-            ))
-        })?;
+    let address_to_range =
+        query_next_smallest_elements_by_address(txn, addresses.clone(), tree.clone())
+            .await
+            .map_err(|e| {
+                PhotonApiError::UnexpectedError(format!(
+                    "Failed to query next smallest elements: {}",
+                    e
+                ))
+            })?;
 
     let mut results = HashMap::new();
     let mut leaf_nodes_with_indices = Vec::new();
