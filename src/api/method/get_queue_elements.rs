@@ -866,66 +866,59 @@ async fn fetch_address_queue_v2(
         .unwrap_or_default();
 
     let mut leaves_hash_chains = Vec::new();
-    let tree_pubkey_bytes: [u8; 32] = serializable_tree
-        .to_bytes_vec()
-        .as_slice()
-        .try_into()
-        .map_err(|_| PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string()))?;
-    let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
-    let cached = queue_hash_cache::get_cached_hash_chains(
-        tx,
-        tree_pubkey,
-        QueueType::AddressV2,
-        batch_start_index as u64,
-    )
-    .await
-    .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
-
-    let expected_batch_count = if !addresses.is_empty() && zkp_batch_size > 0 {
-        addresses.len() / zkp_batch_size as usize
-    } else {
-        0
-    };
-
-    log::debug!(
-        "Address queue hash chain cache: batch_start_index={}, cached_count={}, expected_count={}, addresses={}, zkp_batch_size={}",
-        batch_start_index,
-        cached.len(),
-        expected_batch_count,
-        addresses.len(),
-        zkp_batch_size
-    );
-
-    if !cached.is_empty() && cached.len() >= expected_batch_count {
-        log::debug!(
-            "Using {} cached hash chains for batch_start_index={}",
-            cached.len(),
-            batch_start_index
-        );
-        let mut sorted = cached;
-        sorted.sort_by_key(|c| c.zkp_batch_index);
-        for entry in sorted {
-            leaves_hash_chains.push(Hash::from(entry.hash_chain));
-        }
-    } else if !addresses.is_empty() {
-        if cached.is_empty() {
-            log::debug!(
-                "No cached hash chains found, creating {} new chains for batch_start_index={}",
-                expected_batch_count,
-                batch_start_index
-            );
-        }
-        if zkp_batch_size == 0 {
-            return Err(PhotonApiError::ValidationError(
-                "Address queue ZKP batch size must be greater than zero".to_string(),
-            ));
-        }
-
+    if !addresses.is_empty() && zkp_batch_size > 0 {
         let batch_size = zkp_batch_size as usize;
         let batch_count = addresses.len() / batch_size;
 
-        if batch_count > 0 {
-            let mut chains_to_cache = Vec::new();
+        let first_queue_index = queue_indices.first().copied().unwrap_or(0);
+        let cache_key = first_queue_index + 1;
+
+        let tree_pubkey_bytes: [u8; 32] = serializable_tree
+            .to_bytes_vec()
+            .as_slice()
+            .try_into()
+            .map_err(|_| {
+                PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string())
+            })?;
+        let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
+
+        let cached = queue_hash_cache::get_cached_hash_chains(
+            tx,
+            tree_pubkey,
+            QueueType::AddressV2,
+            cache_key,
+        )
+        .await
+        .unwrap_or_default();
+
+        log::debug!(
+            "Address queue hash chain: first_queue_index={}, cache_key={}, cached_count={}, expected_count={}, addresses={}",
+            first_queue_index,
+            cache_key,
+            cached.len(),
+            batch_count,
+            addresses.len()
+        );
+
+        if !cached.is_empty() && cached.len() >= batch_count && batch_count > 0 {
+            log::debug!(
+                "Using {} of {} cached hash chains for cache_key={}",
+                batch_count,
+                cached.len(),
+                cache_key
+            );
+            let mut sorted = cached;
+            sorted.sort_by_key(|c| c.zkp_batch_index);
+            for entry in sorted.into_iter().take(batch_count) {
+                leaves_hash_chains.push(Hash::from(entry.hash_chain));
+            }
+        } else {
+            // Compute fresh hash chains from the actual addresses
+            log::debug!(
+                "Computing {} fresh hash chains for {} addresses (cache miss or insufficient)",
+                batch_count,
+                addresses.len()
+            );
 
             for batch_idx in 0..batch_count {
                 let start = batch_idx * batch_size;
@@ -948,20 +941,6 @@ async fn fetch_address_queue_v2(
                 })?;
 
                 leaves_hash_chains.push(Hash::from(hash_chain));
-                let chain_offset =
-                    (batch_start_index as u64) + (batch_idx as u64 * zkp_batch_size as u64);
-                chains_to_cache.push((batch_idx, chain_offset, hash_chain));
-            }
-
-            if !chains_to_cache.is_empty() {
-                let _ = queue_hash_cache::store_hash_chains_batch(
-                    tx,
-                    tree_pubkey,
-                    QueueType::AddressV2,
-                    batch_start_index as u64,
-                    chains_to_cache,
-                )
-                .await;
             }
         }
     }
