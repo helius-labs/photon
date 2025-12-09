@@ -52,7 +52,7 @@ struct Args {
     db_url: Option<String>,
 
     /// The start slot to begin indexing from. Defaults to the last indexed slot in the database plus
-    /// one.  
+    /// one.
     #[arg(short, long)]
     start_slot: Option<String>,
 

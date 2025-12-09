@@ -3,10 +3,10 @@ use function_name::named;
 use light_hasher::hash_to_field_size::hashv_to_bn254_field_size_be_const_array;
 use light_hasher::Poseidon;
 use num_bigint::BigUint;
-use photon_indexer::api::method::get_batch_address_update_info::GetBatchAddressUpdateInfoRequest;
 use photon_indexer::api::method::get_multiple_new_address_proofs::{
     AddressListWithTrees, AddressWithTree,
 };
+use photon_indexer::api::method::get_queue_elements::{GetQueueElementsRequest, QueueRequest};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
@@ -163,16 +163,25 @@ async fn run_batched_address_test(
     println!("Verifying address queue state before batch update...");
     let queue_elements_before = setup
         .api
-        .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
+        .get_queue_elements(GetQueueElementsRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            start_queue_index: None,
-            limit: 100,
+            output_queue: None,
+            input_queue: None,
+            address_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
         })
         .await
         .expect("Failed to get address queue elements before batch update");
 
+    let address_queue_before = queue_elements_before
+        .address_queue
+        .expect("Address queue should be present");
+
     assert_eq!(
-        queue_elements_before.addresses.len(),
+        address_queue_before.addresses.len(),
         total_addresses,
         "Address queue length mismatch before batch update"
     );
@@ -180,12 +189,12 @@ async fn run_batched_address_test(
     println!("expected_addresses len: {}", expected_addresses.len());
     println!(
         "addresses in queue len: {}",
-        queue_elements_before.addresses.len()
+        address_queue_before.addresses.len()
     );
 
-    for (i, element) in queue_elements_before.addresses.iter().enumerate() {
+    for (i, element) in address_queue_before.addresses.iter().enumerate() {
         assert_eq!(
-            element.address.0.to_bytes(),
+            element.0.to_bytes(),
             expected_addresses[i].0, // Compare the underlying [u8; 32]
             "Address queue content mismatch at index {} before batch update",
             i
@@ -211,19 +220,26 @@ async fn run_batched_address_test(
     println!("Verifying address queue state after batch update...");
     let queue_elements_after = setup
         .api
-        .get_batch_address_update_info(GetBatchAddressUpdateInfoRequest {
+        .get_queue_elements(GetQueueElementsRequest {
             tree: address_tree_pubkey.to_bytes().into(),
-            start_queue_index: None,
-            limit: 100,
+            output_queue: None,
+            input_queue: None,
+            address_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
         })
         .await
         .expect("Failed to get address queue elements after batch update");
 
-    println!("Queue elements after update: {:?}", queue_elements_after);
+    let address_queue_after = queue_elements_after.address_queue;
+    println!("Queue elements after update: {:?}", address_queue_after);
+    let addresses_after = address_queue_after.map(|q| q.addresses).unwrap_or_default();
     assert!(
-        queue_elements_after.addresses.is_empty(),
+        addresses_after.is_empty(),
         "Address queue should be empty after batch update, but found {} elements",
-        queue_elements_after.addresses.len()
+        addresses_after.len()
     );
     println!("Address queue state verified after batch update (empty).");
 

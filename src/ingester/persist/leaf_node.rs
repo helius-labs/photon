@@ -169,6 +169,26 @@ pub async fn persist_leaf_nodes(
     // We first build the query and then execute it because SeaORM has a bug where it always throws
     // an error if we do not insert a record in an insert statement. However, in this case, it's
     // expected not to insert anything if the key already exists.
+    let update_count = models_to_updates.len();
+    let mut seq_values: Vec<i64> = models_to_updates
+        .values()
+        .filter_map(|m| match &m.seq {
+            sea_orm::ActiveValue::Set(opt) => *opt,
+            _ => None,
+        })
+        .collect();
+    seq_values.sort();
+    let min_seq = seq_values.first().copied();
+    let max_seq = seq_values.last().copied();
+
+    log::debug!(
+        "Persisting {} tree nodes (seq range: {:?} to {:?}) for tree {:?}",
+        update_count,
+        min_seq,
+        max_seq,
+        leaf_nodes.first().map(|n| &n.tree)
+    );
+
     let mut query = state_trees::Entity::insert_many(models_to_updates.into_values())
         .on_conflict(
             OnConflict::columns([state_trees::Column::Tree, state_trees::Column::NodeIdx])
@@ -187,5 +207,11 @@ pub async fn persist_leaf_nodes(
     txn.execute(query).await.map_err(|e| {
         IngesterError::DatabaseError(format!("Failed to persist path nodes: {}", e))
     })?;
+
+    log::debug!(
+        "Successfully persisted {} nodes for tree {:?}",
+        update_count,
+        leaf_nodes.first().map(|n| &n.tree)
+    );
     Ok(())
 }

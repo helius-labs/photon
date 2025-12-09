@@ -150,7 +150,6 @@ fn proof_for_empty_tree_with_seq(
         .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e)))?;
 
     let mut root = zeroeth_element_hash.clone().to_vec();
-
     for elem in proof.iter() {
         root = compute_parent_hash(root, elem.to_vec())
             .map_err(|e| PhotonApiError::UnexpectedError(format!("Failed to compute hash: {e}")))?;
@@ -180,27 +179,42 @@ pub async fn query_next_smallest_elements<T>(
 where
     T: ConnectionTrait + TransactionTrait,
 {
+    if values.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+
     let response = match txn_or_conn.get_database_backend() {
-        // HACK: I am executing SQL queries one by one in a loop because I am getting a weird syntax
-        //       error when I am using parentheses.
         DatabaseBackend::Postgres => {
-            let sql_statements = values.iter().map(|value| {
-                format!(
-                    "( SELECT * FROM indexed_trees WHERE tree = {} AND value < {} ORDER BY value DESC LIMIT 1 )",
-                    format_bytes(tree.clone(), txn_or_conn.get_database_backend()),
-                    format_bytes(value.clone(), txn_or_conn.get_database_backend())
-                )
-            });
-            let full_query = sql_statements.collect::<Vec<String>>().join(" UNION ALL ");
-            txn_or_conn
-                .query_all(Statement::from_string(
-                    txn_or_conn.get_database_backend(),
-                    full_query,
-                ))
-                .await
-                .map_err(|e| {
-                    IngesterError::DatabaseError(format!("Failed to execute indexed query: {e}"))
-                })?
+            // Batch queries in chunks to avoid query plan explosion
+            // Each chunk uses UNION ALL which PostgreSQL optimizes well with index scans
+            const BATCH_SIZE: usize = 100;
+            let tree_bytes = format_bytes(tree.clone(), txn_or_conn.get_database_backend());
+            let mut all_results = vec![];
+
+            for chunk in values.chunks(BATCH_SIZE) {
+                let sql_statements = chunk.iter().map(|value| {
+                    format!(
+                        "(SELECT * FROM indexed_trees WHERE tree = {} AND value < {} ORDER BY value DESC LIMIT 1)",
+                        tree_bytes,
+                        format_bytes(value.clone(), txn_or_conn.get_database_backend())
+                    )
+                });
+                let full_query = sql_statements.collect::<Vec<String>>().join(" UNION ALL ");
+
+                let chunk_results = txn_or_conn
+                    .query_all(Statement::from_string(
+                        txn_or_conn.get_database_backend(),
+                        full_query,
+                    ))
+                    .await
+                    .map_err(|e| {
+                        IngesterError::DatabaseError(format!(
+                            "Failed to execute indexed query: {e}"
+                        ))
+                    })?;
+                all_results.extend(chunk_results);
+            }
+            all_results
         }
         DatabaseBackend::Sqlite => {
             let mut response = vec![];
@@ -244,6 +258,111 @@ where
     Ok(indexed_tree)
 }
 
+/// Optimized version for API use: Query the next smallest element for each input address.
+/// Returns a HashMap mapping INPUT ADDRESS -> range node model.
+/// This is O(1) lookup per address instead of O(n) scan in the caller.
+pub async fn query_next_smallest_elements_by_address<T>(
+    txn_or_conn: &T,
+    values: Vec<Vec<u8>>,
+    tree: Vec<u8>,
+) -> Result<HashMap<Vec<u8>, indexed_trees::Model>, IngesterError>
+where
+    T: ConnectionTrait + TransactionTrait,
+{
+    if values.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let tree_bytes = format_bytes(tree.clone(), txn_or_conn.get_database_backend());
+    let mut indexed_tree: HashMap<Vec<u8>, indexed_trees::Model> =
+        HashMap::with_capacity(values.len());
+
+    match txn_or_conn.get_database_backend() {
+        DatabaseBackend::Postgres => {
+            // Batch queries in chunks to avoid query plan explosion
+            // Each chunk uses UNION ALL which PostgreSQL optimizes well with index scans
+            // Include input_address as a constant column to track which result belongs to which input
+            const BATCH_SIZE: usize = 100;
+
+            for chunk in values.chunks(BATCH_SIZE) {
+                let sql_statements = chunk.iter().map(|value| {
+                    let value_bytes = format_bytes(value.clone(), txn_or_conn.get_database_backend());
+                    format!(
+                        "(SELECT {val}::bytea as input_address, tree, leaf_index, value, next_index, next_value, seq \
+                         FROM indexed_trees WHERE tree = {tree} AND value < {val} ORDER BY value DESC LIMIT 1)",
+                        val = value_bytes,
+                        tree = tree_bytes,
+                    )
+                });
+                let full_query = sql_statements.collect::<Vec<String>>().join(" UNION ALL ");
+
+                let chunk_results = txn_or_conn
+                    .query_all(Statement::from_string(
+                        txn_or_conn.get_database_backend(),
+                        full_query,
+                    ))
+                    .await
+                    .map_err(|e| {
+                        IngesterError::DatabaseError(format!(
+                            "Failed to execute indexed query: {e}"
+                        ))
+                    })?;
+
+                for row in chunk_results {
+                    let input_address: Vec<u8> = row.try_get("", "input_address")?;
+                    let model = indexed_trees::Model {
+                        tree: row.try_get("", "tree")?,
+                        leaf_index: row.try_get("", "leaf_index")?,
+                        value: row.try_get("", "value")?,
+                        next_index: row.try_get("", "next_index")?,
+                        next_value: row.try_get("", "next_value")?,
+                        seq: row.try_get("", "seq")?,
+                    };
+                    indexed_tree.insert(input_address, model);
+                }
+            }
+        }
+        DatabaseBackend::Sqlite => {
+            for value in values {
+                let value_bytes = format_bytes(value.clone(), txn_or_conn.get_database_backend());
+                let full_query = format!(
+                    "SELECT CAST({val} AS BLOB) as input_address, tree, leaf_index, value, next_index, next_value, seq \
+                     FROM indexed_trees WHERE tree = {tree} AND value < {val} ORDER BY value DESC LIMIT 1",
+                    val = value_bytes,
+                    tree = tree_bytes,
+                );
+                let results = txn_or_conn
+                    .query_all(Statement::from_string(
+                        txn_or_conn.get_database_backend(),
+                        full_query,
+                    ))
+                    .await
+                    .map_err(|e| {
+                        IngesterError::DatabaseError(format!(
+                            "Failed to execute indexed query: {e}"
+                        ))
+                    })?;
+
+                for row in results {
+                    let input_address: Vec<u8> = row.try_get("", "input_address")?;
+                    let model = indexed_trees::Model {
+                        tree: row.try_get("", "tree")?,
+                        leaf_index: row.try_get("", "leaf_index")?,
+                        value: row.try_get("", "value")?,
+                        next_index: row.try_get("", "next_index")?,
+                        next_value: row.try_get("", "next_value")?,
+                        seq: row.try_get("", "seq")?,
+                    };
+                    indexed_tree.insert(input_address, model);
+                }
+            }
+        }
+        _ => unimplemented!(),
+    };
+
+    Ok(indexed_tree)
+}
+
 /// Batched version of get_exclusion_range_with_proof_v2
 /// Returns a HashMap mapping each input address to its (model, proof) tuple
 pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
@@ -257,27 +376,24 @@ pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
         return Ok(HashMap::new());
     }
 
-    let btree = query_next_smallest_elements(txn, addresses.clone(), tree.clone())
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!(
-                "Failed to query next smallest elements: {}",
-                e
-            ))
-        })?;
+    // Query returns HashMap<input_address, range_node> - O(1) lookup per address
+    let address_to_range =
+        query_next_smallest_elements_by_address(txn, addresses.clone(), tree.clone())
+            .await
+            .map_err(|e| {
+                PhotonApiError::UnexpectedError(format!(
+                    "Failed to query next smallest elements: {}",
+                    e
+                ))
+            })?;
 
     let mut results = HashMap::new();
     let mut leaf_nodes_with_indices = Vec::new();
     let mut address_to_model: HashMap<Vec<u8>, indexed_trees::Model> = HashMap::new();
 
-    // Process addresses that have range proofs
+    // Process addresses that have range proofs - O(1) lookup per address
     for address in &addresses {
-        let range_node = btree
-            .values()
-            .filter(|node| node.value < *address)
-            .max_by(|a, b| a.value.cmp(&b.value));
-
-        if let Some(range_node) = range_node {
+        if let Some(range_node) = address_to_range.get(address) {
             let hash = compute_hash_by_tree_type(range_node, tree_type).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
             })?;
