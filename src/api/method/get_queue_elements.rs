@@ -1,47 +1,170 @@
-use light_compressed_account::QueueType;
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, TransactionTrait,
-};
-
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
 use crate::api::error::PhotonApiError;
+use crate::api::method::get_multiple_new_address_proofs::{
+    get_multiple_new_address_proofs_helper, AddressWithTree,
+};
+use crate::common::format_bytes;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::dao::generated::accounts;
+use crate::dao::generated::{accounts, state_trees};
+use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs_by_indices;
+use crate::{ingester::persist::persisted_state_tree::get_subtrees, monitor::queue_hash_cache};
+use light_batched_merkle_tree::constants::{
+    DEFAULT_ADDRESS_ZKP_BATCH_SIZE, DEFAULT_ZKP_BATCH_SIZE,
+};
+use light_compressed_account::hash_chain::create_hash_chain_from_slice;
+use light_compressed_account::QueueType;
+use light_hasher::{Hasher, Poseidon};
+use sea_orm::{
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
+};
+use serde::{Deserialize, Serialize};
+use solana_pubkey::Pubkey;
+use std::collections::HashMap;
+use utoipa::ToSchema;
+
+const MAX_QUEUE_ELEMENTS: u16 = 30_000;
+const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 500;
+
+/// Encode tree node position as a single u64
+/// Format: [level: u8][position: 56 bits]
+/// Level 0 = leaves, Level tree_height-1 = root
+#[inline]
+fn encode_node_index(level: u8, position: u64, tree_height: u8) -> u64 {
+    debug_assert!(
+        level <= tree_height,
+        "level {} > tree_height {}",
+        level,
+        tree_height
+    );
+    ((level as u64) << 56) | position
+}
+
+/// Convert leaf_index to node_index in binary tree format (root=1, children of N are 2N and 2N+1)
+#[inline]
+fn leaf_index_to_node_index(leaf_index: u32, tree_height: u32) -> i64 {
+    2_i64.pow(tree_height - 1) + leaf_index as i64
+}
+
+struct StateQueueProofData {
+    proofs: Vec<crate::ingester::persist::MerkleProofWithContext>,
+    tree_height: u8,
+    /// Path nodes from DB: maps (node_idx in DB format) -> hash
+    path_nodes: HashMap<i64, Hash>,
+}
+
+enum QueueData {
+    Output(OutputQueueData, Option<StateQueueProofData>),
+    Input(InputQueueData, Option<StateQueueProofData>),
+}
+
+/// Parameters for requesting queue elements
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct QueueRequest {
+    pub limit: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_index: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zkp_batch_size: Option<u16>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsRequest {
     pub tree: Hash,
-    pub start_queue_index: Option<u64>,
-    pub limit: u16,
-    pub queue_type: u8,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_queue: Option<QueueRequest>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_queue: Option<QueueRequest>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_queue: Option<QueueRequest>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetQueueElementsResponse {
     pub context: Context,
-    pub value: Vec<GetQueueElementsResponseValue>,
-    pub first_value_queue_index: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_queue: Option<StateQueueData>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_queue: Option<AddressQueueData>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+/// A tree node with its encoded index and hash
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetQueueElementsResponseValue {
-    pub proof: Vec<Hash>,
-    pub root: Hash,
-    pub leaf_index: u64,
-    pub leaf: Hash,
-    pub tree: Hash,
+pub struct Node {
+    /// Encoded node index: (level << 56) | position
+    pub index: u64,
+    pub hash: Hash,
+}
+
+/// State queue data with shared tree nodes for output and input queues
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct StateQueueData {
+    /// Shared deduplicated tree nodes for state queues (output + input)
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub nodes: Vec<Node>,
+    /// Initial root for the state tree (shared by output and input queues)
+    pub initial_root: Hash,
+    /// Sequence number of the root
     pub root_seq: u64,
-    pub tx_hash: Option<Hash>,
-    pub account_hash: Hash,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_queue: Option<OutputQueueData>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_queue: Option<InputQueueData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct OutputQueueData {
+    pub leaf_indices: Vec<u64>,
+    pub account_hashes: Vec<Hash>,
+    pub leaves: Vec<Hash>,
+    pub first_queue_index: u64,
+    pub next_index: u64,
+    pub leaves_hash_chains: Vec<Hash>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InputQueueData {
+    pub leaf_indices: Vec<u64>,
+    pub account_hashes: Vec<Hash>,
+    pub leaves: Vec<Hash>,
+    pub tx_hashes: Vec<Hash>,
+    pub nullifiers: Vec<Hash>,
+    pub first_queue_index: u64,
+    pub leaves_hash_chains: Vec<Hash>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AddressQueueData {
+    pub addresses: Vec<SerializablePubkey>,
+    pub queue_indices: Vec<u64>,
+    /// Deduplicated tree nodes - clients reconstruct proofs from these using low_element_indices
+    pub nodes: Vec<Node>,
+    pub low_element_indices: Vec<u64>,
+    pub low_element_values: Vec<Hash>,
+    pub low_element_next_indices: Vec<u64>,
+    pub low_element_next_values: Vec<Hash>,
+    pub leaves_hash_chains: Vec<Hash>,
+    pub initial_root: Hash,
+    pub start_index: u64,
+    pub subtrees: Vec<Hash>,
+    pub root_seq: u64,
 }
 
 #[derive(FromQueryResult, Debug)]
@@ -50,137 +173,904 @@ struct QueueElement {
     hash: Vec<u8>,
     tx_hash: Option<Vec<u8>>,
     nullifier_queue_index: Option<i64>,
+    nullifier: Option<Vec<u8>>,
 }
 
 pub async fn get_queue_elements(
     conn: &DatabaseConnection,
     request: GetQueueElementsRequest,
 ) -> Result<GetQueueElementsResponse, PhotonApiError> {
-    let queue_type = QueueType::from(request.queue_type as u64);
+    let has_output_request = request.output_queue.is_some();
+    let has_input_request = request.input_queue.is_some();
+    let has_address_request = request.address_queue.is_some();
 
-    if request.limit > 1000 {
-        return Err(PhotonApiError::ValidationError(format!(
-            "Too many queue elements requested {}. Maximum allowed: 1000",
-            request.limit
-        )));
+    if !has_output_request && !has_input_request && !has_address_request {
+        return Err(PhotonApiError::ValidationError(
+            "At least one queue must be requested".to_string(),
+        ));
     }
 
-    let limit = request.limit;
     let context = Context::extract(conn).await?;
+
     let tx = conn.begin().await?;
     crate::api::set_transaction_isolation_if_needed(&tx).await?;
 
-    let mut query_condition =
-        Condition::all().add(accounts::Column::Tree.eq(request.tree.to_vec()));
-
-    match queue_type {
-        QueueType::InputStateV2 => {
-            query_condition = query_condition
-                .add(accounts::Column::NullifierQueueIndex.is_not_null())
-                .add(accounts::Column::NullifiedInTree.eq(false));
-            if let Some(start_queue_index) = request.start_queue_index {
-                query_condition = query_condition
-                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64))
-                    .add(accounts::Column::NullifiedInTree.eq(false));
-            }
+    // Fetch output and input queues with their proof data
+    let (output_queue, output_proof_data) = if let Some(ref req) = request.output_queue {
+        match fetch_queue(
+            &tx,
+            &request.tree,
+            QueueType::OutputStateV2,
+            req.start_index,
+            req.limit,
+            req.zkp_batch_size,
+        )
+        .await?
+        {
+            QueueData::Output(data, proof_data) => (Some(data), proof_data),
+            QueueData::Input(_, _) => unreachable!("OutputState should return Output"),
         }
-        QueueType::OutputStateV2 => {
-            query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
-            if let Some(start_queue_index) = request.start_queue_index {
-                query_condition =
-                    query_condition.add(accounts::Column::LeafIndex.gte(start_queue_index as i64));
-            }
-        }
-        _ => {
-            return Err(PhotonApiError::ValidationError(format!(
-                "Invalid queue type: {:?}",
-                queue_type
-            )))
-        }
-    }
-
-    let query = match queue_type {
-        QueueType::InputStateV2 => accounts::Entity::find()
-            .filter(query_condition)
-            .order_by_asc(accounts::Column::NullifierQueueIndex),
-        QueueType::OutputStateV2 => accounts::Entity::find()
-            .filter(query_condition)
-            .order_by_asc(accounts::Column::LeafIndex),
-        _ => {
-            return Err(PhotonApiError::ValidationError(format!(
-                "Invalid queue type: {:?}",
-                queue_type
-            )))
-        }
+    } else {
+        (None, None)
     };
 
-    let queue_elements: Vec<QueueElement> = query
-        .limit(limit as u64)
-        .into_model::<QueueElement>()
-        .all(&tx)
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
-        })?;
-    let indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
-    let (proofs, first_value_queue_index) = if !indices.is_empty() {
-        let first_value_queue_index = match queue_type {
-            QueueType::InputStateV2 => Ok(queue_elements[0].nullifier_queue_index.ok_or(
-                PhotonApiError::ValidationError("Nullifier queue index is missing".to_string()),
-            )? as u64),
-            QueueType::OutputStateV2 => Ok(queue_elements[0].leaf_index as u64),
-            _ => Err(PhotonApiError::ValidationError(format!(
-                "Invalid queue type: {:?}",
-                queue_type
-            ))),
-        }?;
-        let generated_proofs = get_multiple_compressed_leaf_proofs_by_indices(
+    let (input_queue, input_proof_data) = if let Some(ref req) = request.input_queue {
+        match fetch_queue(
             &tx,
-            SerializablePubkey::from(request.tree.0),
-            indices.clone(),
+            &request.tree,
+            QueueType::InputStateV2,
+            req.start_index,
+            req.limit,
+            req.zkp_batch_size,
         )
-        .await?;
-        if generated_proofs.len() != indices.len() {
-            return Err(PhotonApiError::ValidationError(format!(
-                "Expected {} proofs for {} queue elements, but got {} proofs",
-                indices.len(),
-                queue_elements.len(),
-                generated_proofs.len()
-            )));
+        .await?
+        {
+            QueueData::Input(data, proof_data) => (Some(data), proof_data),
+            QueueData::Output(_, _) => unreachable!("InputState should return Input"),
         }
-
-        (generated_proofs, first_value_queue_index)
     } else {
-        (vec![], 0)
+        (None, None)
+    };
+
+    let state_queue = if has_output_request || has_input_request {
+        let (nodes, initial_root, root_seq) =
+            merge_state_queue_proofs(&output_proof_data, &input_proof_data)?;
+
+        Some(StateQueueData {
+            nodes,
+            initial_root,
+            root_seq,
+            output_queue,
+            input_queue,
+        })
+    } else {
+        None
+    };
+
+    let address_queue = if let Some(ref req) = request.address_queue {
+        let zkp_batch_size = req
+            .zkp_batch_size
+            .unwrap_or(DEFAULT_ADDRESS_ZKP_BATCH_SIZE as u16);
+        Some(
+            fetch_address_queue_v2(
+                &tx,
+                &request.tree,
+                req.start_index,
+                req.limit,
+                zkp_batch_size,
+            )
+            .await?,
+        )
+    } else {
+        None
     };
 
     tx.commit().await?;
 
-    let result: Vec<GetQueueElementsResponseValue> = proofs
-        .into_iter()
-        .zip(queue_elements.iter())
-        .map(|(proof, queue_element)| {
-            let tx_hash = queue_element
-                .tx_hash
-                .as_ref()
-                .map(|tx_hash| Hash::new(tx_hash.as_slice()).unwrap());
-            let account_hash = Hash::new(queue_element.hash.as_slice()).unwrap();
-            Ok(GetQueueElementsResponseValue {
-                proof: proof.proof,
-                root: proof.root,
-                leaf_index: proof.leaf_index as u64,
-                leaf: proof.hash,
-                tree: Hash::from(proof.merkle_tree.0.to_bytes()),
-                root_seq: proof.root_seq,
-                tx_hash,
-                account_hash,
-            })
-        })
-        .collect::<Result<_, PhotonApiError>>()?;
-
     Ok(GetQueueElementsResponse {
         context,
-        value: result,
-        first_value_queue_index,
+        state_queue,
+        address_queue,
     })
+}
+
+fn merge_state_queue_proofs(
+    output_proof_data: &Option<StateQueueProofData>,
+    input_proof_data: &Option<StateQueueProofData>,
+) -> Result<(Vec<Node>, Hash, u64), PhotonApiError> {
+    let mut all_proofs: Vec<&crate::ingester::persist::MerkleProofWithContext> = Vec::new();
+    let mut all_path_nodes: HashMap<i64, Hash> = HashMap::new();
+    let mut tree_height: Option<u8> = None;
+    let mut initial_root: Option<Hash> = None;
+    let mut root_seq: Option<u64> = None;
+
+    // Collect proofs and path nodes from output queue
+    if let Some(ref proof_data) = output_proof_data {
+        tree_height = Some(proof_data.tree_height);
+        all_path_nodes.extend(proof_data.path_nodes.clone());
+        for proof in &proof_data.proofs {
+            if initial_root.is_none() {
+                initial_root = Some(proof.root.clone());
+                root_seq = Some(proof.root_seq);
+            }
+            all_proofs.push(proof);
+        }
+    }
+
+    // Collect proofs and path nodes from input queue
+    if let Some(ref proof_data) = input_proof_data {
+        if tree_height.is_none() {
+            tree_height = Some(proof_data.tree_height);
+        }
+        all_path_nodes.extend(proof_data.path_nodes.clone());
+        for proof in &proof_data.proofs {
+            if initial_root.is_none() {
+                initial_root = Some(proof.root.clone());
+                root_seq = Some(proof.root_seq);
+            }
+            all_proofs.push(proof);
+        }
+    }
+
+    if all_proofs.is_empty() || tree_height.is_none() {
+        return Ok((Vec::new(), Hash::default(), 0));
+    }
+
+    let height = tree_height.unwrap();
+    let nodes = deduplicate_nodes_from_refs(&all_proofs, height, &all_path_nodes);
+
+    Ok((
+        nodes,
+        initial_root.unwrap_or_default(),
+        root_seq.unwrap_or_default(),
+    ))
+}
+
+async fn fetch_queue(
+    tx: &sea_orm::DatabaseTransaction,
+    tree: &Hash,
+    queue_type: QueueType,
+    start_index: Option<u64>,
+    limit: u16,
+    zkp_batch_size_hint: Option<u16>,
+) -> Result<QueueData, PhotonApiError> {
+    if limit > MAX_QUEUE_ELEMENTS {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many queue elements requested {}. Maximum allowed: {}",
+            limit, MAX_QUEUE_ELEMENTS
+        )));
+    }
+
+    let mut query_condition = Condition::all().add(accounts::Column::Tree.eq(tree.to_vec()));
+
+    let query = match queue_type {
+        QueueType::InputStateV2 => {
+            query_condition = query_condition
+                .add(accounts::Column::NullifierQueueIndex.is_not_null())
+                .add(accounts::Column::NullifiedInTree.eq(false))
+                .add(accounts::Column::Spent.eq(true));
+            if let Some(start_queue_index) = start_index {
+                query_condition = query_condition
+                    .add(accounts::Column::NullifierQueueIndex.gte(start_queue_index as i64));
+            }
+            accounts::Entity::find()
+                .filter(query_condition)
+                .order_by_asc(accounts::Column::NullifierQueueIndex)
+        }
+        QueueType::OutputStateV2 => {
+            query_condition = query_condition.add(accounts::Column::InOutputQueue.eq(true));
+            if let Some(start_queue_index) = start_index {
+                query_condition =
+                    query_condition.add(accounts::Column::LeafIndex.gte(start_queue_index as i64));
+            }
+            accounts::Entity::find()
+                .filter(query_condition)
+                .order_by_asc(accounts::Column::LeafIndex)
+        }
+        _ => {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Invalid queue type: {:?}",
+                queue_type
+            )))
+        }
+    };
+
+    let mut queue_elements: Vec<QueueElement> = query
+        .limit(limit as u64)
+        .into_model::<QueueElement>()
+        .all(tx)
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("DB error fetching queue elements: {}", e))
+        })?;
+
+    if queue_elements.is_empty() {
+        return Ok(match queue_type {
+            QueueType::OutputStateV2 => QueueData::Output(OutputQueueData::default(), None),
+            QueueType::InputStateV2 => QueueData::Input(InputQueueData::default(), None),
+            _ => unreachable!("Only OutputState and InputState are supported"),
+        });
+    }
+
+    let mut indices: Vec<u64> = queue_elements.iter().map(|e| e.leaf_index as u64).collect();
+    let first_queue_index = match queue_type {
+        QueueType::InputStateV2 => {
+            queue_elements[0]
+                .nullifier_queue_index
+                .ok_or(PhotonApiError::ValidationError(
+                    "Nullifier queue index is missing".to_string(),
+                ))? as u64
+        }
+        QueueType::OutputStateV2 => queue_elements[0].leaf_index as u64,
+        _ => unreachable!("Only OutputState and InputState are supported"),
+    };
+    if let Some(start) = start_index {
+        if first_queue_index > start {
+            return Err(PhotonApiError::ValidationError(format!(
+                "Requested start_index {} but first_queue_index {} is later (possible pruning)",
+                start, first_queue_index
+            )));
+        }
+    }
+
+    let serializable_tree = SerializablePubkey::from(tree.0);
+
+    let tree_info = TreeInfo::get(tx, &serializable_tree.to_string())
+        .await?
+        .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
+
+    // For output queue, next_index is where the elements will be appended.
+    // This is the minimum leaf_index of the queued elements (first_queue_index).
+    // We cannot use tree_metadata.next_index because it's only updated by the monitor,
+    // not by the ingester when processing batch events.
+    let next_index = if queue_type == QueueType::OutputStateV2 {
+        first_queue_index
+    } else {
+        0
+    };
+
+    let zkp_batch_size = zkp_batch_size_hint
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_ZKP_BATCH_SIZE as u16) as usize;
+    if zkp_batch_size > 0 {
+        let full_batches = indices.len() / zkp_batch_size;
+        let allowed = full_batches * zkp_batch_size;
+        if allowed == 0 {
+            return Ok(match queue_type {
+                QueueType::OutputStateV2 => QueueData::Output(OutputQueueData::default(), None),
+                QueueType::InputStateV2 => QueueData::Input(InputQueueData::default(), None),
+                _ => unreachable!("Only OutputState and InputState are supported"),
+            });
+        }
+        if indices.len() > allowed {
+            indices.truncate(allowed);
+            queue_elements.truncate(allowed);
+        }
+    }
+
+    let generated_proofs =
+        get_multiple_compressed_leaf_proofs_by_indices(tx, serializable_tree, indices.clone())
+            .await?;
+
+    if generated_proofs.len() != indices.len() {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Expected {} proofs for {} queue elements, but got {} proofs",
+            indices.len(),
+            queue_elements.len(),
+            generated_proofs.len()
+        )));
+    }
+
+    // Fetch path nodes (ancestors) from DB for all leaves
+    let tree_height_u32 = tree_info.height as u32 + 1;
+    let path_nodes =
+        fetch_path_nodes_from_db(tx, &serializable_tree, &indices, tree_height_u32).await?;
+
+    // Return proofs for merging at response level
+    let proof_data = Some(StateQueueProofData {
+        proofs: generated_proofs.clone(),
+        tree_height: tree_info.height as u8,
+        path_nodes,
+    });
+
+    let leaf_indices = indices.clone();
+    let account_hashes: Vec<Hash> = queue_elements
+        .iter()
+        .enumerate()
+        .map(|(idx, e)| {
+            Hash::new(e.hash.as_slice()).map_err(|err| {
+                PhotonApiError::UnexpectedError(format!(
+                    "Invalid hash for queue element at index {} (leaf_index={}): {}",
+                    idx, e.leaf_index, err
+                ))
+            })
+        })
+        .collect::<Result<Vec<Hash>, PhotonApiError>>()?;
+    let leaves: Vec<Hash> = generated_proofs.iter().map(|p| p.hash.clone()).collect();
+
+    let tree_pubkey_bytes: [u8; 32] = serializable_tree
+        .to_bytes_vec()
+        .as_slice()
+        .try_into()
+        .map_err(|_| PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string()))?;
+    let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
+
+    let batch_start_index = first_queue_index;
+    let cached =
+        queue_hash_cache::get_cached_hash_chains(tx, tree_pubkey, queue_type, batch_start_index)
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("Cache error: {}", e)))?;
+
+    let expected_batch_count = indices.len() / zkp_batch_size;
+    let leaves_hash_chains = if !cached.is_empty() && cached.len() >= expected_batch_count {
+        let mut sorted = cached;
+        sorted.sort_by_key(|c| c.zkp_batch_index);
+        sorted
+            .into_iter()
+            .take(expected_batch_count)
+            .map(|entry| Hash::from(entry.hash_chain))
+            .collect()
+    } else {
+        // Fall back to computing locally if cache is empty (e.g., monitor hasn't run yet)
+        log::warn!(
+            "No cached hash chains for {:?} queue (batch_start_index={}, cached={}, expected={})",
+            queue_type,
+            batch_start_index,
+            cached.len(),
+            expected_batch_count
+        );
+        compute_state_queue_hash_chains(&queue_elements, queue_type, zkp_batch_size)?
+    };
+
+    Ok(match queue_type {
+        QueueType::OutputStateV2 => QueueData::Output(
+            OutputQueueData {
+                leaf_indices,
+                account_hashes,
+                leaves,
+                first_queue_index,
+                next_index,
+                leaves_hash_chains,
+            },
+            proof_data,
+        ),
+        QueueType::InputStateV2 => {
+            let tx_hashes: Result<Vec<Hash>, PhotonApiError> = queue_elements
+                .iter()
+                .enumerate()
+                .map(|(idx, e)| {
+                    e.tx_hash
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PhotonApiError::UnexpectedError(format!(
+                                "Missing tx_hash for spent queue element at index {} (leaf_index={})",
+                                idx, e.leaf_index
+                            ))
+                        })
+                        .and_then(|tx| {
+                            Hash::new(tx.as_slice()).map_err(|e| {
+                                PhotonApiError::UnexpectedError(format!("Invalid tx_hash: {}", e))
+                            })
+                        })
+                })
+                .collect();
+
+            let nullifiers: Result<Vec<Hash>, PhotonApiError> = queue_elements
+                .iter()
+                .enumerate()
+                .map(|(idx, e)| {
+                    e.nullifier
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PhotonApiError::UnexpectedError(format!(
+                                "Missing nullifier for spent queue element at index {} (leaf_index={})",
+                                idx, e.leaf_index
+                            ))
+                        })
+                        .and_then(|n| {
+                            Hash::new(n.as_slice()).map_err(|e| {
+                                PhotonApiError::UnexpectedError(format!("Invalid nullifier: {}", e))
+                            })
+                        })
+                })
+                .collect();
+
+            QueueData::Input(
+                InputQueueData {
+                    leaf_indices,
+                    account_hashes,
+                    leaves,
+                    tx_hashes: tx_hashes?,
+                    nullifiers: nullifiers?,
+                    first_queue_index,
+                    leaves_hash_chains,
+                },
+                proof_data,
+            )
+        }
+        _ => unreachable!("Only OutputState and InputState are supported"),
+    })
+}
+
+fn compute_state_queue_hash_chains(
+    queue_elements: &[QueueElement],
+    queue_type: QueueType,
+    zkp_batch_size: usize,
+) -> Result<Vec<Hash>, PhotonApiError> {
+    use light_compressed_account::hash_chain::create_hash_chain_from_slice;
+
+    if zkp_batch_size == 0 || queue_elements.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let batch_count = queue_elements.len() / zkp_batch_size;
+    if batch_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut hash_chains = Vec::with_capacity(batch_count);
+
+    for batch_idx in 0..batch_count {
+        let start = batch_idx * zkp_batch_size;
+        let end = start + zkp_batch_size;
+        let batch_elements = &queue_elements[start..end];
+
+        let mut values: Vec<[u8; 32]> = Vec::with_capacity(zkp_batch_size);
+
+        for element in batch_elements {
+            let value: [u8; 32] = match queue_type {
+                QueueType::OutputStateV2 => element.hash.as_slice().try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError(format!(
+                        "Invalid hash length: expected 32 bytes, got {}",
+                        element.hash.len()
+                    ))
+                })?,
+                QueueType::InputStateV2 => element
+                    .nullifier
+                    .as_ref()
+                    .ok_or_else(|| {
+                        PhotonApiError::UnexpectedError(
+                            "Missing nullifier for InputState queue element".to_string(),
+                        )
+                    })?
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| {
+                        PhotonApiError::UnexpectedError(
+                            "Invalid nullifier length: expected 32 bytes".to_string(),
+                        )
+                    })?,
+                _ => {
+                    return Err(PhotonApiError::ValidationError(format!(
+                        "Unsupported queue type for hash chain computation: {:?}",
+                        queue_type
+                    )))
+                }
+            };
+            values.push(value);
+        }
+
+        let hash_chain = create_hash_chain_from_slice(&values).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Hash chain computation error: {}", e))
+        })?;
+
+        hash_chains.push(Hash::from(hash_chain));
+    }
+
+    log::debug!(
+        "Computed {} hash chains for {:?} queue with {} elements (zkp_batch_size={})",
+        hash_chains.len(),
+        queue_type,
+        queue_elements.len(),
+        zkp_batch_size
+    );
+
+    Ok(hash_chains)
+}
+
+async fn fetch_address_queue_v2(
+    tx: &sea_orm::DatabaseTransaction,
+    tree: &Hash,
+    start_queue_index: Option<u64>,
+    limit: u16,
+    zkp_batch_size: u16,
+) -> Result<AddressQueueData, PhotonApiError> {
+    let max_allowed = match tx.get_database_backend() {
+        sea_orm::DatabaseBackend::Sqlite => MAX_QUEUE_ELEMENTS_SQLITE,
+        _ => MAX_QUEUE_ELEMENTS,
+    };
+    if limit > max_allowed {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Too many addresses requested {}. Maximum allowed: {}",
+            limit, max_allowed
+        )));
+    }
+
+    let merkle_tree_bytes = tree.to_vec();
+    let serializable_tree =
+        SerializablePubkey::try_from(merkle_tree_bytes.clone()).map_err(|_| {
+            PhotonApiError::UnexpectedError("Failed to parse merkle tree pubkey".to_string())
+        })?;
+
+    let tree_info = TreeInfo::get(tx, &serializable_tree.to_string())
+        .await?
+        .ok_or_else(|| PhotonApiError::UnexpectedError("Failed to get tree info".to_string()))?;
+
+    let max_index_stmt = Statement::from_string(
+        tx.get_database_backend(),
+        format!(
+            "SELECT COALESCE(MAX(leaf_index + 1), 1) as max_index FROM indexed_trees WHERE tree = {}",
+            format_bytes(merkle_tree_bytes.clone(), tx.get_database_backend())
+        ),
+    );
+    let max_index_result = tx.query_one(max_index_stmt).await?;
+    let batch_start_index = match max_index_result {
+        Some(row) => row.try_get::<i64>("", "max_index")? as usize,
+        None => 1,
+    };
+
+    let offset_condition = match start_queue_index {
+        Some(start) => format!("AND queue_index >= {}", start),
+        None => String::new(),
+    };
+
+    let address_queue_stmt = Statement::from_string(
+        tx.get_database_backend(),
+        format!(
+            "SELECT tree, address, queue_index FROM address_queues
+             WHERE tree = {}
+             {}
+             ORDER BY queue_index ASC
+             LIMIT {}",
+            format_bytes(merkle_tree_bytes.clone(), tx.get_database_backend()),
+            offset_condition,
+            limit
+        ),
+    );
+
+    let queue_results = tx.query_all(address_queue_stmt).await.map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("DB error fetching address queue: {}", e))
+    })?;
+
+    let subtrees = get_subtrees(tx, merkle_tree_bytes.clone(), tree_info.height as usize)
+        .await?
+        .into_iter()
+        .map(Hash::from)
+        .collect();
+
+    if queue_results.is_empty() {
+        return Ok(AddressQueueData {
+            start_index: batch_start_index as u64,
+            subtrees,
+            ..Default::default()
+        });
+    }
+
+    let mut addresses = Vec::with_capacity(queue_results.len());
+    let mut queue_indices = Vec::with_capacity(queue_results.len());
+    let mut addresses_with_trees = Vec::with_capacity(queue_results.len());
+
+    for row in &queue_results {
+        let address: Vec<u8> = row.try_get("", "address")?;
+        let queue_index: i64 = row.try_get("", "queue_index")?;
+        let address_pubkey = SerializablePubkey::try_from(address.clone()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to parse address: {}", e))
+        })?;
+
+        addresses.push(address_pubkey);
+        queue_indices.push(queue_index as u64);
+        addresses_with_trees.push(AddressWithTree {
+            address: address_pubkey,
+            tree: serializable_tree,
+        });
+    }
+
+    let non_inclusion_proofs = get_multiple_new_address_proofs_helper(
+        tx,
+        addresses_with_trees,
+        max_allowed as usize,
+        false,
+    )
+    .await?;
+
+    if non_inclusion_proofs.len() != queue_results.len() {
+        return Err(PhotonApiError::ValidationError(format!(
+            "Expected {} proofs for {} queue elements, but got {} proofs",
+            queue_results.len(),
+            queue_results.len(),
+            non_inclusion_proofs.len()
+        )));
+    }
+
+    let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
+    let mut low_element_indices = Vec::with_capacity(non_inclusion_proofs.len());
+    let mut low_element_values = Vec::with_capacity(non_inclusion_proofs.len());
+    let mut low_element_next_indices = Vec::with_capacity(non_inclusion_proofs.len());
+    let mut low_element_next_values = Vec::with_capacity(non_inclusion_proofs.len());
+
+    // Track which low_element_leaf_indices we've already processed to avoid redundant hash computations
+    let mut processed_leaf_indices: std::collections::HashSet<u32> =
+        std::collections::HashSet::new();
+
+    for proof in &non_inclusion_proofs {
+        let low_value = Hash::new(&proof.lowerRangeAddress.to_bytes_vec()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Invalid low element value: {}", e))
+        })?;
+        let next_value = Hash::new(&proof.higherRangeAddress.to_bytes_vec()).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Invalid next element value: {}", e))
+        })?;
+
+        low_element_indices.push(proof.lowElementLeafIndex as u64);
+        low_element_values.push(low_value.clone());
+        low_element_next_indices.push(proof.nextIndex as u64);
+        low_element_next_values.push(next_value.clone());
+
+        // Skip node computation if we've already processed this leaf index
+        // This is a huge optimization for empty/sparse trees where many addresses share the same low element
+        if processed_leaf_indices.contains(&proof.lowElementLeafIndex) {
+            continue;
+        }
+        processed_leaf_indices.insert(proof.lowElementLeafIndex);
+
+        let leaf_idx =
+            encode_node_index(0, proof.lowElementLeafIndex as u64, tree_info.height as u8);
+        let hashed_leaf = compute_indexed_leaf_hash(&low_value, &next_value)?;
+        nodes_map.insert(leaf_idx, hashed_leaf.clone());
+
+        let mut pos = proof.lowElementLeafIndex as u64;
+        let mut current_hash = hashed_leaf;
+
+        for (level, sibling_hash) in proof.proof.iter().enumerate() {
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+
+            let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
+            nodes_map.insert(sibling_idx, sibling_hash.clone());
+
+            let parent_hash = if pos % 2 == 0 {
+                Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
+            } else {
+                Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
+            };
+
+            match parent_hash {
+                Ok(hash) => {
+                    current_hash = Hash::from(hash);
+                    let parent_pos = pos / 2;
+                    let parent_idx =
+                        encode_node_index((level + 1) as u8, parent_pos, tree_info.height as u8);
+                    nodes_map.insert(parent_idx, current_hash.clone());
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+
+            pos /= 2;
+        }
+    }
+
+    let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();
+    sorted_nodes.sort_by_key(|(idx, _)| *idx);
+    let nodes: Vec<Node> = sorted_nodes
+        .into_iter()
+        .map(|(index, hash)| Node { index, hash })
+        .collect();
+
+    let initial_root = non_inclusion_proofs
+        .first()
+        .map(|proof| proof.root.clone())
+        .unwrap_or_default();
+    let root_seq = non_inclusion_proofs
+        .first()
+        .map(|proof| proof.rootSeq)
+        .unwrap_or_default();
+
+    let mut leaves_hash_chains = Vec::new();
+    if !addresses.is_empty() && zkp_batch_size > 0 {
+        let batch_size = zkp_batch_size as usize;
+        let batch_count = addresses.len() / batch_size;
+
+        let first_queue_index = queue_indices.first().copied().unwrap_or(0);
+        let cache_key = first_queue_index + 1;
+
+        let tree_pubkey_bytes: [u8; 32] = serializable_tree
+            .to_bytes_vec()
+            .as_slice()
+            .try_into()
+            .map_err(|_| {
+                PhotonApiError::UnexpectedError("Invalid tree pubkey bytes".to_string())
+            })?;
+        let tree_pubkey = Pubkey::new_from_array(tree_pubkey_bytes);
+
+        let cached = queue_hash_cache::get_cached_hash_chains(
+            tx,
+            tree_pubkey,
+            QueueType::AddressV2,
+            cache_key,
+        )
+        .await
+        .unwrap_or_default();
+
+        log::debug!(
+            "Address queue hash chain: first_queue_index={}, cache_key={}, cached_count={}, expected_count={}, addresses={}",
+            first_queue_index,
+            cache_key,
+            cached.len(),
+            batch_count,
+            addresses.len()
+        );
+
+        if !cached.is_empty() && cached.len() >= batch_count && batch_count > 0 {
+            log::debug!(
+                "Using {} of {} cached hash chains for cache_key={}",
+                batch_count,
+                cached.len(),
+                cache_key
+            );
+            let mut sorted = cached;
+            sorted.sort_by_key(|c| c.zkp_batch_index);
+            for entry in sorted.into_iter().take(batch_count) {
+                leaves_hash_chains.push(Hash::from(entry.hash_chain));
+            }
+        } else {
+            // Compute fresh hash chains from the actual addresses
+            log::debug!(
+                "Computing {} fresh hash chains for {} addresses (cache miss or insufficient)",
+                batch_count,
+                addresses.len()
+            );
+
+            for batch_idx in 0..batch_count {
+                let start = batch_idx * batch_size;
+                let end = start + batch_size;
+                let slice = &addresses[start..end];
+
+                let mut decoded = Vec::with_capacity(batch_size);
+                for pk in slice {
+                    let bytes = pk.to_bytes_vec();
+                    let arr: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+                        PhotonApiError::UnexpectedError(
+                            "Invalid address pubkey length for hash chain".to_string(),
+                        )
+                    })?;
+                    decoded.push(arr);
+                }
+
+                let hash_chain = create_hash_chain_from_slice(&decoded).map_err(|e| {
+                    PhotonApiError::UnexpectedError(format!("Hash chain error: {}", e))
+                })?;
+
+                leaves_hash_chains.push(Hash::from(hash_chain));
+            }
+        }
+    }
+
+    Ok(AddressQueueData {
+        addresses,
+        queue_indices,
+        nodes,
+        low_element_indices,
+        low_element_values,
+        low_element_next_indices,
+        low_element_next_values,
+        leaves_hash_chains,
+        initial_root,
+        start_index: batch_start_index as u64,
+        subtrees,
+        root_seq,
+    })
+}
+
+/// Deduplicate nodes across all merkle proofs using pre-fetched path nodes from DB.
+/// Returns a Vec<Node> sorted by index.
+/// Uses path_nodes (DB node_idx -> hash) for parent hashes instead of computing them.
+fn deduplicate_nodes_from_refs(
+    proofs: &[&crate::ingester::persist::MerkleProofWithContext],
+    tree_height: u8,
+    path_nodes: &HashMap<i64, Hash>,
+) -> Vec<Node> {
+    let mut nodes_map: HashMap<u64, Hash> = HashMap::new();
+    let tree_height_u32 = tree_height as u32 + 1;
+
+    for proof_ctx in proofs {
+        let mut pos = proof_ctx.leaf_index as u64;
+        let mut db_node_idx = leaf_index_to_node_index(proof_ctx.leaf_index, tree_height_u32);
+
+        // Store the leaf itself
+        let leaf_idx = encode_node_index(0, pos, tree_height);
+        nodes_map.insert(leaf_idx, proof_ctx.hash.clone());
+
+        // Walk up the proof path, storing sibling hashes and path node hashes from DB
+        for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+
+            // Store the sibling (from proof)
+            let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);
+            nodes_map.insert(sibling_idx, sibling_hash.clone());
+
+            // Move to parent
+            db_node_idx >>= 1;
+            pos /= 2;
+
+            // Store the parent hash from DB (if available)
+            if let Some(parent_hash) = path_nodes.get(&db_node_idx) {
+                let parent_idx = encode_node_index((level + 1) as u8, pos, tree_height);
+                nodes_map.insert(parent_idx, parent_hash.clone());
+            }
+        }
+    }
+
+    let mut sorted_nodes: Vec<(u64, Hash)> = nodes_map.into_iter().collect();
+    sorted_nodes.sort_by_key(|(idx, _)| *idx);
+
+    sorted_nodes
+        .into_iter()
+        .map(|(index, hash)| Node { index, hash })
+        .collect()
+}
+
+fn compute_indexed_leaf_hash(low_value: &Hash, next_value: &Hash) -> Result<Hash, PhotonApiError> {
+    let hashed = Poseidon::hashv(&[&low_value.0, &next_value.0]).map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("Failed to hash indexed leaf: {}", e))
+    })?;
+    Ok(Hash::from(hashed))
+}
+
+/// Fetch path nodes (all ancestors from leaf to root) from the database.
+/// Returns a map from node_idx (in DB binary tree format) to hash.
+async fn fetch_path_nodes_from_db(
+    tx: &sea_orm::DatabaseTransaction,
+    tree: &SerializablePubkey,
+    leaf_indices: &[u64],
+    tree_height: u32,
+) -> Result<HashMap<i64, Hash>, PhotonApiError> {
+    use itertools::Itertools;
+
+    if leaf_indices.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let tree_bytes = tree.to_bytes_vec();
+
+    let all_path_indices: Vec<i64> = leaf_indices
+        .iter()
+        .flat_map(|&leaf_idx| {
+            let node_idx = leaf_index_to_node_index(leaf_idx as u32, tree_height);
+            let mut path = vec![node_idx];
+            let mut current = node_idx;
+            while current > 1 {
+                current >>= 1;
+                path.push(current);
+            }
+            path
+        })
+        .sorted()
+        .dedup()
+        .collect();
+
+    if all_path_indices.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let path_nodes = state_trees::Entity::find()
+        .filter(
+            state_trees::Column::Tree
+                .eq(tree_bytes)
+                .and(state_trees::Column::NodeIdx.is_in(all_path_indices)),
+        )
+        .all(tx)
+        .await
+        .map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
+        })?;
+
+    let mut result = HashMap::new();
+    for node in path_nodes {
+        let hash = Hash::try_from(node.hash).map_err(|e| {
+            PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
+        })?;
+        result.insert(node.node_idx, hash);
+    }
+
+    Ok(result)
 }

@@ -1,4 +1,4 @@
-mod queue_hash_cache;
+pub mod queue_hash_cache;
 mod queue_monitor;
 pub mod tree_metadata_sync;
 pub mod v1_tree_accounts;

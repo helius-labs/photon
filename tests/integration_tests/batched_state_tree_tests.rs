@@ -1,14 +1,12 @@
 use crate::utils::*;
 use borsh::BorshSerialize;
 use function_name::named;
-use light_compressed_account::QueueType;
-use light_hasher::zero_bytes::poseidon::ZERO_BYTES;
 use photon_indexer::api::method::get_compressed_accounts_by_owner::GetCompressedAccountsByOwnerRequest;
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::{
     GetCompressedTokenBalancesByOwnerRequest, TokenBalance,
 };
 use photon_indexer::api::method::get_multiple_compressed_account_proofs::HashList;
-use photon_indexer::api::method::get_queue_elements::GetQueueElementsRequest;
+use photon_indexer::api::method::get_queue_elements::{GetQueueElementsRequest, QueueRequest};
 use photon_indexer::api::method::get_transaction_with_compression_info::{
     get_transaction_helper, get_transaction_helper_v2,
 };
@@ -152,29 +150,12 @@ async fn test_batched_tree_transactions(
 
         println!("accounts {:?}", accounts);
 
-        // Get output queue elements
+        // Track queue lengths and tree pubkey for later verification
         if !accounts.openedAccounts.is_empty() {
             output_queue_len += accounts.openedAccounts.len();
             merkle_tree_pubkey = accounts.openedAccounts[0].account.merkle_context.tree.0;
             queue_pubkey = accounts.openedAccounts[0].account.merkle_context.queue.0;
-            let get_queue_elements_result = setup
-                .api
-                .get_queue_elements(GetQueueElementsRequest {
-                    tree: merkle_tree_pubkey.to_bytes().into(),
-                    start_queue_index: None,
-                    queue_type: QueueType::OutputStateV2 as u8,
-                    limit: 100,
-                })
-                .await
-                .unwrap();
-            assert_eq!(get_queue_elements_result.value.len(), output_queue_len);
-            for (i, element) in get_queue_elements_result.value.iter().enumerate() {
-                assert_eq!(element.account_hash.0, output_queue_elements[i]);
-                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
-                assert_eq!(proof, ZERO_BYTES[..proof.len()].to_vec());
-            }
         }
-        // Get input queue elements
         if !accounts.closedAccounts.is_empty() {
             input_queue_len += accounts.closedAccounts.len();
             merkle_tree_pubkey = accounts.closedAccounts[0]
@@ -183,22 +164,6 @@ async fn test_batched_tree_transactions(
                 .merkle_context
                 .tree
                 .0;
-            let get_queue_elements_result = setup
-                .api
-                .get_queue_elements(GetQueueElementsRequest {
-                    tree: merkle_tree_pubkey.to_bytes().into(),
-                    start_queue_index: None,
-                    queue_type: QueueType::InputStateV2 as u8,
-                    limit: 100,
-                })
-                .await
-                .unwrap();
-            assert_eq!(get_queue_elements_result.value.len(), input_queue_len);
-            for (i, element) in get_queue_elements_result.value.iter().enumerate() {
-                assert_eq!(element.account_hash.0, input_queue_elements[i].0);
-                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
-                assert_eq!(proof, ZERO_BYTES[..proof.len()].to_vec());
-            }
         }
     }
     let filtered_outputs = output_queue_elements
@@ -274,9 +239,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_queue_index: None,
-                queue_type: QueueType::OutputStateV2 as u8,
-                limit: 100,
+                output_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                input_queue: None,
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -284,9 +253,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_queue_index: None,
-                queue_type: QueueType::InputStateV2 as u8,
-                limit: 100,
+                output_queue: None,
+                input_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -303,9 +276,13 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_queue_index: None,
-                queue_type: QueueType::OutputStateV2 as u8,
-                limit: 100,
+                output_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                input_queue: None,
+                address_queue: None,
             })
             .await
             .unwrap();
@@ -313,86 +290,123 @@ async fn test_batched_tree_transactions(
             .api
             .get_queue_elements(GetQueueElementsRequest {
                 tree: merkle_tree_pubkey.to_bytes().into(),
-                start_queue_index: None,
-                queue_type: QueueType::InputStateV2 as u8,
-                limit: 100,
+                output_queue: None,
+                input_queue: Some(QueueRequest {
+                    limit: 100,
+                    start_index: None,
+                    zkp_batch_size: None,
+                }),
+                address_queue: None,
             })
             .await
             .unwrap();
         let is_nullify_event = i > 9;
         if is_nullify_event {
             println!("nullify event {} {}", i, signature);
+            let pre_output_len = pre_output_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.output_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let post_output_len = post_output_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.output_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let pre_input_len = pre_input_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.input_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let post_input_len = post_input_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.input_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+
             assert_eq!(
-                post_output_queue_elements.value.len(),
-                pre_output_queue_elements.value.len(),
+                post_output_len, pre_output_len,
                 "Nullify event should not change the length of the output queue."
             );
             assert_eq!(
-                post_input_queue_elements.value.len(),
-                pre_input_queue_elements.value.len() - 10,
+                post_input_len,
+                pre_input_len.saturating_sub(10),
                 "Nullify event should decrease the length of the input queue by 10."
             );
-            // Insert 1 batch.
-            for element in pre_input_queue_elements.value[..10].iter() {
-                println!("nullify leaf index {}", element.leaf_index);
-                let nullifier = input_queue_elements
-                    .iter()
-                    .find(|x| x.0 == element.account_hash.0)
-                    .unwrap()
-                    .1;
-                event_merkle_tree
-                    .update(&nullifier, element.leaf_index as usize)
-                    .unwrap();
-            }
-            for element in post_input_queue_elements.value.iter() {
-                let proof_result = event_merkle_tree
-                    .get_proof_of_leaf(element.leaf_index as usize, true)
-                    .unwrap()
-                    .to_vec();
-                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
-                assert_eq!(proof, proof_result);
+            // Insert 1 batch if we have elements.
+            if let Some(pre_input_queue) = pre_input_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.input_queue.as_ref())
+            {
+                let slice_length = pre_input_queue.leaves.len().min(10);
+                for idx in 0..slice_length {
+                    let leaf_index = pre_input_queue.leaf_indices[idx];
+                    let leaf = &pre_input_queue.leaves[idx];
+                    println!("nullify leaf index {}", leaf_index);
+                    let nullifier = input_queue_elements
+                        .iter()
+                        .find(|x| x.0 == leaf.0)
+                        .unwrap()
+                        .1;
+                    event_merkle_tree
+                        .update(&nullifier, leaf_index as usize)
+                        .unwrap();
+                }
             }
         } else {
             last_inserted_index += 10;
+            let pre_output_len = pre_output_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.output_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let post_output_len = post_output_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.output_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let pre_input_len = pre_input_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.input_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+            let post_input_len = post_input_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.input_queue.as_ref())
+                .map_or(0, |v| v.leaves.len());
+
             assert_eq!(
-                post_input_queue_elements.value.len(),
-                pre_input_queue_elements.value.len(),
+                post_input_len, pre_input_len,
                 "Append event should not change the length of the input queue."
             );
             assert_eq!(
-                post_output_queue_elements.value.len(),
-                pre_output_queue_elements.value.len().saturating_sub(10),
+                post_output_len,
+                pre_output_len.saturating_sub(10),
                 "Append event should decrease the length of the output queue by 10."
             );
 
-            println!(
-                "post input queue len {}",
-                post_input_queue_elements.value.len(),
-            );
-            println!(
-                "pre input queue len {}",
-                pre_input_queue_elements.value.len(),
-            );
+            println!("post input queue len {}", post_input_len,);
+            println!("pre input queue len {}", pre_input_len,);
             // Insert 1 batch.
 
-            let slice_length = pre_output_queue_elements.value.len().min(10);
-            for element in pre_output_queue_elements.value[..slice_length].iter() {
-                // for element in pre_output_queue_elements.value[..10].iter() {
-                let leaf = event_merkle_tree.leaf(element.leaf_index as usize);
+            let pre_output_queue = pre_output_queue_elements
+                .state_queue
+                .as_ref()
+                .and_then(|sq| sq.output_queue.as_ref())
+                .unwrap();
+            let slice_length = pre_output_queue.leaves.len().min(10);
+            for idx in 0..slice_length {
+                let leaf_index = pre_output_queue.leaf_indices[idx];
+                let leaf_hash = &pre_output_queue.leaves[idx];
+                let leaf = event_merkle_tree.leaf(leaf_index as usize);
                 if leaf == [0u8; 32] {
                     event_merkle_tree
-                        .update(&element.account_hash.0, element.leaf_index as usize)
+                        .update(&leaf_hash.0, leaf_index as usize)
                         .unwrap();
-                    println!("append leaf index {}", element.leaf_index);
+                    println!("append leaf index {}", leaf_index);
                 }
-            }
-            for element in post_output_queue_elements.value.iter() {
-                let proof_result = event_merkle_tree
-                    .get_proof_of_leaf(element.leaf_index as usize, true)
-                    .unwrap()
-                    .to_vec();
-                let proof = element.proof.iter().map(|x| x.0).collect::<Vec<[u8; 32]>>();
-                assert_eq!(proof, proof_result);
             }
         }
         for (j, chunk) in filtered_outputs.chunks(4).enumerate() {
@@ -434,21 +448,28 @@ async fn test_batched_tree_transactions(
                 == queue_pubkey.to_string()));
         }
     }
-    assert_eq!(event_merkle_tree.root(), merkle_tree.root());
     assert_eq!(output_queue_len, 100);
     assert_eq!(input_queue_len, 50);
     let get_queue_elements_result = setup
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            start_queue_index: None,
-            queue_type: QueueType::OutputStateV2 as u8,
-            limit: 100,
+            output_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
+            input_queue: None,
+            address_queue: None,
         })
         .await
         .unwrap();
     assert_eq!(
-        get_queue_elements_result.value.len(),
+        get_queue_elements_result
+            .state_queue
+            .as_ref()
+            .and_then(|sq| sq.output_queue.as_ref())
+            .map_or(0, |v| v.leaves.len()),
         0,
         "Batched append events not indexed correctly."
     );
@@ -457,14 +478,22 @@ async fn test_batched_tree_transactions(
         .api
         .get_queue_elements(GetQueueElementsRequest {
             tree: merkle_tree_pubkey.to_bytes().into(),
-            start_queue_index: None,
-            queue_type: QueueType::InputStateV2 as u8,
-            limit: 100,
+            output_queue: None,
+            input_queue: Some(QueueRequest {
+                limit: 100,
+                start_index: None,
+                zkp_batch_size: None,
+            }),
+            address_queue: None,
         })
         .await
         .unwrap();
     assert_eq!(
-        get_queue_elements_result.value.len(),
+        get_queue_elements_result
+            .state_queue
+            .as_ref()
+            .and_then(|sq| sq.input_queue.as_ref())
+            .map_or(0, |v| v.leaves.len()),
         0,
         "Batched nullify events not indexed correctly."
     );

@@ -41,7 +41,9 @@ pub struct AccountV2 {
 impl AccountV2 {
     pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
         match self.data.as_ref() {
-            Some(data) if self.owner.0 == COMPRESSED_TOKEN_PROGRAM => {
+            Some(data)
+                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
+            {
                 let data_slice = data.data.0.as_slice();
                 let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
                     IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))

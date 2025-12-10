@@ -13,3 +13,7 @@ test-ledger/
 minio
 test.db
 docker-compose.yml
+
+.cursor
+**/photon.log
+proto/**/*.bin

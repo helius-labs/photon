@@ -21,7 +21,6 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
         return Ok(Vec::new());
     }
 
-    // Convert SerializablePubkey to [u8; 32] for the helper function
     let tree_bytes = merkle_tree_pubkey.0.to_bytes();
     let root_seq = get_current_tree_sequence(txn, &tree_bytes)
         .await
@@ -29,6 +28,13 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
             PhotonApiError::UnexpectedError(format!("Failed to get tree sequence: {}", e))
         })? as u32;
     let root_seq = if root_seq == 0 { None } else { Some(root_seq) };
+
+    log::debug!(
+        "Fetching proofs for {} indices on tree {}, current root_seq: {:?}",
+        indices.len(),
+        merkle_tree_pubkey,
+        root_seq
+    );
 
     let existing_leaves = state_trees::Entity::find()
         .filter(
@@ -180,7 +186,6 @@ pub async fn get_multiple_compressed_leaf_proofs(
         })
         .collect::<Result<Vec<(LeafNode, i64)>, PhotonApiError>>()?;
 
-    // Get tree height from the first leaf node (all should be from the same tree or we need to handle multiple trees)
     let tree_height = if !leaf_nodes_with_node_index.is_empty() {
         let first_tree = &leaf_nodes_with_node_index[0].0.tree;
         TreeInfo::height(txn, &first_tree.to_string())
@@ -283,5 +288,6 @@ pub async fn get_multiple_compressed_leaf_proofs_from_full_leaf_info(
     // for proof in proofs.iter() {
     //     validate_proof(proof)?;
     // }
+
     Ok(proofs)
 }
