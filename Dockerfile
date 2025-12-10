@@ -1,15 +1,27 @@
-FROM rust:1.87-slim-bullseye
-RUN apt update && apt install -y build-essential pkg-config libssl-dev
+FROM rust:1.91-slim-bookworm AS builder
 
-# Copy the project files
-COPY . .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Build the project
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
 RUN cargo build --release
 
-RUN mv target/release/photon . 
-RUN mv target/release/photon-snapshotter . 
-RUN mv target/release/photon-migration . 
+FROM debian:bookworm-slim
 
-RUN rm -rf target
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
+COPY --from=builder /app/target/release/photon ./
+COPY --from=builder /app/target/release/photon-snapshotter ./
+COPY --from=builder /app/target/release/photon-migration ./
