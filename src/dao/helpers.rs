@@ -4,7 +4,10 @@ use crate::dao::generated::{accounts, state_trees};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use std::collections::HashMap;
 
-/// Finds accounts by multiple hashes, optionally filtering by spent status
+/// Maximum number of parameters allowed in a single PostgreSQL query.
+const MAX_SQL_PARAMS: usize = 30_000;
+
+/// Finds accounts by multiple hashes, optionally filtering by spent status.
 pub async fn find_accounts_by_hashes(
     conn: &DatabaseConnection,
     hashes: &[Hash],
@@ -12,18 +15,24 @@ pub async fn find_accounts_by_hashes(
 ) -> Result<HashMap<Vec<u8>, accounts::Model>, sea_orm::DbErr> {
     let raw_hashes: Vec<Vec<u8>> = hashes.iter().map(|h| h.to_vec()).collect();
 
-    let mut query = accounts::Entity::find().filter(accounts::Column::Hash.is_in(raw_hashes));
+    let mut result = HashMap::new();
 
-    if let Some(spent) = spent_filter {
-        query = query.filter(accounts::Column::Spent.eq(spent));
+    for chunk in raw_hashes.chunks(MAX_SQL_PARAMS) {
+        let mut query =
+            accounts::Entity::find().filter(accounts::Column::Hash.is_in(chunk.to_vec()));
+
+        if let Some(spent) = spent_filter {
+            query = query.filter(accounts::Column::Spent.eq(spent));
+        }
+
+        let accounts = query.all(conn).await?;
+
+        for account in accounts {
+            result.insert(account.hash.clone(), account);
+        }
     }
 
-    let accounts = query.all(conn).await?;
-
-    Ok(accounts
-        .into_iter()
-        .map(|account| (account.hash.clone(), account))
-        .collect())
+    Ok(result)
 }
 
 /// Finds accounts by multiple addresses, optionally filtering by spent status
@@ -34,18 +43,24 @@ pub async fn find_accounts_by_addresses(
 ) -> Result<HashMap<Vec<u8>, accounts::Model>, sea_orm::DbErr> {
     let raw_addresses: Vec<Vec<u8>> = addresses.iter().map(|addr| addr.to_bytes_vec()).collect();
 
-    let mut query = accounts::Entity::find().filter(accounts::Column::Address.is_in(raw_addresses));
+    let mut result = HashMap::new();
 
-    if let Some(spent) = spent_filter {
-        query = query.filter(accounts::Column::Spent.eq(spent));
+    for chunk in raw_addresses.chunks(MAX_SQL_PARAMS) {
+        let mut query =
+            accounts::Entity::find().filter(accounts::Column::Address.is_in(chunk.to_vec()));
+
+        if let Some(spent) = spent_filter {
+            query = query.filter(accounts::Column::Spent.eq(spent));
+        }
+
+        let accounts = query.all(conn).await?;
+
+        for account in accounts {
+            result.insert(account.address.clone().unwrap_or_default(), account);
+        }
     }
 
-    let accounts = query.all(conn).await?;
-
-    Ok(accounts
-        .into_iter()
-        .map(|account| (account.address.clone().unwrap_or_default(), account))
-        .collect())
+    Ok(result)
 }
 
 /// Finds leaf nodes in state_trees by multiple hashes
@@ -55,19 +70,24 @@ pub async fn find_leaf_nodes_by_hashes(
 ) -> Result<HashMap<Vec<u8>, state_trees::Model>, sea_orm::DbErr> {
     let raw_hashes: Vec<Vec<u8>> = hashes.iter().map(|h| h.to_vec()).collect();
 
-    let leaf_nodes = state_trees::Entity::find()
-        .filter(
-            state_trees::Column::Hash
-                .is_in(raw_hashes)
-                .and(state_trees::Column::Level.eq(0)),
-        )
-        .all(conn)
-        .await?;
+    let mut result = HashMap::new();
 
-    Ok(leaf_nodes
-        .into_iter()
-        .map(|node| (node.hash.clone(), node))
-        .collect())
+    for chunk in raw_hashes.chunks(MAX_SQL_PARAMS) {
+        let leaf_nodes = state_trees::Entity::find()
+            .filter(
+                state_trees::Column::Hash
+                    .is_in(chunk.to_vec())
+                    .and(state_trees::Column::Level.eq(0)),
+            )
+            .all(conn)
+            .await?;
+
+        for node in leaf_nodes {
+            result.insert(node.hash.clone(), node);
+        }
+    }
+
+    Ok(result)
 }
 
 /// Finds a single account by hash
