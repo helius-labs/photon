@@ -28,6 +28,8 @@ use utoipa::ToSchema;
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 500;
 
+const MAX_SQL_PARAMS: usize = 30_000;
+
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
 /// Level 0 = leaves, Level tree_height-1 = root
@@ -1052,24 +1054,29 @@ async fn fetch_path_nodes_from_db(
         return Ok(HashMap::new());
     }
 
-    let path_nodes = state_trees::Entity::find()
-        .filter(
-            state_trees::Column::Tree
-                .eq(tree_bytes)
-                .and(state_trees::Column::NodeIdx.is_in(all_path_indices)),
-        )
-        .all(tx)
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
-        })?;
-
     let mut result = HashMap::new();
-    for node in path_nodes {
-        let hash = Hash::try_from(node.hash).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
-        })?;
-        result.insert(node.node_idx, hash);
+
+    let tree_bytes_ref = tree_bytes.clone();
+
+    for chunk in all_path_indices.chunks(MAX_SQL_PARAMS) {
+        let path_nodes = state_trees::Entity::find()
+            .filter(
+                state_trees::Column::Tree
+                    .eq(tree_bytes_ref.clone())
+                    .and(state_trees::Column::NodeIdx.is_in(chunk.to_vec())),
+            )
+            .all(tx)
+            .await
+            .map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
+            })?;
+
+        for node in path_nodes {
+            let hash = Hash::try_from(node.hash).map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
+            })?;
+            result.insert(node.node_idx, hash);
+        }
     }
 
     Ok(result)
