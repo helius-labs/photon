@@ -238,13 +238,26 @@ pub async fn get_queue_elements(
         let (nodes, initial_root, root_seq) =
             merge_state_queue_proofs(&output_proof_data, &input_proof_data)?;
 
-        Some(StateQueueData {
-            nodes,
-            initial_root,
-            root_seq,
-            output_queue,
-            input_queue,
-        })
+        let has_output_data = output_queue
+            .as_ref()
+            .map(|oq| !oq.leaf_indices.is_empty())
+            .unwrap_or(false);
+        let has_input_data = input_queue
+            .as_ref()
+            .map(|iq| !iq.leaf_indices.is_empty())
+            .unwrap_or(false);
+
+        if has_output_data || has_input_data {
+            Some(StateQueueData {
+                nodes,
+                initial_root,
+                root_seq,
+                output_queue,
+                input_queue,
+            })
+        } else {
+            None
+        }
     } else {
         None
     };
