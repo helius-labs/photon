@@ -391,21 +391,22 @@ async fn test_batched_tree_transactions(
             println!("pre input queue len {}", pre_input_len,);
             // Insert 1 batch.
 
-            let pre_output_queue = pre_output_queue_elements
+            if let Some(pre_output_queue) = pre_output_queue_elements
                 .state_queue
                 .as_ref()
                 .and_then(|sq| sq.output_queue.as_ref())
-                .unwrap();
-            let slice_length = pre_output_queue.leaves.len().min(10);
-            for idx in 0..slice_length {
-                let leaf_index = pre_output_queue.leaf_indices[idx];
-                let leaf_hash = &pre_output_queue.leaves[idx];
-                let leaf = event_merkle_tree.leaf(leaf_index as usize);
-                if leaf == [0u8; 32] {
-                    event_merkle_tree
-                        .update(&leaf_hash.0, leaf_index as usize)
-                        .unwrap();
-                    println!("append leaf index {}", leaf_index);
+            {
+                let slice_length = pre_output_queue.leaves.len().min(10);
+                for idx in 0..slice_length {
+                    let leaf_index = pre_output_queue.leaf_indices[idx];
+                    let leaf_hash = &pre_output_queue.leaves[idx];
+                    let leaf = event_merkle_tree.leaf(leaf_index as usize);
+                    if leaf == [0u8; 32] {
+                        event_merkle_tree
+                            .update(&leaf_hash.0, leaf_index as usize)
+                            .unwrap();
+                        println!("append leaf index {}", leaf_index);
+                    }
                 }
             }
         }
