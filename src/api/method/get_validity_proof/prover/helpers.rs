@@ -178,13 +178,93 @@ pub fn get_public_input_hash(
             PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e))
         })?;
 
-    if non_inclusion_hash_chain != [0u8; 32] {
-        Ok(non_inclusion_hash_chain)
-    } else if inclusion_hash_chain != [0u8; 32] {
-        Ok(inclusion_hash_chain)
-    } else {
+    let has_inclusion = inclusion_hash_chain != [0u8; 32];
+    let has_non_inclusion = non_inclusion_hash_chain != [0u8; 32];
+
+    if has_inclusion && has_non_inclusion {
         create_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain]).map_err(
             |e| PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e)),
         )
+    } else if has_non_inclusion {
+        Ok(non_inclusion_hash_chain)
+    } else if has_inclusion {
+        Ok(inclusion_hash_chain)
+    } else {
+        Err(PhotonApiError::ValidationError(
+            "No proofs provided".to_string(),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_pubkey::Pubkey;
+
+    fn mock_account_proof(hash: [u8; 32], root: [u8; 32]) -> MerkleProofWithContext {
+        MerkleProofWithContext {
+            proof: vec![],
+            root: Hash(root),
+            leaf_index: 0,
+            hash: Hash(hash),
+            merkle_tree: SerializablePubkey(Pubkey::new_unique()),
+            root_seq: 1,
+        }
+    }
+
+    fn mock_address_proof(address: [u8; 32], root: [u8; 32]) -> MerkleContextWithNewAddressProof {
+        MerkleContextWithNewAddressProof {
+            root: Hash(root),
+            address: SerializablePubkey(Pubkey::new_from_array(address)),
+            lowerRangeAddress: SerializablePubkey(Pubkey::default()),
+            higherRangeAddress: SerializablePubkey(Pubkey::default()),
+            nextIndex: 0,
+            proof: vec![],
+            merkleTree: SerializablePubkey(Pubkey::new_unique()),
+            rootSeq: 1,
+            lowElementLeafIndex: 0,
+        }
+    }
+
+    fn hex_to_bytes32(hex: &str) -> [u8; 32] {
+        let hex = hex.trim_start_matches("0x");
+        let padded = format!("{:0>64}", hex);
+        hex::decode(padded).unwrap().try_into().unwrap()
+    }
+
+
+    /// combined proofs incorrectly returned non_inclusion_chain instead of
+    /// hash(inclusion_chain, non_inclusion_chain).
+    #[test]
+    fn test_regression_devnet_reproducer_2026_01_07() {
+        let account_hash =
+            hex_to_bytes32("b26682444a98d769a7ff67246359645e3a8bcd7c60c44e3ae88ff150fed6a5f");
+        let account_root =
+            hex_to_bytes32("2a2e7bc4a92749c2ace23a629e9b94f0ff711c599d5d9b29a77a8c3ca472e32e");
+        let address =
+            hex_to_bytes32("a81478ab4cebeb0d511fe3bce110da0ba9de22d27490cf7ce75bcd1c5480a2");
+        let address_root =
+            hex_to_bytes32("88a2982293bb2e1d553828b0569ff1ed98e3c6cdf7630ccf6873261680c4e97");
+
+        let inclusion_chain =
+            create_two_inputs_hash_chain(&[account_root], &[account_hash]).unwrap();
+        let non_inclusion_chain =
+            create_two_inputs_hash_chain(&[address_root], &[address]).unwrap();
+
+
+        let old_result = non_inclusion_chain;
+
+
+        let correct_result =
+            create_two_inputs_hash_chain(&[inclusion_chain], &[non_inclusion_chain]).unwrap();
+
+        let result = get_public_input_hash(
+            &[mock_account_proof(account_hash, account_root)],
+            &[mock_address_proof(address, address_root)],
+        )
+        .unwrap();
+
+        assert_eq!(result, correct_result);
+        assert_ne!(result, old_result);
     }
 }
