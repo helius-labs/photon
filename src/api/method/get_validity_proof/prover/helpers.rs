@@ -187,8 +187,12 @@ pub fn get_public_input_hash(
         )
     } else if has_non_inclusion {
         Ok(non_inclusion_hash_chain)
-    } else {
+    } else if has_inclusion {
         Ok(inclusion_hash_chain)
+    } else {
+        Err(PhotonApiError::ValidationError(
+            "No proofs provided".to_string(),
+        ))
     }
 }
 
