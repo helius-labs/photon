@@ -178,13 +178,16 @@ pub fn get_public_input_hash(
             PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e))
         })?;
 
-    if non_inclusion_hash_chain != [0u8; 32] {
-        Ok(non_inclusion_hash_chain)
-    } else if inclusion_hash_chain != [0u8; 32] {
-        Ok(inclusion_hash_chain)
-    } else {
+    let has_inclusion = inclusion_hash_chain != [0u8; 32];
+    let has_non_inclusion = non_inclusion_hash_chain != [0u8; 32];
+
+    if has_inclusion && has_non_inclusion {
         create_two_inputs_hash_chain(&[inclusion_hash_chain], &[non_inclusion_hash_chain]).map_err(
             |e| PhotonApiError::UnexpectedError(format!("Failed to create hash chain: {}", e)),
         )
+    } else if has_non_inclusion {
+        Ok(non_inclusion_hash_chain)
+    } else {
+        Ok(inclusion_hash_chain)
     }
 }
