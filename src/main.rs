@@ -224,6 +224,14 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
+
+    if let Err(e) =
+        photon_indexer::ingester::startup_cleanup::cleanup_stale_address_queues(db_conn.as_ref())
+            .await
+    {
+        error!("Failed to cleanup stale address queues: {}", e);
+    }
+
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
     let rpc_client = get_rpc_client(&args.rpc_url);
 
