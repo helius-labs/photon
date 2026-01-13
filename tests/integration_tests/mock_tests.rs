@@ -1152,6 +1152,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof = get_validity_proof(
         &setup.db_conn,
         &setup.prover_url,
+        None,
         GetValidityProofRequest {
             new_addresses: addresses.clone(),
             new_addresses_with_trees: vec![],
@@ -1185,6 +1186,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof_v2 = get_validity_proof_v2(
         &setup.db_conn,
         &setup.prover_url,
+        None,
         GetValidityProofRequestV2 {
             new_addresses_with_trees: addresses_with_trees.clone(),
             hashes: vec![],
