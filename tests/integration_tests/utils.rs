@@ -225,7 +225,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     };
     let client = get_rpc_client(&rpc_url);
     let prover_url = "http://127.0.0.1:3001".to_string();
-    let api = PhotonApi::new(db_conn.clone(), client.clone(), prover_url.clone());
+    let api = PhotonApi::new(db_conn.clone(), client.clone(), prover_url.clone(), None);
     TestSetup {
         name,
         db_conn,
