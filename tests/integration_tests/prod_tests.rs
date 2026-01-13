@@ -29,7 +29,7 @@ async fn test_incorrect_root_bug() {
     let devnet_db = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(pool));
     let rpc_client = get_rpc_client("https://api.devnet.solana.com");
     let prover_url = "http://localhost:3001";
-    let api = PhotonApi::new(devnet_db.clone(), rpc_client, prover_url.to_string());
+    let api = PhotonApi::new(devnet_db.clone(), rpc_client, prover_url.to_string(), None);
 
     let response = api
         .get_compressed_accounts_by_owner(GetCompressedAccountsByOwnerRequest {
@@ -55,7 +55,7 @@ async fn test_mainnet_fra_invalid_address_tree_bug() {
     let devnet_db = Arc::new(SqlxPostgresConnector::from_sqlx_postgres_pool(pool));
     let rpc_client = get_rpc_client("https://api.mainnet-beta.solana.com");
     let prover_url = "http://localhost:3001";
-    let api = PhotonApi::new(devnet_db.clone(), rpc_client, prover_url.to_string());
+    let api = PhotonApi::new(devnet_db.clone(), rpc_client, prover_url.to_string(), None);
 
     let response = api
         .get_multiple_new_address_proofs_v2(AddressListWithTrees(vec![AddressWithTree {
