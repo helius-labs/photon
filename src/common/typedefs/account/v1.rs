@@ -15,7 +15,8 @@ use utoipa::ToSchema;
 pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
 pub const C_TOKEN_DISCRIMINATOR_V2: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 pub const C_TOKEN_DISCRIMINATOR_V3: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 4];
-/// Discriminator for compressed mints (1 in big endian)
+/// Discriminator for compressed mints (value 1 as u64 in big-endian bytes)
+/// Matches COMPRESSED_MINT_DISCRIMINATOR from light-protocol constants.rs
 pub const COMPRESSED_MINT_DISCRIMINATOR: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -53,19 +54,35 @@ impl Account {
     }
 
     pub fn parse_mint_data(&self) -> Result<Option<MintData>, IngesterError> {
-        match self.data.as_ref() {
-            Some(data)
-                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM
-                    && data.is_compressed_mint_discriminator() =>
-            {
+        // First, try discriminator-based detection
+        if let Some(data) = self.data.as_ref() {
+            if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_compressed_mint_discriminator() {
                 let data_slice = data.data.0.as_slice();
                 let mint_data = MintData::parse(data_slice).map_err(|e| {
                     IngesterError::ParserError(format!("Failed to parse mint data: {:?}", e))
                 })?;
-                Ok(Some(mint_data))
+                return Ok(Some(mint_data));
             }
-            _ => Ok(None),
         }
+
+        // Fallback: If owned by compressed token program and not a token account,
+        // try to parse as mint (handles cases where discriminator might differ)
+        if let Some(data) = self.data.as_ref() {
+            if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && !data.is_c_token_discriminator() {
+                let data_slice = data.data.0.as_slice();
+                // Try parsing - if it succeeds, it's a mint
+                // Note: For v2 read-only accounts, only the hash is available (32 bytes),
+                // so parsing will fail. Full mint data support for v2 requires additional work.
+                if let Ok(mint_data) = MintData::parse(data_slice) {
+                    // Verify it looks like a valid mint (has mint_pda set)
+                    if mint_data.mint_pda.to_bytes_vec() != vec![0u8; 32] {
+                        return Ok(Some(mint_data));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 }
 

@@ -16,6 +16,7 @@ pub enum Accounts {
     Table,
     Hash,
     Address,
+    OnchainPubkey,
     Data,
     DataHash,
     Owner,

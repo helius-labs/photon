@@ -52,6 +52,10 @@ pub use self::leaf_node_proof::{
 
 pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
+/// Discriminator for decompressed PDA accounts: [255, 255, 255, 255, 255, 255, 255, 0]
+/// This matches DECOMPRESSED_PDA_DISCRIMINATOR from light_compressible.
+pub const DECOMPRESSED_ACCOUNT_DISCRIMINATOR: u64 = 0x00FFFFFFFFFFFFFF;
+
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 500;
 
@@ -435,9 +439,20 @@ async fn append_output_accounts(
     let mut mint_accounts = Vec::new();
 
     for account in out_accounts {
+        // Extract onchain_pubkey for decompressed accounts
+        let onchain_pubkey = account.account.data.as_ref().and_then(|data| {
+            if data.discriminator.0 == DECOMPRESSED_ACCOUNT_DISCRIMINATOR && data.data.0.len() >= 32
+            {
+                Some(data.data.0[..32].to_vec())
+            } else {
+                None
+            }
+        });
+
         account_models.push(accounts::ActiveModel {
             hash: Set(account.account.hash.to_vec()),
             address: Set(account.account.address.map(|x| x.to_bytes_vec())),
+            onchain_pubkey: Set(onchain_pubkey),
             discriminator: Set(account
                 .account
                 .data
@@ -468,14 +483,18 @@ async fn append_output_accounts(
                 hash: account.account.hash.clone(),
             });
         } else if let Some(mint_data) = account.account.parse_mint_data()? {
-            // Compressed mints must have an address
-            if let Some(address) = account.account.address {
-                mint_accounts.push(EnrichedMintAccount {
-                    mint_data,
-                    hash: account.account.hash.clone(),
-                    address: address.0.to_bytes(),
-                });
-            }
+            // For compressed mints, use the account's address if present,
+            // otherwise fall back to mint_pda
+            let address = account
+                .account
+                .address
+                .map(|a| a.0.to_bytes())
+                .unwrap_or_else(|| mint_data.mint_pda.0.to_bytes());
+            mint_accounts.push(EnrichedMintAccount {
+                mint_data,
+                hash: account.account.hash.clone(),
+                address,
+            });
         }
     }
 
