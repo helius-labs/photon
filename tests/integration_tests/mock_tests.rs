@@ -1984,7 +1984,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: mint_authority1,
-            authority_type: Some(MintAuthorityType::MintAuthority),
+            authority_type: MintAuthorityType::MintAuthority,
             cursor: None,
             limit: None,
         })
@@ -2003,7 +2003,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: freeze_authority1,
-            authority_type: Some(MintAuthorityType::FreezeAuthority),
+            authority_type: MintAuthorityType::FreezeAuthority,
             cursor: None,
             limit: None,
         })
@@ -2023,7 +2023,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: mint_authority2,
-            authority_type: Some(MintAuthorityType::Both),
+            authority_type: MintAuthorityType::Both,
             cursor: None,
             limit: None,
         })
@@ -2037,7 +2037,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: mint_authority1,
-            authority_type: Some(MintAuthorityType::MintAuthority),
+            authority_type: MintAuthorityType::MintAuthority,
             cursor: None,
             limit: Some(Limit::new(1).unwrap()),
         })
@@ -2053,7 +2053,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: mint_authority1,
-            authority_type: Some(MintAuthorityType::MintAuthority),
+            authority_type: MintAuthorityType::MintAuthority,
             cursor,
             limit: Some(Limit::new(1).unwrap()),
         })
@@ -2073,7 +2073,7 @@ async fn test_persist_mint_data(
             .api
             .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
                 authority: mint_authority1,
-                authority_type: Some(MintAuthorityType::MintAuthority),
+                authority_type: MintAuthorityType::MintAuthority,
                 cursor: Some(cursor),
                 limit: Some(Limit::new(1).unwrap()),
             })
@@ -2089,7 +2089,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: SerializablePubkey::new_unique(), // Random authority
-            authority_type: None,
+            authority_type: MintAuthorityType::Both,
             cursor: None,
             limit: None,
         })
@@ -2122,7 +2122,7 @@ async fn test_persist_mint_data(
         .api
         .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
             authority: freeze_authority2,
-            authority_type: Some(MintAuthorityType::FreezeAuthority),
+            authority_type: MintAuthorityType::FreezeAuthority,
             cursor: None,
             limit: None,
         })
