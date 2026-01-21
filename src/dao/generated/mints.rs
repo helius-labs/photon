@@ -12,6 +12,7 @@ pub struct Model {
     pub mint_signer: Vec<u8>,
     pub mint_authority: Option<Vec<u8>>,
     pub freeze_authority: Option<Vec<u8>>,
+    pub supply: i64,
     pub decimals: i16,
     pub version: i16,
     pub mint_decompressed: bool,
