@@ -567,6 +567,7 @@ pub async fn persist_mints(
                 mint_signer: Set(mint_data.mint_signer.to_bytes_vec()),
                 mint_authority: Set(mint_data.mint_authority.map(|a| a.to_bytes_vec())),
                 freeze_authority: Set(mint_data.freeze_authority.map(|a| a.to_bytes_vec())),
+                supply: Set(mint_data.supply.0 as i64),
                 decimals: Set(mint_data.decimals as i16),
                 version: Set(mint_data.version as i16),
                 mint_decompressed: Set(mint_data.mint_decompressed),

@@ -124,6 +124,7 @@ pub enum Mints {
     MintSigner,
     MintAuthority,
     FreezeAuthority,
+    Supply,
     Decimals,
     Version,
     MintDecompressed,

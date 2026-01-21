@@ -34,6 +34,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Mints::MintSigner).binary().not_null())
                     .col(ColumnDef::new(Mints::MintAuthority).binary())
                     .col(ColumnDef::new(Mints::FreezeAuthority).binary())
+                    .col(ColumnDef::new(Mints::Supply).big_integer().not_null())
                     .col(ColumnDef::new(Mints::Decimals).small_integer().not_null())
                     .col(ColumnDef::new(Mints::Version).small_integer().not_null())
                     .col(

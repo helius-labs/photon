@@ -38,27 +38,8 @@ pub struct GetCompressedMintResponse {
     pub value: Option<CompressedMint>,
 }
 
-/// Convert mint model and account data to MintData.
-/// Supply is parsed from account.data since it changes frequently.
-pub fn mint_model_to_mint_data(
-    mint: &mints::Model,
-    account: &accounts::Model,
-) -> Result<MintData, PhotonApiError> {
-    // Parse supply from account data
-    let supply = if let Some(ref data) = account.data {
-        // Supply is at offset 36 (after mint_authority COption) for 8 bytes
-        if data.len() >= 44 {
-            let supply_bytes: [u8; 8] = data[36..44]
-                .try_into()
-                .map_err(|_| PhotonApiError::UnexpectedError("Invalid supply bytes".to_string()))?;
-            u64::from_le_bytes(supply_bytes)
-        } else {
-            0
-        }
-    } else {
-        0
-    };
-
+/// Convert mint model to MintData.
+pub fn mint_model_to_mint_data(mint: &mints::Model) -> Result<MintData, PhotonApiError> {
     Ok(MintData {
         mint_pda: mint.mint_pda.clone().try_into()?,
         mint_signer: mint.mint_signer.clone().try_into()?,
@@ -72,7 +53,7 @@ pub fn mint_model_to_mint_data(
             .clone()
             .map(SerializablePubkey::try_from)
             .transpose()?,
-        supply: UnsignedInteger(supply),
+        supply: UnsignedInteger(mint.supply as u64),
         decimals: mint.decimals as u8,
         version: mint.version as u8,
         mint_decompressed: mint.mint_decompressed,
@@ -111,7 +92,7 @@ pub async fn get_compressed_mint(
 
     let value = match result {
         Some((mint, Some(account))) => {
-            let mint_data = mint_model_to_mint_data(&mint, &account)?;
+            let mint_data = mint_model_to_mint_data(&mint)?;
             let account: AccountV2 = account.try_into()?;
             Some(CompressedMint { account, mint_data })
         }

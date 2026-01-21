@@ -118,7 +118,7 @@ pub async fn get_compressed_mints_by_authority(
             .await?;
 
         if let Some(account) = account {
-            let mint_data = mint_model_to_mint_data(&mint, &account)?;
+            let mint_data = mint_model_to_mint_data(&mint)?;
             let account_v2: AccountV2 = account.try_into()?;
             items.push(CompressedMint {
                 account: account_v2,
