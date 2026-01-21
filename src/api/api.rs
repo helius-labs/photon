@@ -4,8 +4,15 @@ use super::method::get_compressed_account::{
 use super::method::get_compressed_balance_by_owner::{
     get_compressed_balance_by_owner, GetCompressedBalanceByOwnerRequest,
 };
+use super::method::get_compressed_mint::{
+    get_compressed_mint, GetCompressedMintRequest, GetCompressedMintResponse,
+};
 use super::method::get_compressed_mint_token_holders::{
     get_compressed_mint_token_holders, GetCompressedMintTokenHoldersRequest, OwnerBalancesResponse,
+};
+use super::method::get_compressed_mints_by_authority::{
+    get_compressed_mints_by_authority, GetCompressedMintsByAuthorityRequest,
+    GetCompressedMintsByAuthorityResponse,
 };
 use super::method::get_compressed_token_accounts_by_delegate::{
     get_compressed_account_token_accounts_by_delegate,
@@ -304,6 +311,20 @@ impl PhotonApi {
         get_compressed_mint_token_holders(self.db_conn.as_ref(), request).await
     }
 
+    pub async fn get_compressed_mint(
+        &self,
+        request: GetCompressedMintRequest,
+    ) -> Result<GetCompressedMintResponse, PhotonApiError> {
+        get_compressed_mint(&self.db_conn, request).await
+    }
+
+    pub async fn get_compressed_mints_by_authority(
+        &self,
+        request: GetCompressedMintsByAuthorityRequest,
+    ) -> Result<GetCompressedMintsByAuthorityResponse, PhotonApiError> {
+        get_compressed_mints_by_authority(&self.db_conn, request).await
+    }
+
     pub async fn get_multiple_compressed_accounts(
         &self,
         request: GetMultipleCompressedAccountsRequest,
@@ -463,6 +484,16 @@ impl PhotonApi {
                 name: "getCompressedMintTokenHolders".to_string(),
                 request: Some(GetCompressedMintTokenHoldersRequest::schema().1),
                 response: OwnerBalancesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedMint".to_string(),
+                request: Some(GetCompressedMintRequest::schema().1),
+                response: GetCompressedMintResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getCompressedMintsByAuthority".to_string(),
+                request: Some(GetCompressedMintsByAuthorityRequest::schema().1),
+                response: GetCompressedMintsByAuthorityResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getMultipleCompressedAccounts".to_string(),

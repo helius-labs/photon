@@ -6,6 +6,10 @@ use photon_indexer::api::method::get_compressed_accounts_by_owner::{
     DataSlice, FilterSelector, GetCompressedAccountsByOwnerRequest, Memcmp,
 };
 use photon_indexer::api::method::get_compressed_balance_by_owner::GetCompressedBalanceByOwnerRequest;
+use photon_indexer::api::method::get_compressed_mint::GetCompressedMintRequest;
+use photon_indexer::api::method::get_compressed_mints_by_authority::{
+    GetCompressedMintsByAuthorityRequest, MintAuthorityType,
+};
 use photon_indexer::api::method::get_compressed_token_balances_by_owner::GetCompressedTokenBalancesByOwnerRequest;
 use photon_indexer::api::method::get_multiple_compressed_accounts::GetMultipleCompressedAccountsRequest;
 use photon_indexer::api::method::get_validity_proof::{
@@ -29,13 +33,14 @@ use sea_orm::{QueryFilter, TransactionTrait};
 
 use photon_indexer::common::typedefs::account::{Account, AccountContext, AccountWithContext};
 use photon_indexer::common::typedefs::bs64_string::Base64String;
+use photon_indexer::common::typedefs::mint_data::MintData;
 use photon_indexer::common::typedefs::{hash::Hash, serializable_pubkey::SerializablePubkey};
 use photon_indexer::dao::generated::accounts;
 use photon_indexer::ingester::index_block;
 use photon_indexer::ingester::parser::state_update::StateUpdate;
 use photon_indexer::ingester::persist::{
-    compute_parent_hash, get_multiple_compressed_leaf_proofs, persist_leaf_nodes,
-    persist_token_accounts, EnrichedTokenAccount, LeafNode,
+    compute_parent_hash, get_multiple_compressed_leaf_proofs, persist_leaf_nodes, persist_mints,
+    persist_token_accounts, EnrichedMintAccount, EnrichedTokenAccount, LeafNode,
 };
 
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
@@ -1712,4 +1717,431 @@ async fn test_update_indexed_merkle_tree(
         assert_eq!(tree_model.next_index, index_element_2.next_index as i64);
         assert_eq!(tree_model.seq, Some(1i64));
     }
+}
+
+// Test persist_mints and mint API endpoints:
+// - get_compressed_mint (by address)
+// - get_compressed_mint (by mint_pda)
+// - get_compressed_mints_by_authority (with different authority_type filters)
+// - Pagination via cursor
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_persist_mint_data(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
+) {
+    let name = trim_test_name(function_name!());
+    let setup = setup(name, db_backend).await;
+
+    // Create test authorities and PDAs
+    let mint_authority1 = SerializablePubkey::new_unique();
+    let mint_authority2 = SerializablePubkey::new_unique();
+    let freeze_authority1 = SerializablePubkey::new_unique();
+    let freeze_authority2 = SerializablePubkey::new_unique();
+
+    // HACK: We index a block so that API methods can fetch the current slot.
+    index_block(
+        &setup.db_conn,
+        &BlockInfo {
+            metadata: BlockMetadata {
+                slot: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    // Create mint data entries with various authority combinations
+    let mint_data1 = MintData {
+        mint_pda: SerializablePubkey::new_unique(),
+        mint_signer: SerializablePubkey::new_unique(),
+        mint_authority: Some(mint_authority1),
+        freeze_authority: Some(freeze_authority1),
+        supply: UnsignedInteger(1_000_000),
+        decimals: 6,
+        version: 0,
+        mint_decompressed: false,
+        extensions: None,
+    };
+
+    let mint_data2 = MintData {
+        mint_pda: SerializablePubkey::new_unique(),
+        mint_signer: SerializablePubkey::new_unique(),
+        mint_authority: Some(mint_authority1), // Same mint authority as mint1
+        freeze_authority: Some(freeze_authority2),
+        supply: UnsignedInteger(2_000_000),
+        decimals: 9,
+        version: 1,
+        mint_decompressed: false,
+        extensions: None,
+    };
+
+    let mint_data3 = MintData {
+        mint_pda: SerializablePubkey::new_unique(),
+        mint_signer: SerializablePubkey::new_unique(),
+        mint_authority: Some(mint_authority2),
+        freeze_authority: Some(freeze_authority1), // Same freeze authority as mint1
+        supply: UnsignedInteger(3_000_000),
+        decimals: 8,
+        version: 0,
+        mint_decompressed: false,
+        extensions: Some(Base64String(vec![1, 2, 3, 4])),
+    };
+
+    // Mint with only mint authority (no freeze authority)
+    let mint_data4 = MintData {
+        mint_pda: SerializablePubkey::new_unique(),
+        mint_signer: SerializablePubkey::new_unique(),
+        mint_authority: Some(mint_authority2),
+        freeze_authority: None,
+        supply: UnsignedInteger(4_000_000),
+        decimals: 6,
+        version: 0,
+        mint_decompressed: false,
+        extensions: None,
+    };
+
+    // Mint with only freeze authority (no mint authority)
+    let mint_data5 = MintData {
+        mint_pda: SerializablePubkey::new_unique(),
+        mint_signer: SerializablePubkey::new_unique(),
+        mint_authority: None,
+        freeze_authority: Some(freeze_authority2),
+        supply: UnsignedInteger(5_000_000),
+        decimals: 6,
+        version: 0,
+        mint_decompressed: false,
+        extensions: None,
+    };
+
+    let all_mint_data = vec![
+        mint_data1.clone(),
+        mint_data2.clone(),
+        mint_data3.clone(),
+        mint_data4.clone(),
+        mint_data5.clone(),
+    ];
+
+    // Create hashes and addresses for each mint
+    let hashes: Vec<Hash> = all_mint_data.iter().map(|_| Hash::new_unique()).collect();
+    let addresses: Vec<[u8; 32]> = all_mint_data
+        .iter()
+        .map(|_| Pubkey::new_unique().to_bytes())
+        .collect();
+
+    // Helper to serialize mint data for account.data (supply is at bytes 36-44)
+    fn serialize_mint_account_data(mint_data: &MintData) -> Vec<u8> {
+        let mut data = vec![0u8; 166]; // Minimum size for mint data
+
+        // mint_authority COption (4 bytes discriminator + 32 bytes pubkey)
+        let mut offset = 0;
+        if let Some(ref authority) = mint_data.mint_authority {
+            data[offset..offset + 4].copy_from_slice(&1u32.to_le_bytes());
+            data[offset + 4..offset + 36].copy_from_slice(&authority.0.to_bytes());
+        }
+        offset += 36;
+
+        // supply (8 bytes) - THIS IS WHAT WE PARSE
+        data[offset..offset + 8].copy_from_slice(&mint_data.supply.0.to_le_bytes());
+        offset += 8;
+
+        // decimals (1 byte)
+        data[offset] = mint_data.decimals;
+        offset += 1;
+
+        // is_initialized (1 byte)
+        data[offset] = 1;
+        offset += 1;
+
+        // freeze_authority COption (4 bytes discriminator + 32 bytes pubkey)
+        if let Some(ref authority) = mint_data.freeze_authority {
+            data[offset..offset + 4].copy_from_slice(&1u32.to_le_bytes());
+            data[offset + 4..offset + 36].copy_from_slice(&authority.0.to_bytes());
+        }
+        offset += 36;
+
+        // MintMetadata
+        // version (1 byte)
+        data[offset] = mint_data.version;
+        offset += 1;
+
+        // mint_decompressed (1 byte)
+        data[offset] = if mint_data.mint_decompressed { 1 } else { 0 };
+        offset += 1;
+
+        // mint (32 bytes) - mint PDA
+        data[offset..offset + 32].copy_from_slice(&mint_data.mint_pda.0.to_bytes());
+        offset += 32;
+
+        // mint_signer (32 bytes)
+        data[offset..offset + 32].copy_from_slice(&mint_data.mint_signer.0.to_bytes());
+
+        data
+    }
+
+    // Begin transaction
+    let txn = sea_orm::TransactionTrait::begin(setup.db_conn.as_ref())
+        .await
+        .unwrap();
+
+    // Insert accounts first (required due to foreign key relationship)
+    for (i, (mint_data, hash)) in all_mint_data.iter().zip(hashes.iter()).enumerate() {
+        // Serialize mint data so supply can be parsed from account.data
+        let account_data = serialize_mint_account_data(mint_data);
+
+        let model = accounts::ActiveModel {
+            hash: Set(hash.clone().into()),
+            address: Set(Some(addresses[i].to_vec())),
+            spent: Set(false),
+            data: Set(Some(account_data)),
+            owner: Set(mint_data.mint_pda.to_bytes_vec()),
+            lamports: Set(Decimal::from(0)),
+            slot_created: Set(0),
+            leaf_index: Set(i as i64),
+            discriminator: Set(Some(Decimal::from(1))), // mint discriminator
+            data_hash: Set(Some(Hash::new_unique().to_vec())),
+            tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
+            queue: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
+            tree_type: Set(Some(TreeType::StateV1 as i32)),
+            seq: Set(Some(0)),
+            ..Default::default()
+        };
+        accounts::Entity::insert(model).exec(&txn).await.unwrap();
+    }
+
+    // Create EnrichedMintAccount entries
+    let enriched_mints: Vec<EnrichedMintAccount> = all_mint_data
+        .iter()
+        .zip(hashes.iter())
+        .zip(addresses.iter())
+        .map(|((mint_data, hash), address)| EnrichedMintAccount {
+            mint_data: mint_data.clone(),
+            hash: hash.clone(),
+            address: *address,
+        })
+        .collect();
+
+    // Persist mints
+    persist_mints(&txn, enriched_mints).await.unwrap();
+    txn.commit().await.unwrap();
+
+    // Test 1: get_compressed_mint by address
+    let res = setup
+        .api
+        .get_compressed_mint(GetCompressedMintRequest {
+            address: Some(SerializablePubkey(addresses[0].into())),
+            mint_pda: None,
+        })
+        .await
+        .unwrap();
+
+    assert!(res.value.is_some());
+    let compressed_mint = res.value.unwrap();
+    assert_eq!(compressed_mint.mint_data.mint_pda, mint_data1.mint_pda);
+    assert_eq!(compressed_mint.mint_data.supply, mint_data1.supply);
+    assert_eq!(compressed_mint.mint_data.decimals, mint_data1.decimals);
+    assert_eq!(
+        compressed_mint.mint_data.mint_authority,
+        mint_data1.mint_authority
+    );
+    assert_eq!(
+        compressed_mint.mint_data.freeze_authority,
+        mint_data1.freeze_authority
+    );
+
+    // Test 2: get_compressed_mint by mint_pda
+    let res = setup
+        .api
+        .get_compressed_mint(GetCompressedMintRequest {
+            address: None,
+            mint_pda: Some(mint_data2.mint_pda),
+        })
+        .await
+        .unwrap();
+
+    assert!(res.value.is_some());
+    let compressed_mint = res.value.unwrap();
+    assert_eq!(compressed_mint.mint_data.supply, mint_data2.supply);
+    assert_eq!(compressed_mint.mint_data.decimals, mint_data2.decimals);
+
+    // Test 3: get_compressed_mint for non-existent address should return None
+    let res = setup
+        .api
+        .get_compressed_mint(GetCompressedMintRequest {
+            address: Some(SerializablePubkey::new_unique()),
+            mint_pda: None,
+        })
+        .await
+        .unwrap();
+    assert!(res.value.is_none());
+
+    // Test 4: get_compressed_mints_by_authority with MintAuthority filter
+    // mint_authority1 controls mint1 and mint2
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: mint_authority1,
+            authority_type: Some(MintAuthorityType::MintAuthority),
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 2);
+    // Verify the mints have the correct mint_authority
+    for mint in &res.value.items {
+        assert_eq!(mint.mint_data.mint_authority, Some(mint_authority1));
+    }
+
+    // Test 5: get_compressed_mints_by_authority with FreezeAuthority filter
+    // freeze_authority1 controls mint1 and mint3
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: freeze_authority1,
+            authority_type: Some(MintAuthorityType::FreezeAuthority),
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 2);
+    for mint in &res.value.items {
+        assert_eq!(mint.mint_data.freeze_authority, Some(freeze_authority1));
+    }
+
+    // Test 6: get_compressed_mints_by_authority with Both filter
+    // mint_authority2 is mint authority for mint3 and mint4
+    // freeze_authority1 is freeze authority for mint1 and mint3
+    // With "Both" filter for mint_authority2: should return mint3 and mint4
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: mint_authority2,
+            authority_type: Some(MintAuthorityType::Both),
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 2);
+
+    // Test 7: Test with limit
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: mint_authority1,
+            authority_type: Some(MintAuthorityType::MintAuthority),
+            cursor: None,
+            limit: Some(Limit::new(1).unwrap()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 1);
+    assert!(res.value.cursor.is_some()); // Should have cursor since there's more data
+
+    // Test 8: Test pagination with cursor
+    let cursor = res.value.cursor.clone();
+    let res2 = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: mint_authority1,
+            authority_type: Some(MintAuthorityType::MintAuthority),
+            cursor,
+            limit: Some(Limit::new(1).unwrap()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res2.value.items.len(), 1);
+    // Verify we got a different mint
+    assert_ne!(
+        res.value.items[0].mint_data.mint_pda,
+        res2.value.items[0].mint_data.mint_pda
+    );
+
+    // Test 8b: Fetch third page - should be empty (no more data)
+    if let Some(cursor) = res2.value.cursor.clone() {
+        let res3 = setup
+            .api
+            .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+                authority: mint_authority1,
+                authority_type: Some(MintAuthorityType::MintAuthority),
+                cursor: Some(cursor),
+                limit: Some(Limit::new(1).unwrap()),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(res3.value.items.len(), 0);
+        assert!(res3.value.cursor.is_none());
+    }
+
+    // Test 9: Authority with no associated mints
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: SerializablePubkey::new_unique(), // Random authority
+            authority_type: None,
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 0);
+    assert!(res.value.cursor.is_none());
+
+    // Test 10: Verify mint with extensions
+    let res = setup
+        .api
+        .get_compressed_mint(GetCompressedMintRequest {
+            address: Some(SerializablePubkey(addresses[2].into())),
+            mint_pda: None,
+        })
+        .await
+        .unwrap();
+
+    assert!(res.value.is_some());
+    let compressed_mint = res.value.unwrap();
+    assert!(compressed_mint.mint_data.extensions.is_some());
+    assert_eq!(
+        compressed_mint.mint_data.extensions.clone().unwrap().0,
+        vec![1, 2, 3, 4]
+    );
+
+    // Test 11: freeze_authority2 has freeze authority for mint2 and mint5, plus None/freeze only
+    let res = setup
+        .api
+        .get_compressed_mints_by_authority(GetCompressedMintsByAuthorityRequest {
+            authority: freeze_authority2,
+            authority_type: Some(MintAuthorityType::FreezeAuthority),
+            cursor: None,
+            limit: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(res.value.items.len(), 2);
+    for mint in &res.value.items {
+        assert_eq!(mint.mint_data.freeze_authority, Some(freeze_authority2));
+    }
+
+    // Test 12: Error case - neither address nor mint_pda provided
+    let res = setup
+        .api
+        .get_compressed_mint(GetCompressedMintRequest {
+            address: None,
+            mint_pda: None,
+        })
+        .await;
+
+    assert!(res.is_err());
 }

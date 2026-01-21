@@ -7,6 +7,7 @@ pub mod accounts;
 pub mod address_queues;
 pub mod blocks;
 pub mod indexed_trees;
+pub mod mints;
 pub mod owner_balances;
 pub mod queue_hash_chains;
 pub mod state_tree_histories;
