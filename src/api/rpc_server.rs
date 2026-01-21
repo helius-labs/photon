@@ -354,6 +354,23 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         },
     )?;
 
+    module.register_async_method("getCompressedMint", |rpc_params, rpc_context| async move {
+        let api = rpc_context.as_ref();
+        let payload = rpc_params.parse()?;
+        api.get_compressed_mint(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method(
+        "getCompressedMintsByAuthority",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_compressed_mints_by_authority(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
     module.register_async_method(
         "getCompressedTokenBalancesByOwnerV2",
         |rpc_params, rpc_context| async move {

@@ -2,9 +2,9 @@ use super::{error, parser::state_update::AccountTransaction};
 use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
 use crate::{
     api::method::utils::PAGE_LIMIT,
-    common::typedefs::{hash::Hash, token_data::TokenData},
+    common::typedefs::{hash::Hash, mint_data::MintData, token_data::TokenData},
     dao::generated::{
-        account_transactions, accounts, state_tree_histories, state_trees, token_accounts,
+        account_transactions, accounts, mints, state_tree_histories, state_trees, token_accounts,
         transactions,
     },
     ingester::parser::state_update::Transaction,
@@ -279,6 +279,12 @@ pub struct EnrichedTokenAccount {
     pub hash: Hash,
 }
 
+pub struct EnrichedMintAccount {
+    pub mint_data: MintData,
+    pub hash: Hash,
+    pub address: [u8; 32],
+}
+
 #[derive(Debug)]
 enum AccountType {
     Account,
@@ -426,6 +432,7 @@ async fn append_output_accounts(
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
+    let mut mint_accounts = Vec::new();
 
     for account in out_accounts {
         account_models.push(accounts::ActiveModel {
@@ -460,6 +467,15 @@ async fn append_output_accounts(
                 token_data,
                 hash: account.account.hash.clone(),
             });
+        } else if let Some(mint_data) = account.account.parse_mint_data()? {
+            // Compressed mints must have an address
+            if let Some(address) = account.account.address {
+                mint_accounts.push(EnrichedMintAccount {
+                    mint_data,
+                    hash: account.account.hash.clone(),
+                    address: address.0.to_bytes(),
+                });
+            }
         }
     }
 
@@ -482,6 +498,11 @@ async fn append_output_accounts(
         if !token_accounts.is_empty() {
             debug!("Persisting {} token accounts...", token_accounts.len());
             persist_token_accounts(txn, token_accounts).await?;
+        }
+
+        if !mint_accounts.is_empty() {
+            debug!("Persisting {} mint accounts...", mint_accounts.len());
+            persist_mints(txn, mint_accounts).await?;
         }
     }
 
@@ -524,6 +545,48 @@ pub async fn persist_token_accounts(
         ModificationType::Append,
     )
     .await?;
+
+    Ok(())
+}
+
+pub async fn persist_mints(
+    txn: &DatabaseTransaction,
+    mint_accounts: Vec<EnrichedMintAccount>,
+) -> Result<(), IngesterError> {
+    let mint_models = mint_accounts
+        .into_iter()
+        .map(
+            |EnrichedMintAccount {
+                 mint_data,
+                 hash,
+                 address,
+             }| mints::ActiveModel {
+                hash: Set(hash.into()),
+                address: Set(address.to_vec()),
+                mint_pda: Set(mint_data.mint_pda.to_bytes_vec()),
+                mint_signer: Set(mint_data.mint_signer.to_bytes_vec()),
+                mint_authority: Set(mint_data.mint_authority.map(|a| a.to_bytes_vec())),
+                freeze_authority: Set(mint_data.freeze_authority.map(|a| a.to_bytes_vec())),
+                decimals: Set(mint_data.decimals as i16),
+                version: Set(mint_data.version as i16),
+                mint_decompressed: Set(mint_data.mint_decompressed),
+                extensions: Set(mint_data.extensions.map(|e| e.0)),
+                spent: Set(false),
+                prev_spent: Set(None),
+            },
+        )
+        .collect::<Vec<_>>();
+
+    if !mint_models.is_empty() {
+        let query = mints::Entity::insert_many(mint_models)
+            .on_conflict(
+                OnConflict::column(mints::Column::Hash)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .build(txn.get_database_backend());
+        txn.execute(query).await?;
+    }
 
     Ok(())
 }

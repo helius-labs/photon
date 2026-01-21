@@ -2,6 +2,7 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::utils::parse_decimal;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
+use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -14,6 +15,8 @@ use utoipa::ToSchema;
 pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
 pub const C_TOKEN_DISCRIMINATOR_V2: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 pub const C_TOKEN_DISCRIMINATOR_V3: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 4];
+/// Discriminator for compressed mints (1 in big endian)
+pub const COMPRESSED_MINT_DISCRIMINATOR: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -48,6 +51,22 @@ impl Account {
             _ => Ok(None),
         }
     }
+
+    pub fn parse_mint_data(&self) -> Result<Option<MintData>, IngesterError> {
+        match self.data.as_ref() {
+            Some(data)
+                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM
+                    && data.is_compressed_mint_discriminator() =>
+            {
+                let data_slice = data.data.0.as_slice();
+                let mint_data = MintData::parse(data_slice).map_err(|e| {
+                    IngesterError::ParserError(format!("Failed to parse mint data: {:?}", e))
+                })?;
+                Ok(Some(mint_data))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -64,6 +83,11 @@ impl AccountData {
         bytes == C_TOKEN_DISCRIMINATOR_V1
             || bytes == C_TOKEN_DISCRIMINATOR_V2
             || bytes == C_TOKEN_DISCRIMINATOR_V3
+    }
+
+    pub fn is_compressed_mint_discriminator(&self) -> bool {
+        let bytes = self.discriminator.0.to_le_bytes();
+        bytes == COMPRESSED_MINT_DISCRIMINATOR
     }
 }
 
