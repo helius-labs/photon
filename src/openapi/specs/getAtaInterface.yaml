@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: photon-indexer
+  description: Solana indexer for general compression
+  license:
+    name: Apache-2.0
+  version: 0.50.0
+servers:
+- url: https://mainnet.helius-rpc.com?api-key=<api_key>
+paths:
+  /getAtaInterface:
+    summary: getAtaInterface
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getAtaInterface
+                params:
+                  type: object
+                  description: Request parameters for getAtaInterface - derives ATA address from owner and mint
+                  required:
+                  - owner
+                  - mint
+                  properties:
+                    owner:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                    mint:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
+                  example:
+                    owner: '11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3'
+                    mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - context
+                properties:
+                  context:
+                    $ref: '#/components/schemas/Context'
+                  value:
+                    $ref: '#/components/schemas/TokenAccountInterface'
+                additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+components:
+  schemas:
+    TokenAccountInterface:
+      type: object
+      description: Token account interface with parsed token data
+      required:
+      - account
+      - token
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountInterface'
+        token:
+          $ref: '#/components/schemas/TokenData'
+      additionalProperties: false
+    AccountInterface:
+      type: object
+      description: Unified account interface representing either on-chain or compressed account data
+      required:
+      - address
+      - lamports
+      - owner
+      - data
+      - executable
+      - rentEpoch
+      - resolvedFrom
+      - resolvedSlot
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        lamports:
+          $ref: '#/components/schemas/UnsignedInteger'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        data:
+          $ref: '#/components/schemas/Base64String'
+        executable:
+          type: boolean
+          description: Whether the account is executable (always false for compressed)
+        rentEpoch:
+          $ref: '#/components/schemas/UnsignedInteger'
+        resolvedFrom:
+          $ref: '#/components/schemas/ResolvedFrom'
+        resolvedSlot:
+          $ref: '#/components/schemas/UnsignedInteger'
+        compressedContext:
+          $ref: '#/components/schemas/CompressedContext'
+      additionalProperties: false
+    CompressedContext:
+      type: object
+      description: Context information for compressed accounts
+      required:
+      - hash
+      - tree
+      - leafIndex
+      - proveByIndex
+      properties:
+        hash:
+          $ref: '#/components/schemas/Hash'
+        tree:
+          $ref: '#/components/schemas/SerializablePubkey'
+        leafIndex:
+          $ref: '#/components/schemas/UnsignedInteger'
+        seq:
+          $ref: '#/components/schemas/UnsignedInteger'
+        proveByIndex:
+          type: boolean
+          description: Whether the account can be proven by index (in output queue)
+      additionalProperties: false
+    TokenData:
+      type: object
+      description: Parsed token account data
+      required:
+      - mint
+      - owner
+      - amount
+      - state
+      properties:
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        amount:
+          $ref: '#/components/schemas/UnsignedInteger'
+        delegate:
+          $ref: '#/components/schemas/SerializablePubkey'
+        state:
+          type: string
+          description: Token account state
+          enum:
+          - initialized
+          - frozen
+        tlv:
+          $ref: '#/components/schemas/Base64String'
+      additionalProperties: false
+    ResolvedFrom:
+      type: string
+      description: Indicates the source of the resolved account data
+      enum:
+      - onchain
+      - compressed
+    Base64String:
+      type: string
+      description: A base 64 encoded string.
+      default: SGVsbG8sIFdvcmxkIQ==
+      example: SGVsbG8sIFdvcmxkIQ==
+    Context:
+      type: object
+      required:
+      - slot
+      properties:
+        slot:
+          type: integer
+          default: 100
+          example: 100
+    Hash:
+      type: string
+      description: A 32-byte hash represented as a base58 string.
+      example: 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+    SerializablePubkey:
+      type: string
+      description: A Solana public key represented as a base58 string.
+      default: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
+      example: 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
+    UnsignedInteger:
+      type: integer
+      default: 100
+      example: 100

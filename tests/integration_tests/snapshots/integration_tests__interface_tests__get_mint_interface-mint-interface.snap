@@ -1,0 +1,38 @@
+---
+source: tests/integration_tests/interface_tests.rs
+assertion_line: 352
+expression: result
+---
+{
+  "context": {
+    "slot": 0
+  },
+  "value": {
+    "address": "1q1WGWovbguwryoKi6pqMVe7Kg89GGFydsMsdV9rnNr",
+    "lamports": 0,
+    "owner": "cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m",
+    "data": "AQAAADwnoQx7ujHJcfKDkl7hQKUz/Hvi6qrsfBpPmC20LrGTAAAAAAAAAAAJAQEAAAA8J6EMe7oxyXHyg5Je4UClM/x74uqq7HwaT5gttC6xkwMA/xRAVGPTUAuc3hxY3AOcETGkJ2jgoc14EK83nFeVOd1SXdgASB2I4Btm1QB5tapW556WUNTAhOgajeMPwNjdVfwAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAPgqAQKAMAA=",
+    "executable": false,
+    "rentEpoch": 0,
+    "resolvedFrom": "compressed",
+    "resolvedSlot": 0,
+    "compressedContext": {
+      "hash": "wSoCZnxk3W2rsh7GyonDtjRa7ZwXgsGQBYkc4xHg8W5",
+      "tree": "bmt5yU97jC88YXTuSukYHa8Z5Bi2ZDUtmzfkDTA2mG2",
+      "leafIndex": 4,
+      "seq": null,
+      "proveByIndex": true
+    },
+    "mintData": {
+      "mintPda": "JAisegaP3mQQEqsX7H4qiKoBrPYvr36FW1rpeCKHixUU",
+      "mintSigner": "6YXRmnz78bHvQiHyLFm5tvSPPL2KfzNorNTWHqsnTFYx",
+      "mintAuthority": "53pWamsRsaNDnjFJho4WdTPF8StjG3986mVARrXrfUyQ",
+      "freezeAuthority": "53pWamsRsaNDnjFJho4WdTPF8StjG3986mVARrXrfUyQ",
+      "supply": 0,
+      "decimals": 9,
+      "version": 3,
+      "mintDecompressed": false,
+      "extensions": null
+    }
+  }
+}

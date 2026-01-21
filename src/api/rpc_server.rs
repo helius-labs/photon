@@ -437,5 +437,49 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         },
     )?;
 
+    // Interface endpoints - race hot (on-chain) and cold (compressed) lookups
+    module.register_async_method(
+        "getAccountInterface",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_account_interface(payload).await.map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getTokenAccountInterface",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_token_account_interface(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method("getAtaInterface", |rpc_params, rpc_context| async move {
+        let api = rpc_context.as_ref();
+        let payload = rpc_params.parse()?;
+        api.get_ata_interface(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method("getMintInterface", |rpc_params, rpc_context| async move {
+        let api = rpc_context.as_ref();
+        let payload = rpc_params.parse()?;
+        api.get_mint_interface(payload).await.map_err(Into::into)
+    })?;
+
+    module.register_async_method(
+        "getMultipleAccountInterfaces",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_multiple_account_interfaces(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
     Ok(module)
 }

@@ -85,15 +85,16 @@ solana-commitment-config = "3.0.0"
 
 solana-transaction-status = "3.0.8"
 
-light-zero-copy = { version = "0.5",default-features = false}
-light-concurrent-merkle-tree = {version = "4", default-features = false }
-light-batched-merkle-tree = { version = "0.6", default-features = false}
-light-merkle-tree-metadata = { version = "0.6", default-features = false }
-light-compressed-account = { version = "0.6", default-features = false }
-light-hasher = { version = "5", features = ["poseidon", "keccak", "sha256"], default-features = false}
+light-zero-copy = { version = "0.6", default-features = false }
+light-concurrent-merkle-tree = { version = "4", default-features = false }
+light-batched-merkle-tree = { version = "0.9", default-features = false }
+light-merkle-tree-metadata = { version = "0.9", default-features = false }
+light-compressed-account = { version = "0.9", default-features = false }
+light-hasher = { version = "5", features = ["poseidon", "keccak", "sha256"], default-features = false }
 light-poseidon = "0.3.0"
 light-indexed-merkle-tree = { version = "4", default-features = false }
-light-event = "0.1"
+light-event = "0.4"
+light-token-interface = { version = "0.3", default-features = false }
 
 sqlx = { version = "0.6.2", features = [
     "macros",

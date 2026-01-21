@@ -10,6 +10,7 @@ pub struct Model {
     pub data: Option<Vec<u8>>,
     pub data_hash: Option<Vec<u8>>,
     pub address: Option<Vec<u8>>,
+    pub onchain_pubkey: Option<Vec<u8>>,
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
     pub leaf_index: i64,

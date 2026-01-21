@@ -92,6 +92,14 @@ use crate::api::method::get_validity_proof::{
     GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
     GetValidityProofResponseV2,
 };
+use crate::api::method::interface::{
+    get_account_interface, get_ata_interface, get_mint_interface, get_multiple_account_interfaces,
+    get_token_account_interface, GetAccountInterfaceRequest, GetAccountInterfaceResponse,
+    GetAtaInterfaceRequest, GetAtaInterfaceResponse, GetMintInterfaceRequest,
+    GetMintInterfaceResponse, GetMultipleAccountInterfacesRequest,
+    GetMultipleAccountInterfacesResponse, GetTokenAccountInterfaceRequest,
+    GetTokenAccountInterfaceResponse,
+};
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
     GetNonPaginatedSignaturesResponseWithError, GetPaginatedSignaturesResponse, HashRequest,
@@ -423,6 +431,42 @@ impl PhotonApi {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
 
+    // Interface endpoints - race hot (on-chain) and cold (compressed) lookups
+    pub async fn get_account_interface(
+        &self,
+        request: GetAccountInterfaceRequest,
+    ) -> Result<GetAccountInterfaceResponse, PhotonApiError> {
+        get_account_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_token_account_interface(
+        &self,
+        request: GetTokenAccountInterfaceRequest,
+    ) -> Result<GetTokenAccountInterfaceResponse, PhotonApiError> {
+        get_token_account_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_ata_interface(
+        &self,
+        request: GetAtaInterfaceRequest,
+    ) -> Result<GetAtaInterfaceResponse, PhotonApiError> {
+        get_ata_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_mint_interface(
+        &self,
+        request: GetMintInterfaceRequest,
+    ) -> Result<GetMintInterfaceResponse, PhotonApiError> {
+        get_mint_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_multiple_account_interfaces(
+        &self,
+        request: GetMultipleAccountInterfacesRequest,
+    ) -> Result<GetMultipleAccountInterfacesResponse, PhotonApiError> {
+        get_multiple_account_interfaces(&self.db_conn, &self.rpc_client, request).await
+    }
+
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
             OpenApiSpec {
@@ -621,6 +665,32 @@ impl PhotonApi {
                 name: "getIndexerSlot".to_string(),
                 request: None,
                 response: UnsignedInteger::schema().1,
+            },
+            // Interface endpoints
+            OpenApiSpec {
+                name: "getAccountInterface".to_string(),
+                request: Some(GetAccountInterfaceRequest::schema().1),
+                response: GetAccountInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getTokenAccountInterface".to_string(),
+                request: Some(GetTokenAccountInterfaceRequest::schema().1),
+                response: GetTokenAccountInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getAtaInterface".to_string(),
+                request: Some(GetAtaInterfaceRequest::schema().1),
+                response: GetAtaInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMintInterface".to_string(),
+                request: Some(GetMintInterfaceRequest::schema().1),
+                response: GetMintInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleAccountInterfaces".to_string(),
+                request: Some(GetMultipleAccountInterfacesRequest::schema().1),
+                response: GetMultipleAccountInterfacesResponse::schema().1,
             },
         ]
     }
