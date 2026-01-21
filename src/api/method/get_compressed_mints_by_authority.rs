@@ -27,14 +27,13 @@ pub enum MintAuthorityType {
 }
 
 /// Request for getting compressed mints by authority
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetCompressedMintsByAuthorityRequest {
     /// The authority pubkey to search for
     pub authority: SerializablePubkey,
-    /// Type of authority to filter by (default: Both)
-    #[serde(default)]
-    pub authority_type: Option<MintAuthorityType>,
+    /// Type of authority to filter by
+    pub authority_type: MintAuthorityType,
     /// Pagination cursor
     #[serde(default)]
     pub cursor: Option<Base58String>,
@@ -65,7 +64,7 @@ pub async fn get_compressed_mints_by_authority(
 ) -> Result<GetCompressedMintsByAuthorityResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
     let authority_bytes: Vec<u8> = request.authority.into();
-    let authority_type = request.authority_type.unwrap_or_default();
+    let authority_type = request.authority_type;
 
     // Build the filter based on authority type
     let mut filter = mints::Column::Spent.eq(false);
