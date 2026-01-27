@@ -1,5 +1,6 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_validity_proof::prover::structs::{CompressedProof, ProofABC};
+use crate::common::typedefs::bs58_string::Base58String;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use solana_bn254::compression::prelude::{
     alt_bn128_g1_compress, alt_bn128_g2_compress, convert_endianness,
@@ -39,8 +40,8 @@ pub fn compress_proof(proof: &ProofABC) -> Result<CompressedProof, PhotonApiErro
         .map_err(|_| PhotonApiError::UnexpectedError("Failed to compress G1 proof".to_string()))?;
 
     Ok(CompressedProof {
-        a: Vec::from(proof_a),
-        b: Vec::from(proof_b),
-        c: Vec::from(proof_c),
+        a: Base58String(Vec::from(proof_a)),
+        b: Base58String(Vec::from(proof_b)),
+        c: Base58String(Vec::from(proof_c)),
     })
 }

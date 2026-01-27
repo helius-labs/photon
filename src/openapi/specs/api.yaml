@@ -4360,6 +4360,8 @@ paths:
                     required:
                     - context
                     properties:
+                      addressQueue:
+                        $ref: '#/components/schemas/AddressQueueData'
                       context:
                         $ref: '#/components/schemas/Context'
                       value:
