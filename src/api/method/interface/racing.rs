@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use sea_orm::{sea_query::Condition, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_account::Account as SolanaAccount;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_commitment_config::CommitmentConfig;
@@ -16,7 +16,8 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts;
 
 use super::types::{
-    AccountInterface, CompressedContext, ResolvedFrom, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
+    AccountInterface, ColdContext, ColdData, SolanaAccountData, TreeInfo, DB_TIMEOUT_MS,
+    RPC_TIMEOUT_MS,
 };
 
 /// Result from a hot (on-chain RPC) lookup
@@ -44,8 +45,6 @@ pub struct ColdAccountData {
     pub tree: SerializablePubkey,
     pub leaf_index: u64,
     pub seq: Option<u64>,
-    pub slot_created: u64,
-    pub prove_by_index: bool,
 }
 
 /// Perform a hot lookup via Solana RPC
@@ -88,26 +87,19 @@ pub async fn hot_lookup_multiple(
 }
 
 /// Perform a cold lookup from the compressed accounts database.
-/// Searches by both address and onchain_pubkey columns to support generic linking.
-/// This allows finding compressed accounts either by their compressed address
-/// or by the on-chain pubkey they map to (for decompressed accounts).
+/// Searches by onchain_pubkey column — the input is always a Solana pubkey
+/// (every account starts on-chain before compression, so onchain_pubkey is always populated).
 pub async fn cold_lookup(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
 ) -> Result<ColdLookupResult, PhotonApiError> {
     let address_bytes: Vec<u8> = (*address).into();
 
-    // Query by EITHER address OR onchain_pubkey to support generic linking
     let result = timeout(
         Duration::from_millis(DB_TIMEOUT_MS),
         accounts::Entity::find()
-            .filter(
-                Condition::all().add(accounts::Column::Spent.eq(false)).add(
-                    Condition::any()
-                        .add(accounts::Column::Address.eq(address_bytes.clone()))
-                        .add(accounts::Column::OnchainPubkey.eq(address_bytes)),
-                ),
-            )
+            .filter(accounts::Column::Spent.eq(false))
+            .filter(accounts::Column::OnchainPubkey.eq(address_bytes))
             .one(conn),
     )
     .await;
@@ -127,8 +119,6 @@ pub async fn cold_lookup(
                 tree: model.tree.clone().try_into()?,
                 leaf_index: crate::api::method::utils::parse_leaf_index(model.leaf_index)?,
                 seq: model.seq.map(|s| s as u64),
-                slot_created: model.slot_created as u64,
-                prove_by_index: model.in_output_queue,
             };
             Ok(ColdLookupResult {
                 account: Some(cold_data),
@@ -147,52 +137,38 @@ pub async fn cold_lookup(
 }
 
 /// Perform cold lookup for multiple addresses.
-/// Searches by both address and onchain_pubkey columns to support generic linking.
+/// Searches by onchain_pubkey column — the input is always Solana pubkeys.
 pub async fn cold_lookup_multiple(
     conn: &DatabaseConnection,
     addresses: &[SerializablePubkey],
 ) -> Result<Vec<Option<ColdAccountData>>, PhotonApiError> {
     let address_bytes: Vec<Vec<u8>> = addresses.iter().map(|a| (*a).into()).collect();
 
-    // Query by EITHER address OR onchain_pubkey to support generic linking
     let result = timeout(
         Duration::from_millis(DB_TIMEOUT_MS),
         accounts::Entity::find()
-            .filter(
-                Condition::all().add(accounts::Column::Spent.eq(false)).add(
-                    Condition::any()
-                        .add(accounts::Column::Address.is_in(address_bytes.clone()))
-                        .add(accounts::Column::OnchainPubkey.is_in(address_bytes.clone())),
-                ),
-            )
+            .filter(accounts::Column::Spent.eq(false))
+            .filter(accounts::Column::OnchainPubkey.is_in(address_bytes.clone()))
             .all(conn),
     )
     .await;
 
     match result {
         Ok(Ok(models)) => {
-            // Create maps of address -> model and onchain_pubkey -> model for efficient lookup
-            let mut address_to_model: std::collections::HashMap<Vec<u8>, _> =
-                std::collections::HashMap::new();
+            // Create map of onchain_pubkey -> model for efficient lookup
             let mut onchain_pubkey_to_model: std::collections::HashMap<Vec<u8>, _> =
                 std::collections::HashMap::new();
 
             for model in models {
-                if let Some(addr) = &model.address {
-                    address_to_model.insert(addr.clone(), model.clone());
-                }
                 if let Some(onchain) = &model.onchain_pubkey {
                     onchain_pubkey_to_model.insert(onchain.clone(), model);
                 }
             }
 
-            // Map results back to original order, checking both address and onchain_pubkey
+            // Map results back to original order
             let mut results = Vec::with_capacity(addresses.len());
             for addr_bytes in &address_bytes {
-                // First check address, then onchain_pubkey
-                let model = address_to_model
-                    .get(addr_bytes)
-                    .or_else(|| onchain_pubkey_to_model.get(addr_bytes));
+                let model = onchain_pubkey_to_model.get(addr_bytes);
 
                 if let Some(model) = model {
                     let cold_data = ColdAccountData {
@@ -208,8 +184,6 @@ pub async fn cold_lookup_multiple(
                         tree: model.tree.clone().try_into()?,
                         leaf_index: crate::api::method::utils::parse_leaf_index(model.leaf_index)?,
                         seq: model.seq.map(|s| s as u64),
-                        slot_created: model.slot_created as u64,
-                        prove_by_index: model.in_output_queue,
                     };
                     results.push(Some(cold_data));
                 } else {
@@ -225,55 +199,65 @@ pub async fn cold_lookup_multiple(
     }
 }
 
+/// Split raw data into 8-byte discriminator and remaining payload
+pub fn split_discriminator(data: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    if data.len() >= 8 {
+        (data[..8].to_vec(), data[8..].to_vec())
+    } else {
+        (data.to_vec(), vec![])
+    }
+}
+
 /// Convert an on-chain Solana account to AccountInterface
 pub fn hot_to_interface(
     account: &SolanaAccount,
     address: SerializablePubkey,
-    slot: u64,
+    _slot: u64,
 ) -> AccountInterface {
     AccountInterface {
-        address,
-        lamports: UnsignedInteger(account.lamports),
-        owner: SerializablePubkey::from(account.owner.to_bytes()),
-        data: Base64String(account.data.clone()),
-        executable: account.executable,
-        rent_epoch: UnsignedInteger(account.rent_epoch),
-        resolved_from: ResolvedFrom::Onchain,
-        resolved_slot: UnsignedInteger(slot),
-        compressed_context: None,
+        key: address,
+        account: SolanaAccountData {
+            lamports: UnsignedInteger(account.lamports),
+            data: Base64String(account.data.clone()),
+            owner: SerializablePubkey::from(account.owner.to_bytes()),
+            executable: account.executable,
+            rent_epoch: UnsignedInteger(account.rent_epoch),
+        },
+        cold: None,
     }
 }
 
 /// Convert a compressed account to AccountInterface.
-/// Returns None if the account is missing required data (like address).
-pub fn cold_to_interface(account: &ColdAccountData) -> Option<AccountInterface> {
-    let address = match account.address {
-        Some(addr) => addr,
-        None => {
-            log::warn!(
-                "Compressed account missing address field for hash: {:?}. \
-                This account may be a fungible token account that doesn't have an address.",
-                account.hash
-            );
-            return None;
-        }
-    };
+/// Always uses `query_address` (the on-chain Solana pubkey) as the key,
+/// since `account.address` is the compressed address (Poseidon hash), not the on-chain pubkey.
+pub fn cold_to_interface(
+    account: &ColdAccountData,
+    query_address: SerializablePubkey,
+) -> Option<AccountInterface> {
+    let address = query_address;
+    let raw_data = account.data.clone().unwrap_or_default();
+    let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(AccountInterface {
-        address,
-        lamports: UnsignedInteger(account.lamports),
-        owner: account.owner,
-        data: Base64String(account.data.clone().unwrap_or_default()),
-        executable: false,              // Compressed accounts are never executable
-        rent_epoch: UnsignedInteger(0), // Compressed accounts don't have rent epoch
-        resolved_from: ResolvedFrom::Compressed,
-        resolved_slot: UnsignedInteger(account.slot_created),
-        compressed_context: Some(CompressedContext {
+        key: address,
+        account: SolanaAccountData {
+            lamports: UnsignedInteger(account.lamports),
+            data: Base64String(raw_data),
+            owner: account.owner,
+            executable: false,
+            rent_epoch: UnsignedInteger(0),
+        },
+        cold: Some(ColdContext::Account {
             hash: account.hash.clone(),
-            tree: account.tree,
             leaf_index: UnsignedInteger(account.leaf_index),
-            seq: account.seq.map(UnsignedInteger),
-            prove_by_index: account.prove_by_index,
+            tree_info: TreeInfo {
+                tree: account.tree,
+                seq: account.seq.map(UnsignedInteger),
+            },
+            data: ColdData {
+                discriminator,
+                data: Base64String(data_payload),
+            },
         }),
     })
 }
@@ -354,7 +338,7 @@ fn resolve_race_result(
         // Only cold succeeded
         (Err(e), Ok(cold)) => {
             log::debug!("Hot lookup failed, using cold result: {:?}", e);
-            Ok(cold.account.and_then(|a| cold_to_interface(&a)))
+            Ok(cold.account.and_then(|a| cold_to_interface(&a, address)))
         }
         // Both failed - return the hot error (RPC errors are usually more informative)
         (Err(hot_err), Err(cold_err)) => {
@@ -368,30 +352,26 @@ fn resolve_race_result(
     }
 }
 
-/// Resolve a single race between hot and cold account data
+/// Resolve a single race between hot and cold account data.
+/// Prefers hot (on-chain) if the account exists with lamports > 0.
 fn resolve_single_race(
     hot_account: Option<&SolanaAccount>,
     cold_account: Option<&ColdAccountData>,
     hot_slot: u64,
     address: SerializablePubkey,
 ) -> Option<AccountInterface> {
-    match (hot_account, cold_account) {
-        // Both have data - return higher slot
-        (Some(hot), Some(cold)) => {
-            if hot_slot >= cold.slot_created {
-                Some(hot_to_interface(hot, address, hot_slot))
-            } else {
-                // cold_to_interface returns None if account has no address
-                cold_to_interface(cold)
-            }
+    // Prefer hot if account exists on-chain
+    if let Some(hot) = hot_account {
+        if hot.lamports > 0 {
+            return Some(hot_to_interface(hot, address, hot_slot));
         }
-        // Only hot has data
-        (Some(hot), None) => Some(hot_to_interface(hot, address, hot_slot)),
-        // Only cold has data - returns None if account has no address
-        (None, Some(cold)) => cold_to_interface(cold),
-        // Neither has data
-        (None, None) => None,
     }
+    // Fall back to cold
+    if let Some(cold) = cold_account {
+        return cold_to_interface(cold, address);
+    }
+    // Neither found
+    None
 }
 
 #[cfg(test)]
@@ -399,7 +379,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_single_race_both_present_hot_wins() {
+    fn test_resolve_single_race_hot_preferred() {
+        // Hot is always preferred when it has lamports > 0, regardless of slots
         let hot = SolanaAccount {
             lamports: 1000,
             data: vec![1, 2, 3],
@@ -410,34 +391,29 @@ mod tests {
         let cold = ColdAccountData {
             hash: Hash::default(),
             address: Some(SerializablePubkey::default()),
-            data: Some(vec![4, 5, 6]),
+            data: Some(vec![0, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6]),
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
             leaf_index: 0,
             seq: Some(1),
-            slot_created: 100, // Lower slot
-            prove_by_index: false,
         };
 
-        let result = resolve_single_race(
-            Some(&hot),
-            Some(&cold),
-            200, // Higher slot for hot
-            SerializablePubkey::default(),
-        );
+        let result =
+            resolve_single_race(Some(&hot), Some(&cold), 200, SerializablePubkey::default());
 
         assert!(result.is_some());
         let interface = result.unwrap();
-        assert_eq!(interface.resolved_from, ResolvedFrom::Onchain);
-        assert_eq!(interface.lamports.0, 1000);
+        assert!(interface.cold.is_none()); // hot account
+        assert_eq!(interface.account.lamports.0, 1000);
     }
 
     #[test]
-    fn test_resolve_single_race_both_present_cold_wins() {
+    fn test_resolve_single_race_hot_zero_lamports_falls_back_to_cold() {
+        // If hot has 0 lamports, fall back to cold
         let hot = SolanaAccount {
-            lamports: 1000,
-            data: vec![1, 2, 3],
+            lamports: 0,
+            data: vec![],
             owner: Pubkey::new_unique(),
             executable: false,
             rent_epoch: 0,
@@ -445,27 +421,21 @@ mod tests {
         let cold = ColdAccountData {
             hash: Hash::default(),
             address: Some(SerializablePubkey::default()),
-            data: Some(vec![4, 5, 6]),
+            data: Some(vec![0, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6]),
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
             leaf_index: 0,
             seq: Some(1),
-            slot_created: 300, // Higher slot
-            prove_by_index: false,
         };
 
-        let result = resolve_single_race(
-            Some(&hot),
-            Some(&cold),
-            200, // Lower slot for hot
-            SerializablePubkey::default(),
-        );
+        let result =
+            resolve_single_race(Some(&hot), Some(&cold), 200, SerializablePubkey::default());
 
         assert!(result.is_some());
         let interface = result.unwrap();
-        assert_eq!(interface.resolved_from, ResolvedFrom::Compressed);
-        assert_eq!(interface.lamports.0, 500);
+        assert!(interface.cold.is_some()); // cold account
+        assert_eq!(interface.account.lamports.0, 500);
     }
 
     #[test]
@@ -482,7 +452,7 @@ mod tests {
 
         assert!(result.is_some());
         let interface = result.unwrap();
-        assert_eq!(interface.resolved_from, ResolvedFrom::Onchain);
+        assert!(interface.cold.is_none());
     }
 
     #[test]
@@ -490,21 +460,19 @@ mod tests {
         let cold = ColdAccountData {
             hash: Hash::default(),
             address: Some(SerializablePubkey::default()),
-            data: Some(vec![4, 5, 6]),
+            data: Some(vec![0, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6]),
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
             leaf_index: 0,
             seq: Some(1),
-            slot_created: 100,
-            prove_by_index: false,
         };
 
         let result = resolve_single_race(None, Some(&cold), 200, SerializablePubkey::default());
 
         assert!(result.is_some());
         let interface = result.unwrap();
-        assert_eq!(interface.resolved_from, ResolvedFrom::Compressed);
+        assert!(interface.cold.is_some());
     }
 
     #[test]
@@ -512,43 +480,6 @@ mod tests {
         let result = resolve_single_race(None, None, 200, SerializablePubkey::default());
 
         assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_resolve_single_race_equal_slots_hot_wins() {
-        // When slots are equal, hot (on-chain) should win as it's considered more authoritative
-        let hot = SolanaAccount {
-            lamports: 1000,
-            data: vec![1, 2, 3],
-            owner: Pubkey::new_unique(),
-            executable: false,
-            rent_epoch: 0,
-        };
-        let cold = ColdAccountData {
-            hash: Hash::default(),
-            address: Some(SerializablePubkey::default()),
-            data: Some(vec![4, 5, 6]),
-            owner: SerializablePubkey::default(),
-            lamports: 500,
-            tree: SerializablePubkey::default(),
-            leaf_index: 0,
-            seq: Some(1),
-            slot_created: 200, // Same slot
-            prove_by_index: false,
-        };
-
-        let result = resolve_single_race(
-            Some(&hot),
-            Some(&cold),
-            200, // Same slot as cold
-            SerializablePubkey::default(),
-        );
-
-        assert!(result.is_some());
-        let interface = result.unwrap();
-        // Hot wins when slots are equal (>= comparison)
-        assert_eq!(interface.resolved_from, ResolvedFrom::Onchain);
-        assert_eq!(interface.lamports.0, 1000);
     }
 
     #[test]
@@ -566,14 +497,12 @@ mod tests {
 
         let interface = hot_to_interface(&hot, address, slot);
 
-        assert_eq!(interface.lamports.0, 5000);
-        assert_eq!(interface.data.0, vec![10, 20, 30]);
-        assert_eq!(interface.owner.0, owner);
-        assert!(interface.executable);
-        assert_eq!(interface.rent_epoch.0, 100);
-        assert_eq!(interface.resolved_from, ResolvedFrom::Onchain);
-        assert_eq!(interface.resolved_slot.0, 12345);
-        assert!(interface.compressed_context.is_none());
+        assert_eq!(interface.account.lamports.0, 5000);
+        assert_eq!(interface.account.data.0, vec![10, 20, 30]);
+        assert_eq!(interface.account.owner.0, owner);
+        assert!(interface.account.executable);
+        assert_eq!(interface.account.rent_epoch.0, 100);
+        assert!(interface.cold.is_none());
     }
 
     #[test]
@@ -581,52 +510,63 @@ mod tests {
         let cold = ColdAccountData {
             hash: Hash::from([1u8; 32]),
             address: Some(SerializablePubkey::from([2u8; 32])),
-            data: Some(vec![100, 200]),
+            data: Some(vec![10, 20, 30, 40, 50, 60, 70, 80, 100, 200]),
             owner: SerializablePubkey::from([3u8; 32]),
             lamports: 9999,
             tree: SerializablePubkey::from([4u8; 32]),
             leaf_index: 42,
             seq: Some(7),
-            slot_created: 54321,
-            prove_by_index: true,
         };
 
-        let interface = cold_to_interface(&cold).expect("should return Some when address exists");
+        let interface = cold_to_interface(&cold, SerializablePubkey::default())
+            .expect("should return Some when address exists");
 
-        assert_eq!(interface.lamports.0, 9999);
-        assert_eq!(interface.data.0, vec![100, 200]);
-        assert!(!interface.executable); // Always false for compressed
-        assert_eq!(interface.rent_epoch.0, 0); // Always 0 for compressed
-        assert_eq!(interface.resolved_from, ResolvedFrom::Compressed);
-        assert_eq!(interface.resolved_slot.0, 54321);
+        assert_eq!(interface.account.lamports.0, 9999);
+        assert_eq!(
+            interface.account.data.0,
+            vec![10, 20, 30, 40, 50, 60, 70, 80, 100, 200]
+        );
+        assert!(!interface.account.executable);
+        assert_eq!(interface.account.rent_epoch.0, 0);
+        assert!(interface.cold.is_some());
 
-        let ctx = interface.compressed_context.unwrap();
-        assert_eq!(ctx.hash.0, [1u8; 32]);
-        assert_eq!(ctx.leaf_index.0, 42);
-        assert_eq!(ctx.seq.unwrap().0, 7);
-        assert!(ctx.prove_by_index);
+        match interface.cold.unwrap() {
+            ColdContext::Account {
+                hash,
+                leaf_index,
+                tree_info,
+                data,
+            } => {
+                assert_eq!(hash.0, [1u8; 32]);
+                assert_eq!(leaf_index.0, 42);
+                assert_eq!(tree_info.seq.unwrap().0, 7);
+                assert_eq!(data.discriminator, vec![10, 20, 30, 40, 50, 60, 70, 80]);
+                assert_eq!(data.data.0, vec![100, 200]);
+            }
+            _ => panic!("Expected ColdContext::Account"),
+        }
     }
 
     #[test]
     fn test_cold_to_interface_no_address() {
-        // Test when compressed account has no address (e.g., fungible token account)
+        let query_address = SerializablePubkey::from([42u8; 32]);
         let cold = ColdAccountData {
             hash: Hash::default(),
-            address: None, // No address - like fungible token accounts
+            address: None,
             data: None,
             owner: SerializablePubkey::default(),
             lamports: 100,
             tree: SerializablePubkey::default(),
             leaf_index: 0,
             seq: None,
-            slot_created: 1000,
-            prove_by_index: false,
         };
 
-        let interface = cold_to_interface(&cold);
+        let interface = cold_to_interface(&cold, query_address);
 
-        // Should return None when account has no address
-        assert!(interface.is_none());
+        assert!(interface.is_some());
+        let iface = interface.unwrap();
+        assert_eq!(iface.key, query_address);
+        assert_eq!(iface.account.lamports.0, 100);
     }
 
     #[test]
@@ -635,14 +575,12 @@ mod tests {
             account: Some(ColdAccountData {
                 hash: Hash::default(),
                 address: Some(SerializablePubkey::default()),
-                data: Some(vec![1, 2, 3]),
+                data: Some(vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3]),
                 owner: SerializablePubkey::default(),
                 lamports: 1000,
                 tree: SerializablePubkey::default(),
                 leaf_index: 0,
                 seq: Some(1),
-                slot_created: 100,
-                prove_by_index: false,
             }),
             slot: 100,
         });
@@ -654,7 +592,7 @@ mod tests {
         assert!(result.is_ok());
         let interface = result.unwrap();
         assert!(interface.is_some());
-        assert_eq!(interface.unwrap().resolved_from, ResolvedFrom::Compressed);
+        assert!(interface.unwrap().cold.is_some());
     }
 
     #[test]
@@ -677,7 +615,7 @@ mod tests {
         assert!(result.is_ok());
         let interface = result.unwrap();
         assert!(interface.is_some());
-        assert_eq!(interface.unwrap().resolved_from, ResolvedFrom::Onchain);
+        assert!(interface.unwrap().cold.is_none());
     }
 
     #[test]
@@ -689,7 +627,6 @@ mod tests {
 
         let result = resolve_race_result(hot_result, cold_result, SerializablePubkey::default());
 
-        // When both fail, should return the hot error
         assert!(result.is_err());
     }
 
@@ -708,5 +645,21 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_split_discriminator_with_enough_data() {
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let (disc, payload) = split_discriminator(&data);
+        assert_eq!(disc, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(payload, vec![9, 10]);
+    }
+
+    #[test]
+    fn test_split_discriminator_short_data() {
+        let data = vec![1, 2, 3];
+        let (disc, payload) = split_discriminator(&data);
+        assert_eq!(disc, vec![1, 2, 3]);
+        assert!(payload.is_empty());
     }
 }

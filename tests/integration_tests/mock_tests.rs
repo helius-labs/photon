@@ -1120,10 +1120,11 @@ async fn test_get_multiple_new_address_proofs(
 async fn test_get_multiple_new_address_proofs_interop(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use light_sdk_types::constants::ADDRESS_TREE_V1;
     use photon_indexer::api::method::{
         get_multiple_new_address_proofs::{
             get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
-            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
+            AddressListWithTrees, AddressWithTree,
         },
         get_validity_proof::CompressedProof,
     };

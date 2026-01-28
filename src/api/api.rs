@@ -93,12 +93,14 @@ use crate::api::method::get_validity_proof::{
     GetValidityProofResponseV2,
 };
 use crate::api::method::interface::{
-    get_account_interface, get_ata_interface, get_mint_interface, get_multiple_account_interfaces,
-    get_token_account_interface, GetAccountInterfaceRequest, GetAccountInterfaceResponse,
-    GetAtaInterfaceRequest, GetAtaInterfaceResponse, GetMintInterfaceRequest,
-    GetMintInterfaceResponse, GetMultipleAccountInterfacesRequest,
-    GetMultipleAccountInterfacesResponse, GetTokenAccountInterfaceRequest,
-    GetTokenAccountInterfaceResponse,
+    get_account_interface, get_account_interfaces, get_mint_account_interfaces, get_mint_interface,
+    get_multiple_account_interfaces, get_token_account_interface, get_token_account_interfaces,
+    GetAccountInterfaceRequest, GetAccountInterfaceResponse, GetAccountInterfacesRequest,
+    GetAccountInterfacesResponse, GetMintAccountInterfacesRequest,
+    GetMintAccountInterfacesResponse, GetMintInterfaceRequest, GetMintInterfaceResponse,
+    GetMultipleAccountInterfacesRequest, GetMultipleAccountInterfacesResponse,
+    GetTokenAccountInterfaceRequest, GetTokenAccountInterfaceResponse,
+    GetTokenAccountInterfacesRequest, GetTokenAccountInterfacesResponse,
 };
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
@@ -446,13 +448,6 @@ impl PhotonApi {
         get_token_account_interface(&self.db_conn, &self.rpc_client, request).await
     }
 
-    pub async fn get_ata_interface(
-        &self,
-        request: GetAtaInterfaceRequest,
-    ) -> Result<GetAtaInterfaceResponse, PhotonApiError> {
-        get_ata_interface(&self.db_conn, &self.rpc_client, request).await
-    }
-
     pub async fn get_mint_interface(
         &self,
         request: GetMintInterfaceRequest,
@@ -465,6 +460,27 @@ impl PhotonApi {
         request: GetMultipleAccountInterfacesRequest,
     ) -> Result<GetMultipleAccountInterfacesResponse, PhotonApiError> {
         get_multiple_account_interfaces(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_account_interfaces(
+        &self,
+        request: GetAccountInterfacesRequest,
+    ) -> Result<GetAccountInterfacesResponse, PhotonApiError> {
+        get_account_interfaces(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_token_account_interfaces(
+        &self,
+        request: GetTokenAccountInterfacesRequest,
+    ) -> Result<GetTokenAccountInterfacesResponse, PhotonApiError> {
+        get_token_account_interfaces(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_mint_account_interfaces(
+        &self,
+        request: GetMintAccountInterfacesRequest,
+    ) -> Result<GetMintAccountInterfacesResponse, PhotonApiError> {
+        get_mint_account_interfaces(&self.db_conn, &self.rpc_client, request).await
     }
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
@@ -678,11 +694,6 @@ impl PhotonApi {
                 response: GetTokenAccountInterfaceResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getAtaInterface".to_string(),
-                request: Some(GetAtaInterfaceRequest::schema().1),
-                response: GetAtaInterfaceResponse::schema().1,
-            },
-            OpenApiSpec {
                 name: "getMintInterface".to_string(),
                 request: Some(GetMintInterfaceRequest::schema().1),
                 response: GetMintInterfaceResponse::schema().1,
@@ -691,6 +702,21 @@ impl PhotonApi {
                 name: "getMultipleAccountInterfaces".to_string(),
                 request: Some(GetMultipleAccountInterfacesRequest::schema().1),
                 response: GetMultipleAccountInterfacesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getAccountInterfaces".to_string(),
+                request: Some(GetAccountInterfacesRequest::schema().1),
+                response: GetAccountInterfacesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getTokenAccountInterfaces".to_string(),
+                request: Some(GetTokenAccountInterfacesRequest::schema().1),
+                response: GetTokenAccountInterfacesResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMintAccountInterfaces".to_string(),
+                request: Some(GetMintAccountInterfacesRequest::schema().1),
+                response: GetMintAccountInterfacesResponse::schema().1,
             },
         ]
     }

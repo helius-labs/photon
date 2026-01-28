@@ -69,6 +69,13 @@ impl TokenData {
             } else if option_tag == 1 && !buf.is_empty() {
                 Some(Base64String(buf.to_vec()))
             } else {
+                if option_tag != 0 && option_tag != 1 {
+                    log::warn!(
+                        "Unknown TLV option_tag={} with {} bytes remaining",
+                        option_tag,
+                        buf.len()
+                    );
+                }
                 None
             }
         };

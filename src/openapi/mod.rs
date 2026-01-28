@@ -41,8 +41,8 @@ use crate::api::method::get_validity_proof::{
     CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
 };
 use crate::api::method::interface::types::{
-    AccountInterface, AccountLookup, CompressedContext, InterfaceResult, MintInterface,
-    ResolvedFrom, TokenAccountInterface,
+    AccountInterface, AccountLookup, ColdContext, ColdData, InterfaceResult, MintInterface,
+    SolanaAccountData, TokenAccountInterface, TreeInfo,
 };
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
@@ -170,10 +170,12 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     CompressedMintList,
     // Interface types
     AccountInterface,
+    SolanaAccountData,
+    ColdContext,
+    TreeInfo,
+    ColdData,
     TokenAccountInterface,
     MintInterface,
-    CompressedContext,
-    ResolvedFrom,
     InterfaceResult,
     AccountLookup,
 )))]

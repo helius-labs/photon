@@ -4,8 +4,8 @@ use function_name::named;
 use futures::{pin_mut, StreamExt};
 use insta::assert_json_snapshot;
 use photon_indexer::api::method::interface::{
-    GetAccountInterfaceRequest, GetAtaInterfaceRequest, GetMintInterfaceRequest,
-    GetMultipleAccountInterfacesRequest, GetTokenAccountInterfaceRequest,
+    GetAccountInterfaceRequest, GetMintInterfaceRequest, GetMultipleAccountInterfacesRequest,
+    GetTokenAccountInterfaceRequest,
 };
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
@@ -203,57 +203,6 @@ async fn test_get_multiple_account_interfaces(
             format!("{}-multiple-account-interfaces", name.clone()),
             result
         );
-    }
-}
-
-/// Test getAtaInterface with owner+mint derivation.
-///
-/// ATA addresses are derived from owner+mint. Since there's no on-chain ATA
-/// and compressed token accounts don't use ATA addresses, this returns null.
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_get_ata_interface(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    // Mint compressed tokens to Bob and Charlie
-    let mint_tokens_tx =
-        "2YTv5hjSmRAgfwoNHdc4DRDFWW7fqQb57f9s8Rxtu9u6jA2hDxNxEWoiybvn4p7ua2nw3scYeNo6htYCSuBYviFd";
-
-    // Test ATA lookup - derives ATA address from owner+mint
-    // Bob is the owner, SPL Mint from the indexer_interface test
-    let owner =
-        SerializablePubkey::try_from("DkbH1tracp6nxSQLrHQqJwVE7NaDAAb7eGKzfB9TwBdF").unwrap();
-    let mint =
-        SerializablePubkey::try_from("B8dxn19gmQFB7g1wHsiN2R5jkqEWw14B3CFNQZ9tDwbm").unwrap();
-
-    let txs = [mint_tokens_tx];
-    let indexing =
-        all_indexing_methodologies_for_interface(setup.db_conn.clone(), setup.client.clone(), &txs);
-    pin_mut!(indexing);
-
-    while let Some(_) = indexing.next().await {
-        // Test getAtaInterface - returns null since no on-chain or compressed ATA exists
-        let result = setup
-            .api
-            .get_ata_interface(GetAtaInterfaceRequest { owner, mint })
-            .await
-            .unwrap();
-
-        // Expect null - no ATA exists for this owner+mint
-        assert!(result.value.is_none());
-        assert_json_snapshot!(format!("{}-ata-interface", name.clone()), result);
     }
 }
 

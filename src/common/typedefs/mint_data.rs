@@ -32,10 +32,6 @@ pub struct MintData {
     pub extensions: Option<Base64String>,
 }
 
-/// Discriminator for compressed mints (value 1 as u64 in big-endian bytes)
-/// Matches COMPRESSED_MINT_DISCRIMINATOR from light-protocol constants.rs
-pub const COMPRESSED_MINT_DISCRIMINATOR: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
-
 impl MintData {
     /// Parse mint data from compressed account data using light-token-interface zero-copy parser.
     pub fn parse(data: &[u8]) -> Result<Self, std::io::Error> {

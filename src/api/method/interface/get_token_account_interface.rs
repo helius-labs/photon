@@ -1,8 +1,10 @@
 use std::time::Duration;
 
+use light_compressed_account::address::derive_address;
+use light_sdk_types::constants::ADDRESS_TREE_V2;
 use light_token_interface::state::Token;
 use light_zero_copy::traits::ZeroCopyAt;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{sea_query::Condition, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_account::Account as SolanaAccount;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_commitment_config::CommitmentConfig;
@@ -18,16 +20,14 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::token_data::{AccountState, TokenData};
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts;
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 
+use super::racing::split_discriminator;
 use super::types::{
-    AccountInterface, CompressedContext, GetTokenAccountInterfaceRequest,
-    GetTokenAccountInterfaceResponse, ResolvedFrom, TokenAccountInterface, DB_TIMEOUT_MS,
-    RPC_TIMEOUT_MS,
+    AccountInterface, ColdContext, ColdData, GetTokenAccountInterfaceRequest,
+    GetTokenAccountInterfaceResponse, SolanaAccountData, TokenAccountInterface, TreeInfo,
+    DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
 };
-
-/// Light Token Program ID (for CToken accounts / decompressed token accounts)
-const LIGHT_TOKEN_PROGRAM_ID: Pubkey =
-    solana_pubkey::pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
 /// Get token account data from either on-chain (decompressed CToken) or compressed sources.
 /// Races both lookups and returns the result with the higher slot.
@@ -74,29 +74,40 @@ async fn hot_token_lookup(
                 Ok(None)
             }
         }
-        Ok(Err(e)) => {
-            log::debug!("RPC error during hot token lookup: {:?}", e);
-            Ok(None)
-        }
-        Err(_) => {
-            log::debug!("Timeout during hot token lookup");
-            Ok(None)
-        }
+        Ok(Err(e)) => Err(PhotonApiError::UnexpectedError(format!(
+            "RPC error during hot token lookup: {}",
+            e
+        ))),
+        Err(_) => Err(PhotonApiError::UnexpectedError(
+            "Timeout during hot token lookup".to_string(),
+        )),
     }
 }
 
-/// Cold lookup for compressed token account
+/// Cold lookup for compressed token account.
+/// Derives the compressed address from the on-chain pubkey and queries both
+/// the Address column (compressed address) and OnchainPubkey column.
 async fn cold_token_lookup(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
 ) -> Result<Option<ColdTokenData>, PhotonApiError> {
-    let address_bytes: Vec<u8> = (*address).into();
+    let onchain_pubkey_bytes: Vec<u8> = (*address).into();
+    let compressed_address = derive_address(
+        &address.0.to_bytes(),
+        &ADDRESS_TREE_V2,
+        &LIGHT_TOKEN_PROGRAM_ID.to_bytes(),
+    );
 
     let result = timeout(
         Duration::from_millis(DB_TIMEOUT_MS),
         accounts::Entity::find()
-            .filter(accounts::Column::Address.eq(address_bytes))
-            .filter(accounts::Column::Spent.eq(false))
+            .filter(
+                Condition::all().add(accounts::Column::Spent.eq(false)).add(
+                    Condition::any()
+                        .add(accounts::Column::Address.eq(compressed_address.to_vec()))
+                        .add(accounts::Column::OnchainPubkey.eq(onchain_pubkey_bytes)),
+                ),
+            )
             .one(conn),
     )
     .await;
@@ -124,29 +135,21 @@ async fn cold_token_lookup(
 
             let cold_data = ColdTokenData {
                 hash: account.hash.clone().try_into()?,
-                address: account
-                    .address
-                    .clone()
-                    .map(SerializablePubkey::try_from)
-                    .transpose()?,
                 data: account.data.clone(),
                 owner: account.owner.clone().try_into()?,
                 lamports: parse_decimal(account.lamports)?,
                 tree: account.tree.clone().try_into()?,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
-                slot_created: account.slot_created as u64,
-                prove_by_index: account.in_output_queue,
                 token_data,
             };
             Ok(Some(cold_data))
         }
         Ok(Ok(None)) => Ok(None),
         Ok(Err(e)) => Err(PhotonApiError::DatabaseError(e)),
-        Err(_) => {
-            log::debug!("Timeout during cold token lookup");
-            Ok(None)
-        }
+        Err(_) => Err(PhotonApiError::UnexpectedError(
+            "Timeout during cold token lookup".to_string(),
+        )),
     }
 }
 
@@ -154,44 +157,63 @@ async fn cold_token_lookup(
 #[derive(Debug)]
 struct ColdTokenData {
     hash: Hash,
-    address: Option<SerializablePubkey>,
     data: Option<Vec<u8>>,
     owner: SerializablePubkey,
     lamports: u64,
     tree: SerializablePubkey,
     leaf_index: u64,
     seq: Option<u64>,
-    slot_created: u64,
-    prove_by_index: bool,
     token_data: TokenData,
 }
 
-/// Resolve the token race result between hot (on-chain CToken) and cold (compressed) lookups
+/// Resolve the token race result between hot (on-chain CToken) and cold (compressed) lookups.
+/// Prefers hot if account exists on-chain with lamports > 0 and is owned by LIGHT_TOKEN_PROGRAM_ID.
 fn resolve_token_race(
     hot_result: Result<Option<(SolanaAccount, u64)>, PhotonApiError>,
     cold_result: Result<Option<ColdTokenData>, PhotonApiError>,
     address: SerializablePubkey,
 ) -> Result<Option<TokenAccountInterface>, PhotonApiError> {
-    let hot = hot_result.ok().flatten();
-    let cold = cold_result.ok().flatten();
-
-    match (hot, cold) {
-        // Both have data - return higher slot
-        (Some((account, hot_slot)), Some(cold_data)) => {
-            if hot_slot >= cold_data.slot_created {
-                // Use on-chain CToken data
-                parse_light_token(&account, hot_slot, address)
-            } else {
-                // Use compressed data (returns None if no address)
-                Ok(cold_to_token_interface(&cold_data))
+    match (hot_result, cold_result) {
+        // Both succeeded — prefer hot
+        (Ok(hot), Ok(cold)) => {
+            if let Some((account, slot)) = hot {
+                if account.lamports > 0 {
+                    if let Some(interface) = parse_light_token(&account, slot, address)? {
+                        return Ok(Some(interface));
+                    }
+                    // Fall through to cold if hot parse returned None
+                }
+            }
+            if let Some(cold_data) = cold {
+                return Ok(cold_to_token_interface(&cold_data, address));
+            }
+            Ok(None)
+        }
+        // Only hot succeeded
+        (Ok(hot), Err(e)) => {
+            log::warn!("Cold token lookup failed: {:?}", e);
+            match hot {
+                Some((account, slot)) => parse_light_token(&account, slot, address),
+                None => Ok(None),
             }
         }
-        // Only hot has data (on-chain CToken)
-        (Some((account, slot)), None) => parse_light_token(&account, slot, address),
-        // Only cold has data (returns None if no address)
-        (None, Some(cold_data)) => Ok(cold_to_token_interface(&cold_data)),
-        // Neither has data
-        (None, None) => Ok(None),
+        // Only cold succeeded
+        (Err(e), Ok(cold)) => {
+            log::warn!("Hot token lookup failed: {:?}", e);
+            match cold {
+                Some(cold_data) => Ok(cold_to_token_interface(&cold_data, address)),
+                None => Ok(None),
+            }
+        }
+        // Both failed - return the hot error
+        (Err(hot_err), Err(cold_err)) => {
+            log::warn!(
+                "Both hot and cold token lookups failed. Hot: {:?}, Cold: {:?}",
+                hot_err,
+                cold_err
+            );
+            Err(hot_err)
+        }
     }
 }
 
@@ -212,56 +234,57 @@ fn parse_light_token(
 fn hot_to_token_interface(
     account: &SolanaAccount,
     address: SerializablePubkey,
-    slot: u64,
+    _slot: u64,
     token_data: TokenData,
 ) -> TokenAccountInterface {
     TokenAccountInterface {
         account: AccountInterface {
-            address,
-            lamports: UnsignedInteger(account.lamports),
-            owner: SerializablePubkey::from(account.owner.to_bytes()),
-            data: Base64String(account.data.clone()),
-            executable: account.executable,
-            rent_epoch: UnsignedInteger(account.rent_epoch),
-            resolved_from: ResolvedFrom::Onchain,
-            resolved_slot: UnsignedInteger(slot),
-            compressed_context: None,
+            key: address,
+            account: SolanaAccountData {
+                lamports: UnsignedInteger(account.lamports),
+                data: Base64String(account.data.clone()),
+                owner: SerializablePubkey::from(account.owner.to_bytes()),
+                executable: account.executable,
+                rent_epoch: UnsignedInteger(account.rent_epoch),
+            },
+            cold: None,
         },
         token_data,
     }
 }
 
 /// Convert compressed token to TokenAccountInterface.
-/// Returns None if the account is missing its address (common for fungible token accounts).
-fn cold_to_token_interface(cold: &ColdTokenData) -> Option<TokenAccountInterface> {
-    let address = match cold.address {
-        Some(addr) => addr,
-        None => {
-            log::debug!(
-                "Compressed token account has no address field for hash: {:?}. \
-                This is expected for fungible token accounts created via mint_to.",
-                cold.hash
-            );
-            return None;
-        }
-    };
+/// Always uses `query_address` (the on-chain Solana pubkey) as the key,
+/// since `cold.address` is the compressed address (Poseidon hash), not the on-chain pubkey.
+fn cold_to_token_interface(
+    cold: &ColdTokenData,
+    query_address: SerializablePubkey,
+) -> Option<TokenAccountInterface> {
+    let address = query_address;
+    let raw_data = cold.data.clone().unwrap_or_default();
+    let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(TokenAccountInterface {
         account: AccountInterface {
-            address,
-            lamports: UnsignedInteger(cold.lamports),
-            owner: cold.owner,
-            data: Base64String(cold.data.clone().unwrap_or_default()),
-            executable: false,
-            rent_epoch: UnsignedInteger(0),
-            resolved_from: ResolvedFrom::Compressed,
-            resolved_slot: UnsignedInteger(cold.slot_created),
-            compressed_context: Some(CompressedContext {
+            key: address,
+            account: SolanaAccountData {
+                lamports: UnsignedInteger(cold.lamports),
+                data: Base64String(raw_data),
+                owner: cold.owner,
+                executable: false,
+                rent_epoch: UnsignedInteger(0),
+            },
+            cold: Some(ColdContext::Token {
                 hash: cold.hash.clone(),
-                tree: cold.tree,
                 leaf_index: UnsignedInteger(cold.leaf_index),
-                seq: cold.seq.map(UnsignedInteger),
-                prove_by_index: cold.prove_by_index,
+                tree_info: TreeInfo {
+                    tree: cold.tree,
+                    seq: cold.seq.map(UnsignedInteger),
+                },
+                data: ColdData {
+                    discriminator,
+                    data: Base64String(data_payload),
+                },
             }),
         },
         token_data: cold.token_data.clone(),
