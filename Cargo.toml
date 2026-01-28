@@ -95,6 +95,7 @@ light-poseidon = "0.3.0"
 light-indexed-merkle-tree = { version = "4", default-features = false }
 light-event = "0.4"
 light-token-interface = { version = "0.3", default-features = false }
+light-sdk-types = { version = "0.19", default-features = false }
 
 sqlx = { version = "0.6.2", features = [
     "macros",

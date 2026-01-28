@@ -9,61 +9,84 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub enum ResolvedFrom {
-    Onchain,
-    Compressed,
-}
-
-/// Context information for compressed accounts
+/// Nested Solana account fields (matches getAccountInfo shape)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct CompressedContext {
-    /// The hash of the compressed account (leaf hash in Merkle tree)
-    pub hash: Hash,
-    /// The Merkle tree address
-    pub tree: SerializablePubkey,
-    /// The leaf index in the Merkle tree
-    pub leaf_index: UnsignedInteger,
-    /// Sequence number (None if in output queue, Some once inserted into Merkle tree)
-    pub seq: Option<UnsignedInteger>,
-    /// Whether the account can be proven by index (in output queue)
-    pub prove_by_index: bool,
+pub struct SolanaAccountData {
+    pub lamports: UnsignedInteger,
+    pub data: Base64String,
+    pub owner: SerializablePubkey,
+    pub executable: bool,
+    pub rent_epoch: UnsignedInteger,
 }
 
-/// Unified account interface that represents either on-chain or compressed account data
+/// Merkle tree info for compressed accounts
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeInfo {
+    pub tree: SerializablePubkey,
+    pub seq: Option<UnsignedInteger>,
+}
+
+/// Structured compressed account data (discriminator separated)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ColdData {
+    pub discriminator: Vec<u8>,
+    pub data: Base64String,
+}
+
+/// Compressed account context — present when account is in compressed state
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ColdContext {
+    #[serde(rename = "account")]
+    Account {
+        hash: Hash,
+        #[serde(rename = "leafIndex")]
+        leaf_index: UnsignedInteger,
+        #[serde(rename = "treeInfo")]
+        tree_info: TreeInfo,
+        data: ColdData,
+    },
+    #[serde(rename = "token")]
+    Token {
+        hash: Hash,
+        #[serde(rename = "leafIndex")]
+        leaf_index: UnsignedInteger,
+        #[serde(rename = "treeInfo")]
+        tree_info: TreeInfo,
+        data: ColdData,
+    },
+    #[serde(rename = "mint")]
+    Mint {
+        hash: Hash,
+        #[serde(rename = "leafIndex")]
+        leaf_index: UnsignedInteger,
+        #[serde(rename = "treeInfo")]
+        tree_info: TreeInfo,
+        data: ColdData,
+    },
+}
+
+/// Unified account interface — works for both on-chain and compressed accounts
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
-    /// The account address (pubkey for on-chain, compressed address for compressed)
-    pub address: SerializablePubkey,
-    /// Account lamports balance
-    pub lamports: UnsignedInteger,
-    /// The program owner of this account
-    pub owner: SerializablePubkey,
-    /// Account data as base64 encoded bytes
-    pub data: Base64String,
-    /// Whether the account is executable (always false for compressed)
-    pub executable: bool,
-    /// Rent epoch (always 0 for compressed)
-    pub rent_epoch: UnsignedInteger,
-    /// Source of the account data
-    pub resolved_from: ResolvedFrom,
-    /// Slot at which the account data was resolved
-    pub resolved_slot: UnsignedInteger,
-    /// Additional context for compressed accounts (None for on-chain)
-    pub compressed_context: Option<CompressedContext>,
+    /// The on-chain Solana pubkey
+    pub key: SerializablePubkey,
+    /// Standard Solana account fields
+    pub account: SolanaAccountData,
+    /// Compressed context — null if on-chain, present if compressed
+    pub cold: Option<ColdContext>,
 }
 
 /// Token account interface with parsed token data
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountInterface {
-    /// Base account interface data
     #[serde(flatten)]
     pub account: AccountInterface,
-    /// Parsed token account data
     pub token_data: TokenData,
 }
 
@@ -71,10 +94,8 @@ pub struct TokenAccountInterface {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MintInterface {
-    /// Base account interface data
     #[serde(flatten)]
     pub account: AccountInterface,
-    /// Parsed mint data
     pub mint_data: MintData,
 }
 
@@ -95,14 +116,6 @@ pub enum AccountLookup {
     Token {
         /// The token account address to look up
         address: SerializablePubkey,
-    },
-    /// ATA lookup by owner and mint (derives the ATA address)
-    #[serde(rename = "ata")]
-    Ata {
-        /// The wallet owner address
-        owner: SerializablePubkey,
-        /// The mint address
-        mint: SerializablePubkey,
     },
     /// Mint account lookup by address
     #[serde(rename = "mint")]
@@ -145,16 +158,6 @@ pub struct GetTokenAccountInterfaceRequest {
     pub address: SerializablePubkey,
 }
 
-/// Request for getAtaInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetAtaInterfaceRequest {
-    /// The wallet owner address
-    pub owner: SerializablePubkey,
-    /// The mint address
-    pub mint: SerializablePubkey,
-}
-
 /// Request for getMintInterface
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -194,16 +197,6 @@ pub struct GetTokenAccountInterfaceResponse {
     pub value: Option<TokenAccountInterface>,
 }
 
-/// Response for getAtaInterface (same as token account)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAtaInterfaceResponse {
-    /// Current context (slot)
-    pub context: Context,
-    /// The ATA data, or None if not found
-    pub value: Option<TokenAccountInterface>,
-}
-
 /// Response for getMintInterface
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -222,6 +215,54 @@ pub struct GetMultipleAccountInterfacesResponse {
     pub context: Context,
     /// List of typed results (Some for found accounts, None for not found)
     pub value: Vec<Option<InterfaceResult>>,
+}
+
+/// Request for getTokenAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetTokenAccountInterfacesRequest {
+    /// List of token account addresses to look up (max 100)
+    pub addresses: Vec<SerializablePubkey>,
+}
+
+/// Response for getTokenAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTokenAccountInterfacesResponse {
+    pub context: Context,
+    pub value: Vec<Option<TokenAccountInterface>>,
+}
+
+/// Request for getAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAccountInterfacesRequest {
+    /// List of account addresses to look up (max 100)
+    pub addresses: Vec<SerializablePubkey>,
+}
+
+/// Response for getAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAccountInterfacesResponse {
+    pub context: Context,
+    pub value: Vec<Option<AccountInterface>>,
+}
+
+/// Request for getMintAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetMintAccountInterfacesRequest {
+    /// List of mint addresses to look up (max 100)
+    pub addresses: Vec<SerializablePubkey>,
+}
+
+/// Response for getMintAccountInterfaces (batch)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMintAccountInterfacesResponse {
+    pub context: Context,
+    pub value: Vec<Option<MintInterface>>,
 }
 
 // ============ Constants ============

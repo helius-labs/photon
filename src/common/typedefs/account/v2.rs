@@ -9,7 +9,7 @@ use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -41,7 +41,7 @@ impl AccountV2 {
     pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
         match self.data.as_ref() {
             Some(data)
-                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
+                if self.owner.0 == LIGHT_TOKEN_PROGRAM_ID && data.is_c_token_discriminator() =>
             {
                 let data_slice = data.data.0.as_slice();
                 let token_data = TokenData::parse(data_slice).map_err(|e| {

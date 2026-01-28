@@ -17,7 +17,7 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use photon_indexer::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use serial_test::serial;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
@@ -684,7 +684,7 @@ async fn test_batched_tree_token_transactions(
                 assert_eq!(account.account.lamports, UnsignedInteger(1_000_000));
                 assert_eq!(
                     account.account.owner,
-                    SerializablePubkey::from(COMPRESSED_TOKEN_PROGRAM)
+                    SerializablePubkey::from(LIGHT_TOKEN_PROGRAM_ID)
                 );
                 assert_eq!(account.account.leaf_index.0, i as u64);
                 assert_eq!(account.account.seq, None);
