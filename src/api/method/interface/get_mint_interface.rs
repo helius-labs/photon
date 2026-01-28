@@ -17,15 +17,13 @@ use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, mints};
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 
+use super::racing::split_discriminator;
 use super::types::{
-    AccountInterface, CompressedContext, GetMintInterfaceRequest, GetMintInterfaceResponse,
-    MintInterface, ResolvedFrom, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
+    AccountInterface, ColdContext, ColdData, GetMintInterfaceRequest, GetMintInterfaceResponse,
+    MintInterface, SolanaAccountData, TreeInfo, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
 };
-
-/// Light Token Program ID (for CMint accounts / decompressed mints)
-const LIGHT_TOKEN_PROGRAM_ID: Pubkey =
-    solana_pubkey::pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
 /// Get mint account data from either on-chain or compressed sources.
 pub async fn get_mint_interface(
@@ -72,14 +70,13 @@ async fn hot_mint_lookup(
                 Ok(None)
             }
         }
-        Ok(Err(e)) => {
-            log::debug!("RPC error during hot mint lookup: {:?}", e);
-            Ok(None)
-        }
-        Err(_) => {
-            log::debug!("Timeout during hot mint lookup");
-            Ok(None)
-        }
+        Ok(Err(e)) => Err(PhotonApiError::UnexpectedError(format!(
+            "RPC error during hot mint lookup: {}",
+            e
+        ))),
+        Err(_) => Err(PhotonApiError::UnexpectedError(
+            "Timeout during hot mint lookup".to_string(),
+        )),
     }
 }
 
@@ -95,6 +92,7 @@ async fn cold_mint_lookup(
             .find_also_related(accounts::Entity)
             .filter(mints::Column::MintPda.eq(mint_pda_bytes))
             .filter(mints::Column::Spent.eq(false))
+            .filter(accounts::Column::Spent.eq(false))
             .one(conn),
     )
     .await;
@@ -105,73 +103,84 @@ async fn cold_mint_lookup(
 
             let cold_data = ColdMintData {
                 hash: account.hash.clone().try_into()?,
-                address: account
-                    .address
-                    .clone()
-                    .map(SerializablePubkey::try_from)
-                    .transpose()?,
                 data: account.data.clone(),
                 owner: account.owner.clone().try_into()?,
                 lamports: parse_decimal(account.lamports)?,
                 tree: account.tree.clone().try_into()?,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
-                slot_created: account.slot_created as u64,
-                prove_by_index: account.in_output_queue,
                 mint_data,
             };
             Ok(Some(cold_data))
         }
         Ok(Ok(_)) => Ok(None),
         Ok(Err(e)) => Err(PhotonApiError::DatabaseError(e)),
-        Err(_) => {
-            log::debug!("Timeout during cold mint lookup");
-            Ok(None)
-        }
+        Err(_) => Err(PhotonApiError::UnexpectedError(
+            "Timeout during cold mint lookup".to_string(),
+        )),
     }
 }
 
 #[derive(Debug)]
 struct ColdMintData {
     hash: Hash,
-    address: Option<SerializablePubkey>,
     data: Option<Vec<u8>>,
     owner: SerializablePubkey,
     lamports: u64,
     tree: SerializablePubkey,
     leaf_index: u64,
     seq: Option<u64>,
-    slot_created: u64,
-    prove_by_index: bool,
     mint_data: MintData,
 }
 
-/// Resolve the mint race result between hot (on-chain CMint) and cold (compressed) lookups
+/// Resolve the mint race result between hot (on-chain CMint) and cold (compressed) lookups.
+/// Prefers hot if account exists on-chain with lamports > 0.
 fn resolve_mint_race(
     hot_result: Result<Option<(SolanaAccount, u64)>, PhotonApiError>,
     cold_result: Result<Option<ColdMintData>, PhotonApiError>,
     address: SerializablePubkey,
 ) -> Result<Option<MintInterface>, PhotonApiError> {
-    let hot = hot_result.ok().flatten();
-    let cold = cold_result.ok().flatten();
-
-    match (hot, cold) {
-        // Both have data - return higher slot
-        (Some((account, hot_slot)), Some(cold_data)) => {
-            if hot_slot >= cold_data.slot_created {
-                // Use on-chain CMint data
-                parse_light_mint(&account, hot_slot, address)
-            } else {
-                // Use compressed data (returns None if no address - unexpected for mints)
-                Ok(cold_to_mint_interface(&cold_data))
+    match (hot_result, cold_result) {
+        // Both succeeded — prefer hot
+        (Ok(hot), Ok(cold)) => {
+            if let Some((account, slot)) = hot {
+                if account.lamports > 0 {
+                    if let Some(interface) = parse_light_mint(&account, slot, address)? {
+                        return Ok(Some(interface));
+                    }
+                    // Fall through to cold if hot parse returned None
+                }
+            }
+            if let Some(cold_data) = cold {
+                return Ok(cold_to_mint_interface(&cold_data, address));
+            }
+            Ok(None)
+        }
+        // Only hot succeeded
+        (Ok(hot), Err(e)) => {
+            log::warn!("Cold mint lookup failed: {:?}", e);
+            match hot {
+                Some((account, slot)) => parse_light_mint(&account, slot, address),
+                None => Ok(None),
             }
         }
-        // Only hot has data (on-chain CMint)
-        (Some((account, slot)), None) => parse_light_mint(&account, slot, address),
-        // Only cold has data (returns None if no address - unexpected for mints)
-        (None, Some(cold_data)) => Ok(cold_to_mint_interface(&cold_data)),
-        // Neither has data
-        (None, None) => Ok(None),
+        // Only cold succeeded
+        (Err(e), Ok(cold)) => {
+            log::warn!("Hot mint lookup failed: {:?}", e);
+            match cold {
+                Some(cold_data) => Ok(cold_to_mint_interface(&cold_data, address)),
+                None => Ok(None),
+            }
+        }
+        // Both failed - return the hot error
+        (Err(hot_err), Err(cold_err)) => {
+            log::warn!(
+                "Both hot and cold mint lookups failed. Hot: {:?}, Cold: {:?}",
+                hot_err,
+                cold_err
+            );
+            Err(hot_err)
+        }
     }
 }
 
@@ -192,57 +201,56 @@ fn parse_light_mint(
 fn hot_to_mint_interface(
     account: &SolanaAccount,
     address: SerializablePubkey,
-    slot: u64,
+    _slot: u64,
     mint_data: MintData,
 ) -> MintInterface {
     MintInterface {
         account: AccountInterface {
-            address,
-            lamports: UnsignedInteger(account.lamports),
-            owner: SerializablePubkey::from(account.owner.to_bytes()),
-            data: Base64String(account.data.clone()),
-            executable: account.executable,
-            rent_epoch: UnsignedInteger(account.rent_epoch),
-            resolved_from: ResolvedFrom::Onchain,
-            resolved_slot: UnsignedInteger(slot),
-            compressed_context: None,
+            key: address,
+            account: SolanaAccountData {
+                lamports: UnsignedInteger(account.lamports),
+                data: Base64String(account.data.clone()),
+                owner: SerializablePubkey::from(account.owner.to_bytes()),
+                executable: account.executable,
+                rent_epoch: UnsignedInteger(account.rent_epoch),
+            },
+            cold: None,
         },
         mint_data,
     }
 }
 
 /// Convert compressed mint to MintInterface.
-/// Returns None if the account is missing its address (unexpected for mints).
-fn cold_to_mint_interface(cold: &ColdMintData) -> Option<MintInterface> {
-    let address = match cold.address {
-        Some(addr) => addr,
-        None => {
-            // Mints should always have addresses (they're unique PDAs)
-            log::warn!(
-                "Compressed mint account unexpectedly missing address field for hash: {:?}. \
-                This indicates a data inconsistency.",
-                cold.hash
-            );
-            return None;
-        }
-    };
+/// Uses `query_address` as fallback when the account has no address field.
+fn cold_to_mint_interface(
+    cold: &ColdMintData,
+    query_address: SerializablePubkey,
+) -> Option<MintInterface> {
+    let address = query_address;
+    let raw_data = cold.data.clone().unwrap_or_default();
+    let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(MintInterface {
         account: AccountInterface {
-            address,
-            lamports: UnsignedInteger(cold.lamports),
-            owner: cold.owner,
-            data: Base64String(cold.data.clone().unwrap_or_default()),
-            executable: false,
-            rent_epoch: UnsignedInteger(0),
-            resolved_from: ResolvedFrom::Compressed,
-            resolved_slot: UnsignedInteger(cold.slot_created),
-            compressed_context: Some(CompressedContext {
+            key: address,
+            account: SolanaAccountData {
+                lamports: UnsignedInteger(cold.lamports),
+                data: Base64String(raw_data),
+                owner: cold.owner,
+                executable: false,
+                rent_epoch: UnsignedInteger(0),
+            },
+            cold: Some(ColdContext::Mint {
                 hash: cold.hash.clone(),
-                tree: cold.tree,
                 leaf_index: UnsignedInteger(cold.leaf_index),
-                seq: cold.seq.map(UnsignedInteger),
-                prove_by_index: cold.prove_by_index,
+                tree_info: TreeInfo {
+                    tree: cold.tree,
+                    seq: cold.seq.map(UnsignedInteger),
+                },
+                data: ColdData {
+                    discriminator,
+                    data: Base64String(data_payload),
+                },
             }),
         },
         mint_data: cold.mint_data.clone(),

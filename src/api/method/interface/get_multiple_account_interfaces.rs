@@ -11,6 +11,7 @@ use crate::common::typedefs::context::Context;
 use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::{mints, token_accounts};
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 
 use super::get_account_interface::get_account_interface;
 use super::get_mint_interface::get_mint_interface;
@@ -20,9 +21,6 @@ use super::types::{
     GetMultipleAccountInterfacesResponse, GetTokenAccountInterfaceRequest, InterfaceResult,
     DB_TIMEOUT_MS, MAX_BATCH_SIZE, RPC_TIMEOUT_MS,
 };
-
-const LIGHT_TOKEN_PROGRAM_ID: Pubkey =
-    solana_pubkey::pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
 /// Get multiple account data from either on-chain or compressed sources.
 /// Server auto-detects account type (account, token, mint) and returns heterogeneous results.
@@ -55,8 +53,22 @@ pub async fn get_multiple_account_interfaces(
 
     let results = futures::future::join_all(futures).await;
 
-    let value: Vec<Option<InterfaceResult>> =
-        results.into_iter().map(|r| r.ok().flatten()).collect();
+    let value: Vec<Option<InterfaceResult>> = results
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| match r {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!(
+                    "Failed to fetch interface for address {:?} (index {}): {:?}",
+                    request.addresses.get(i),
+                    i,
+                    e
+                );
+                None
+            }
+        })
+        .collect();
 
     Ok(GetMultipleAccountInterfacesResponse { context, value })
 }
@@ -192,8 +204,21 @@ async fn detect_type_onchain(
         return Ok(None);
     }
 
-    // Try to determine if it's a mint or token by parsing
-    // Mints have MintData structure, tokens have TokenData structure
+    // SPL Token/Mint accounts store an account type discriminator at byte offset 165.
+    // 1 = Mint, 2 = Token Account.
+    const ACCOUNT_TYPE_OFFSET: usize = 165;
+    const ACCOUNT_TYPE_MINT: u8 = 1;
+    const ACCOUNT_TYPE_TOKEN: u8 = 2;
+
+    if account.data.len() > ACCOUNT_TYPE_OFFSET {
+        match account.data[ACCOUNT_TYPE_OFFSET] {
+            ACCOUNT_TYPE_MINT => return Ok(Some(DetectedType::Mint)),
+            ACCOUNT_TYPE_TOKEN => return Ok(Some(DetectedType::Token)),
+            _ => {}
+        }
+    }
+
+    // Fallback: try structural parsing
     if MintData::parse(&account.data).is_ok() {
         return Ok(Some(DetectedType::Mint));
     }

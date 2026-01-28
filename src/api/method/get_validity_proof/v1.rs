@@ -1,5 +1,5 @@
 use crate::api::method::get_multiple_new_address_proofs::{
-    get_multiple_new_address_proofs_helper, AddressWithTree, ADDRESS_TREE_V1, MAX_ADDRESSES,
+    get_multiple_new_address_proofs_helper, AddressWithTree, MAX_ADDRESSES,
 };
 use crate::api::method::get_validity_proof::prover::prove::generate_proof;
 use crate::api::method::get_validity_proof::CompressedProof;
@@ -11,6 +11,7 @@ use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
 use jsonrpsee_core::Serialize;
+use light_sdk_types::constants::ADDRESS_TREE_V1;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
 use serde::Deserialize;
 use utoipa::ToSchema;

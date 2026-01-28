@@ -50,7 +50,7 @@ pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
 };
 
-pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
+pub const LIGHT_TOKEN_PROGRAM_ID: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
 
 /// Discriminator for decompressed PDA accounts: [255, 255, 255, 255, 255, 255, 255, 0]
 /// This matches DECOMPRESSED_PDA_DISCRIMINATOR from light_compressible.
@@ -439,7 +439,9 @@ async fn append_output_accounts(
     let mut mint_accounts = Vec::new();
 
     for account in out_accounts {
-        // Extract onchain_pubkey for decompressed accounts
+        // Extract onchain_pubkey for decompressed accounts.
+        // Accounts with the decompressed discriminator store the on-chain PDA
+        // pubkey in the first 32 bytes of their data.
         let onchain_pubkey = account.account.data.as_ref().and_then(|data| {
             if data.discriminator.0 == DECOMPRESSED_ACCOUNT_DISCRIMINATOR && data.data.0.len() >= 32
             {

@@ -458,12 +458,6 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
         },
     )?;
 
-    module.register_async_method("getAtaInterface", |rpc_params, rpc_context| async move {
-        let api = rpc_context.as_ref();
-        let payload = rpc_params.parse()?;
-        api.get_ata_interface(payload).await.map_err(Into::into)
-    })?;
-
     module.register_async_method("getMintInterface", |rpc_params, rpc_context| async move {
         let api = rpc_context.as_ref();
         let payload = rpc_params.parse()?;
@@ -476,6 +470,39 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
             let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_multiple_account_interfaces(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getAccountInterfaces",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_account_interfaces(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getTokenAccountInterfaces",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_token_account_interfaces(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getMintAccountInterfaces",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_mint_account_interfaces(payload)
                 .await
                 .map_err(Into::into)
         },
