@@ -100,22 +100,17 @@ pub async fn get_compressed_mints_by_authority(
         limit = l.value();
     }
 
-    // Query mints with limit first
-    let mint_results = mints::Entity::find()
+    let results = mints::Entity::find()
+        .find_also_related(accounts::Entity)
         .filter(filter)
+        .filter(accounts::Column::Spent.eq(false))
         .order_by(mints::Column::Hash, Order::Asc)
         .limit(limit)
         .all(conn)
         .await?;
 
-    // Then fetch the related accounts
-    let mut items = Vec::with_capacity(mint_results.len());
-    for mint in mint_results {
-        let account = accounts::Entity::find()
-            .filter(accounts::Column::Hash.eq(mint.hash.clone()))
-            .one(conn)
-            .await?;
-
+    let mut items = Vec::with_capacity(results.len());
+    for (mint, account) in results {
         if let Some(account) = account {
             let mint_data = mint_model_to_mint_data(&mint)?;
             let account_v2: AccountV2 = account.try_into()?;

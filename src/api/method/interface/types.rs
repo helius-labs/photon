@@ -18,6 +18,7 @@ pub struct SolanaAccountData {
     pub owner: SerializablePubkey,
     pub executable: bool,
     pub rent_epoch: UnsignedInteger,
+    pub space: UnsignedInteger,
 }
 
 /// Merkle tree info for compressed accounts

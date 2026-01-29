@@ -213,6 +213,7 @@ fn hot_to_mint_interface(
                 owner: SerializablePubkey::from(account.owner.to_bytes()),
                 executable: account.executable,
                 rent_epoch: UnsignedInteger(account.rent_epoch),
+                space: UnsignedInteger(account.data.len() as u64),
             },
             cold: None,
         },
@@ -228,6 +229,7 @@ fn cold_to_mint_interface(
 ) -> Option<MintInterface> {
     let address = query_address;
     let raw_data = cold.data.clone().unwrap_or_default();
+    let space = raw_data.len() as u64;
     let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(MintInterface {
@@ -239,6 +241,7 @@ fn cold_to_mint_interface(
                 owner: cold.owner,
                 executable: false,
                 rent_epoch: UnsignedInteger(0),
+                space: UnsignedInteger(space),
             },
             cold: Some(ColdContext::Mint {
                 hash: cold.hash.clone(),

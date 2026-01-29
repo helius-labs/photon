@@ -222,6 +222,7 @@ pub fn hot_to_interface(
             owner: SerializablePubkey::from(account.owner.to_bytes()),
             executable: account.executable,
             rent_epoch: UnsignedInteger(account.rent_epoch),
+            space: UnsignedInteger(account.data.len() as u64),
         },
         cold: None,
     }
@@ -236,6 +237,7 @@ pub fn cold_to_interface(
 ) -> Option<AccountInterface> {
     let address = query_address;
     let raw_data = account.data.clone().unwrap_or_default();
+    let space = raw_data.len() as u64;
     let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(AccountInterface {
@@ -246,6 +248,7 @@ pub fn cold_to_interface(
             owner: account.owner,
             executable: false,
             rent_epoch: UnsignedInteger(0),
+            space: UnsignedInteger(space),
         },
         cold: Some(ColdContext::Account {
             hash: account.hash.clone(),

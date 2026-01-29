@@ -67,14 +67,12 @@ pub async fn get_compressed_mint(
 ) -> Result<GetCompressedMintResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
-    // Validate request - at least one identifier must be provided
     if request.address.is_none() && request.mint_pda.is_none() {
         return Err(PhotonApiError::ValidationError(
             "Either address or mint_pda must be provided".to_string(),
         ));
     }
 
-    // Build the filter
     let mut filter = mints::Column::Spent.eq(false);
     if let Some(address) = request.address {
         filter = filter.and(mints::Column::Address.eq::<Vec<u8>>(address.into()));
@@ -83,10 +81,10 @@ pub async fn get_compressed_mint(
         filter = filter.and(mints::Column::MintPda.eq::<Vec<u8>>(mint_pda.into()));
     }
 
-    // Query the mints table with joined accounts
     let result = mints::Entity::find()
         .find_also_related(accounts::Entity)
         .filter(filter)
+        .filter(accounts::Column::Spent.eq(false))
         .one(conn)
         .await?;
 
