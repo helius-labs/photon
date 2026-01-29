@@ -602,8 +602,14 @@ pub async fn persist_mints(
     if !mint_models.is_empty() {
         let query = mints::Entity::insert_many(mint_models)
             .on_conflict(
-                OnConflict::column(mints::Column::Hash)
-                    .do_nothing()
+                OnConflict::column(mints::Column::Address)
+                    .update_columns([
+                        mints::Column::Hash,
+                        mints::Column::Supply,
+                        mints::Column::MintDecompressed,
+                        mints::Column::Spent,
+                        mints::Column::PrevSpent,
+                    ])
                     .to_owned(),
             )
             .build(txn.get_database_backend());
