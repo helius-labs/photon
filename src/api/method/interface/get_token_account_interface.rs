@@ -246,6 +246,7 @@ fn hot_to_token_interface(
                 owner: SerializablePubkey::from(account.owner.to_bytes()),
                 executable: account.executable,
                 rent_epoch: UnsignedInteger(account.rent_epoch),
+                space: UnsignedInteger(account.data.len() as u64),
             },
             cold: None,
         },
@@ -262,6 +263,7 @@ fn cold_to_token_interface(
 ) -> Option<TokenAccountInterface> {
     let address = query_address;
     let raw_data = cold.data.clone().unwrap_or_default();
+    let space = raw_data.len() as u64;
     let (discriminator, data_payload) = split_discriminator(&raw_data);
 
     Some(TokenAccountInterface {
@@ -273,6 +275,7 @@ fn cold_to_token_interface(
                 owner: cold.owner,
                 executable: false,
                 rent_epoch: UnsignedInteger(0),
+                space: UnsignedInteger(space),
             },
             cold: Some(ColdContext::Token {
                 hash: cold.hash.clone(),
