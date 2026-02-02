@@ -86,17 +86,17 @@ solana-commitment-config = "3.0.0"
 solana-transaction-status = "3.0.8"
 
 
-light-zero-copy = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", features = ["poseidon", "keccak", "sha256"], default-features = false }
+light-zero-copy = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-concurrent-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-batched-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-merkle-tree-metadata = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-compressed-account = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-hasher = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", features = ["poseidon", "keccak", "sha256"], default-features = false }
 light-poseidon = "0.4.0"
-light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-event = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342" }
-light-token-interface = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
-light-sdk-types = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342", default-features = false }
+light-indexed-merkle-tree = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-event = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa" }
+light-token-interface = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
+light-sdk-types = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa", default-features = false }
 
 sqlx = { version = "0.6.2", features = [
     "macros",
@@ -141,7 +141,7 @@ jsonwebtoken = "9"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "9560334dce04983fd5cb7420a8bd230080f6a342" }
+light-merkle-tree-reference = { git = "https://github.com/Lightprotocol/light-protocol", rev = "e705f24cede040a2452090d8dcf8ae4a9ab1e6aa" }
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.
