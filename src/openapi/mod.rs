@@ -42,7 +42,7 @@ use crate::api::method::get_validity_proof::{
 };
 use crate::api::method::interface::types::{
     AccountInterface, AccountLookup, ColdContext, ColdData, InterfaceResult, MintInterface,
-    SolanaAccountData, TokenAccountInterface, TreeInfo,
+    SolanaAccountData, TokenAccountInterface, TreeInfo, TreeType,
 };
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
@@ -173,6 +173,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     SolanaAccountData,
     ColdContext,
     TreeInfo,
+    TreeType,
     ColdData,
     TokenAccountInterface,
     MintInterface,
@@ -373,7 +374,7 @@ fn find_all_components(schema: RefOr<Schema>) -> HashSet<String> {
                 ref_location
                     .ref_location
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap()
                     .to_string(),
             );

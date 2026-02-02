@@ -190,6 +190,7 @@ async fn verify_address_queue_hash_chains(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn verify_queue_hash_chains(
     db: &DatabaseConnection,
     queue_type: QueueType,
@@ -224,7 +225,7 @@ async fn verify_queue_hash_chains(
     let on_chain_chains: Vec<[u8; 32]> = on_chain_batch_hash_chains
         .iter()
         .skip(num_inserted_zkps as usize)
-        .map(|h| *h)
+        .copied()
         .collect();
 
     if on_chain_chains.is_empty() {
@@ -543,9 +544,9 @@ pub fn log_divergence(divergence: &HashChainDivergence) {
     );
     error!(
         "  Expected: {}",
-        hex::encode(&divergence.expected_hash_chain)
+        hex::encode(divergence.expected_hash_chain)
     );
-    error!("  On-chain: {}", hex::encode(&divergence.actual_hash_chain));
+    error!("  On-chain: {}", hex::encode(divergence.actual_hash_chain));
 }
 
 pub async fn verify_single_queue(

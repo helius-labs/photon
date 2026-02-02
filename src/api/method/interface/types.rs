@@ -21,11 +21,43 @@ pub struct SolanaAccountData {
     pub space: UnsignedInteger,
 }
 
+/// Tree type enum matching light-protocol's TreeType.
+/// Values match light-compressed-account::TreeType: StateV1=1, StateV2=3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[repr(u64)]
+#[derive(Default)]
+pub enum TreeType {
+    /// Legacy V1 state tree (tree and queue are the same)
+    #[serde(rename = "stateV1")]
+    #[default]
+    StateV1 = 1,
+    /// V2 state tree with separate output queue
+    #[serde(rename = "stateV2")]
+    StateV2 = 3,
+}
+
+impl From<i32> for TreeType {
+    fn from(value: i32) -> Self {
+        match value {
+            1 => TreeType::StateV1,
+            3 => TreeType::StateV2,
+            _ => TreeType::StateV1, // Default fallback
+        }
+    }
+}
+
 /// Merkle tree info for compressed accounts
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TreeInfo {
+    /// The merkle tree pubkey
     pub tree: SerializablePubkey,
+    /// The output queue pubkey (same as tree for V1, separate for V2)
+    pub queue: SerializablePubkey,
+    /// The tree type (V1 or V2)
+    pub tree_type: TreeType,
+    /// Sequence number of the account in the tree
     pub seq: Option<UnsignedInteger>,
 }
 
@@ -167,6 +199,16 @@ pub struct GetMintInterfaceRequest {
     pub address: SerializablePubkey,
 }
 
+/// Request for getAtaInterface
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAtaInterfaceRequest {
+    /// The wallet address that owns the ATA
+    pub owner: SerializablePubkey,
+    /// The token mint address
+    pub mint: SerializablePubkey,
+}
+
 /// Request for getMultipleAccountInterfaces
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -206,6 +248,16 @@ pub struct GetMintInterfaceResponse {
     pub context: Context,
     /// The mint data, or None if not found
     pub value: Option<MintInterface>,
+}
+
+/// Response for getAtaInterface
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAtaInterfaceResponse {
+    /// Current context (slot)
+    pub context: Context,
+    /// The token account data, or None if not found
+    pub value: Option<TokenAccountInterface>,
 }
 
 /// Response for getMultipleAccountInterfaces

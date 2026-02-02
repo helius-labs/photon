@@ -23,6 +23,8 @@ expression: result
       "leafIndex": 4,
       "treeInfo": {
         "tree": "bmt5yU97jC88YXTuSukYHa8Z5Bi2ZDUtmzfkDTA2mG2",
+        "queue": "oq5oh5ZR3yGomuQgFduNDzjtGvVWfDRGLuDVjv9a96P",
+        "treeType": "stateV2",
         "seq": null
       },
       "data": {

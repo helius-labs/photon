@@ -209,12 +209,12 @@ pub fn parse_instruction_groups(
         .instructions()
         .iter()
         .map(|ix| {
-            let program_id = accounts[ix.program_id_index as usize].clone();
+            let program_id = accounts[ix.program_id_index as usize];
             let data = ix.data.clone();
             let instruction_accounts: Vec<Pubkey> = ix
                 .accounts
                 .iter()
-                .map(|account_index| accounts[*account_index as usize].clone())
+                .map(|account_index| accounts[*account_index as usize])
                 .collect();
 
             InstructionGroup {
@@ -236,14 +236,14 @@ pub fn parse_instruction_groups(
                 match ui_instruction {
                     UiInstruction::Compiled(ui_compiled_instruction) => {
                         let program_id =
-                            accounts[ui_compiled_instruction.program_id_index as usize].clone();
+                            accounts[ui_compiled_instruction.program_id_index as usize];
                         let data = bs58::decode(&ui_compiled_instruction.data)
                             .into_vec()
                             .map_err(|e| IngesterError::ParserError(e.to_string()))?;
                         let instruction_accounts: Vec<Pubkey> = ui_compiled_instruction
                             .accounts
                             .iter()
-                            .map(|account_index| accounts[*account_index as usize].clone())
+                            .map(|account_index| accounts[*account_index as usize])
                             .collect();
                         instruction_groups[index as usize]
                             .inner_instructions

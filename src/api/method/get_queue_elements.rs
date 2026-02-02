@@ -836,12 +836,16 @@ async fn fetch_address_queue_v2(
         let mut current_hash = hashed_leaf;
 
         for (level, sibling_hash) in proof.proof.iter().enumerate() {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_pos = if pos.is_multiple_of(2) {
+                pos + 1
+            } else {
+                pos - 1
+            };
 
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
             nodes_map.insert(sibling_idx, sibling_hash.clone());
 
-            let parent_hash = if pos % 2 == 0 {
+            let parent_hash = if pos.is_multiple_of(2) {
                 Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
             } else {
                 Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
@@ -997,7 +1001,11 @@ fn deduplicate_nodes_from_refs(
 
         // Walk up the proof path, storing sibling hashes and path node hashes from DB
         for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_pos = if pos.is_multiple_of(2) {
+                pos + 1
+            } else {
+                pos - 1
+            };
 
             // Store the sibling (from proof)
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);

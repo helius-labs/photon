@@ -245,7 +245,7 @@ pub async fn get_validity_proof_v2(
         // Try to get tree from prove-by-index accounts
         accounts_for_prove_by_index_inputs
             .iter()
-            .find_map(|opt_acc| opt_acc.as_ref().map(|acc| acc.merkle_context.tree.clone()))
+            .find_map(|opt_acc| opt_acc.as_ref().map(|acc| acc.merkle_context.tree))
     };
 
     let root_history_capacity = if let Some(tree_pubkey) = tree_pubkey {

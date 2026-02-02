@@ -39,7 +39,7 @@ pub async fn cleanup_stale_address_queues(
             .order_by_desc(indexed_trees::Column::LeafIndex)
             .one(db)
             .await?
-            .map(|t| (t.leaf_index + 1) as i64)
+            .map(|t| t.leaf_index + 1)
             .unwrap_or(1);
 
         // Address queue indices are 0-based, tree indices are 1-based
