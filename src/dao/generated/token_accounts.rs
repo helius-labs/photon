@@ -16,6 +16,8 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((23, 0)))")]
     pub amount: Decimal,
     pub tlv: Option<Vec<u8>>,
+    /// The wallet owner the ATA is derived from (for compressed ATAs)
+    pub ata_owner: Option<Vec<u8>>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

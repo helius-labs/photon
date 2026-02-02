@@ -22,7 +22,7 @@ use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use super::racing::split_discriminator;
 use super::types::{
     AccountInterface, ColdContext, ColdData, GetMintInterfaceRequest, GetMintInterfaceResponse,
-    MintInterface, SolanaAccountData, TreeInfo, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
+    MintInterface, SolanaAccountData, TreeInfo, TreeType, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
 };
 
 /// Get mint account data from either on-chain or compressed sources.
@@ -101,12 +101,26 @@ async fn cold_mint_lookup(
         Ok(Ok(Some((mint, Some(account))))) => {
             let mint_data = mint_model_to_mint_data(&mint)?;
 
+            let tree: SerializablePubkey = account.tree.clone().try_into()?;
+            let queue: SerializablePubkey = account
+                .queue
+                .clone()
+                .map(SerializablePubkey::try_from)
+                .transpose()?
+                .unwrap_or(tree);
+            let tree_type = account
+                .tree_type
+                .map(TreeType::from)
+                .unwrap_or(TreeType::StateV1);
+
             let cold_data = ColdMintData {
                 hash: account.hash.clone().try_into()?,
                 data: account.data.clone(),
                 owner: account.owner.clone().try_into()?,
                 lamports: parse_decimal(account.lamports)?,
-                tree: account.tree.clone().try_into()?,
+                tree,
+                queue,
+                tree_type,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
                 mint_data,
@@ -128,6 +142,8 @@ struct ColdMintData {
     owner: SerializablePubkey,
     lamports: u64,
     tree: SerializablePubkey,
+    queue: SerializablePubkey,
+    tree_type: TreeType,
     leaf_index: u64,
     seq: Option<u64>,
     mint_data: MintData,
@@ -248,6 +264,8 @@ fn cold_to_mint_interface(
                 leaf_index: UnsignedInteger(cold.leaf_index),
                 tree_info: TreeInfo {
                     tree: cold.tree,
+                    queue: cold.queue,
+                    tree_type: cold.tree_type,
                     seq: cold.seq.map(UnsignedInteger),
                 },
                 data: ColdData {

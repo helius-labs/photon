@@ -9,7 +9,6 @@ use photon_indexer::{
 };
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
-use tokio;
 
 #[derive(Parser)]
 struct Args {

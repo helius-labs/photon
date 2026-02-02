@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let http_client = reqwest::Client::new();
     // Call the download snapshot endpoint
     let response = http_client
-        .get(&format!("{}/download", args.snapshot_server_url))
+        .get(format!("{}/download", args.snapshot_server_url))
         .send()
         .await
         .unwrap();

@@ -17,7 +17,7 @@ use super::sequence::update_root_sequence;
 /// Persists a batch nullify event.
 /// 1. Create leaf nodes with nullifier as leaf.
 /// 2. Mark elements as nullified in tree
-///     and remove them from the database nullifier queue.
+///    and remove them from the database nullifier queue.
 pub async fn persist_batch_nullify_event(
     txn: &DatabaseTransaction,
     batch_nullify_event: &BatchEvent,
@@ -38,7 +38,7 @@ pub async fn persist_batch_nullify_event(
     // Count accounts that are spent but not yet nullified in tree
     let queue_count = count_accounts_ready_to_nullify(
         txn,
-        &batch_nullify_event.merkle_tree_pubkey.to_vec(),
+        batch_nullify_event.merkle_tree_pubkey.as_ref(),
         queue_start,
         queue_end,
     )
@@ -56,7 +56,7 @@ pub async fn persist_batch_nullify_event(
         // Check if this is a re-indexing scenario (accounts already nullified)
         let already_processed = check_nullify_already_processed(
             txn,
-            &batch_nullify_event.merkle_tree_pubkey.to_vec(),
+            batch_nullify_event.merkle_tree_pubkey.as_ref(),
             queue_start,
             queue_end,
         )
@@ -90,7 +90,7 @@ pub async fn persist_batch_nullify_event(
         // Partial accounts found - gather more info for error message
         let in_queue_count = count_nullify_accounts_in_output_queue(
             txn,
-            &batch_nullify_event.merkle_tree_pubkey.to_vec(),
+            batch_nullify_event.merkle_tree_pubkey.as_ref(),
             queue_start,
             queue_end,
         )
@@ -112,7 +112,7 @@ pub async fn persist_batch_nullify_event(
 
     let accounts = fetch_accounts_to_nullify(
         txn,
-        &batch_nullify_event.merkle_tree_pubkey.to_vec(),
+        batch_nullify_event.merkle_tree_pubkey.as_ref(),
         queue_start,
         queue_end,
     )
