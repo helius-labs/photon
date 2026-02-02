@@ -46,6 +46,7 @@ pub enum TokenAccounts {
     Tlv,
     Spent,
     PrevSpent,
+    AtaOwner,
 }
 
 #[derive(Copy, Clone, Iden)]

@@ -78,11 +78,7 @@ pub fn continously_monitor_photon(
 
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
-            let lag = if latest_slot > last_indexed_slot {
-                latest_slot - last_indexed_slot
-            } else {
-                0
-            };
+            let lag = latest_slot.saturating_sub(last_indexed_slot);
             metric! {
                 statsd_gauge!("indexing_lag", lag);
             }
@@ -149,7 +145,7 @@ pub fn continously_monitor_photon(
 }
 
 pub async fn update_latest_slot(rpc_client: &RpcClient) {
-    let slot = fetch_current_slot_with_infinite_retry(&rpc_client).await;
+    let slot = fetch_current_slot_with_infinite_retry(rpc_client).await;
     LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
 }
 

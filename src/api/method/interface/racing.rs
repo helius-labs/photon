@@ -18,7 +18,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts;
 
 use super::types::{
-    AccountInterface, ColdContext, ColdData, SolanaAccountData, TreeInfo, DB_TIMEOUT_MS,
+    AccountInterface, ColdContext, ColdData, SolanaAccountData, TreeInfo, TreeType, DB_TIMEOUT_MS,
     RPC_TIMEOUT_MS,
 };
 
@@ -48,6 +48,10 @@ pub struct ColdAccountData {
     pub owner: SerializablePubkey,
     pub lamports: u64,
     pub tree: SerializablePubkey,
+    /// The output queue pubkey (for V2 trees)
+    pub queue: SerializablePubkey,
+    /// The tree type (V1 or V2)
+    pub tree_type: TreeType,
     pub leaf_index: u64,
     pub seq: Option<u64>,
 }
@@ -234,28 +238,40 @@ pub async fn cold_lookup(
 
 /// Convert a database model to ColdAccountData
 fn model_to_cold_data(model: &accounts::Model) -> Result<ColdAccountData, PhotonApiError> {
-    // Parse discriminator from Decimal to u64
-    let discriminator = model
-        .discriminator
-        .as_ref()
-        .map(|d| {
-            let parsed = parse_decimal(d.clone());
+    // Parse discriminator from BLOB (8 bytes little-endian) to u64
+    let discriminator = model.discriminator.as_ref().and_then(|d| {
+        if d.len() == 8 {
+            let bytes: [u8; 8] = d.as_slice().try_into().ok()?;
+            let disc = u64::from_le_bytes(bytes);
             log::info!(
-                "model_to_cold_data: discriminator Decimal={}, parsed={:?}",
-                d,
-                parsed
+                "model_to_cold_data: discriminator bytes={:?}, u64={}",
+                bytes,
+                disc
             );
-            parsed
-        })
-        .transpose()?;
+            Some(disc)
+        } else {
+            log::warn!(
+                "model_to_cold_data: discriminator has unexpected length {}, expected 8",
+                d.len()
+            );
+            None
+        }
+    });
 
-    if let Some(disc) = discriminator {
-        log::info!(
-            "model_to_cold_data: discriminator u64={}, bytes={:?}",
-            disc,
-            disc.to_le_bytes()
-        );
-    }
+    // Parse queue - if not set, default to tree (V1 behavior)
+    let tree: SerializablePubkey = model.tree.clone().try_into()?;
+    let queue: SerializablePubkey = model
+        .queue
+        .clone()
+        .map(SerializablePubkey::try_from)
+        .transpose()?
+        .unwrap_or(tree);
+
+    // Parse tree_type - default to StateV1 if not set
+    let tree_type = model
+        .tree_type
+        .map(TreeType::from)
+        .unwrap_or(TreeType::StateV1);
 
     Ok(ColdAccountData {
         hash: model.hash.clone().try_into()?,
@@ -267,8 +283,10 @@ fn model_to_cold_data(model: &accounts::Model) -> Result<ColdAccountData, Photon
         discriminator,
         data: model.data.clone(),
         owner: model.owner.clone().try_into()?,
-        lamports: parse_decimal(model.lamports.clone())?,
-        tree: model.tree.clone().try_into()?,
+        lamports: parse_decimal(model.lamports)?,
+        tree,
+        queue,
+        tree_type,
         leaf_index: crate::api::method::utils::parse_leaf_index(model.leaf_index)?,
         seq: model.seq.map(|s| s as u64),
     })
@@ -489,6 +507,8 @@ pub fn cold_to_interface(
             leaf_index: UnsignedInteger(account.leaf_index),
             tree_info: TreeInfo {
                 tree: account.tree,
+                queue: account.queue,
+                tree_type: account.tree_type,
                 seq: account.seq.map(UnsignedInteger),
             },
             data: ColdData {
@@ -537,15 +557,16 @@ pub async fn race_hot_cold_multiple(
 
     // Resolve each account
     let mut results = Vec::with_capacity(addresses.len());
-    for i in 0..addresses.len() {
-        let hot_account = hot_accounts.get(i).cloned().flatten();
-        let cold_account = cold_accounts.get(i).cloned().flatten();
-
+    for ((address, hot_account), cold_account) in addresses
+        .iter()
+        .zip(hot_accounts.iter())
+        .zip(cold_accounts.iter())
+    {
         let resolved = resolve_single_race(
             hot_account.as_ref(),
             cold_account.as_ref(),
             hot_slot,
-            addresses[i],
+            *address,
         );
         results.push(resolved);
     }
@@ -633,6 +654,8 @@ mod tests {
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
+            queue: SerializablePubkey::default(),
+            tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
         };
@@ -664,6 +687,8 @@ mod tests {
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
+            queue: SerializablePubkey::default(),
+            tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
         };
@@ -704,6 +729,8 @@ mod tests {
             owner: SerializablePubkey::default(),
             lamports: 500,
             tree: SerializablePubkey::default(),
+            queue: SerializablePubkey::default(),
+            tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
         };
@@ -747,14 +774,18 @@ mod tests {
 
     #[test]
     fn test_cold_to_interface_conversion() {
+        // discriminator as u64: 0x0807060504030201 in little-endian = [1,2,3,4,5,6,7,8]
+        let discriminator_u64 = u64::from_le_bytes([1, 2, 3, 4, 5, 6, 7, 8]);
         let cold = ColdAccountData {
             hash: Hash::from([1u8; 32]),
             address: Some(SerializablePubkey::from([2u8; 32])),
-            discriminator: None,
-            data: Some(vec![10, 20, 30, 40, 50, 60, 70, 80, 100, 200]),
+            discriminator: Some(discriminator_u64),
+            data: Some(vec![100, 200]),
             owner: SerializablePubkey::from([3u8; 32]),
             lamports: 9999,
             tree: SerializablePubkey::from([4u8; 32]),
+            queue: SerializablePubkey::from([5u8; 32]),
+            tree_type: TreeType::StateV2,
             leaf_index: 42,
             seq: Some(7),
         };
@@ -763,9 +794,10 @@ mod tests {
             .expect("should return Some when address exists");
 
         assert_eq!(interface.account.lamports.0, 9999);
+        // Full account data = discriminator bytes + payload
         assert_eq!(
             interface.account.data.0,
-            vec![10, 20, 30, 40, 50, 60, 70, 80, 100, 200]
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 100, 200]
         );
         assert!(!interface.account.executable);
         assert_eq!(interface.account.rent_epoch.0, 0);
@@ -781,7 +813,7 @@ mod tests {
                 assert_eq!(hash.0, [1u8; 32]);
                 assert_eq!(leaf_index.0, 42);
                 assert_eq!(tree_info.seq.unwrap().0, 7);
-                assert_eq!(data.discriminator, vec![10, 20, 30, 40, 50, 60, 70, 80]);
+                assert_eq!(data.discriminator, vec![1, 2, 3, 4, 5, 6, 7, 8]);
                 assert_eq!(data.data.0, vec![100, 200]);
             }
             _ => panic!("Expected ColdContext::Account"),
@@ -799,6 +831,8 @@ mod tests {
             owner: SerializablePubkey::default(),
             lamports: 100,
             tree: SerializablePubkey::default(),
+            queue: SerializablePubkey::default(),
+            tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: None,
         };
@@ -822,6 +856,8 @@ mod tests {
                 owner: SerializablePubkey::default(),
                 lamports: 1000,
                 tree: SerializablePubkey::default(),
+                queue: SerializablePubkey::default(),
+                tree_type: TreeType::StateV1,
                 leaf_index: 0,
                 seq: Some(1),
             }),

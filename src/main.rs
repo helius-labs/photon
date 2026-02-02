@@ -5,7 +5,7 @@ use async_stream::stream;
 use clap::Parser;
 use futures::pin_mut;
 use jsonrpsee::server::ServerHandle;
-use log::{error, info};
+use log::{error, info, warn};
 use photon_indexer::api::{self, api::PhotonApi};
 
 use photon_indexer::common::{
@@ -308,6 +308,19 @@ async fn main() {
         }
         false => {
             info!("Starting indexer...");
+
+            info!("Syncing tree metadata...");
+            if let Err(e) = photon_indexer::monitor::tree_metadata_sync::sync_tree_metadata(
+                rpc_client.as_ref(),
+                db_conn.as_ref(),
+            )
+            .await
+            {
+                warn!("Failed to sync tree metadata on startup: {}. Will retry in background monitor.", e);
+            } else {
+                info!("Tree metadata sync completed successfully");
+            }
+
             // For localnet we can safely use a large batch size to speed up indexing.
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
                 Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,

@@ -19,7 +19,7 @@ use self::sequence::should_process_event;
 
 /// We need to find the events of the same tree:
 /// - order them by sequence number and execute them in order
-///     HashMap<pubkey, Vec<Event(BatchAppendEvent, seq)>>
+///   HashMap<pubkey, Vec<Event(BatchAppendEvent, seq)>>
 /// - execute a single function call to persist all changed nodes
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,

@@ -103,6 +103,9 @@ pub struct StateUpdate {
     // v2 input accounts that are inserted into the input queue
     pub batch_nullify_context: Vec<BatchNullifyContext>,
     pub batch_new_addresses: Vec<AddressQueueUpdate>,
+    /// ATA owner info for compressed ATAs (account_hash -> wallet_owner_pubkey).
+    /// Used to populate the ata_owner column in token_accounts table.
+    pub ata_owners: HashMap<Hash, Pubkey>,
 }
 
 /// Result of filtering a StateUpdate by known trees
@@ -285,6 +288,7 @@ impl StateUpdate {
             batch_merkle_tree_events,
             batch_nullify_context: self.batch_nullify_context,
             batch_new_addresses,
+            ata_owners: self.ata_owners,
         };
 
         Ok(FilteredStateUpdate {
@@ -332,6 +336,7 @@ impl StateUpdate {
             merged
                 .batch_nullify_context
                 .extend(update.batch_nullify_context);
+            merged.ata_owners.extend(update.ata_owners);
         }
 
         merged

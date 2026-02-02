@@ -45,21 +45,15 @@ impl BlockStreamConfig {
         stream! {
             if let Some(grpc_stream) = grpc_stream {
                 pin_mut!(grpc_stream);
-                loop {
-                    match grpc_stream.next().await {
-                        Some(blocks) => yield blocks,
-                        None => break,
-                    }
+                while let Some(blocks) = grpc_stream.next().await {
+                    yield blocks;
                 }
             }
 
             if let Some(poller_stream) = poller_stream {
                 pin_mut!(poller_stream);
-                loop {
-                    match poller_stream.next().await {
-                        Some(blocks) => yield blocks,
-                        None => break,
-                    }
+                while let Some(blocks) = poller_stream.next().await {
+                    yield blocks;
                 }
             }
         }

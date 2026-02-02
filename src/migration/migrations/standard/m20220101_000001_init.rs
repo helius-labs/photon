@@ -12,7 +12,7 @@ use super::super::super::model::table::{
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-async fn execute_sql<'a>(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr> {
+async fn execute_sql(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr> {
     manager
         .get_connection()
         .execute(Statement::from_string(

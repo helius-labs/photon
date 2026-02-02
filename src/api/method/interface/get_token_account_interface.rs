@@ -25,7 +25,7 @@ use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use super::racing::split_discriminator;
 use super::types::{
     AccountInterface, ColdContext, ColdData, GetTokenAccountInterfaceRequest,
-    GetTokenAccountInterfaceResponse, SolanaAccountData, TokenAccountInterface, TreeInfo,
+    GetTokenAccountInterfaceResponse, SolanaAccountData, TokenAccountInterface, TreeInfo, TreeType,
     DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
 };
 
@@ -133,12 +133,26 @@ async fn cold_token_lookup(
                 }
             };
 
+            let tree: SerializablePubkey = account.tree.clone().try_into()?;
+            let queue: SerializablePubkey = account
+                .queue
+                .clone()
+                .map(SerializablePubkey::try_from)
+                .transpose()?
+                .unwrap_or(tree);
+            let tree_type = account
+                .tree_type
+                .map(TreeType::from)
+                .unwrap_or(TreeType::StateV1);
+
             let cold_data = ColdTokenData {
                 hash: account.hash.clone().try_into()?,
                 data: account.data.clone(),
                 owner: account.owner.clone().try_into()?,
                 lamports: parse_decimal(account.lamports)?,
-                tree: account.tree.clone().try_into()?,
+                tree,
+                queue,
+                tree_type,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
                 token_data,
@@ -161,6 +175,8 @@ struct ColdTokenData {
     owner: SerializablePubkey,
     lamports: u64,
     tree: SerializablePubkey,
+    queue: SerializablePubkey,
+    tree_type: TreeType,
     leaf_index: u64,
     seq: Option<u64>,
     token_data: TokenData,
@@ -282,6 +298,8 @@ fn cold_to_token_interface(
                 leaf_index: UnsignedInteger(cold.leaf_index),
                 tree_info: TreeInfo {
                     tree: cold.tree,
+                    queue: cold.queue,
+                    tree_type: cold.tree_type,
                     seq: cold.seq.map(UnsignedInteger),
                 },
                 data: ColdData {

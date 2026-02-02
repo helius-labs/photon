@@ -568,7 +568,7 @@ async fn test_persist_token_data(
             lamports: Set(Decimal::from(10)),
             slot_created: Set(slot),
             leaf_index: Set(i as i64),
-            discriminator: Set(Some(Decimal::from(1))),
+            discriminator: Set(Some(vec![1, 0, 0, 0, 0, 0, 0, 0])),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
@@ -580,6 +580,7 @@ async fn test_persist_token_data(
         token_datas.push(EnrichedTokenAccount {
             hash,
             token_data: token_data.clone(),
+            ata_owner: None,
         });
     }
 
@@ -965,6 +966,13 @@ async fn test_persisted_state_trees(
     }
 }
 
+/// Helper to create a 32-byte padded value from a single byte for AddressV2 tests
+fn padded_value(val: u8) -> Vec<u8> {
+    let mut v = vec![0u8; 31];
+    v.push(val);
+    v
+}
+
 #[named]
 #[rstest]
 #[tokio::test]
@@ -983,7 +991,10 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
+    // Use 32-byte padded values for AddressV2 hash compatibility
+    let values: Vec<Vec<u8>> = (0..num_nodes)
+        .map(|i| padded_value((i * 4 + 1) as u8))
+        .collect();
     let tree_height = 33; // prev. 4
 
     // Create tree info cache - convert SerializablePubkey to Pubkey
@@ -1017,7 +1028,7 @@ async fn test_indexed_merkle_trees(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![3],
+        padded_value(3),
     )
     .await
     .unwrap();
@@ -1025,9 +1036,9 @@ async fn test_indexed_merkle_trees(
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
         leaf_index: 1,
-        value: vec![1],
+        value: padded_value(1),
         next_index: 2,
-        next_value: vec![5],
+        next_value: padded_value(5),
         seq: Some(0),
     };
 
@@ -1037,7 +1048,7 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = vec![vec![3]];
+    let values = vec![padded_value(3)];
 
     multi_append(
         &txn,
@@ -1058,7 +1069,7 @@ async fn test_indexed_merkle_trees(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![4],
+        padded_value(4),
     )
     .await
     .unwrap();
@@ -1066,9 +1077,9 @@ async fn test_indexed_merkle_trees(
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
         leaf_index: 3,
-        value: vec![3],
+        value: padded_value(3),
         next_index: 2,
-        next_value: vec![5],
+        next_value: padded_value(5),
         seq: Some(1),
     };
 
@@ -1902,7 +1913,7 @@ async fn test_persist_mint_data(
             lamports: Set(Decimal::from(0)),
             slot_created: Set(0),
             leaf_index: Set(i as i64),
-            discriminator: Set(Some(Decimal::from(1))), // mint discriminator
+            discriminator: Set(Some(vec![1, 0, 0, 0, 0, 0, 0, 0])), // mint discriminator
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
