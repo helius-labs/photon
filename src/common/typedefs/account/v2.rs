@@ -91,7 +91,11 @@ impl TryFrom<Model> for AccountV2 {
             merkle_context: MerkleContextV2 {
                 tree_type: account.tree_type.map(|t| t as u16).unwrap_or(0),
                 tree: account.tree.try_into()?,
-                queue: account.queue.unwrap_or_default().try_into()?,
+                queue: account
+                    .queue
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
                 cpi_context: None,
                 next_tree_context: None,
             },
@@ -114,7 +118,7 @@ impl From<&AccountWithContext> for AccountV2 {
             merkle_context: MerkleContextV2 {
                 tree_type: x.context.tree_type,
                 tree: x.account.tree.clone(),
-                queue: x.context.queue.clone(),
+                queue: x.context.queue.clone().unwrap_or_default(),
                 cpi_context: None,
                 next_tree_context: None,
             },

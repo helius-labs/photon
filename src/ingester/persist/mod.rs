@@ -439,7 +439,7 @@ async fn append_output_accounts(
             data: Set(account.account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.account.tree.to_bytes_vec()),
-            queue: Set(Some(account.context.queue.to_bytes_vec())),
+            queue: Set(account.context.queue.as_ref().map(|q| q.to_bytes_vec())),
             leaf_index: Set(account.account.leaf_index.0 as i64),
             in_output_queue: Set(account.context.in_output_queue),
             nullifier_queue_index: Set(account.context.nullifier_queue_index.map(|x| x.0 as i64)),

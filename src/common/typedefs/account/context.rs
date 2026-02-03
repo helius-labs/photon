@@ -21,7 +21,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
-    pub queue: SerializablePubkey,
+    pub queue: Option<SerializablePubkey>,
     pub in_output_queue: bool,
     pub spent: bool,
     pub nullified_in_tree: bool,
@@ -90,7 +90,7 @@ impl AccountWithContext {
                 seq: seq.map(UnsignedInteger),
             },
             context: AccountContext {
-                queue: queue.into(),
+                queue: Some(queue.into()),
                 in_output_queue,
                 spent,
                 nullified_in_tree: false,
@@ -137,7 +137,9 @@ impl TryFrom<Model> for AccountWithContext {
                 seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
             },
             context: AccountContext {
-                queue: account.queue.unwrap_or_default().try_into()?,
+                queue: account.queue
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?,
                 in_output_queue: account.in_output_queue,
                 spent: account.spent,
                 nullified_in_tree: account.nullified_in_tree,
