@@ -137,7 +137,11 @@ impl TryFrom<Model> for AccountWithContext {
                 seq: account.seq.map(|seq| UnsignedInteger(seq as u64)),
             },
             context: AccountContext {
-                queue: account.queue.unwrap_or_default().try_into()?,
+                queue: account
+                    .queue
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
                 in_output_queue: account.in_output_queue,
                 spent: account.spent,
                 nullified_in_tree: account.nullified_in_tree,
