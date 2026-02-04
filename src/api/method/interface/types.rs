@@ -58,6 +58,8 @@ pub struct TreeInfo {
     pub tree_type: TreeType,
     /// Sequence number of the account in the tree
     pub seq: Option<UnsignedInteger>,
+    /// Slot when the account was created/compressed
+    pub slot_created: UnsignedInteger,
 }
 
 /// Structured compressed account data (discriminator separated)
