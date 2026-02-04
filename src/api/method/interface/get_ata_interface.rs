@@ -189,6 +189,7 @@ async fn cold_ata_lookup(
                 tree_type,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
+                slot_created: account.slot_created as u64,
                 token_data,
                 onchain_pubkey: account.onchain_pubkey.clone(),
             };
@@ -218,6 +219,7 @@ struct ColdAtaData {
     tree_type: TreeType,
     leaf_index: u64,
     seq: Option<u64>,
+    slot_created: u64,
     token_data: TokenData,
     onchain_pubkey: Option<Vec<u8>>,
 }
@@ -466,6 +468,7 @@ fn cold_to_ata_interface(
                     queue: cold.queue,
                     tree_type: cold.tree_type,
                     seq: cold.seq.map(UnsignedInteger),
+                    slot_created: UnsignedInteger(cold.slot_created),
                 },
                 data: ColdData {
                     discriminator,
