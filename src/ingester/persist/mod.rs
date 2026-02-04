@@ -50,7 +50,11 @@ pub use self::leaf_node_proof::{
     get_multiple_compressed_leaf_proofs_from_full_leaf_info,
 };
 
-pub const COMPRESSED_TOKEN_PROGRAM: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
+pub const LIGHT_TOKEN_PROGRAM_ID: Pubkey = pubkey!("cTokenmWW8bLPjZEBAUgYy3zKxQZW6VKi7bqNFEVv3m");
+
+/// Discriminator for decompressed PDA accounts: [255, 255, 255, 255, 255, 255, 255, 0]
+/// This matches DECOMPRESSED_PDA_DISCRIMINATOR from light_compressible.
+pub const DECOMPRESSED_ACCOUNT_DISCRIMINATOR: u64 = 0x00FFFFFFFFFFFFFF;
 
 // To avoid exceeding the 64k total parameter limit
 pub const MAX_SQL_INSERTS: usize = 500;
@@ -82,7 +86,7 @@ pub async fn persist_state_update(
         batch_merkle_tree_events,
         batch_nullify_context,
         batch_new_addresses,
-        ..
+        ata_owners,
     } = state_update;
 
     let input_accounts_len = in_accounts.len();
@@ -104,7 +108,7 @@ pub async fn persist_state_update(
 
     debug!("Persisting output accounts...");
     for chunk in out_accounts.chunks(MAX_SQL_INSERTS) {
-        append_output_accounts(txn, chunk).await?;
+        append_output_accounts(txn, chunk, &ata_owners).await?;
     }
 
     debug!("Persisting spent accounts...");
@@ -173,7 +177,7 @@ pub async fn persist_state_update(
             .map_err(|e| IngesterError::ParserError(format!("Invalid tree pubkey: {}", e)))?;
         nodes_by_tree
             .entry(tree_pubkey)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((leaf_node, signature));
     }
 
@@ -277,6 +281,8 @@ async fn persist_state_tree_history(
 pub struct EnrichedTokenAccount {
     pub token_data: TokenData,
     pub hash: Hash,
+    /// The wallet owner pubkey that the ATA is derived from (for compressed ATAs)
+    pub ata_owner: Option<solana_pubkey::Pubkey>,
 }
 
 #[derive(Debug)]
@@ -423,19 +429,33 @@ async fn insert_addresses_into_queues(
 async fn append_output_accounts(
     txn: &DatabaseTransaction,
     out_accounts: &[AccountWithContext],
+    ata_owners: &HashMap<crate::common::typedefs::hash::Hash, solana_pubkey::Pubkey>,
 ) -> Result<(), IngesterError> {
     let mut account_models = Vec::new();
     let mut token_accounts = Vec::new();
 
     for account in out_accounts {
+        // Extract onchain_pubkey for decompressed accounts.
+        // Accounts with the decompressed discriminator store the on-chain PDA
+        // pubkey in the first 32 bytes of their data.
+        let onchain_pubkey = account.account.data.as_ref().and_then(|data| {
+            if data.discriminator.0 == DECOMPRESSED_ACCOUNT_DISCRIMINATOR && data.data.0.len() >= 32
+            {
+                Some(data.data.0[..32].to_vec())
+            } else {
+                None
+            }
+        });
+
         account_models.push(accounts::ActiveModel {
             hash: Set(account.account.hash.to_vec()),
             address: Set(account.account.address.map(|x| x.to_bytes_vec())),
+            onchain_pubkey: Set(onchain_pubkey),
             discriminator: Set(account
                 .account
                 .data
                 .as_ref()
-                .map(|x| Decimal::from(x.discriminator.0))),
+                .map(|x| x.discriminator.0.to_le_bytes().to_vec())),
             data: Set(account.account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.account.tree.to_bytes_vec()),
@@ -456,9 +476,11 @@ async fn append_output_accounts(
         });
 
         if let Some(token_data) = account.account.parse_token_data()? {
+            let ata_owner = ata_owners.get(&account.account.hash).copied();
             token_accounts.push(EnrichedTokenAccount {
                 token_data,
                 hash: account.account.hash.clone(),
+                ata_owner,
             });
         }
     }
@@ -495,7 +517,11 @@ pub async fn persist_token_accounts(
     let token_models = token_accounts
         .into_iter()
         .map(
-            |EnrichedTokenAccount { token_data, hash }| token_accounts::ActiveModel {
+            |EnrichedTokenAccount {
+                 token_data,
+                 hash,
+                 ata_owner,
+             }| token_accounts::ActiveModel {
                 hash: Set(hash.into()),
                 mint: Set(token_data.mint.to_bytes_vec()),
                 owner: Set(token_data.owner.to_bytes_vec()),
@@ -505,6 +531,7 @@ pub async fn persist_token_accounts(
                 spent: Set(false),
                 prev_spent: Set(None),
                 tlv: Set(token_data.tlv.map(|t| t.0)),
+                ata_owner: Set(ata_owner.map(|o| o.to_bytes().to_vec())),
             },
         )
         .collect::<Vec<_>>();
