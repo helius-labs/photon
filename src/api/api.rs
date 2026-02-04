@@ -4,15 +4,8 @@ use super::method::get_compressed_account::{
 use super::method::get_compressed_balance_by_owner::{
     get_compressed_balance_by_owner, GetCompressedBalanceByOwnerRequest,
 };
-use super::method::get_compressed_mint::{
-    get_compressed_mint, GetCompressedMintRequest, GetCompressedMintResponse,
-};
 use super::method::get_compressed_mint_token_holders::{
     get_compressed_mint_token_holders, GetCompressedMintTokenHoldersRequest, OwnerBalancesResponse,
-};
-use super::method::get_compressed_mints_by_authority::{
-    get_compressed_mints_by_authority, GetCompressedMintsByAuthorityRequest,
-    GetCompressedMintsByAuthorityResponse,
 };
 use super::method::get_compressed_token_accounts_by_delegate::{
     get_compressed_account_token_accounts_by_delegate,
@@ -93,15 +86,13 @@ use crate::api::method::get_validity_proof::{
     GetValidityProofResponseV2,
 };
 use crate::api::method::interface::{
-    get_account_interface, get_account_interfaces, get_ata_interface, get_mint_account_interfaces,
-    get_mint_interface, get_multiple_account_interfaces, get_token_account_interface,
-    get_token_account_interfaces, GetAccountInterfaceRequest, GetAccountInterfaceResponse,
-    GetAccountInterfacesRequest, GetAccountInterfacesResponse, GetAtaInterfaceRequest,
-    GetAtaInterfaceResponse, GetMintAccountInterfacesRequest, GetMintAccountInterfacesResponse,
-    GetMintInterfaceRequest, GetMintInterfaceResponse, GetMultipleAccountInterfacesRequest,
-    GetMultipleAccountInterfacesResponse, GetTokenAccountInterfaceRequest,
-    GetTokenAccountInterfaceResponse, GetTokenAccountInterfacesRequest,
-    GetTokenAccountInterfacesResponse,
+    get_account_interface, get_account_interfaces, get_ata_interface,
+    get_multiple_account_interfaces, get_token_account_interface, get_token_account_interfaces,
+    GetAccountInterfaceRequest, GetAccountInterfaceResponse, GetAccountInterfacesRequest,
+    GetAccountInterfacesResponse, GetAtaInterfaceRequest, GetAtaInterfaceResponse,
+    GetMultipleAccountInterfacesRequest, GetMultipleAccountInterfacesResponse,
+    GetTokenAccountInterfaceRequest, GetTokenAccountInterfaceResponse,
+    GetTokenAccountInterfacesRequest, GetTokenAccountInterfacesResponse,
 };
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
@@ -322,20 +313,6 @@ impl PhotonApi {
         get_compressed_mint_token_holders(self.db_conn.as_ref(), request).await
     }
 
-    pub async fn get_compressed_mint(
-        &self,
-        request: GetCompressedMintRequest,
-    ) -> Result<GetCompressedMintResponse, PhotonApiError> {
-        get_compressed_mint(&self.db_conn, request).await
-    }
-
-    pub async fn get_compressed_mints_by_authority(
-        &self,
-        request: GetCompressedMintsByAuthorityRequest,
-    ) -> Result<GetCompressedMintsByAuthorityResponse, PhotonApiError> {
-        get_compressed_mints_by_authority(&self.db_conn, request).await
-    }
-
     pub async fn get_multiple_compressed_accounts(
         &self,
         request: GetMultipleCompressedAccountsRequest,
@@ -449,13 +426,6 @@ impl PhotonApi {
         get_token_account_interface(&self.db_conn, &self.rpc_client, request).await
     }
 
-    pub async fn get_mint_interface(
-        &self,
-        request: GetMintInterfaceRequest,
-    ) -> Result<GetMintInterfaceResponse, PhotonApiError> {
-        get_mint_interface(&self.db_conn, &self.rpc_client, request).await
-    }
-
     pub async fn get_multiple_account_interfaces(
         &self,
         request: GetMultipleAccountInterfacesRequest,
@@ -475,13 +445,6 @@ impl PhotonApi {
         request: GetTokenAccountInterfacesRequest,
     ) -> Result<GetTokenAccountInterfacesResponse, PhotonApiError> {
         get_token_account_interfaces(&self.db_conn, &self.rpc_client, request).await
-    }
-
-    pub async fn get_mint_account_interfaces(
-        &self,
-        request: GetMintAccountInterfacesRequest,
-    ) -> Result<GetMintAccountInterfacesResponse, PhotonApiError> {
-        get_mint_account_interfaces(&self.db_conn, &self.rpc_client, request).await
     }
 
     pub async fn get_ata_interface(
@@ -552,16 +515,6 @@ impl PhotonApi {
                 name: "getCompressedMintTokenHolders".to_string(),
                 request: Some(GetCompressedMintTokenHoldersRequest::schema().1),
                 response: OwnerBalancesResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedMint".to_string(),
-                request: Some(GetCompressedMintRequest::schema().1),
-                response: GetCompressedMintResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getCompressedMintsByAuthority".to_string(),
-                request: Some(GetCompressedMintsByAuthorityRequest::schema().1),
-                response: GetCompressedMintsByAuthorityResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getMultipleCompressedAccounts".to_string(),
@@ -702,11 +655,6 @@ impl PhotonApi {
                 response: GetTokenAccountInterfaceResponse::schema().1,
             },
             OpenApiSpec {
-                name: "getMintInterface".to_string(),
-                request: Some(GetMintInterfaceRequest::schema().1),
-                response: GetMintInterfaceResponse::schema().1,
-            },
-            OpenApiSpec {
                 name: "getMultipleAccountInterfaces".to_string(),
                 request: Some(GetMultipleAccountInterfacesRequest::schema().1),
                 response: GetMultipleAccountInterfacesResponse::schema().1,
@@ -720,11 +668,6 @@ impl PhotonApi {
                 name: "getTokenAccountInterfaces".to_string(),
                 request: Some(GetTokenAccountInterfacesRequest::schema().1),
                 response: GetTokenAccountInterfacesResponse::schema().1,
-            },
-            OpenApiSpec {
-                name: "getMintAccountInterfaces".to_string(),
-                request: Some(GetMintAccountInterfacesRequest::schema().1),
-                response: GetMintAccountInterfacesResponse::schema().1,
             },
             OpenApiSpec {
                 name: "getAtaInterface".to_string(),

@@ -4,7 +4,6 @@ pub mod bs64_string;
 pub mod context;
 pub mod hash;
 pub mod limit;
-pub mod mint_data;
 pub mod serializable_pubkey;
 pub mod serializable_signature;
 pub mod token_data;

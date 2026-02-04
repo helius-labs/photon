@@ -9,16 +9,9 @@ use crate::api::method::get_compressed_accounts_by_owner::FilterSelector;
 use crate::api::method::get_compressed_accounts_by_owner::Memcmp;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountList;
 use crate::api::method::get_compressed_accounts_by_owner::PaginatedAccountListV2;
-use crate::api::method::get_compressed_mint::{
-    CompressedMint, GetCompressedMintRequest, GetCompressedMintResponse,
-};
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalance;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalanceList;
 use crate::api::method::get_compressed_mint_token_holders::OwnerBalancesResponse;
-use crate::api::method::get_compressed_mints_by_authority::{
-    CompressedMintList, GetCompressedMintsByAuthorityRequest,
-    GetCompressedMintsByAuthorityResponse, MintAuthorityType,
-};
 use crate::api::method::get_compressed_token_account_balance::TokenAccountBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalance;
 use crate::api::method::get_compressed_token_balances_by_owner::TokenBalanceList;
@@ -41,8 +34,8 @@ use crate::api::method::get_validity_proof::{
     CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
 };
 use crate::api::method::interface::types::{
-    AccountInterface, AccountLookup, ColdContext, ColdData, InterfaceResult, MintInterface,
-    SolanaAccountData, TokenAccountInterface, TreeInfo, TreeType,
+    AccountInterface, AccountLookup, ColdContext, ColdData, InterfaceResult, SolanaAccountData,
+    TokenAccountInterface, TreeInfo, TreeType,
 };
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
@@ -59,7 +52,6 @@ use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::limit::Limit;
-use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::serializable_signature::SerializableSignature;
 use crate::common::typedefs::token_data::AccountState;
@@ -160,14 +152,6 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TreeContextInfo,
     GetCompressedAccountProofResponseValue,
     GetCompressedAccountProofResponseValueV2,
-    MintData,
-    CompressedMint,
-    GetCompressedMintRequest,
-    GetCompressedMintResponse,
-    MintAuthorityType,
-    GetCompressedMintsByAuthorityRequest,
-    GetCompressedMintsByAuthorityResponse,
-    CompressedMintList,
     // Interface types
     AccountInterface,
     SolanaAccountData,
@@ -176,7 +160,6 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TreeType,
     ColdData,
     TokenAccountInterface,
-    MintInterface,
     InterfaceResult,
     AccountLookup,
 )))]
