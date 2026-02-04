@@ -54,6 +54,8 @@ pub struct ColdAccountData {
     pub tree_type: TreeType,
     pub leaf_index: u64,
     pub seq: Option<u64>,
+    /// Slot when the account was created/compressed
+    pub slot_created: u64,
 }
 
 /// Perform a hot lookup via Solana RPC
@@ -289,6 +291,7 @@ fn model_to_cold_data(model: &accounts::Model) -> Result<ColdAccountData, Photon
         tree_type,
         leaf_index: crate::api::method::utils::parse_leaf_index(model.leaf_index)?,
         seq: model.seq.map(|s| s as u64),
+        slot_created: model.slot_created as u64,
     })
 }
 
@@ -510,6 +513,7 @@ pub fn cold_to_interface(
                 queue: account.queue,
                 tree_type: account.tree_type,
                 seq: account.seq.map(UnsignedInteger),
+                slot_created: UnsignedInteger(account.slot_created),
             },
             data: ColdData {
                 discriminator: discriminator_bytes,
@@ -658,6 +662,7 @@ mod tests {
             tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
+            slot_created: 100,
         };
 
         let result =
@@ -691,6 +696,7 @@ mod tests {
             tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
+            slot_created: 100,
         };
 
         let result =
@@ -733,6 +739,7 @@ mod tests {
             tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: Some(1),
+            slot_created: 100,
         };
 
         let result = resolve_single_race(None, Some(&cold), 200, SerializablePubkey::default());
@@ -788,6 +795,7 @@ mod tests {
             tree_type: TreeType::StateV2,
             leaf_index: 42,
             seq: Some(7),
+            slot_created: 100,
         };
 
         let interface = cold_to_interface(&cold, SerializablePubkey::default())
@@ -835,6 +843,7 @@ mod tests {
             tree_type: TreeType::StateV1,
             leaf_index: 0,
             seq: None,
+            slot_created: 100,
         };
 
         let interface = cold_to_interface(&cold, query_address);
@@ -860,6 +869,7 @@ mod tests {
                 tree_type: TreeType::StateV1,
                 leaf_index: 0,
                 seq: Some(1),
+                slot_created: 100,
             }),
             slot: 100,
         });

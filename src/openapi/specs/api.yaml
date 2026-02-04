@@ -6153,11 +6153,15 @@ components:
       - tree
       - queue
       - treeType
+      - slotCreated
       properties:
         queue:
           $ref: '#/components/schemas/SerializablePubkey'
         seq:
           $ref: '#/components/schemas/UnsignedInteger'
+        slotCreated:
+          $ref: '#/components/schemas/UnsignedInteger'
+          description: Slot when the account was created/compressed
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
         treeType:

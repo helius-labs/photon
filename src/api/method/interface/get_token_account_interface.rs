@@ -155,6 +155,7 @@ async fn cold_token_lookup(
                 tree_type,
                 leaf_index: crate::api::method::utils::parse_leaf_index(account.leaf_index)?,
                 seq: account.seq.map(|s| s as u64),
+                slot_created: account.slot_created as u64,
                 token_data,
             };
             Ok(Some(cold_data))
@@ -179,6 +180,7 @@ struct ColdTokenData {
     tree_type: TreeType,
     leaf_index: u64,
     seq: Option<u64>,
+    slot_created: u64,
     token_data: TokenData,
 }
 
@@ -301,6 +303,7 @@ fn cold_to_token_interface(
                     queue: cold.queue,
                     tree_type: cold.tree_type,
                     seq: cold.seq.map(UnsignedInteger),
+                    slot_created: UnsignedInteger(cold.slot_created),
                 },
                 data: ColdData {
                     discriminator,
