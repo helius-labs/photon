@@ -116,21 +116,3 @@ pub enum AddressQueues {
     Address,
     QueueIndex,
 }
-
-#[derive(Copy, Clone, Iden)]
-pub enum Mints {
-    Table,
-    Hash,
-    Address,
-    MintPda,
-    MintSigner,
-    MintAuthority,
-    FreezeAuthority,
-    Supply,
-    Decimals,
-    Version,
-    MintDecompressed,
-    Extensions,
-    Spent,
-    PrevSpent,
-}
