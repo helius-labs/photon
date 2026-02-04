@@ -2,7 +2,6 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::utils::parse_decimal;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -19,8 +18,6 @@ pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = TOKEN_COMPRESSED_ACCOUNT_DISCRIMIN
 pub const C_TOKEN_DISCRIMINATOR_V2: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 /// V3/ShaFlat: SHA256 flat hash with TLV extensions (not yet exported from SDK crates)
 pub const C_TOKEN_DISCRIMINATOR_V3: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 4];
-/// Discriminator for compressed mints (not yet exported from SDK crates)
-pub const COMPRESSED_MINT_DISCRIMINATOR: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -55,38 +52,6 @@ impl Account {
             _ => Ok(None),
         }
     }
-
-    pub fn parse_mint_data(&self) -> Result<Option<MintData>, IngesterError> {
-        // First, try discriminator-based detection
-        if let Some(data) = self.data.as_ref() {
-            if self.owner.0 == LIGHT_TOKEN_PROGRAM_ID && data.is_compressed_mint_discriminator() {
-                let data_slice = data.data.0.as_slice();
-                let mint_data = MintData::parse(data_slice).map_err(|e| {
-                    IngesterError::ParserError(format!("Failed to parse mint data: {:?}", e))
-                })?;
-                return Ok(Some(mint_data));
-            }
-        }
-
-        // Fallback: If owned by compressed token program and not a token account,
-        // try to parse as mint (handles cases where discriminator might differ)
-        if let Some(data) = self.data.as_ref() {
-            if self.owner.0 == LIGHT_TOKEN_PROGRAM_ID && !data.is_c_token_discriminator() {
-                let data_slice = data.data.0.as_slice();
-                // Try parsing - if it succeeds, it's a mint
-                // Note: For v2 read-only accounts, only the hash is available (32 bytes),
-                // so parsing will fail. Full mint data support for v2 requires additional work.
-                if let Ok(mint_data) = MintData::parse(data_slice) {
-                    // Verify it looks like a valid mint (has mint_pda set)
-                    if mint_data.mint_pda.to_bytes_vec() != vec![0u8; 32] {
-                        return Ok(Some(mint_data));
-                    }
-                }
-            }
-        }
-
-        Ok(None)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -103,11 +68,6 @@ impl AccountData {
         bytes == C_TOKEN_DISCRIMINATOR_V1
             || bytes == C_TOKEN_DISCRIMINATOR_V2
             || bytes == C_TOKEN_DISCRIMINATOR_V3
-    }
-
-    pub fn is_compressed_mint_discriminator(&self) -> bool {
-        let bytes = self.discriminator.0.to_le_bytes();
-        bytes == COMPRESSED_MINT_DISCRIMINATOR
     }
 }
 

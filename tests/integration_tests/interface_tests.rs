@@ -4,7 +4,7 @@ use function_name::named;
 use futures::{pin_mut, StreamExt};
 use insta::assert_json_snapshot;
 use photon_indexer::api::method::interface::{
-    GetAccountInterfaceRequest, GetMintInterfaceRequest, GetMultipleAccountInterfacesRequest,
+    GetAccountInterfaceRequest, GetMultipleAccountInterfacesRequest,
     GetTokenAccountInterfaceRequest,
 };
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -206,117 +206,6 @@ async fn test_get_multiple_account_interfaces(
     }
 }
 
-/// Test getMintInterface with fully compressed mint (cold path only).
-///
-/// This tests looking up a fully compressed mint by its mint_pda address.
-/// The mint was created via CreateMint and then compressed via CompressAndCloseMint.
-/// This test is fully reproducible from snapshot data (no live RPC needed).
-///
-/// Test data flow:
-/// 1. CreateMint tx creates compressed mint (initially decompressed on-chain)
-/// 2. CompressAndCloseMint tx closes on-chain CMint, full data goes to compressed DB
-/// 3. Cold lookup finds full mint data in compressed DB
-///
-/// To regenerate test data:
-/// 1. cd light-protocol/forester && cargo test -p forester --test test_indexer_interface -- --nocapture
-/// 2. cargo xtask export-photon-test-data --test-name indexer_interface
-/// 3. Copy transactions to photon/tests/data/transactions/indexer_interface/
-/// 4. Update transaction signatures and pubkeys below
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_get_mint_interface(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    // Scenario 5: Fully compressed mint (CreateMint + CompressAndCloseMint)
-    // These transactions create a mint and then compress it to the compressed DB.
-    let create_mint_tx =
-        "2Q8KnAuf9TuPThbkEFZp6tfFC9bsGBVEpvoDJzLZAAEDKi2eSZuEdjKrqw9ez2yhxJt5U7S8LYdrUdSq1KKZid4X";
-    let compress_mint_tx =
-        "2afJTiZyNEMvrKJasbDFqPaTaLWMttjAHnBLgm7CizqzqsiqFp6pXAB9fdrFHq66u6zvv3ddY5xLAzpmREASatnB";
-
-    // Fully compressed mint PDA from Scenario 5
-    let compressed_mint =
-        SerializablePubkey::try_from("JAisegaP3mQQEqsX7H4qiKoBrPYvr36FW1rpeCKHixUU").unwrap();
-
-    let txs = [create_mint_tx, compress_mint_tx];
-    let indexing =
-        all_indexing_methodologies_for_interface(setup.db_conn.clone(), setup.client.clone(), &txs);
-    pin_mut!(indexing);
-
-    while let Some(_) = indexing.next().await {
-        let result = setup
-            .api
-            .get_mint_interface(GetMintInterfaceRequest {
-                address: compressed_mint,
-            })
-            .await
-            .unwrap();
-
-        // With fully compressed mint test data:
-        // - resolvedFrom should be "compressed" (from DB, not on-chain)
-        // - resolvedSlot should be stable (from DB slot_created)
-        // - compressedContext should be present with tree/leaf_index/hash
-        assert_json_snapshot!(format!("{}-mint-interface", name.clone()), result);
-    }
-}
-
-/// Test getMintInterface with non-existent mint.
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_get_mint_interface_nonexistent(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    // Create compressed mint transaction to have slot context
-    let create_mint_tx =
-        "2Q8KnAuf9TuPThbkEFZp6tfFC9bsGBVEpvoDJzLZAAEDKi2eSZuEdjKrqw9ez2yhxJt5U7S8LYdrUdSq1KKZid4X";
-
-    // Test with a non-existent mint - should return None
-    let nonexistent_mint = SerializablePubkey::default();
-
-    let txs = [create_mint_tx];
-    let indexing =
-        all_indexing_methodologies_for_interface(setup.db_conn.clone(), setup.client.clone(), &txs);
-    pin_mut!(indexing);
-
-    while let Some(_) = indexing.next().await {
-        let result = setup
-            .api
-            .get_mint_interface(GetMintInterfaceRequest {
-                address: nonexistent_mint,
-            })
-            .await
-            .unwrap();
-
-        // Should return None for non-existent mint
-        assert!(result.value.is_none());
-        assert_json_snapshot!(format!("{}-mint-interface-none", name.clone()), result);
-    }
-}
-
 /// Test batch size validation for getMultipleAccountInterfaces.
 #[named]
 #[rstest]
@@ -370,9 +259,7 @@ The test creates:
 1. SPL Mint (on-chain) - standard mint for token operations
 2. Compressed token accounts (via mint_to) - these have NO address field
 3. Registered v2 address in batched address tree - for address tree verification
-4. Decompressed mint (via CreateMint) - CMint on-chain, compressed DB has 32-byte PDA only
-5. Fully compressed mint (CreateMint + CompressAndCloseMint) - full data in compressed DB
-6. Compressible token accounts - on-chain accounts that can be compressed
+4. Compressible token accounts - on-chain accounts that can be compressed
 
 Transaction files are stored in tests/data/transactions/indexer_interface/
 

@@ -4,7 +4,6 @@ use utoipa::ToSchema;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
-use crate::common::typedefs::mint_data::MintData;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
@@ -91,15 +90,6 @@ pub enum ColdContext {
         tree_info: TreeInfo,
         data: ColdData,
     },
-    #[serde(rename = "mint")]
-    Mint {
-        hash: Hash,
-        #[serde(rename = "leafIndex")]
-        leaf_index: UnsignedInteger,
-        #[serde(rename = "treeInfo")]
-        tree_info: TreeInfo,
-        data: ColdData,
-    },
 }
 
 /// Unified account interface — works for both on-chain and compressed accounts
@@ -123,15 +113,6 @@ pub struct TokenAccountInterface {
     pub token_data: TokenData,
 }
 
-/// Mint account interface with parsed mint data
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct MintInterface {
-    #[serde(flatten)]
-    pub account: AccountInterface,
-    pub mint_data: MintData,
-}
-
 // ============ Typed Lookup Types ============
 
 /// Typed account lookup for batch requests
@@ -150,12 +131,6 @@ pub enum AccountLookup {
         /// The token account address to look up
         address: SerializablePubkey,
     },
-    /// Mint account lookup by address
-    #[serde(rename = "mint")]
-    Mint {
-        /// The mint address to look up
-        address: SerializablePubkey,
-    },
 }
 
 /// Heterogeneous result type for batch lookups
@@ -168,9 +143,6 @@ pub enum InterfaceResult {
     /// Token account result with parsed token data
     #[serde(rename = "token")]
     Token(TokenAccountInterface),
-    /// Mint account result with parsed mint data
-    #[serde(rename = "mint")]
-    Mint(MintInterface),
 }
 
 // ============ Request Types ============
@@ -188,14 +160,6 @@ pub struct GetAccountInterfaceRequest {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetTokenAccountInterfaceRequest {
     /// The token account address to look up
-    pub address: SerializablePubkey,
-}
-
-/// Request for getMintInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetMintInterfaceRequest {
-    /// The mint address to look up
     pub address: SerializablePubkey,
 }
 
@@ -238,16 +202,6 @@ pub struct GetTokenAccountInterfaceResponse {
     pub context: Context,
     /// The token account data, or None if not found
     pub value: Option<TokenAccountInterface>,
-}
-
-/// Response for getMintInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetMintInterfaceResponse {
-    /// Current context (slot)
-    pub context: Context,
-    /// The mint data, or None if not found
-    pub value: Option<MintInterface>,
 }
 
 /// Response for getAtaInterface
@@ -300,22 +254,6 @@ pub struct GetAccountInterfacesRequest {
 pub struct GetAccountInterfacesResponse {
     pub context: Context,
     pub value: Vec<Option<AccountInterface>>,
-}
-
-/// Request for getMintAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetMintAccountInterfacesRequest {
-    /// List of mint addresses to look up (max 100)
-    pub addresses: Vec<SerializablePubkey>,
-}
-
-/// Response for getMintAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetMintAccountInterfacesResponse {
-    pub context: Context,
-    pub value: Vec<Option<MintInterface>>,
 }
 
 // ============ Constants ============
