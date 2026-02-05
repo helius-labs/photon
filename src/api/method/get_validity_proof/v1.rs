@@ -57,6 +57,7 @@ pub struct GetValidityProofResponse {
 pub async fn get_validity_proof(
     conn: &DatabaseConnection,
     prover_url: &str,
+    prover_api_key: Option<&str>,
     mut request: GetValidityProofRequest,
 ) -> Result<GetValidityProofResponse, PhotonApiError> {
     if request.hashes.is_empty()
@@ -149,6 +150,7 @@ pub async fn get_validity_proof(
         db_new_address_proofs,
         root_history_capacity,
         prover_url,
+        prover_api_key,
     )
     .await?;
 
