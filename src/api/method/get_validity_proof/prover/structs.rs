@@ -1,4 +1,3 @@
-use crate::common::typedefs::bs58_string::Base58String;
 use crate::ingester::parser::tree_info::TreeInfo;
 use jsonrpsee_core::Serialize;
 use num_traits::identities::Zero;
@@ -69,9 +68,9 @@ pub(crate) struct ProofABC {
 
 #[derive(Serialize, Deserialize, Default, ToSchema, Debug, Clone)]
 pub struct CompressedProof {
-    pub a: Base58String,
-    pub b: Base58String,
-    pub c: Base58String,
+    pub a: Vec<u8>,
+    pub b: Vec<u8>,
+    pub c: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
