@@ -105,14 +105,23 @@ components:
       - c
       properties:
         a:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
+            format: uint8
+            minimum: 0
         b:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
+            format: uint8
+            minimum: 0
         c:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
+            format: uint8
+            minimum: 0
     CompressedProofWithContext:
       type: object
       required:
