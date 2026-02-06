@@ -128,6 +128,10 @@ impl PhotonApi {
         Ok(())
     }
 
+    pub async fn health(&self) -> Result<(), PhotonApiError> {
+        Ok(())
+    }
+
     pub async fn readiness(&self) -> Result<(), PhotonApiError> {
         self.db_conn
             .execute(Statement::from_string(
