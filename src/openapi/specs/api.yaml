@@ -5438,14 +5438,17 @@ components:
       - c
       properties:
         a:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
         b:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
         c:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
     CompressedProofWithContext:
       type: object
       required:
@@ -6043,7 +6046,14 @@ components:
           $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
     TokenAccountInterface:
-      $ref: '#/components/schemas/AccountInterface'
+      allOf:
+      - $ref: '#/components/schemas/AccountInterface'
+      - type: object
+        required:
+        - tokenData
+        properties:
+          tokenData:
+            $ref: '#/components/schemas/TokenData'
     TokenAccountList:
       type: object
       required:

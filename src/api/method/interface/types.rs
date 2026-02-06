@@ -107,12 +107,33 @@ pub struct AccountInterface {
 }
 
 /// Token account interface with parsed token data
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenAccountInterface {
     #[serde(flatten)]
     pub account: AccountInterface,
     pub token_data: TokenData,
+}
+
+impl<'__s> utoipa::ToSchema<'__s> for TokenAccountInterface {
+    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+        use utoipa::openapi::*;
+        let schema = Schema::AllOf(
+            AllOfBuilder::new()
+                .item(RefOr::Ref(Ref::from_schema_name("AccountInterface")))
+                .item(RefOr::T(Schema::Object(
+                    ObjectBuilder::new()
+                        .property(
+                            "tokenData",
+                            RefOr::Ref(Ref::from_schema_name("TokenData")),
+                        )
+                        .required("tokenData")
+                        .build(),
+                )))
+                .build(),
+        );
+        ("TokenAccountInterface", RefOr::T(schema))
+    }
 }
 
 // ============ Typed Lookup Types ============
@@ -136,7 +157,7 @@ pub enum AccountLookup {
 }
 
 /// Heterogeneous result type for batch lookups
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum InterfaceResult {
     /// Generic account result
@@ -145,6 +166,57 @@ pub enum InterfaceResult {
     /// Token account result with parsed token data
     #[serde(rename = "token")]
     Token(TokenAccountInterface),
+}
+
+impl<'__s> utoipa::ToSchema<'__s> for InterfaceResult {
+    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+        use utoipa::openapi::*;
+        let account_variant = AllOfBuilder::new()
+            .item(RefOr::Ref(Ref::from_schema_name("AccountInterface")))
+            .item(RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .property(
+                        "type",
+                        RefOr::T(Schema::Object(
+                            ObjectBuilder::new()
+                                .schema_type(SchemaType::String)
+                                .enum_values(Some(vec!["account"]))
+                                .build(),
+                        )),
+                    )
+                    .required("type")
+                    .build(),
+            )))
+            .build();
+
+        let token_variant = AllOfBuilder::new()
+            .item(RefOr::Ref(Ref::from_schema_name("TokenAccountInterface")))
+            .item(RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .property(
+                        "type",
+                        RefOr::T(Schema::Object(
+                            ObjectBuilder::new()
+                                .schema_type(SchemaType::String)
+                                .enum_values(Some(vec!["token"]))
+                                .build(),
+                        )),
+                    )
+                    .required("type")
+                    .build(),
+            )))
+            .build();
+
+        let schema = Schema::OneOf(
+            OneOfBuilder::new()
+                .item(RefOr::T(Schema::AllOf(account_variant)))
+                .item(RefOr::T(Schema::AllOf(token_variant)))
+                .discriminator(Some(Discriminator::new("type")))
+                .description(Some("Heterogeneous result type for batch lookups"))
+                .build(),
+        );
+        ("InterfaceResult", RefOr::T(schema))
+    }
 }
 
 // ============ Request Types ============
