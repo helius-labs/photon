@@ -63,11 +63,37 @@ pub struct TreeInfo {
 }
 
 /// Structured compressed account data (discriminator separated)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColdData {
     pub discriminator: Vec<u8>,
     pub data: Base64String,
+}
+
+impl<'__s> utoipa::ToSchema<'__s> for ColdData {
+    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+        use utoipa::openapi::*;
+        // Vec<u8> is serialized by serde as a JSON array of integers.
+        // utoipa's default renders Vec<u8> as string/binary which is wrong.
+        let byte_array = RefOr::T(Schema::Array(
+            ArrayBuilder::new()
+                .items(RefOr::T(Schema::Object(
+                    ObjectBuilder::new()
+                        .schema_type(SchemaType::Integer)
+                        .build(),
+                )))
+                .build(),
+        ));
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .property("discriminator", byte_array)
+                .required("discriminator")
+                .property("data", RefOr::Ref(Ref::from_schema_name("Base64String")))
+                .required("data")
+                .build(),
+        );
+        ("ColdData", RefOr::T(schema))
+    }
 }
 
 /// Compressed account context — present when account is in compressed state
