@@ -5420,7 +5420,6 @@ components:
         propertyName: type
     ColdData:
       type: object
-      description: Structured compressed account data (discriminator separated)
       required:
       - discriminator
       - data
@@ -5428,8 +5427,9 @@ components:
         data:
           $ref: '#/components/schemas/Base64String'
         discriminator:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
     CompressedProof:
       type: object
       required:
