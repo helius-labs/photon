@@ -129,7 +129,14 @@ impl PhotonApi {
     }
 
     pub async fn health(&self) -> Result<(), PhotonApiError> {
-        Ok(())
+        self.db_conn
+            .execute(Statement::from_string(
+                self.db_conn.as_ref().get_database_backend(),
+                "SELECT 1".to_string(),
+            ))
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     pub async fn readiness(&self) -> Result<(), PhotonApiError> {
