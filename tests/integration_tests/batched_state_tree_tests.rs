@@ -17,7 +17,7 @@ use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::common::typedefs::serializable_signature::SerializableSignature;
 use photon_indexer::common::typedefs::token_data::TokenData;
 use photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger;
-use photon_indexer::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use photon_indexer::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use serial_test::serial;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
@@ -391,21 +391,22 @@ async fn test_batched_tree_transactions(
             println!("pre input queue len {}", pre_input_len,);
             // Insert 1 batch.
 
-            let pre_output_queue = pre_output_queue_elements
+            if let Some(pre_output_queue) = pre_output_queue_elements
                 .state_queue
                 .as_ref()
                 .and_then(|sq| sq.output_queue.as_ref())
-                .unwrap();
-            let slice_length = pre_output_queue.leaves.len().min(10);
-            for idx in 0..slice_length {
-                let leaf_index = pre_output_queue.leaf_indices[idx];
-                let leaf_hash = &pre_output_queue.leaves[idx];
-                let leaf = event_merkle_tree.leaf(leaf_index as usize);
-                if leaf == [0u8; 32] {
-                    event_merkle_tree
-                        .update(&leaf_hash.0, leaf_index as usize)
-                        .unwrap();
-                    println!("append leaf index {}", leaf_index);
+            {
+                let slice_length = pre_output_queue.leaves.len().min(10);
+                for idx in 0..slice_length {
+                    let leaf_index = pre_output_queue.leaf_indices[idx];
+                    let leaf_hash = &pre_output_queue.leaves[idx];
+                    let leaf = event_merkle_tree.leaf(leaf_index as usize);
+                    if leaf == [0u8; 32] {
+                        event_merkle_tree
+                            .update(&leaf_hash.0, leaf_index as usize)
+                            .unwrap();
+                        println!("append leaf index {}", leaf_index);
+                    }
                 }
             }
         }
@@ -683,7 +684,7 @@ async fn test_batched_tree_token_transactions(
                 assert_eq!(account.account.lamports, UnsignedInteger(1_000_000));
                 assert_eq!(
                     account.account.owner,
-                    SerializablePubkey::from(COMPRESSED_TOKEN_PROGRAM)
+                    SerializablePubkey::from(LIGHT_TOKEN_PROGRAM_ID)
                 );
                 assert_eq!(account.account.leaf_index.0, i as u64);
                 assert_eq!(account.account.seq, None);
