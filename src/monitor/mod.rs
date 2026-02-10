@@ -44,6 +44,14 @@ const CHUNK_SIZE: usize = 100;
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
 static TREE_VALIDATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
+struct TreeValidationGuard;
+
+impl Drop for TreeValidationGuard {
+    fn drop(&mut self) {
+        TREE_VALIDATION_IN_PROGRESS.store(false, Ordering::SeqCst);
+    }
+}
+
 async fn fetch_last_indexed_slot_with_infinite_retry(db: &DatabaseConnection) -> u64 {
     loop {
         if let Ok(context) = Context::extract(db).await {
@@ -99,10 +107,10 @@ pub fn continously_monitor_photon(
                     let rpc_clone = rpc_client.clone();
 
                     tokio::spawn(async move {
+                        let _validation_guard = TreeValidationGuard;
                         let tree_roots =
                             load_db_tree_roots_with_infinite_retry(db_clone.as_ref()).await;
                         validate_tree_roots(rpc_clone.as_ref(), tree_roots).await;
-                        TREE_VALIDATION_IN_PROGRESS.store(false, Ordering::SeqCst);
                     });
                 }
 

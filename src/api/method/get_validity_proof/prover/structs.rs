@@ -3,7 +3,6 @@ use jsonrpsee_core::Serialize;
 use num_traits::identities::Zero;
 use serde::Deserialize;
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct AccountProofDetail {
     pub hash: String,

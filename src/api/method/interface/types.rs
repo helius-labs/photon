@@ -149,10 +149,7 @@ impl<'__s> utoipa::ToSchema<'__s> for TokenAccountInterface {
                 .item(RefOr::Ref(Ref::from_schema_name("AccountInterface")))
                 .item(RefOr::T(Schema::Object(
                     ObjectBuilder::new()
-                        .property(
-                            "tokenData",
-                            RefOr::Ref(Ref::from_schema_name("TokenData")),
-                        )
+                        .property("tokenData", RefOr::Ref(Ref::from_schema_name("TokenData")))
                         .required("tokenData")
                         .build(),
                 )))

@@ -416,15 +416,23 @@ pub async fn cold_lookup_multiple(
             )
             .await;
 
-            if let Ok(Ok(models)) = derived_result {
-                for model in models {
-                    if let Some(address) = &model.address {
-                        if let Some(&original_idx) = derived_to_original.get(address) {
-                            // Store using the original address bytes as key
-                            onchain_pubkey_to_model
-                                .insert(address_bytes[original_idx].clone(), model);
+            match derived_result {
+                Ok(Ok(models)) => {
+                    for model in models {
+                        if let Some(address) = &model.address {
+                            if let Some(&original_idx) = derived_to_original.get(address) {
+                                // Store using the original address bytes as key
+                                onchain_pubkey_to_model
+                                    .insert(address_bytes[original_idx].clone(), model);
+                            }
                         }
                     }
+                }
+                Ok(Err(e)) => return Err(PhotonApiError::DatabaseError(e)),
+                Err(_) => {
+                    return Err(PhotonApiError::UnexpectedError(
+                        "Database timeout during derived address lookup".to_string(),
+                    ))
                 }
             }
         }
