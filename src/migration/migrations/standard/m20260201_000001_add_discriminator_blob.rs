@@ -21,13 +21,13 @@ async fn execute_sql(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr
 fn postgres_numeric_to_little_endian_hex_expr(value_expr: &str) -> String {
     format!(
         "lpad(to_hex((mod({value_expr}, 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 256), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 65536), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 16777216), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 4294967296), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 1099511627776), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 281474976710656), 256))::int), 2, '0') || \
-         lpad(to_hex((mod(trunc({value_expr} / 72057594037927936), 256))::int), 2, '0')",
+         lpad(to_hex((mod(floor({value_expr} / 256.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 65536.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 16777216.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 4294967296.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 1099511627776.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 281474976710656.0), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(floor({value_expr} / 72057594037927936.0), 256))::int), 2, '0')",
     )
 }
 
