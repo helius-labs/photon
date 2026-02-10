@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::context::Context;
-use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
-use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 
 /// Nested Solana account fields (matches getAccountInfo shape)
@@ -20,226 +19,16 @@ pub struct SolanaAccountData {
     pub space: UnsignedInteger,
 }
 
-/// Tree type enum matching light-protocol's TreeType.
-/// Values match light-compressed-account::TreeType: StateV1=1, StateV2=3
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-#[repr(u64)]
-#[derive(Default)]
-pub enum TreeType {
-    /// Legacy V1 state tree (tree and queue are the same)
-    #[serde(rename = "stateV1")]
-    #[default]
-    StateV1 = 1,
-    /// V2 state tree with separate output queue
-    #[serde(rename = "stateV2")]
-    StateV2 = 3,
-}
-
-impl From<i32> for TreeType {
-    fn from(value: i32) -> Self {
-        match value {
-            1 => TreeType::StateV1,
-            3 => TreeType::StateV2,
-            _ => TreeType::StateV1, // Default fallback
-        }
-    }
-}
-
-/// Merkle tree info for compressed accounts
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TreeInfo {
-    /// The merkle tree pubkey
-    pub tree: SerializablePubkey,
-    /// The output queue pubkey (same as tree for V1, separate for V2)
-    pub queue: SerializablePubkey,
-    /// The tree type (V1 or V2)
-    pub tree_type: TreeType,
-    /// Sequence number of the account in the tree
-    pub seq: Option<UnsignedInteger>,
-    /// Slot when the account was created/compressed
-    pub slot_created: UnsignedInteger,
-}
-
-/// Structured compressed account data (discriminator separated)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ColdData {
-    pub discriminator: Vec<u8>,
-    pub data: Base64String,
-}
-
-impl<'__s> utoipa::ToSchema<'__s> for ColdData {
-    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
-        use utoipa::openapi::*;
-        // Vec<u8> is serialized by serde as a JSON array of integers.
-        // utoipa's default renders Vec<u8> as string/binary which is wrong.
-        let byte_array = RefOr::T(Schema::Array(
-            ArrayBuilder::new()
-                .items(RefOr::T(Schema::Object(
-                    ObjectBuilder::new()
-                        .schema_type(SchemaType::Integer)
-                        .build(),
-                )))
-                .build(),
-        ));
-        let schema = Schema::Object(
-            ObjectBuilder::new()
-                .property("discriminator", byte_array)
-                .required("discriminator")
-                .property("data", RefOr::Ref(Ref::from_schema_name("Base64String")))
-                .required("data")
-                .build(),
-        );
-        ("ColdData", RefOr::T(schema))
-    }
-}
-
-/// Compressed account context — present when account is in compressed state
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum ColdContext {
-    #[serde(rename = "account")]
-    Account {
-        hash: Hash,
-        #[serde(rename = "leafIndex")]
-        leaf_index: UnsignedInteger,
-        #[serde(rename = "treeInfo")]
-        tree_info: TreeInfo,
-        data: ColdData,
-    },
-    #[serde(rename = "token")]
-    Token {
-        hash: Hash,
-        #[serde(rename = "leafIndex")]
-        leaf_index: UnsignedInteger,
-        #[serde(rename = "treeInfo")]
-        tree_info: TreeInfo,
-        data: ColdData,
-    },
-}
-
 /// Unified account interface — works for both on-chain and compressed accounts
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
-    /// The on-chain Solana pubkey
+    /// The queried Solana pubkey
     pub key: SerializablePubkey,
-    /// Standard Solana account fields
+    /// Standard Solana account fields (hot view or synthetic cold view)
     pub account: SolanaAccountData,
-    /// Compressed context — null if on-chain, present if compressed
-    pub cold: Option<ColdContext>,
-}
-
-/// Token account interface with parsed token data
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenAccountInterface {
-    #[serde(flatten)]
-    pub account: AccountInterface,
-    pub token_data: TokenData,
-}
-
-impl<'__s> utoipa::ToSchema<'__s> for TokenAccountInterface {
-    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
-        use utoipa::openapi::*;
-        let schema = Schema::AllOf(
-            AllOfBuilder::new()
-                .item(RefOr::Ref(Ref::from_schema_name("AccountInterface")))
-                .item(RefOr::T(Schema::Object(
-                    ObjectBuilder::new()
-                        .property("tokenData", RefOr::Ref(Ref::from_schema_name("TokenData")))
-                        .required("tokenData")
-                        .build(),
-                )))
-                .build(),
-        );
-        ("TokenAccountInterface", RefOr::T(schema))
-    }
-}
-
-// ============ Typed Lookup Types ============
-
-/// Typed account lookup for batch requests
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum AccountLookup {
-    /// Generic account/PDA lookup by address
-    #[serde(rename = "account")]
-    Account {
-        /// The account address to look up
-        address: SerializablePubkey,
-    },
-    /// Token account lookup by address
-    #[serde(rename = "token")]
-    Token {
-        /// The token account address to look up
-        address: SerializablePubkey,
-    },
-}
-
-/// Heterogeneous result type for batch lookups
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum InterfaceResult {
-    /// Generic account result
-    #[serde(rename = "account")]
-    Account(AccountInterface),
-    /// Token account result with parsed token data
-    #[serde(rename = "token")]
-    Token(TokenAccountInterface),
-}
-
-impl<'__s> utoipa::ToSchema<'__s> for InterfaceResult {
-    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
-        use utoipa::openapi::*;
-        let account_variant = AllOfBuilder::new()
-            .item(RefOr::Ref(Ref::from_schema_name("AccountInterface")))
-            .item(RefOr::T(Schema::Object(
-                ObjectBuilder::new()
-                    .property(
-                        "type",
-                        RefOr::T(Schema::Object(
-                            ObjectBuilder::new()
-                                .schema_type(SchemaType::String)
-                                .enum_values(Some(vec!["account"]))
-                                .build(),
-                        )),
-                    )
-                    .required("type")
-                    .build(),
-            )))
-            .build();
-
-        let token_variant = AllOfBuilder::new()
-            .item(RefOr::Ref(Ref::from_schema_name("TokenAccountInterface")))
-            .item(RefOr::T(Schema::Object(
-                ObjectBuilder::new()
-                    .property(
-                        "type",
-                        RefOr::T(Schema::Object(
-                            ObjectBuilder::new()
-                                .schema_type(SchemaType::String)
-                                .enum_values(Some(vec!["token"]))
-                                .build(),
-                        )),
-                    )
-                    .required("type")
-                    .build(),
-            )))
-            .build();
-
-        let schema = Schema::OneOf(
-            OneOfBuilder::new()
-                .item(RefOr::T(Schema::AllOf(account_variant)))
-                .item(RefOr::T(Schema::AllOf(token_variant)))
-                .discriminator(Some(Discriminator::new("type")))
-                .description(Some("Heterogeneous result type for batch lookups"))
-                .build(),
-        );
-        ("InterfaceResult", RefOr::T(schema))
-    }
+    /// Compressed accounts associated with this pubkey
+    pub cold: Option<Vec<AccountV2>>,
 }
 
 // ============ Request Types ============
@@ -252,30 +41,11 @@ pub struct GetAccountInterfaceRequest {
     pub address: SerializablePubkey,
 }
 
-/// Request for getTokenAccountInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetTokenAccountInterfaceRequest {
-    /// The token account address to look up
-    pub address: SerializablePubkey,
-}
-
-/// Request for getAtaInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetAtaInterfaceRequest {
-    /// The wallet address that owns the ATA
-    pub owner: SerializablePubkey,
-    /// The token mint address
-    pub mint: SerializablePubkey,
-}
-
 /// Request for getMultipleAccountInterfaces
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetMultipleAccountInterfacesRequest {
     /// List of account addresses to look up (max 100)
-    /// Server auto-detects account type (account, token, mint) based on program owner and data
     pub addresses: Vec<SerializablePubkey>,
 }
 
@@ -291,65 +61,13 @@ pub struct GetAccountInterfaceResponse {
     pub value: Option<AccountInterface>,
 }
 
-/// Response for getTokenAccountInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTokenAccountInterfaceResponse {
-    /// Current context (slot)
-    pub context: Context,
-    /// The token account data, or None if not found
-    pub value: Option<TokenAccountInterface>,
-}
-
-/// Response for getAtaInterface
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAtaInterfaceResponse {
-    /// Current context (slot)
-    pub context: Context,
-    /// The token account data, or None if not found
-    pub value: Option<TokenAccountInterface>,
-}
-
 /// Response for getMultipleAccountInterfaces
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetMultipleAccountInterfacesResponse {
     /// Current context (slot)
     pub context: Context,
-    /// List of typed results (Some for found accounts, None for not found)
-    pub value: Vec<Option<InterfaceResult>>,
-}
-
-/// Request for getTokenAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetTokenAccountInterfacesRequest {
-    /// List of token account addresses to look up (max 100)
-    pub addresses: Vec<SerializablePubkey>,
-}
-
-/// Response for getTokenAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTokenAccountInterfacesResponse {
-    pub context: Context,
-    pub value: Vec<Option<TokenAccountInterface>>,
-}
-
-/// Request for getAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetAccountInterfacesRequest {
-    /// List of account addresses to look up (max 100)
-    pub addresses: Vec<SerializablePubkey>,
-}
-
-/// Response for getAccountInterfaces (batch)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAccountInterfacesResponse {
-    pub context: Context,
+    /// List of account results (Some for found accounts, None for not found)
     pub value: Vec<Option<AccountInterface>>,
 }
 

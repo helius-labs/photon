@@ -17,7 +17,6 @@ pub mod m20251021_000001_optimize_nullifier_queue_index;
 pub mod m20260127_000001_add_onchain_pubkey;
 pub mod m20260201_000001_add_discriminator_blob;
 pub mod m20260201_000002_add_ata_owner;
-pub mod m20260203_000001_drop_mints_table;
 
 pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -38,6 +37,5 @@ pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260127_000001_add_onchain_pubkey::Migration),
         Box::new(m20260201_000001_add_discriminator_blob::Migration),
         Box::new(m20260201_000002_add_ata_owner::Migration),
-        Box::new(m20260203_000001_drop_mints_table::Migration),
     ]
 }
