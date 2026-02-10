@@ -214,7 +214,9 @@ impl MigrationTrait for Migration {
                 )
                 .await?;
 
-                // Convert existing Decimal discriminator to 8-byte little-endian BYTEA
+                // Convert existing Decimal discriminator to 8-byte little-endian BYTEA.
+                // Use numeric arithmetic instead of bigint casts, because existing values
+                // may exceed i64::MAX.
                 execute_sql(
                     manager,
                     r#"
@@ -222,14 +224,14 @@ impl MigrationTrait for Migration {
                     SET discriminator_new =
                         CASE WHEN discriminator IS NOT NULL THEN
                             decode(
-                                lpad(to_hex(discriminator::bigint & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 8) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 16) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 24) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 32) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 40) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 48) & 255), 2, '0') ||
-                                lpad(to_hex((discriminator::bigint >> 56) & 255), 2, '0'),
+                                lpad(to_hex((mod(discriminator, 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 256), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 65536), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 16777216), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 4294967296), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 1099511627776), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 281474976710656), 256))::int), 2, '0') ||
+                                lpad(to_hex((mod(trunc(discriminator / 72057594037927936), 256))::int), 2, '0'),
                                 'hex'
                             )
                         ELSE NULL END;
