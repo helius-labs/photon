@@ -18,6 +18,35 @@ async fn execute_sql(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr
     Ok(())
 }
 
+fn postgres_numeric_to_little_endian_hex_expr(value_expr: &str) -> String {
+    format!(
+        "lpad(to_hex((mod({value_expr}, 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 256), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 65536), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 16777216), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 4294967296), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 1099511627776), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 281474976710656), 256))::int), 2, '0') || \
+         lpad(to_hex((mod(trunc({value_expr} / 72057594037927936), 256))::int), 2, '0')",
+    )
+}
+
+fn postgres_discriminator_backfill_sql() -> String {
+    let discriminator_hex_expr = postgres_numeric_to_little_endian_hex_expr("discriminator");
+    format!(
+        r#"
+        UPDATE accounts
+        SET discriminator_new =
+            CASE WHEN discriminator IS NOT NULL THEN
+                decode(
+                    {discriminator_hex_expr},
+                    'hex'
+                )
+            ELSE NULL END;
+        "#
+    )
+}
+
 /// Migration to change discriminator column from REAL/Decimal to BLOB.
 /// This fixes precision loss for large u64 discriminator values in SQLite.
 ///
@@ -217,27 +246,8 @@ impl MigrationTrait for Migration {
                 // Convert existing Decimal discriminator to 8-byte little-endian BYTEA.
                 // Use numeric arithmetic instead of bigint casts, because existing values
                 // may exceed i64::MAX.
-                execute_sql(
-                    manager,
-                    r#"
-                    UPDATE accounts
-                    SET discriminator_new =
-                        CASE WHEN discriminator IS NOT NULL THEN
-                            decode(
-                                lpad(to_hex((mod(discriminator, 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 256), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 65536), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 16777216), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 4294967296), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 1099511627776), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 281474976710656), 256))::int), 2, '0') ||
-                                lpad(to_hex((mod(trunc(discriminator / 72057594037927936), 256))::int), 2, '0'),
-                                'hex'
-                            )
-                        ELSE NULL END;
-                    "#,
-                )
-                .await?;
+                let discriminator_backfill_sql = postgres_discriminator_backfill_sql();
+                execute_sql(manager, &discriminator_backfill_sql).await?;
 
                 // Drop old column and rename new one
                 execute_sql(manager, "ALTER TABLE accounts DROP COLUMN discriminator;").await?;
@@ -332,5 +342,57 @@ impl MigrationTrait for Migration {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm_migration::sea_orm::{ConnectionTrait, Database, DatabaseBackend, Statement};
+    use serial_test::serial;
+
+    fn local_postgres_test_url() -> Option<String> {
+        let url = std::env::var("TEST_DATABASE_URL").ok()?;
+        if url.contains("127.0.0.1") || url.contains("localhost") {
+            Some(url)
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn postgres_backfill_sql_does_not_use_bigint_cast() {
+        let sql = postgres_discriminator_backfill_sql();
+        assert!(!sql.contains("::bigint"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn postgres_backfill_expression_supports_values_above_i64_max() {
+        let Some(database_url) = local_postgres_test_url() else {
+            return;
+        };
+
+        let db = Database::connect(&database_url)
+            .await
+            .expect("failed to connect to TEST_DATABASE_URL");
+
+        if db.get_database_backend() != DatabaseBackend::Postgres {
+            return;
+        }
+
+        let value = 18_224_491_089_580_469_651u64;
+        let hex_expr = postgres_numeric_to_little_endian_hex_expr(&format!("{value}::numeric"));
+        let sql = format!("SELECT decode({hex_expr}, 'hex') AS converted");
+        let rows = db
+            .query_all(Statement::from_string(DatabaseBackend::Postgres, sql))
+            .await
+            .expect("failed to evaluate conversion expression");
+
+        assert_eq!(rows.len(), 1);
+        let converted: Vec<u8> = rows[0]
+            .try_get("", "converted")
+            .expect("failed to parse converted bytes");
+        assert_eq!(converted, value.to_le_bytes().to_vec());
     }
 }
