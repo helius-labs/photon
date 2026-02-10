@@ -2,7 +2,13 @@ use super::{error, parser::state_update::AccountTransaction};
 use crate::ingester::parser::state_update::{AddressQueueUpdate, StateUpdate};
 use crate::{
     api::method::utils::PAGE_LIMIT,
-    common::typedefs::{hash::Hash, token_data::TokenData},
+    common::{
+        token_layout::{
+            ACCOUNT_TYPE_MINT, COMPRESSED_MINT_PDA_END, COMPRESSED_MINT_PDA_OFFSET,
+            TOKEN_ACCOUNT_TYPE_OFFSET,
+        },
+        typedefs::{hash::Hash, token_data::TokenData},
+    },
     dao::generated::{
         account_transactions, accounts, state_tree_histories, state_trees, token_accounts,
         transactions,
@@ -435,17 +441,7 @@ async fn append_output_accounts(
     let mut token_accounts = Vec::new();
 
     for account in out_accounts {
-        // Extract onchain_pubkey for decompressed accounts.
-        // Accounts with the decompressed discriminator store the on-chain PDA
-        // pubkey in the first 32 bytes of their data.
-        let onchain_pubkey = account.account.data.as_ref().and_then(|data| {
-            if data.discriminator.0 == DECOMPRESSED_ACCOUNT_DISCRIMINATOR && data.data.0.len() >= 32
-            {
-                Some(data.data.0[..32].to_vec())
-            } else {
-                None
-            }
-        });
+        let onchain_pubkey = extract_onchain_pubkey(account);
 
         account_models.push(accounts::ActiveModel {
             hash: Set(account.account.hash.to_vec()),
@@ -508,6 +504,27 @@ async fn append_output_accounts(
     }
 
     Ok(())
+}
+
+fn extract_onchain_pubkey(account: &AccountWithContext) -> Option<Vec<u8>> {
+    let data = account.account.data.as_ref()?;
+
+    // Decompressed PDA accounts store the on-chain pubkey in the first 32 bytes.
+    if data.discriminator.0 == DECOMPRESSED_ACCOUNT_DISCRIMINATOR && data.data.0.len() >= 32 {
+        return Some(data.data.0[..32].to_vec());
+    }
+
+    // Compressed mints store the mint PDA at [84..116], and have account_type marker
+    // ACCOUNT_TYPE_MINT at byte TOKEN_ACCOUNT_TYPE_OFFSET.
+    if account.account.owner.0 == LIGHT_TOKEN_PROGRAM_ID
+        && !data.is_c_token_discriminator()
+        && data.data.0.len() > TOKEN_ACCOUNT_TYPE_OFFSET
+        && data.data.0[TOKEN_ACCOUNT_TYPE_OFFSET] == ACCOUNT_TYPE_MINT
+    {
+        return Some(data.data.0[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].to_vec());
+    }
+
+    None
 }
 
 pub async fn persist_token_accounts(
@@ -657,4 +674,91 @@ async fn persist_account_transactions(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::typedefs::account::{
+        Account, AccountContext, AccountData, C_TOKEN_DISCRIMINATOR_V2,
+    };
+    use crate::common::typedefs::bs64_string::Base64String;
+    use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
+    use crate::common::typedefs::unsigned_integer::UnsignedInteger;
+
+    fn sample_account_with_context(
+        owner: Pubkey,
+        discriminator: u64,
+        data: Vec<u8>,
+    ) -> AccountWithContext {
+        AccountWithContext {
+            account: Account {
+                hash: Hash::default(),
+                address: None,
+                data: Some(AccountData {
+                    discriminator: UnsignedInteger(discriminator),
+                    data: Base64String(data),
+                    data_hash: Hash::default(),
+                }),
+                owner: SerializablePubkey::from(owner),
+                lamports: UnsignedInteger(0),
+                tree: SerializablePubkey::default(),
+                leaf_index: UnsignedInteger(0),
+                seq: None,
+                slot_created: UnsignedInteger(0),
+            },
+            context: AccountContext {
+                queue: SerializablePubkey::default(),
+                in_output_queue: true,
+                spent: false,
+                nullified_in_tree: false,
+                nullifier_queue_index: None,
+                nullifier: None,
+                tx_hash: None,
+                tree_type: 0,
+            },
+        }
+    }
+
+    #[test]
+    fn test_extract_onchain_pubkey_for_decompressed_pda() {
+        let expected = (0u8..32).collect::<Vec<u8>>();
+        let mut data = expected.clone();
+        data.extend_from_slice(&[9u8; 8]);
+
+        let account = sample_account_with_context(
+            Pubkey::new_unique(),
+            DECOMPRESSED_ACCOUNT_DISCRIMINATOR,
+            data,
+        );
+
+        assert_eq!(extract_onchain_pubkey(&account), Some(expected));
+    }
+
+    #[test]
+    fn test_extract_onchain_pubkey_for_compressed_mint() {
+        let mut data = vec![0u8; TOKEN_ACCOUNT_TYPE_OFFSET + 1];
+        let expected = [7u8; 32];
+        data[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].copy_from_slice(&expected);
+        data[TOKEN_ACCOUNT_TYPE_OFFSET] = ACCOUNT_TYPE_MINT;
+
+        let account = sample_account_with_context(LIGHT_TOKEN_PROGRAM_ID, 0, data);
+
+        assert_eq!(extract_onchain_pubkey(&account), Some(expected.to_vec()));
+    }
+
+    #[test]
+    fn test_extract_onchain_pubkey_skips_ctoken_discriminator() {
+        let mut data = vec![0u8; TOKEN_ACCOUNT_TYPE_OFFSET + 1];
+        data[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].copy_from_slice(&[8u8; 32]);
+        data[TOKEN_ACCOUNT_TYPE_OFFSET] = ACCOUNT_TYPE_MINT;
+
+        let account = sample_account_with_context(
+            LIGHT_TOKEN_PROGRAM_ID,
+            u64::from_le_bytes(C_TOKEN_DISCRIMINATOR_V2),
+            data,
+        );
+
+        assert_eq!(extract_onchain_pubkey(&account), None);
+    }
 }

@@ -144,7 +144,7 @@ jsonwebtoken = "9"
 [dev-dependencies]
 function_name = "0.3.0"
 serial_test = "2.0.0"
-light-merkle-tree-reference = "0.4"
+light-merkle-tree-reference = "4"
 
 [profile.dev]
 # Do not produce debug info for ~40% faster incremental compilation.

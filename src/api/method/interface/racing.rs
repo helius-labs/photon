@@ -11,13 +11,19 @@ use solana_pubkey::Pubkey;
 use tokio::time::timeout;
 
 use crate::api::error::PhotonApiError;
+use crate::common::token_layout::SPL_TOKEN_ACCOUNT_BASE_LEN;
 use crate::common::typedefs::account::AccountV2;
 use crate::common::typedefs::bs64_string::Base64String;
+use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 
-use super::types::{AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS};
+use crate::common::typedefs::token_data::TokenData;
+
+use super::types::{
+    AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS, SPL_TOKEN_PROGRAM_ID,
+};
 
 /// Result from a hot (on-chain RPC) lookup.
 #[derive(Debug)]
@@ -30,6 +36,8 @@ pub struct HotLookupResult {
 #[derive(Debug)]
 pub struct ColdLookupResult {
     pub accounts: Vec<AccountV2>,
+    /// Map from account hash → wallet owner bytes (from ata_owner in token_accounts table).
+    pub token_wallet_owners: HashMap<Hash, [u8; 32]>,
 }
 
 /// Perform a hot lookup via Solana RPC.
@@ -63,7 +71,7 @@ pub async fn cold_lookup(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
 ) -> Result<ColdLookupResult, PhotonApiError> {
-    let models = find_cold_models(conn, address).await?;
+    let (models, token_wallet_owners) = find_cold_models(conn, address).await?;
 
     let mut accounts_v2 = Vec::with_capacity(models.len());
     for model in models {
@@ -73,17 +81,19 @@ pub async fn cold_lookup(
 
     Ok(ColdLookupResult {
         accounts: accounts_v2,
+        token_wallet_owners,
     })
 }
 
 async fn find_cold_models(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
-) -> Result<Vec<accounts::Model>, PhotonApiError> {
+) -> Result<(Vec<accounts::Model>, HashMap<Hash, [u8; 32]>), PhotonApiError> {
     let address_bytes: Vec<u8> = (*address).into();
     let pda_seed = address.0.to_bytes();
 
     let mut by_hash: HashMap<Vec<u8>, accounts::Model> = HashMap::new();
+    let mut token_wallet_owners: HashMap<Hash, [u8; 32]> = HashMap::new();
 
     // 1) Direct onchain pubkey linkage.
     let onchain_result = timeout(
@@ -181,9 +191,24 @@ async fn find_cold_models(
 
     match token_result {
         Ok(Ok(rows)) => {
-            for (_token, maybe_account) in rows {
+            for (token, maybe_account) in rows {
                 if let Some(model) = maybe_account {
                     if !model.spent {
+                        if let Some(ata_owner) = token.ata_owner {
+                            match (
+                                Hash::try_from(model.hash.clone()),
+                                <[u8; 32]>::try_from(ata_owner.as_slice()),
+                            ) {
+                                (Ok(hash), Ok(owner)) => {
+                                    token_wallet_owners.insert(hash, owner);
+                                }
+                                _ => log::warn!(
+                                    "Skipping invalid token wallet owner entry: hash_len={}, owner_len={}",
+                                    model.hash.len(),
+                                    ata_owner.len()
+                                ),
+                            }
+                        }
                         by_hash.insert(model.hash.clone(), model);
                     }
                 }
@@ -197,7 +222,7 @@ async fn find_cold_models(
         }
     }
 
-    Ok(by_hash.into_values().collect())
+    Ok((by_hash.into_values().collect(), token_wallet_owners))
 }
 
 /// Get distinct owners from accounts that have derived addresses.
@@ -237,7 +262,92 @@ fn hot_to_solana_account_data(account: &SolanaAccount) -> SolanaAccountData {
     }
 }
 
-fn cold_to_synthetic_account_data(account: &AccountV2) -> SolanaAccountData {
+/// Build the 165-byte SPL Token Account layout from compressed TokenData + corrected wallet owner.
+///
+/// Layout verified against light-protocol's Token struct serialization
+/// (program-libs/token-interface/src/state/token/borsh.rs).
+fn build_spl_token_account_bytes(token_data: &TokenData, wallet_owner: &[u8; 32]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(SPL_TOKEN_ACCOUNT_BASE_LEN);
+
+    // [0..32] mint
+    buf.extend_from_slice(&token_data.mint.0.to_bytes());
+    // [32..64] owner — corrected to wallet owner (not compressed token owner)
+    buf.extend_from_slice(wallet_owner);
+    // [64..72] amount
+    buf.extend_from_slice(&token_data.amount.0.to_le_bytes());
+    // [72..108] delegate: COption<Pubkey> (4-byte LE tag + 32-byte pubkey)
+    match &token_data.delegate {
+        Some(delegate) => {
+            buf.extend_from_slice(&1u32.to_le_bytes());
+            buf.extend_from_slice(&delegate.0.to_bytes());
+        }
+        None => {
+            buf.extend_from_slice(&0u32.to_le_bytes());
+            buf.extend_from_slice(&[0u8; 32]);
+        }
+    }
+    // [108] state: compressed 0 (Initialized) → SPL 1, compressed 1 (Frozen) → SPL 2
+    let spl_state: u8 = match token_data.state {
+        crate::common::typedefs::token_data::AccountState::initialized => 1,
+        crate::common::typedefs::token_data::AccountState::frozen => 2,
+    };
+    buf.push(spl_state);
+    // [109..121] is_native: COption<u64> — not tracked in compressed, set to None
+    buf.extend_from_slice(&0u32.to_le_bytes()); // tag = None
+    buf.extend_from_slice(&0u64.to_le_bytes()); // value = 0
+                                                // [121..129] delegated_amount — tracked in TLV extension, set to 0 for now
+    buf.extend_from_slice(&0u64.to_le_bytes());
+    // [129..165] close_authority: COption<Pubkey> — not tracked in compressed, set to None
+    buf.extend_from_slice(&0u32.to_le_bytes());
+    buf.extend_from_slice(&[0u8; 32]);
+
+    debug_assert_eq!(buf.len(), SPL_TOKEN_ACCOUNT_BASE_LEN);
+    buf
+}
+
+fn cold_to_synthetic_account_data(
+    account: &AccountV2,
+    wallet_owner: Option<&[u8]>,
+) -> SolanaAccountData {
+    // For token accounts, always synthesize 165-byte SPL layout.
+    // Prefer ATA wallet owner when available, else fall back to compressed token owner.
+    if let Ok(Some(token_data)) = account.parse_token_data() {
+        let owner_arr = match wallet_owner.and_then(|bytes| <&[u8; 32]>::try_from(bytes).ok()) {
+            Some(owner) => *owner,
+            None => {
+                if let Some(owner) = wallet_owner {
+                    log::debug!(
+                        "Invalid ata_owner length for token account {}, using compressed owner: {}",
+                        account.hash,
+                        owner.len()
+                    );
+                }
+                token_data.owner.0.to_bytes()
+            }
+        };
+
+        let spl_bytes = build_spl_token_account_bytes(&token_data, &owner_arr);
+        return SolanaAccountData {
+            lamports: account.lamports,
+            data: Base64String(spl_bytes.clone()),
+            owner: SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID),
+            executable: false,
+            rent_epoch: UnsignedInteger(0),
+            space: UnsignedInteger(spl_bytes.len() as u64),
+        };
+    }
+
+    if wallet_owner
+        .map(|bytes| <&[u8; 32]>::try_from(bytes).is_err())
+        .unwrap_or(false)
+    {
+        log::debug!(
+            "Ignoring invalid wallet owner length for non-token cold account: {:?}",
+            wallet_owner.map(|v| v.len())
+        );
+    }
+
+    // Fallback: discriminator + raw data concatenation.
     let full_data = account
         .data
         .as_ref()
@@ -300,6 +410,7 @@ fn resolve_race_result(
             &cold.accounts,
             hot.slot,
             address,
+            &cold.token_wallet_owners,
         )),
         (Ok(hot), Err(e)) => {
             log::debug!("Cold lookup failed, using hot result: {:?}", e);
@@ -313,7 +424,13 @@ fn resolve_race_result(
         }
         (Err(e), Ok(cold)) => {
             log::debug!("Hot lookup failed, using cold result: {:?}", e);
-            Ok(resolve_single_race(None, &cold.accounts, 0, address))
+            Ok(resolve_single_race(
+                None,
+                &cold.accounts,
+                0,
+                address,
+                &cold.token_wallet_owners,
+            ))
         }
         (Err(hot_err), Err(cold_err)) => {
             log::warn!(
@@ -331,6 +448,7 @@ fn resolve_single_race(
     cold_accounts: &[AccountV2],
     hot_slot: u64,
     address: SerializablePubkey,
+    token_wallet_owners: &HashMap<Hash, [u8; 32]>,
 ) -> Option<AccountInterface> {
     let newest_cold = cold_accounts
         .iter()
@@ -344,11 +462,15 @@ fn resolve_single_race(
             if hot_slot >= cold.slot_created.0 {
                 hot_to_solana_account_data(hot)
             } else {
-                cold_to_synthetic_account_data(cold)
+                let wallet_owner = token_wallet_owners.get(&cold.hash);
+                cold_to_synthetic_account_data(cold, wallet_owner.map(|v| v.as_slice()))
             }
         }
         (Some(hot), None) => hot_to_solana_account_data(hot),
-        (None, Some(cold)) => cold_to_synthetic_account_data(cold),
+        (None, Some(cold)) => {
+            let wallet_owner = token_wallet_owners.get(&cold.hash);
+            cold_to_synthetic_account_data(cold, wallet_owner.map(|v| v.as_slice()))
+        }
         (None, None) => return None,
     };
 
@@ -364,7 +486,10 @@ mod tests {
     use super::*;
     use crate::api::method::get_validity_proof::MerkleContextV2;
     use crate::common::typedefs::account::AccountData;
+    use crate::common::typedefs::account::C_TOKEN_DISCRIMINATOR_V2;
     use crate::common::typedefs::hash::Hash;
+    use crate::common::typedefs::token_data::AccountState;
+    use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 
     fn sample_cold(slot_created: u64, lamports: u64) -> AccountV2 {
         AccountV2 {
@@ -376,6 +501,39 @@ mod tests {
                 data_hash: Hash::default(),
             }),
             owner: SerializablePubkey::default(),
+            lamports: UnsignedInteger(lamports),
+            leaf_index: UnsignedInteger(0),
+            seq: Some(UnsignedInteger(1)),
+            slot_created: UnsignedInteger(slot_created),
+            prove_by_index: false,
+            merkle_context: MerkleContextV2 {
+                tree_type: 3,
+                tree: SerializablePubkey::default(),
+                queue: SerializablePubkey::default(),
+                cpi_context: None,
+                next_tree_context: None,
+            },
+        }
+    }
+
+    /// Build a cold AccountV2 that looks like a compressed token account.
+    /// Uses LIGHT_TOKEN_PROGRAM_ID as owner and a c_token discriminator.
+    fn sample_token_cold(slot_created: u64, lamports: u64, token_data: &TokenData) -> AccountV2 {
+        use borsh::BorshSerialize;
+        let mut data_bytes = Vec::new();
+        token_data.serialize(&mut data_bytes).unwrap();
+
+        let discriminator = u64::from_le_bytes(C_TOKEN_DISCRIMINATOR_V2);
+
+        AccountV2 {
+            hash: Hash::default(),
+            address: Some(SerializablePubkey::default()),
+            data: Some(AccountData {
+                discriminator: UnsignedInteger(discriminator),
+                data: Base64String(data_bytes),
+                data_hash: Hash::default(),
+            }),
+            owner: SerializablePubkey::from(LIGHT_TOKEN_PROGRAM_ID),
             lamports: UnsignedInteger(lamports),
             leaf_index: UnsignedInteger(0),
             seq: Some(UnsignedInteger(1)),
@@ -407,6 +565,7 @@ mod tests {
             std::slice::from_ref(&cold),
             200,
             SerializablePubkey::default(),
+            &HashMap::new(),
         )
         .expect("expected Some interface");
 
@@ -431,6 +590,7 @@ mod tests {
             std::slice::from_ref(&cold),
             200,
             SerializablePubkey::default(),
+            &HashMap::new(),
         )
         .expect("expected Some interface");
 
@@ -454,6 +614,7 @@ mod tests {
             std::slice::from_ref(&cold),
             200,
             SerializablePubkey::default(),
+            &HashMap::new(),
         )
         .expect("expected Some interface");
 
@@ -471,8 +632,14 @@ mod tests {
             rent_epoch: 0,
         };
 
-        let result = resolve_single_race(Some(&hot), &[], 200, SerializablePubkey::default())
-            .expect("expected Some interface");
+        let result = resolve_single_race(
+            Some(&hot),
+            &[],
+            200,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
 
         assert_eq!(result.account.lamports.0, 1000);
         assert!(result.cold.is_none());
@@ -487,6 +654,7 @@ mod tests {
             std::slice::from_ref(&cold),
             0,
             SerializablePubkey::default(),
+            &HashMap::new(),
         )
         .expect("expected Some interface");
 
@@ -496,7 +664,154 @@ mod tests {
 
     #[test]
     fn test_resolve_single_race_neither() {
-        let result = resolve_single_race(None, &[], 0, SerializablePubkey::default());
+        let result =
+            resolve_single_race(None, &[], 0, SerializablePubkey::default(), &HashMap::new());
         assert!(result.is_none());
+    }
+
+    // ============ SPL Token Account reconstruction tests ============
+
+    #[test]
+    fn test_build_spl_token_account_bytes_basic() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [42u8; 32];
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]), // compressed owner (not wallet)
+            amount: UnsignedInteger(1_000_000),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let bytes = build_spl_token_account_bytes(&token_data, &wallet_owner);
+
+        assert_eq!(bytes.len(), 165);
+        // [0..32] mint
+        assert_eq!(&bytes[0..32], &mint.to_bytes());
+        // [32..64] owner = wallet_owner, NOT compressed owner
+        assert_eq!(&bytes[32..64], &wallet_owner);
+        // [64..72] amount
+        assert_eq!(&bytes[64..72], &1_000_000u64.to_le_bytes());
+        // [72..76] delegate COption tag = None
+        assert_eq!(&bytes[72..76], &0u32.to_le_bytes());
+        // [76..108] delegate pubkey = zeros
+        assert_eq!(&bytes[76..108], &[0u8; 32]);
+        // [108] state: initialized = 1
+        assert_eq!(bytes[108], 1);
+        // [109..113] is_native COption tag = None
+        assert_eq!(&bytes[109..113], &0u32.to_le_bytes());
+        // [121..129] delegated_amount = 0
+        assert_eq!(&bytes[121..129], &0u64.to_le_bytes());
+        // [129..133] close_authority COption tag = None
+        assert_eq!(&bytes[129..133], &0u32.to_le_bytes());
+    }
+
+    #[test]
+    fn test_build_spl_token_account_bytes_with_delegate() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [10u8; 32];
+        let delegate_key = Pubkey::new_unique();
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(500),
+            delegate: Some(SerializablePubkey::from(delegate_key)),
+            state: AccountState::frozen,
+            tlv: None,
+        };
+
+        let bytes = build_spl_token_account_bytes(&token_data, &wallet_owner);
+
+        assert_eq!(bytes.len(), 165);
+        // [72..76] delegate COption tag = Some (1)
+        assert_eq!(&bytes[72..76], &1u32.to_le_bytes());
+        // [76..108] delegate pubkey
+        assert_eq!(&bytes[76..108], &delegate_key.to_bytes());
+        // [108] state: frozen = 2
+        assert_eq!(bytes[108], 2);
+    }
+
+    #[test]
+    fn test_cold_to_synthetic_token_with_wallet_owner() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [55u8; 32];
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(42),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold = sample_token_cold(100, 1_000_000, &token_data);
+        let result = cold_to_synthetic_account_data(&cold, Some(&wallet_owner));
+
+        // Should produce 165-byte SPL layout
+        assert_eq!(result.data.0.len(), 165);
+        assert_eq!(result.space.0, 165);
+        // Program owner should be SPL Token, not LIGHT_TOKEN_PROGRAM_ID
+        assert_eq!(result.owner, SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID));
+        // Verify wallet owner is at [32..64]
+        assert_eq!(&result.data.0[32..64], &wallet_owner);
+    }
+
+    #[test]
+    fn test_cold_to_synthetic_token_without_wallet_owner() {
+        let mint = Pubkey::new_unique();
+        let compressed_owner = [99u8; 32];
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from(compressed_owner),
+            amount: UnsignedInteger(42),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold = sample_token_cold(100, 1_000_000, &token_data);
+        // No wallet owner → should fall back to compressed token owner.
+        let result = cold_to_synthetic_account_data(&cold, None);
+
+        assert_eq!(result.data.0.len(), 165);
+        assert_eq!(result.space.0, 165);
+        assert_eq!(result.owner, SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID));
+        assert_eq!(&result.data.0[32..64], &compressed_owner);
+    }
+
+    #[test]
+    fn test_cold_to_synthetic_token_invalid_wallet_owner_uses_compressed_owner() {
+        let mint = Pubkey::new_unique();
+        let compressed_owner = [77u8; 32];
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from(compressed_owner),
+            amount: UnsignedInteger(42),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold = sample_token_cold(100, 1_000_000, &token_data);
+        let invalid_owner = [1u8; 31];
+        let result = cold_to_synthetic_account_data(&cold, Some(&invalid_owner));
+
+        assert_eq!(result.data.0.len(), 165);
+        assert_eq!(&result.data.0[32..64], &compressed_owner);
+    }
+
+    #[test]
+    fn test_cold_to_synthetic_non_token() {
+        let cold = sample_cold(100, 500);
+        let wallet_owner = [55u8; 32];
+
+        // Non-token account with wallet_owner should be unaffected
+        let result = cold_to_synthetic_account_data(&cold, Some(&wallet_owner));
+
+        // Should use fallback (discriminator + data), NOT 165-byte SPL layout
+        assert_ne!(result.data.0.len(), 165);
+        // Owner should remain as the account's owner (default pubkey)
+        assert_eq!(result.owner, SerializablePubkey::default());
     }
 }
