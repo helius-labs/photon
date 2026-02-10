@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use function_name::named;
 use futures::{pin_mut, StreamExt};
-use insta::assert_json_snapshot;
 use photon_indexer::api::method::interface::{
     GetAccountInterfaceRequest, GetMultipleAccountInterfacesRequest,
-    GetTokenAccountInterfaceRequest,
 };
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
@@ -50,12 +48,12 @@ fn all_indexing_methodologies_for_interface(
     }
 }
 
-/// Test getAccountInterface with nonexistent address.
+/// Test getAccountInterface resolves compressed token accounts by token owner pubkey.
 #[named]
 #[rstest]
 #[tokio::test]
 #[serial]
-async fn test_get_account_interface_nonexistent(
+async fn test_get_account_interface_token_owner(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
     let name = trim_test_name(function_name!());
@@ -72,8 +70,8 @@ async fn test_get_account_interface_nonexistent(
     let mint_tokens_tx =
         "2YTv5hjSmRAgfwoNHdc4DRDFWW7fqQb57f9s8Rxtu9u6jA2hDxNxEWoiybvn4p7ua2nw3scYeNo6htYCSuBYviFd";
 
-    // Bob's pubkey - note this is the OWNER of compressed token accounts,
-    // not an account ADDRESS. Compressed token accounts don't have addresses.
+    // Bob's pubkey is the token owner. Interface lookup should return
+    // synthetic account data plus compressed token accounts in `cold`.
     let bob_pubkey =
         SerializablePubkey::try_from("DkbH1tracp6nxSQLrHQqJwVE7NaDAAb7eGKzfB9TwBdF").unwrap();
 
@@ -83,8 +81,7 @@ async fn test_get_account_interface_nonexistent(
     pin_mut!(indexing);
 
     while let Some(_) = indexing.next().await {
-        // Test getAccountInterface - should return null since this is an owner pubkey,
-        // not an account address
+        // getAccountInterface must support token-owner lookups.
         let result = setup
             .api
             .get_account_interface(GetAccountInterfaceRequest {
@@ -93,57 +90,12 @@ async fn test_get_account_interface_nonexistent(
             .await
             .unwrap();
 
-        // Expect null - compressed token accounts don't have addresses
-        assert!(result.value.is_none());
-        assert_json_snapshot!(format!("{}-account-interface", name.clone()), result);
-    }
-}
-
-/// Test getTokenAccountInterface with owner pubkey.
-#[named]
-#[rstest]
-#[tokio::test]
-#[serial]
-async fn test_get_token_account_interface_by_owner(
-    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
-) {
-    let name = trim_test_name(function_name!());
-    let setup = setup_with_options(
-        name.clone(),
-        TestSetupOptions {
-            network: Network::Localnet,
-            db_backend,
-        },
-    )
-    .await;
-
-    // Mint compressed tokens to Bob and Charlie
-    let mint_tokens_tx =
-        "2YTv5hjSmRAgfwoNHdc4DRDFWW7fqQb57f9s8Rxtu9u6jA2hDxNxEWoiybvn4p7ua2nw3scYeNo6htYCSuBYviFd";
-
-    // Bob's owner pubkey (not an account address)
-    let bob_pubkey =
-        SerializablePubkey::try_from("DkbH1tracp6nxSQLrHQqJwVE7NaDAAb7eGKzfB9TwBdF").unwrap();
-
-    let txs = [mint_tokens_tx];
-    let indexing =
-        all_indexing_methodologies_for_interface(setup.db_conn.clone(), setup.client.clone(), &txs);
-    pin_mut!(indexing);
-
-    while let Some(_) = indexing.next().await {
-        // Test getTokenAccountInterface - returns null since compressed token
-        // accounts don't have address fields
-        let result = setup
-            .api
-            .get_token_account_interface(GetTokenAccountInterfaceRequest {
-                address: bob_pubkey,
-            })
-            .await
-            .unwrap();
-
-        // Expect null - token accounts from mint_to don't have addresses
-        assert!(result.value.is_none());
-        assert_json_snapshot!(format!("{}-token-account-interface", name.clone()), result);
+        let value = result.value.clone().expect("expected interface value");
+        let cold = value.cold.expect("expected compressed token accounts");
+        assert!(
+            !cold.is_empty(),
+            "expected at least one compressed token account"
+        );
     }
 }
 
@@ -171,7 +123,7 @@ async fn test_get_multiple_account_interfaces(
     let mint_tokens_tx =
         "2YTv5hjSmRAgfwoNHdc4DRDFWW7fqQb57f9s8Rxtu9u6jA2hDxNxEWoiybvn4p7ua2nw3scYeNo6htYCSuBYviFd";
 
-    // Owner pubkeys (not account addresses)
+    // Token owner pubkeys.
     let bob_pubkey =
         SerializablePubkey::try_from("DkbH1tracp6nxSQLrHQqJwVE7NaDAAb7eGKzfB9TwBdF").unwrap();
     let charlie_pubkey =
@@ -196,13 +148,17 @@ async fn test_get_multiple_account_interfaces(
             .await
             .unwrap();
 
-        // Verify we get results for each lookup (all null since these are owner pubkeys)
+        // Both owner pubkeys should resolve to token-backed interfaces.
         assert_eq!(result.value.len(), 3);
-
-        assert_json_snapshot!(
-            format!("{}-multiple-account-interfaces", name.clone()),
-            result
-        );
+        assert!(result.value[0]
+            .as_ref()
+            .and_then(|v| v.cold.as_ref())
+            .is_some_and(|cold| !cold.is_empty()));
+        assert!(result.value[1]
+            .as_ref()
+            .and_then(|v| v.cold.as_ref())
+            .is_some_and(|cold| !cold.is_empty()));
+        assert!(result.value[2].is_none());
     }
 }
 

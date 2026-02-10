@@ -121,243 +121,6 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
-  /getAccountInterfaces:
-    summary: getAccountInterfaces
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getAccountInterfaces
-                params:
-                  type: object
-                  description: Request for getAccountInterfaces (batch)
-                  required:
-                  - addresses
-                  properties:
-                    addresses:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/SerializablePubkey'
-                      description: List of account addresses to look up (max 100)
-                  additionalProperties: false
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    description: Response for getAccountInterfaces (batch)
-                    required:
-                    - context
-                    - value
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        type: array
-                        items:
-                          allOf:
-                          - $ref: '#/components/schemas/AccountInterface'
-                          nullable: true
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-  /getAtaInterface:
-    summary: getAtaInterface
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getAtaInterface
-                params:
-                  type: object
-                  description: Request for getAtaInterface
-                  required:
-                  - owner
-                  - mint
-                  properties:
-                    mint:
-                      $ref: '#/components/schemas/SerializablePubkey'
-                    owner:
-                      $ref: '#/components/schemas/SerializablePubkey'
-                  additionalProperties: false
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    description: Response for getAtaInterface
-                    required:
-                    - context
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        $ref: '#/components/schemas/TokenAccountInterface'
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
   /getCompressedAccount:
     summary: getCompressedAccount
     post:
@@ -3257,9 +3020,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SerializablePubkey'
-                      description: |-
-                        List of account addresses to look up (max 100)
-                        Server auto-detects account type (account, token, mint) based on program owner and data
+                      description: List of account addresses to look up (max 100)
                   additionalProperties: false
         required: true
       responses:
@@ -3303,9 +3064,9 @@ paths:
                         type: array
                         items:
                           allOf:
-                          - $ref: '#/components/schemas/InterfaceResult'
+                          - $ref: '#/components/schemas/AccountInterface'
                           nullable: true
-                        description: List of typed results (Some for found accounts, None for not found)
+                        description: List of account results (Some for found accounts, None for not found)
         '429':
           description: Exceeded rate limit.
           content:
@@ -4287,240 +4048,6 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
-  /getTokenAccountInterface:
-    summary: getTokenAccountInterface
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getTokenAccountInterface
-                params:
-                  type: object
-                  description: Request for getTokenAccountInterface
-                  required:
-                  - address
-                  properties:
-                    address:
-                      $ref: '#/components/schemas/SerializablePubkey'
-                  additionalProperties: false
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    description: Response for getTokenAccountInterface
-                    required:
-                    - context
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        $ref: '#/components/schemas/TokenAccountInterface'
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-  /getTokenAccountInterfaces:
-    summary: getTokenAccountInterfaces
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - jsonrpc
-              - id
-              - method
-              - params
-              properties:
-                id:
-                  type: string
-                  description: An ID to identify the request.
-                  enum:
-                  - test-account
-                jsonrpc:
-                  type: string
-                  description: The version of the JSON-RPC protocol.
-                  enum:
-                  - '2.0'
-                method:
-                  type: string
-                  description: The name of the method to invoke.
-                  enum:
-                  - getTokenAccountInterfaces
-                params:
-                  type: object
-                  description: Request for getTokenAccountInterfaces (batch)
-                  required:
-                  - addresses
-                  properties:
-                    addresses:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/SerializablePubkey'
-                      description: List of token account addresses to look up (max 100)
-                  additionalProperties: false
-        required: true
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                - jsonrpc
-                - id
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                    description: An ID to identify the response.
-                    enum:
-                    - test-account
-                  jsonrpc:
-                    type: string
-                    description: The version of the JSON-RPC protocol.
-                    enum:
-                    - '2.0'
-                  result:
-                    type: object
-                    description: Response for getTokenAccountInterfaces (batch)
-                    required:
-                    - context
-                    - value
-                    properties:
-                      context:
-                        $ref: '#/components/schemas/Context'
-                      value:
-                        type: array
-                        items:
-                          allOf:
-                          - $ref: '#/components/schemas/TokenAccountInterface'
-                          nullable: true
-        '429':
-          description: Exceeded rate limit.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
-        '500':
-          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: object
-                    properties:
-                      code:
-                        type: integer
-                      message:
-                        type: string
-                  id:
-                    type: string
-                  jsonrpc:
-                    type: string
   /getTransactionWithCompressionInfo:
     summary: getTransactionWithCompressionInfo
     post:
@@ -5092,7 +4619,11 @@ components:
         account:
           $ref: '#/components/schemas/SolanaAccountData'
         cold:
-          $ref: '#/components/schemas/ColdContext'
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountV2'
+          description: Compressed accounts associated with this pubkey
+          nullable: true
         key:
           $ref: '#/components/schemas/SerializablePubkey'
     AccountList:
@@ -5118,35 +4649,6 @@ components:
             allOf:
             - $ref: '#/components/schemas/AccountV2'
             nullable: true
-    AccountLookup:
-      oneOf:
-      - type: object
-        description: Generic account/PDA lookup by address
-        required:
-        - address
-        - type
-        properties:
-          address:
-            $ref: '#/components/schemas/SerializablePubkey'
-          type:
-            type: string
-            enum:
-            - account
-      - type: object
-        description: Token account lookup by address
-        required:
-        - address
-        - type
-        properties:
-          address:
-            $ref: '#/components/schemas/SerializablePubkey'
-          type:
-            type: string
-            enum:
-            - token
-      description: Typed account lookup for batch requests
-      discriminator:
-        propertyName: type
     AccountProofInputs:
       type: object
       required:
@@ -5373,63 +4875,6 @@ components:
         optionalTokenData:
           $ref: '#/components/schemas/TokenData'
       additionalProperties: false
-    ColdContext:
-      oneOf:
-      - type: object
-        required:
-        - hash
-        - leafIndex
-        - treeInfo
-        - data
-        - type
-        properties:
-          data:
-            $ref: '#/components/schemas/ColdData'
-          hash:
-            $ref: '#/components/schemas/Hash'
-          leafIndex:
-            $ref: '#/components/schemas/UnsignedInteger'
-          treeInfo:
-            $ref: '#/components/schemas/TreeInfo'
-          type:
-            type: string
-            enum:
-            - account
-      - type: object
-        required:
-        - hash
-        - leafIndex
-        - treeInfo
-        - data
-        - type
-        properties:
-          data:
-            $ref: '#/components/schemas/ColdData'
-          hash:
-            $ref: '#/components/schemas/Hash'
-          leafIndex:
-            $ref: '#/components/schemas/UnsignedInteger'
-          treeInfo:
-            $ref: '#/components/schemas/TreeInfo'
-          type:
-            type: string
-            enum:
-            - token
-      description: Compressed account context — present when account is in compressed state
-      discriminator:
-        propertyName: type
-    ColdData:
-      type: object
-      required:
-      - discriminator
-      - data
-      properties:
-        data:
-          $ref: '#/components/schemas/Base64String'
-        discriminator:
-          type: array
-          items:
-            type: integer
     CompressedProof:
       type: object
       required:
@@ -5650,31 +5095,6 @@ components:
           items:
             $ref: '#/components/schemas/Hash'
       additionalProperties: false
-    InterfaceResult:
-      oneOf:
-      - allOf:
-        - $ref: '#/components/schemas/AccountInterface'
-        - type: object
-          required:
-          - type
-          properties:
-            type:
-              type: string
-              enum:
-              - account
-      - allOf:
-        - $ref: '#/components/schemas/TokenAccountInterface'
-        - type: object
-          required:
-          - type
-          properties:
-            type:
-              type: string
-              enum:
-              - token
-      description: Heterogeneous result type for batch lookups
-      discriminator:
-        propertyName: type
     Limit:
       type: integer
       format: uint64
@@ -6045,15 +5465,6 @@ components:
         amount:
           $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
-    TokenAccountInterface:
-      allOf:
-      - $ref: '#/components/schemas/AccountInterface'
-      - type: object
-        required:
-        - tokenData
-        properties:
-          tokenData:
-            $ref: '#/components/schemas/TokenData'
     TokenAccountList:
       type: object
       required:
@@ -6156,33 +5567,6 @@ components:
           type: integer
           format: uint16
           minimum: 0
-    TreeInfo:
-      type: object
-      description: Merkle tree info for compressed accounts
-      required:
-      - tree
-      - queue
-      - treeType
-      - slotCreated
-      properties:
-        queue:
-          $ref: '#/components/schemas/SerializablePubkey'
-        seq:
-          $ref: '#/components/schemas/UnsignedInteger'
-        slotCreated:
-          $ref: '#/components/schemas/UnsignedInteger'
-        tree:
-          $ref: '#/components/schemas/SerializablePubkey'
-        treeType:
-          $ref: '#/components/schemas/TreeType'
-    TreeType:
-      type: string
-      description: |-
-        Tree type enum matching light-protocol's TreeType.
-        Values match light-compressed-account::TreeType: StateV1=1, StateV2=3
-      enum:
-      - stateV1
-      - stateV2
     UnixTimestamp:
       type: integer
       description: An Unix timestamp (seconds)
