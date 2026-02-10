@@ -2,7 +2,7 @@
 /// to avoid having to import all of Light's dependencies.
 use borsh::{BorshDeserialize, BorshSerialize};
 use light_compressed_account::Pubkey;
-use light_event::event::{AtaOwnerInfo, BatchNullifyContext, NewAddress};
+use light_event::event::{AssociatedTokenAccountOwnerInfo, BatchNullifyContext, NewAddress};
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
@@ -61,7 +61,7 @@ pub struct PublicTransactionEvent {
     pub message: Option<Vec<u8>>,
     /// ATA owner info for compressed ATAs (output_index -> wallet_owner_pubkey).
     /// Only populated for compress_and_close operations where is_ata=true.
-    pub ata_owners: Vec<AtaOwnerInfo>,
+    pub ata_owners: Vec<AssociatedTokenAccountOwnerInfo>,
 }
 
 /// Legacy version of PublicTransactionEvent (without ata_owners, with compression_lamports)
