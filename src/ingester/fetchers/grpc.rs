@@ -17,7 +17,7 @@ use solana_pubkey::Pubkey as SdkPubkey;
 use solana_signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
-use yellowstone_grpc_client::{GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
+use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
 use yellowstone_grpc_proto::geyser::{
     subscribe_update::UpdateOneof, CommitmentLevel, SubscribeRequest, SubscribeRequestPing,
@@ -46,7 +46,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
-        let grpc_stream = get_grpc_block_stream(endpoint, auth_header);
+        let grpc_stream = get_grpc_block_stream(endpoint, auth_header, Some(last_indexed_slot));
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
             Box::pin(get_block_poller_stream(
@@ -158,7 +158,7 @@ fn is_healthy(slot: u64) -> bool {
     (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE
 }
 
-fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<Item = BlockInfo> {
+fn get_grpc_block_stream(endpoint: String, auth_header: String, mut last_indexed_slot: Option<u64>) -> impl Stream<Item = BlockInfo> {
     stream! {
         loop {
             let mut grpc_tx;
@@ -176,7 +176,7 @@ fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<I
                 }
                 let subscription = grpc_client
                     .unwrap()
-                    .subscribe_with_request(Some(get_block_subscribe_request()))
+                    .subscribe_with_request(Some(get_block_subscribe_request(last_indexed_slot.map(|slot| slot + 1))))
                     .await;
                 if let Err(e) = subscription {
                     error!("Error subscribing to gRPC stream, waiting one second then retrying connect: {}", e);
@@ -192,6 +192,7 @@ fn get_grpc_block_stream(endpoint: String, auth_header: String) -> impl Stream<I
                 match message {
                     Ok(message) => match message.update_oneof {
                         Some(UpdateOneof::Block(block)) => {
+                            last_indexed_slot = Some(block.slot);
                             let block = parse_block(block);
                             metric! {
                                 statsd_count!("grpc_block_emitted", 1);
@@ -238,7 +239,8 @@ async fn build_geyser_client(
     GeyserGrpcClient::build_from_shared(endpoint)?
         .x_token(Some(auth_header))?
         .connect_timeout(Duration::from_secs(10))
-        .max_decoding_message_size(8388608)
+        .max_decoding_message_size(100 * 8388608)
+        .tls_config(ClientTlsConfig::new().with_native_roots())?
         .timeout(Duration::from_secs(10))
         .connect()
         .await
@@ -252,7 +254,8 @@ fn generate_random_string(len: usize) -> String {
         .collect()
 }
 
-fn get_block_subscribe_request() -> SubscribeRequest {
+fn get_block_subscribe_request(from_slot: Option<u64>) -> SubscribeRequest {
+    info!("Subscribing to gRPC block stream from slot {}", from_slot.unwrap_or(0));
     SubscribeRequest {
         blocks: HashMap::from_iter(vec![(
             generate_random_string(20),
@@ -264,6 +267,7 @@ fn get_block_subscribe_request() -> SubscribeRequest {
             },
         )]),
         commitment: Some(CommitmentLevel::Confirmed.into()),
+        from_slot,
         ..Default::default()
     }
 }
