@@ -3,10 +3,12 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 
 use crate::api::error::PhotonApiError;
 use crate::common::typedefs::context::Context;
+use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
 use super::racing::race_hot_cold;
 use super::types::{
-    GetMultipleAccountInterfacesRequest, GetMultipleAccountInterfacesResponse, MAX_BATCH_SIZE,
+    AccountInterface, GetMultipleAccountInterfacesRequest, GetMultipleAccountInterfacesResponse,
+    MAX_BATCH_SIZE,
 };
 
 /// Get multiple account data from either on-chain or compressed sources.
@@ -40,22 +42,54 @@ pub async fn get_multiple_account_interfaces(
 
     let results = futures::future::join_all(futures).await;
 
-    let value = results
-        .into_iter()
-        .enumerate()
-        .map(|(i, r)| match r {
-            Ok(v) => v,
+    let value = collect_batch_results(&request.addresses, results)?;
+
+    Ok(GetMultipleAccountInterfacesResponse { context, value })
+}
+
+fn collect_batch_results(
+    addresses: &[SerializablePubkey],
+    results: Vec<Result<Option<AccountInterface>, PhotonApiError>>,
+) -> Result<Vec<Option<AccountInterface>>, PhotonApiError> {
+    let mut value = Vec::with_capacity(results.len());
+    for (i, result) in results.into_iter().enumerate() {
+        match result {
+            // Includes Ok(None): account not found is returned as None.
+            Ok(account) => value.push(account),
+            // Only actual lookup failures abort the entire batch call.
             Err(e) => {
-                log::warn!(
+                log::error!(
                     "Failed to fetch interface for address {:?} (index {}): {:?}",
-                    request.addresses.get(i),
+                    addresses.get(i),
                     i,
                     e
                 );
-                None
+                return Err(e);
             }
-        })
-        .collect();
+        }
+    }
+    Ok(value)
+}
 
-    Ok(GetMultipleAccountInterfacesResponse { context, value })
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_batch_results_keeps_none_for_not_found_accounts() {
+        let addresses = vec![SerializablePubkey::default(), SerializablePubkey::default()];
+        let results = vec![Ok(None), Ok(None)];
+
+        let value = collect_batch_results(&addresses, results).expect("expected success");
+        assert_eq!(value, vec![None, None]);
+    }
+
+    #[test]
+    fn collect_batch_results_returns_error_for_actual_failure() {
+        let addresses = vec![SerializablePubkey::default()];
+        let results = vec![Err(PhotonApiError::UnexpectedError("boom".to_string()))];
+
+        let err = collect_batch_results(&addresses, results).expect_err("expected error");
+        assert_eq!(err, PhotonApiError::UnexpectedError("boom".to_string()));
+    }
 }

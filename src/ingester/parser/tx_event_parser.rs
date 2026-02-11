@@ -91,8 +91,8 @@ where
             .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
         {
             Some(info) => {
-                log::info!(
-                    "DEBUG tx_event_parser: tree={}, tree_type={:?}, queue={}",
+                log::debug!(
+                    "tx_event_parser tree={}, tree_type={:?}, queue={}",
                     tree_solana,
                     info.tree_type,
                     info.queue

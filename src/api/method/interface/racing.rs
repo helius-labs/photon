@@ -21,9 +21,7 @@ use crate::dao::generated::{accounts, token_accounts};
 
 use crate::common::typedefs::token_data::TokenData;
 
-use super::types::{
-    AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS, SPL_TOKEN_PROGRAM_ID,
-};
+use super::types::{AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS};
 
 /// Result from a hot (on-chain RPC) lookup.
 #[derive(Debug)]
@@ -330,7 +328,10 @@ fn cold_to_synthetic_account_data(
         return SolanaAccountData {
             lamports: account.lamports,
             data: Base64String(spl_bytes.clone()),
-            owner: SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID),
+            // Preserve the original program owner from the cold account model.
+            // This can be LIGHT token program and, depending on account source,
+            // may also be SPL Token / Token-2022.
+            owner: account.owner,
             executable: false,
             rent_epoch: UnsignedInteger(0),
             space: UnsignedInteger(spl_bytes.len() as u64),
@@ -751,8 +752,11 @@ mod tests {
         // Should produce 165-byte SPL layout
         assert_eq!(result.data.0.len(), 165);
         assert_eq!(result.space.0, 165);
-        // Program owner should be SPL Token, not LIGHT_TOKEN_PROGRAM_ID
-        assert_eq!(result.owner, SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID));
+        // Program owner should be preserved from cold account.
+        assert_eq!(
+            result.owner,
+            SerializablePubkey::from(LIGHT_TOKEN_PROGRAM_ID)
+        );
         // Verify wallet owner is at [32..64]
         assert_eq!(&result.data.0[32..64], &wallet_owner);
     }
@@ -776,7 +780,10 @@ mod tests {
 
         assert_eq!(result.data.0.len(), 165);
         assert_eq!(result.space.0, 165);
-        assert_eq!(result.owner, SerializablePubkey::from(SPL_TOKEN_PROGRAM_ID));
+        assert_eq!(
+            result.owner,
+            SerializablePubkey::from(LIGHT_TOKEN_PROGRAM_ID)
+        );
         assert_eq!(&result.data.0[32..64], &compressed_owner);
     }
 
