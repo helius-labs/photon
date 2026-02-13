@@ -20,6 +20,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 
 use crate::common::typedefs::token_data::TokenData;
+use crate::ingester::persist::DECOMPRESSED_ACCOUNT_DISCRIMINATOR;
 
 use super::types::{AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS};
 
@@ -220,7 +221,14 @@ async fn find_cold_models(
         }
     }
 
-    Ok((by_hash.into_values().collect(), token_wallet_owners))
+    // Filter out decompressed PDA placeholders — they are bookmarks in the
+    // Merkle tree, not truly cold accounts.
+    let decompressed_disc_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
+    let models: Vec<_> = by_hash
+        .into_values()
+        .filter(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes))
+        .collect();
+    Ok((models, token_wallet_owners))
 }
 
 /// Get distinct owners from accounts that have derived addresses.
@@ -820,5 +828,69 @@ mod tests {
         assert_ne!(result.data.0.len(), 165);
         // Owner should remain as the account's owner (default pubkey)
         assert_eq!(result.owner, SerializablePubkey::default());
+    }
+
+    // ============ Decompressed placeholder filtering tests ============
+
+    #[test]
+    fn test_find_cold_models_filters_decompressed_placeholders() {
+        use crate::dao::generated::accounts;
+        use sea_orm::prelude::Decimal;
+
+        let decompressed_disc = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
+        let normal_disc = 0x0807060504030201u64.to_le_bytes().to_vec();
+
+        let make_model =
+            |hash: Vec<u8>, discriminator: Option<Vec<u8>>, lamports: i64| accounts::Model {
+                hash,
+                address: None,
+                discriminator,
+                data: None,
+                data_hash: None,
+                tree: vec![],
+                leaf_index: 0,
+                seq: Some(1),
+                slot_created: 100,
+                owner: vec![0u8; 32],
+                lamports: Decimal::from(lamports),
+                spent: false,
+                prev_spent: Some(false),
+                tx_hash: None,
+                onchain_pubkey: None,
+                tree_type: Some(3),
+                nullified_in_tree: false,
+                nullifier_queue_index: None,
+                in_output_queue: false,
+                queue: None,
+                nullifier: None,
+            };
+
+        let placeholder = make_model(vec![1u8; 32], Some(decompressed_disc), 0);
+        let normal = make_model(vec![2u8; 32], Some(normal_disc), 1000);
+        let no_disc = make_model(vec![3u8; 32], None, 500);
+
+        // Simulate the filtering logic from find_cold_models.
+        let by_hash: HashMap<Vec<u8>, accounts::Model> = vec![
+            (placeholder.hash.clone(), placeholder),
+            (normal.hash.clone(), normal),
+            (no_disc.hash.clone(), no_disc),
+        ]
+        .into_iter()
+        .collect();
+
+        let decompressed_disc_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
+        let filtered: Vec<_> = by_hash
+            .into_values()
+            .filter(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes))
+            .collect();
+
+        // Placeholder should be filtered out, normal and no-disc should remain.
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered
+            .iter()
+            .all(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes)));
+        let hashes: Vec<&Vec<u8>> = filtered.iter().map(|m| &m.hash).collect();
+        assert!(hashes.contains(&&vec![2u8; 32]));
+        assert!(hashes.contains(&&vec![3u8; 32]));
     }
 }
