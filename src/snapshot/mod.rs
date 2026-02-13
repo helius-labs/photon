@@ -22,7 +22,7 @@ use bytes::{BufMut, Bytes};
 use cloud_storage::Client as GcsClient;
 use futures::stream::StreamExt;
 use futures::{pin_mut, stream, Stream};
-use log::info;
+use log::{error, info};
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::{bucket::Bucket, BucketConfiguration};
@@ -121,7 +121,7 @@ impl R2DirectoryAdapter {
             let stream = result.bytes();
 
             while let Some(byte) = stream.next().await {
-                let byte = byte.with_context(|| "Failed to read byte from file").unwrap();
+                let byte = byte.with_context(|| "Failed to read byte from file")?;
                 yield Ok(byte);
             }
         }
@@ -586,11 +586,38 @@ fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
 }
 
 async fn merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) {
+    const MAX_RETRIES: u32 = 3;
+    const RETRY_DELAY_SECS: u64 = 5;
+
+    for attempt in 1..=MAX_RETRIES {
+        match try_merge_snapshots(directory_adapter.clone()).await {
+            Ok(()) => return,
+            Err(e) => {
+                error!(
+                    "merge_snapshots failed (attempt {}/{}): {:?}",
+                    attempt, MAX_RETRIES, e
+                );
+                if attempt < MAX_RETRIES {
+                    tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+                }
+            }
+        }
+    }
+    panic!("merge_snapshots failed after {} attempts", MAX_RETRIES);
+}
+
+async fn try_merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) -> Result<()> {
     let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
         .await
-        .unwrap();
-    let start_slot = snapshot_files.first().map(|file| file.start_slot).unwrap();
-    let end_slot = snapshot_files.last().map(|file| file.end_slot).unwrap();
+        .context("Failed to get snapshot files")?;
+    let start_slot = snapshot_files
+        .first()
+        .map(|file| file.start_slot)
+        .context("No snapshot files found")?;
+    let end_slot = snapshot_files
+        .last()
+        .map(|file| file.end_slot)
+        .context("No snapshot files found")?;
     info!(
         "Merging snapshots from slot {} to slot {}",
         start_slot, end_slot
@@ -598,13 +625,14 @@ async fn merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) {
     let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
     create_snapshot_from_byte_stream(byte_stream, directory_adapter.as_ref())
         .await
-        .unwrap();
+        .context("Failed to create merged snapshot")?;
     for snapshot_file in snapshot_files {
         directory_adapter
-            .delete_file(snapshot_file.file)
+            .delete_file(snapshot_file.file.clone())
             .await
-            .unwrap();
+            .with_context(|| format!("Failed to delete snapshot file: {}", snapshot_file.file))?;
     }
+    Ok(())
 }
 
 pub async fn update_snapshot(
