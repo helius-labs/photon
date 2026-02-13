@@ -1,14 +1,25 @@
 use s3::request::tokio_backend::HyperRequest as RequestImpl;
 use s3::{
-    bucket::CHUNK_SIZE as S3_CHUNK_SIZE,
     command::{Command, Multipart},
     error::S3Error,
     request::{Request, ResponseData},
     serde_types::Part,
-    utils::{read_chunk_async, PutStreamResponse},
+    utils::PutStreamResponse,
     Bucket,
 };
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncReadExt};
+
+// 100 MiB per part. S3/R2 allows max 10,000 parts, so this supports up to ~977 GB files.
+// The previous 8 MiB default (from rust-s3) only supported ~78 GB, which was exceeded by
+// merged snapshots causing "Part number must be an integer between 1 and 10000" errors.
+const MULTIPART_CHUNK_SIZE: usize = 100 * 1024 * 1024;
+
+async fn read_chunk<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, S3Error> {
+    let mut chunk = Vec::with_capacity(MULTIPART_CHUNK_SIZE);
+    let mut take = reader.take(MULTIPART_CHUNK_SIZE as u64);
+    take.read_to_end(&mut chunk).await?;
+    Ok(chunk)
+}
 
 // Slightly modified implementation of the multipart upload to avoid loading all chunks into
 // memory and limiting concurrency.
@@ -32,10 +43,10 @@ async fn pub_oject_stream_with_content_type_and_retries<R: AsyncRead + Unpin>(
     s3_path: &str,
     content_type: &str,
 ) -> Result<PutStreamResponse, S3Error> {
-    // If the file is smaller CHUNK_SIZE, just do a regular upload.
+    // If the file is smaller than MULTIPART_CHUNK_SIZE, just do a regular upload.
     // Otherwise perform a multi-part upload.
-    let first_chunk = read_chunk_async(reader).await?;
-    if first_chunk.len() < S3_CHUNK_SIZE {
+    let first_chunk = read_chunk(reader).await?;
+    if first_chunk.len() < MULTIPART_CHUNK_SIZE {
         let total_size = first_chunk.len();
         let response_data = bucket
             .put_object_with_content_type(s3_path, first_chunk.as_slice(), content_type)
@@ -84,10 +95,10 @@ async fn pub_oject_stream_with_content_type_and_retries<R: AsyncRead + Unpin>(
         let mut done = false;
 
         for _ in 0..10 {
-            let chunk = read_chunk_async(reader).await?;
+            let chunk = read_chunk(reader).await?;
             total_size += chunk.len();
 
-            done = chunk.len() < S3_CHUNK_SIZE;
+            done = chunk.len() < MULTIPART_CHUNK_SIZE;
 
             // Start chunk upload
             part_number += 1;
