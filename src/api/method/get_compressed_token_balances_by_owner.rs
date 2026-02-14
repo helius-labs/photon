@@ -71,8 +71,7 @@ pub async fn get_compressed_token_balances_by_owner(
         // Only use mint > cursor_mint if we're not filtering by a specific mint
         // If filtering by a specific mint, the cursor should be ignored or we'd get no results
         if mint.is_none() {
-            filter =
-                filter.and(token_owner_balances::Column::Mint.gt::<Vec<u8>>(cursor_mint.into()));
+            filter = filter.and(token_owner_balances::Column::Mint.gt::<Vec<u8>>(cursor_mint));
         }
         // If a specific mint is provided, we can't paginate within that mint
         // because there's only one record per owner-mint combination in token_owner_balances

@@ -13,48 +13,32 @@ use light_compressed_account::hash_chain::create_two_inputs_hash_chain;
 pub fn convert_non_inclusion_merkle_proof_to_hex(
     non_inclusion_merkle_proof_inputs: Vec<MerkleContextWithNewAddressProof>,
 ) -> Vec<NonInclusionHexInputsForProver> {
-    let mut inputs: Vec<NonInclusionHexInputsForProver> = Vec::new();
-    for i in 0..non_inclusion_merkle_proof_inputs.len() {
-        let input = NonInclusionHexInputsForProver {
-            root: hash_to_hex(&non_inclusion_merkle_proof_inputs[i].root),
-            value: pubkey_to_hex(&non_inclusion_merkle_proof_inputs[i].address),
-            path_index: non_inclusion_merkle_proof_inputs[i].lowElementLeafIndex,
-            path_elements: non_inclusion_merkle_proof_inputs[i]
-                .proof
-                .iter()
-                .map(hash_to_hex)
-                .collect(),
-            next_index: non_inclusion_merkle_proof_inputs[i].nextIndex,
-            leaf_lower_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].lowerRangeAddress,
-            ),
-            leaf_higher_range_value: pubkey_to_hex(
-                &non_inclusion_merkle_proof_inputs[i].higherRangeAddress,
-            ),
-        };
-        inputs.push(input);
-    }
-    inputs
+    non_inclusion_merkle_proof_inputs
+        .iter()
+        .map(|input| NonInclusionHexInputsForProver {
+            root: hash_to_hex(&input.root),
+            value: pubkey_to_hex(&input.address),
+            path_index: input.lowElementLeafIndex,
+            path_elements: input.proof.iter().map(hash_to_hex).collect(),
+            next_index: input.nextIndex,
+            leaf_lower_range_value: pubkey_to_hex(&input.lowerRangeAddress),
+            leaf_higher_range_value: pubkey_to_hex(&input.higherRangeAddress),
+        })
+        .collect()
 }
 
 pub fn convert_inclusion_proofs_to_hex(
     inclusion_proof_inputs: Vec<MerkleProofWithContext>,
 ) -> Vec<InclusionHexInputsForProver> {
-    let mut inputs: Vec<InclusionHexInputsForProver> = Vec::new();
-    for i in 0..inclusion_proof_inputs.len() {
-        let input = InclusionHexInputsForProver {
-            root: hash_to_hex(&inclusion_proof_inputs[i].root),
-            path_index: inclusion_proof_inputs[i].leaf_index,
-            path_elements: inclusion_proof_inputs[i]
-                .proof
-                .iter()
-                .map(hash_to_hex)
-                .collect(),
-            leaf: hash_to_hex(&inclusion_proof_inputs[i].hash),
-        };
-        inputs.push(input);
-    }
-    inputs
+    inclusion_proof_inputs
+        .iter()
+        .map(|input| InclusionHexInputsForProver {
+            root: hash_to_hex(&input.root),
+            path_index: input.leaf_index,
+            path_elements: input.proof.iter().map(hash_to_hex).collect(),
+            leaf: hash_to_hex(&input.hash),
+        })
+        .collect()
 }
 
 pub fn hash_to_hex(hash: &Hash) -> String {
@@ -71,11 +55,7 @@ fn pubkey_to_hex(pubkey: &SerializablePubkey) -> String {
 }
 
 pub fn deserialize_hex_string_to_bytes(hex_str: &str) -> Result<Vec<u8>, PhotonApiError> {
-    let hex_str = if hex_str.starts_with("0x") {
-        &hex_str[2..]
-    } else {
-        hex_str
-    };
+    let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
     let hex_str = format!("{:0>64}", hex_str);
 
     hex::decode(hex_str)
@@ -232,7 +212,6 @@ mod tests {
         hex::decode(padded).unwrap().try_into().unwrap()
     }
 
-
     /// combined proofs incorrectly returned non_inclusion_chain instead of
     /// hash(inclusion_chain, non_inclusion_chain).
     #[test]
@@ -251,9 +230,7 @@ mod tests {
         let non_inclusion_chain =
             create_two_inputs_hash_chain(&[address_root], &[address]).unwrap();
 
-
         let old_result = non_inclusion_chain;
-
 
         let correct_result =
             create_two_inputs_hash_chain(&[inclusion_chain], &[non_inclusion_chain]).unwrap();

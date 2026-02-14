@@ -93,6 +93,10 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
+        info!(
+            "DEBUG: Parsed as V1 state tree: {} (queue={}, owner={})",
+            pubkey, data.queue_pubkey, data.owner
+        );
         upsert_tree_metadata(db, pubkey, TreeType::StateV1, &data, slot).await?;
         info!(
             "Synced V1 state tree {} with height {}, root_history_capacity {}, seq {}, next_idx {}",
@@ -124,7 +128,7 @@ pub async fn process_tree_account(
         let data = TreeAccountData {
             queue_pubkey: Pubkey::new_from_array(metadata.metadata.associated_queue.to_bytes()),
             root_history_capacity: metadata.root_history_capacity as usize,
-            height: tree_account.height as u32,
+            height: tree_account.height,
             sequence_number: metadata.sequence_number,
             next_index: metadata.next_index,
             owner: Pubkey::new_from_array(metadata.metadata.access_metadata.owner.to_bytes()),
@@ -138,6 +142,10 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
+        info!(
+            "DEBUG: Parsed as V2 state tree: {} (queue={}, owner={})",
+            pubkey, data.queue_pubkey, data.owner
+        );
         upsert_tree_metadata(db, pubkey, TreeType::StateV2, &data, slot).await?;
 
         info!(
@@ -154,7 +162,7 @@ pub async fn process_tree_account(
         let data = TreeAccountData {
             queue_pubkey: pubkey, // For V2 address trees, queue == tree
             root_history_capacity: metadata.root_history_capacity as usize,
-            height: tree_account.height as u32,
+            height: tree_account.height,
             sequence_number: metadata.sequence_number,
             next_index: metadata.next_index,
             owner: Pubkey::new_from_array(metadata.metadata.access_metadata.owner.to_bytes()),
@@ -250,6 +258,8 @@ where
         .on_conflict(
             sea_orm::sea_query::OnConflict::column(tree_metadata::Column::TreePubkey)
                 .update_columns([
+                    tree_metadata::Column::QueuePubkey,
+                    tree_metadata::Column::TreeType,
                     tree_metadata::Column::SequenceNumber,
                     tree_metadata::Column::NextIndex,
                     tree_metadata::Column::LastSyncedSlot,

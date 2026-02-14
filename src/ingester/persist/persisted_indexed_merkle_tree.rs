@@ -235,13 +235,9 @@ pub async fn persist_indexed_tree_updates(
             .iter()
             .map(|x| {
                 Ok(LeafNode {
-                    tree: SerializablePubkey::try_from(x.tree).map_err(|e| {
-                        IngesterError::DatabaseError(format!("Failed to serialize pubkey: {}", e))
-                    })?,
+                    tree: SerializablePubkey::from(x.tree),
                     leaf_index: x.leaf.index as u32,
-                    hash: Hash::try_from(x.hash).map_err(|e| {
-                        IngesterError::DatabaseError(format!("Failed to serialize hash: {}", e))
-                    })?,
+                    hash: Hash::from(x.hash),
                     seq: Option::from(x.seq as u32),
                 })
             })

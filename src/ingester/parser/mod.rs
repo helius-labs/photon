@@ -88,51 +88,48 @@ where
             state_updates.push(state_update);
         } else {
             for (index, instruction) in ordered_instructions.iter().enumerate() {
-                if ordered_instructions.len() - index > 1 {
-                    if get_compression_program_id() == instruction.program_id {
-                        // Look for a NOOP_PROGRAM_ID instruction after one or two SYSTEM_PROGRAM instructions
-                        // We handle up to two system program instructions in the case where we also have to pay a tree rollover fee
-                        let mut noop_instruction_index = None;
-                        let mut system_program_count = 0;
-                        let mut all_intermediate_are_system = true;
+                if ordered_instructions.len() - index > 1
+                    && get_compression_program_id() == instruction.program_id
+                {
+                    // Look for a NOOP_PROGRAM_ID instruction after one or two SYSTEM_PROGRAM instructions
+                    // We handle up to two system program instructions in the case where we also have to pay a tree rollover fee
+                    let mut noop_instruction_index = None;
+                    let mut system_program_count = 0;
+                    let mut all_intermediate_are_system = true;
 
-                        // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM but no more than two
-                        for i in (index + 1)..ordered_instructions.len() {
-                            let current_instruction = &ordered_instructions[i];
-
-                            if current_instruction.program_id == NOOP_PROGRAM_ID {
-                                noop_instruction_index = Some(i);
-                                break;
-                            } else if current_instruction.program_id == SYSTEM_PROGRAM {
-                                system_program_count += 1;
-                                if system_program_count > 2 {
-                                    all_intermediate_are_system = false;
-                                    break;
-                                }
-                            } else {
+                    // Search for the NOOP instruction, ensuring we find at least one SYSTEM_PROGRAM but no more than two
+                    for (i, current_instruction) in
+                        ordered_instructions.iter().enumerate().skip(index + 1)
+                    {
+                        if current_instruction.program_id == NOOP_PROGRAM_ID {
+                            noop_instruction_index = Some(i);
+                            break;
+                        } else if current_instruction.program_id == SYSTEM_PROGRAM {
+                            system_program_count += 1;
+                            if system_program_count > 2 {
                                 all_intermediate_are_system = false;
                                 break;
                             }
+                        } else {
+                            all_intermediate_are_system = false;
+                            break;
                         }
+                    }
 
-                        // If we found a NOOP instruction, exactly one or two SYSTEM_PROGRAM instructions, and all intermediates were valid
-                        if let Some(noop_index) = noop_instruction_index {
-                            if system_program_count >= 1
-                                && system_program_count <= 2
-                                && all_intermediate_are_system
+                    // If we found a NOOP instruction, exactly one or two SYSTEM_PROGRAM instructions, and all intermediates were valid
+                    if let Some(noop_index) = noop_instruction_index {
+                        if (1..=2).contains(&system_program_count) && all_intermediate_are_system {
+                            if let Some(state_update) = parse_public_transaction_event_v1(
+                                conn,
+                                tx,
+                                slot,
+                                instruction,
+                                &ordered_instructions[noop_index],
+                            )
+                            .await?
                             {
-                                if let Some(state_update) = parse_public_transaction_event_v1(
-                                    conn,
-                                    tx,
-                                    slot,
-                                    instruction,
-                                    &ordered_instructions[noop_index],
-                                )
-                                .await?
-                                {
-                                    is_compression_transaction = true;
-                                    state_updates.push(state_update);
-                                }
+                                is_compression_transaction = true;
+                                state_updates.push(state_update);
                             }
                         }
                     }

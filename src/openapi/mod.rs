@@ -33,6 +33,7 @@ use crate::api::method::get_validity_proof::{
     AccountProofInputs, AddressProofInputs, CompressedProof, CompressedProofWithContext,
     CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
 };
+use crate::api::method::interface::types::{AccountInterface, SolanaAccountData};
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
@@ -148,6 +149,9 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TreeContextInfo,
     GetCompressedAccountProofResponseValue,
     GetCompressedAccountProofResponseValueV2,
+    // Interface types
+    AccountInterface,
+    SolanaAccountData,
 )))]
 struct ApiDoc;
 
@@ -301,7 +305,8 @@ fn fix_examples_for_allOf_references(schema: RefOr<Schema>) -> RefOr<Schema> {
                 }
                 _ => schema,
             }),
-            Schema::AllOf(ref all_of) => all_of.items[0].clone(),
+            Schema::AllOf(ref all_of) if all_of.items.len() == 1 => all_of.items[0].clone(),
+            Schema::AllOf(_) => RefOr::T(schema),
             _ => RefOr::T(schema),
         },
         RefOr::Ref(_) => schema,
@@ -343,7 +348,7 @@ fn find_all_components(schema: RefOr<Schema>) -> HashSet<String> {
                 ref_location
                     .ref_location
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap()
                     .to_string(),
             );

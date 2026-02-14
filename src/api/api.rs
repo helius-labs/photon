@@ -85,6 +85,11 @@ use crate::api::method::get_validity_proof::{
     GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
     GetValidityProofResponseV2,
 };
+use crate::api::method::interface::{
+    get_account_interface, get_multiple_account_interfaces, GetAccountInterfaceRequest,
+    GetAccountInterfaceResponse, GetMultipleAccountInterfacesRequest,
+    GetMultipleAccountInterfacesResponse,
+};
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
     GetNonPaginatedSignaturesResponseWithError, GetPaginatedSignaturesResponse, HashRequest,
@@ -101,6 +106,7 @@ pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     prover_url: String,
+    prover_api_key: Option<String>,
 }
 
 impl PhotonApi {
@@ -108,11 +114,13 @@ impl PhotonApi {
         db_conn: Arc<DatabaseConnection>,
         rpc_client: Arc<RpcClient>,
         prover_url: String,
+        prover_api_key: Option<String>,
     ) -> Self {
         Self {
             db_conn,
             rpc_client,
             prover_url,
+            prover_api_key,
         }
     }
 }
@@ -363,14 +371,26 @@ impl PhotonApi {
         &self,
         request: GetValidityProofRequest,
     ) -> Result<GetValidityProofResponse, PhotonApiError> {
-        get_validity_proof(self.db_conn.as_ref(), &self.prover_url, request).await
+        get_validity_proof(
+            self.db_conn.as_ref(),
+            &self.prover_url,
+            self.prover_api_key.as_deref(),
+            request,
+        )
+        .await
     }
 
     pub async fn get_validity_proof_v2(
         &self,
         request: GetValidityProofRequestV2,
     ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
-        get_validity_proof_v2(self.db_conn.as_ref(), &self.prover_url, request).await
+        get_validity_proof_v2(
+            self.db_conn.as_ref(),
+            &self.prover_url,
+            self.prover_api_key.as_deref(),
+            request,
+        )
+        .await
     }
 
     pub async fn get_latest_compression_signatures(
@@ -385,6 +405,21 @@ impl PhotonApi {
         request: GetLatestSignaturesRequest,
     ) -> Result<GetNonPaginatedSignaturesResponseWithError, PhotonApiError> {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
+    }
+
+    // Interface endpoints - race hot (on-chain) and cold (compressed) lookups
+    pub async fn get_account_interface(
+        &self,
+        request: GetAccountInterfaceRequest,
+    ) -> Result<GetAccountInterfaceResponse, PhotonApiError> {
+        get_account_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_multiple_account_interfaces(
+        &self,
+        request: GetMultipleAccountInterfacesRequest,
+    ) -> Result<GetMultipleAccountInterfacesResponse, PhotonApiError> {
+        get_multiple_account_interfaces(&self.db_conn, &self.rpc_client, request).await
     }
 
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
@@ -575,6 +610,17 @@ impl PhotonApi {
                 name: "getIndexerSlot".to_string(),
                 request: None,
                 response: UnsignedInteger::schema().1,
+            },
+            // Interface endpoints
+            OpenApiSpec {
+                name: "getAccountInterface".to_string(),
+                request: Some(GetAccountInterfaceRequest::schema().1),
+                response: GetAccountInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleAccountInterfaces".to_string(),
+                request: Some(GetMultipleAccountInterfacesRequest::schema().1),
+                response: GetMultipleAccountInterfacesResponse::schema().1,
             },
         ]
     }

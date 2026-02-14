@@ -2,7 +2,6 @@ use crate::ingester::parser::tree_info::TreeInfo;
 use jsonrpsee_core::Serialize;
 use num_traits::identities::Zero;
 use serde::Deserialize;
-use utoipa::ToSchema;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AccountProofDetail {
@@ -66,11 +65,41 @@ pub(crate) struct ProofABC {
     pub c: [u8; 64],
 }
 
-#[derive(Serialize, Deserialize, Default, ToSchema, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CompressedProof {
     pub a: Vec<u8>,
     pub b: Vec<u8>,
     pub c: Vec<u8>,
+}
+
+impl<'__s> utoipa::ToSchema<'__s> for CompressedProof {
+    fn schema() -> (&'__s str, utoipa::openapi::RefOr<utoipa::openapi::Schema>) {
+        use utoipa::openapi::*;
+        // Vec<u8> is serialized by serde as a JSON array of integers.
+        // utoipa's default renders Vec<u8> as string/binary which is wrong.
+        let byte_array = || {
+            RefOr::T(Schema::Array(
+                ArrayBuilder::new()
+                    .items(RefOr::T(Schema::Object(
+                        ObjectBuilder::new()
+                            .schema_type(SchemaType::Integer)
+                            .build(),
+                    )))
+                    .build(),
+            ))
+        };
+        let schema = Schema::Object(
+            ObjectBuilder::new()
+                .property("a", byte_array())
+                .required("a")
+                .property("b", byte_array())
+                .required("b")
+                .property("c", byte_array())
+                .required("c")
+                .build(),
+        );
+        ("CompressedProof", RefOr::T(schema))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
