@@ -356,15 +356,10 @@ fn cold_to_synthetic_account_data(
         );
     }
 
-    // Fallback: discriminator + raw data concatenation.
     let full_data = account
         .data
         .as_ref()
-        .map(|data| {
-            let mut bytes = data.discriminator.0.to_le_bytes().to_vec();
-            bytes.extend_from_slice(&data.data.0);
-            bytes
-        })
+        .map(|d| d.data.0.clone())
         .unwrap_or_default();
 
     SolanaAccountData {
