@@ -447,6 +447,84 @@ fn resolve_race_result(
     }
 }
 
+/// Build a synthetic `SolanaAccountData` from multiple cold accounts.
+///
+/// For fungible tokens: if **all** cold accounts parse as token accounts with the
+/// same mint, their amounts are summed into a single SPL Token layout.  The
+/// delegate, state, and wallet-owner are taken from the newest account (by slot).
+///
+/// For everything else (non-token accounts, mixed mints, parse failures) the
+/// function pick the newest cold account.
+fn cold_accounts_to_synthetic(
+    cold_accounts: &[AccountV2],
+    token_wallet_owners: &HashMap<Hash, [u8; 32]>,
+) -> SolanaAccountData {
+    debug_assert!(!cold_accounts.is_empty());
+
+    // Try to parse every cold account as a token account.
+    let parsed: Vec<(&AccountV2, TokenData)> = cold_accounts
+        .iter()
+        .filter_map(|acc| {
+            acc.parse_token_data()
+                .ok()
+                .flatten()
+                .map(|td| (acc, td))
+        })
+        .collect();
+
+    // All cold accounts must be token accounts with the same mint.
+    if !parsed.is_empty() && parsed.len() == cold_accounts.len() {
+        let first_mint = &parsed[0].1.mint;
+        let all_same_mint = parsed.iter().all(|(_, td)| td.mint == *first_mint);
+
+        if all_same_mint {
+            // Sum amounts across all token accounts.
+            let total_amount: u64 = parsed.iter().map(|(_, td)| td.amount.0).sum();
+
+            // Use the newest account (by slot) for non-amount fields.
+            let (newest_acc, newest_td) = parsed
+                .iter()
+                .max_by_key(|(acc, _)| acc.slot_created.0)
+                .unwrap();
+
+            let wallet_owner_bytes = token_wallet_owners.get(&newest_acc.hash);
+            let owner_arr = match wallet_owner_bytes
+                .and_then(|bytes| <&[u8; 32]>::try_from(bytes.as_slice()).ok())
+            {
+                Some(owner) => *owner,
+                None => newest_td.owner.0.to_bytes(),
+            };
+
+            let aggregated = TokenData {
+                mint: newest_td.mint,
+                owner: newest_td.owner,
+                amount: UnsignedInteger(total_amount),
+                delegate: newest_td.delegate,
+                state: newest_td.state,
+                tlv: newest_td.tlv.clone(),
+            };
+
+            let spl_bytes = build_spl_token_account_bytes(&aggregated, &owner_arr);
+            return SolanaAccountData {
+                lamports: newest_acc.lamports,
+                data: Base64String(spl_bytes.clone()),
+                owner: newest_acc.owner,
+                executable: false,
+                rent_epoch: UnsignedInteger(0),
+                space: UnsignedInteger(spl_bytes.len() as u64),
+            };
+        }
+    }
+
+    // Fallback: use newest cold account by slot.
+    let newest = cold_accounts
+        .iter()
+        .max_by_key(|acc| acc.slot_created.0)
+        .unwrap();
+    let wallet_owner = token_wallet_owners.get(&newest.hash);
+    cold_to_synthetic_account_data(newest, wallet_owner.map(|v| v.as_slice()))
+}
+
 fn resolve_single_race(
     hot_account: Option<&SolanaAccount>,
     cold_accounts: &[AccountV2],
@@ -466,15 +544,11 @@ fn resolve_single_race(
             if hot_slot >= cold.slot_created.0 {
                 hot_to_solana_account_data(hot)
             } else {
-                let wallet_owner = token_wallet_owners.get(&cold.hash);
-                cold_to_synthetic_account_data(cold, wallet_owner.map(|v| v.as_slice()))
+                cold_accounts_to_synthetic(cold_accounts, token_wallet_owners)
             }
         }
         (Some(hot), None) => hot_to_solana_account_data(hot),
-        (None, Some(cold)) => {
-            let wallet_owner = token_wallet_owners.get(&cold.hash);
-            cold_to_synthetic_account_data(cold, wallet_owner.map(|v| v.as_slice()))
-        }
+        (None, Some(_)) => cold_accounts_to_synthetic(cold_accounts, token_wallet_owners),
         (None, None) => return None,
     };
 
@@ -523,6 +597,15 @@ mod tests {
     /// Build a cold AccountV2 that looks like a compressed token account.
     /// Uses LIGHT_TOKEN_PROGRAM_ID as owner and a c_token discriminator.
     fn sample_token_cold(slot_created: u64, lamports: u64, token_data: &TokenData) -> AccountV2 {
+        sample_token_cold_with_hash(slot_created, lamports, token_data, Hash::default())
+    }
+
+    fn sample_token_cold_with_hash(
+        slot_created: u64,
+        lamports: u64,
+        token_data: &TokenData,
+        hash: Hash,
+    ) -> AccountV2 {
         use borsh::BorshSerialize;
         let mut data_bytes = Vec::new();
         token_data.serialize(&mut data_bytes).unwrap();
@@ -530,7 +613,7 @@ mod tests {
         let discriminator = u64::from_le_bytes(C_TOKEN_DISCRIMINATOR_V2);
 
         AccountV2 {
-            hash: Hash::default(),
+            hash,
             address: Some(SerializablePubkey::default()),
             data: Some(AccountData {
                 discriminator: UnsignedInteger(discriminator),
@@ -887,5 +970,159 @@ mod tests {
         let hashes: Vec<&Vec<u8>> = filtered.iter().map(|m| &m.hash).collect();
         assert!(hashes.contains(&&vec![2u8; 32]));
         assert!(hashes.contains(&&vec![3u8; 32]));
+    }
+
+    // ============ Fungible token amount aggregation tests ============
+
+    #[test]
+    fn test_resolve_aggregates_fungible_token_amounts() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [55u8; 32];
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+        let hash2 = Hash::try_from(vec![2u8; 32]).unwrap();
+        let hash3 = Hash::try_from(vec![3u8; 32]).unwrap();
+
+        let td1 = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(100),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let td2 = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(250),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let td3 = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(650),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold1 = sample_token_cold_with_hash(100, 0, &td1, hash1);
+        let cold2 = sample_token_cold_with_hash(200, 0, &td2, hash2);
+        let cold3 = sample_token_cold_with_hash(300, 0, &td3, hash3.clone());
+
+        let cold_accounts = vec![cold1, cold2, cold3];
+
+        // Map newest hash → wallet owner
+        let mut token_wallet_owners = HashMap::new();
+        token_wallet_owners.insert(hash3, wallet_owner);
+
+        let result = resolve_single_race(
+            None,
+            &cold_accounts,
+            0,
+            SerializablePubkey::default(),
+            &token_wallet_owners,
+        )
+        .expect("expected Some interface");
+
+        // Primary view should have aggregated amount = 100 + 250 + 650 = 1000
+        let data = &result.account.data.0;
+        assert_eq!(data.len(), 165);
+        let amount = u64::from_le_bytes(data[64..72].try_into().unwrap());
+        assert_eq!(amount, 1000);
+
+        // Wallet owner should be at [32..64]
+        assert_eq!(&data[32..64], &wallet_owner);
+
+        // All cold accounts should be included
+        assert_eq!(result.cold.as_ref().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_resolve_mixed_mints_uses_newest() {
+        let mint_a = Pubkey::new_unique();
+        let mint_b = Pubkey::new_unique();
+
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+        let hash2 = Hash::try_from(vec![2u8; 32]).unwrap();
+
+        let td1 = TokenData {
+            mint: SerializablePubkey::from(mint_a),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(100),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let td2 = TokenData {
+            mint: SerializablePubkey::from(mint_b),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(200),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold1 = sample_token_cold_with_hash(100, 0, &td1, hash1);
+        let cold2 = sample_token_cold_with_hash(200, 0, &td2, hash2.clone());
+
+        let cold_accounts = vec![cold1, cold2];
+
+        let mut token_wallet_owners = HashMap::new();
+        token_wallet_owners.insert(hash2, [55u8; 32]);
+
+        let result = resolve_single_race(
+            None,
+            &cold_accounts,
+            0,
+            SerializablePubkey::default(),
+            &token_wallet_owners,
+        )
+        .expect("expected Some interface");
+
+        // Mixed mints → fallback to newest by slot (cold2, amount=200)
+        let data = &result.account.data.0;
+        assert_eq!(data.len(), 165);
+        let amount = u64::from_le_bytes(data[64..72].try_into().unwrap());
+        assert_eq!(amount, 200);
+    }
+
+    #[test]
+    fn test_resolve_single_token_unchanged() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [55u8; 32];
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let td = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(42),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let cold = sample_token_cold_with_hash(100, 1_000_000, &td, hash1.clone());
+        let cold_accounts = vec![cold];
+
+        let mut token_wallet_owners = HashMap::new();
+        token_wallet_owners.insert(hash1, wallet_owner);
+
+        let result = resolve_single_race(
+            None,
+            &cold_accounts,
+            0,
+            SerializablePubkey::default(),
+            &token_wallet_owners,
+        )
+        .expect("expected Some interface");
+
+        // Single token account → amount should be 42, unchanged
+        let data = &result.account.data.0;
+        assert_eq!(data.len(), 165);
+        let amount = u64::from_le_bytes(data[64..72].try_into().unwrap());
+        assert_eq!(amount, 42);
+        assert_eq!(&data[32..64], &wallet_owner);
     }
 }
