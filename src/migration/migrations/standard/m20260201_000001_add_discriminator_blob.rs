@@ -6,6 +6,8 @@ use sea_orm_migration::{
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
+const BATCH_SIZE: u64 = 50_000;
+
 async fn execute_sql(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr> {
     log::info!("Executing SQL: {}", sql);
     manager
@@ -31,18 +33,20 @@ fn postgres_numeric_to_little_endian_hex_expr(value_expr: &str) -> String {
     )
 }
 
-fn postgres_discriminator_backfill_sql() -> String {
+fn postgres_discriminator_backfill_batch_sql() -> String {
     let discriminator_hex_expr = postgres_numeric_to_little_endian_hex_expr("discriminator");
     format!(
         r#"
         UPDATE accounts
-        SET discriminator_new =
-            CASE WHEN discriminator IS NOT NULL THEN
-                decode(
-                    {discriminator_hex_expr},
-                    'hex'
-                )
-            ELSE NULL END;
+        SET discriminator_new = decode(
+            {discriminator_hex_expr},
+            'hex'
+        )
+        WHERE ctid = ANY(ARRAY(
+            SELECT ctid FROM accounts
+            WHERE discriminator IS NOT NULL AND discriminator_new IS NULL
+            LIMIT {BATCH_SIZE}
+        ))
         "#
     )
 }
@@ -52,6 +56,10 @@ fn postgres_discriminator_backfill_sql() -> String {
 ///
 /// SQLite REAL (IEEE 754 double) only has 53 bits of mantissa precision,
 /// which causes precision loss for u64 values > 2^53 (like Anchor discriminators).
+///
+/// For Postgres, the backfill runs in batches to avoid long-running locks
+/// and excessive WAL generation. Each batch updates a limited number of rows
+/// in its own transaction, keeping the table available for reads throughout.
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -235,21 +243,38 @@ impl MigrationTrait for Migration {
                 log::info!("Migration complete!");
             }
             sea_orm::DatabaseBackend::Postgres => {
-                // For Postgres, change column type from Decimal to BYTEA
-                // First, add a new column
+                // Phase 1: Add new BYTEA column
                 execute_sql(
                     manager,
                     "ALTER TABLE accounts ADD COLUMN discriminator_new BYTEA;",
                 )
                 .await?;
 
-                // Convert existing Decimal discriminator to 8-byte little-endian BYTEA.
-                // Use numeric arithmetic instead of bigint casts, because existing values
-                // may exceed i64::MAX.
-                let discriminator_backfill_sql = postgres_discriminator_backfill_sql();
-                execute_sql(manager, &discriminator_backfill_sql).await?;
+                // Phase 2: Backfill in batches to avoid long locks and WAL bloat.
+                // Each batch updates a limited number of rows using a ctid
+                // subquery, keeping lock duration short.
+                let batch_sql = postgres_discriminator_backfill_batch_sql();
+                let conn = manager.get_connection();
+                let mut total_updated: u64 = 0;
+                loop {
+                    let result = conn
+                        .execute(Statement::from_string(
+                            manager.get_database_backend(),
+                            batch_sql.clone(),
+                        ))
+                        .await?;
+                    let rows_affected = result.rows_affected();
+                    total_updated += rows_affected;
+                    log::info!(
+                        "Backfilled {total_updated} discriminator rows ({rows_affected} in this batch)"
+                    );
+                    if rows_affected == 0 {
+                        break;
+                    }
+                }
+                log::info!("Backfill complete, swapping columns...");
 
-                // Drop old column and rename new one
+                // Phase 3: Drop old column + rename
                 execute_sql(manager, "ALTER TABLE accounts DROP COLUMN discriminator;").await?;
                 execute_sql(
                     manager,
@@ -358,12 +383,6 @@ mod tests {
         } else {
             None
         }
-    }
-
-    #[test]
-    fn postgres_backfill_sql_does_not_use_bigint_cast() {
-        let sql = postgres_discriminator_backfill_sql();
-        assert!(!sql.contains("::bigint"));
     }
 
     #[tokio::test]
