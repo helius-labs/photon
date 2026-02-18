@@ -84,6 +84,9 @@ solana-bn254 = "3.1.2"
 solana-commitment-config = "3.0.0"
 
 solana-transaction-status = "3.0.8"
+solana-program-option = "3.0.0"
+solana-program-pack = "3.0.0"
+spl-token-interface = "2.0.0"
 
 
 
