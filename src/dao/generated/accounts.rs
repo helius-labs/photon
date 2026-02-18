@@ -27,7 +27,8 @@ pub struct Model {
     pub nullifier: Option<Vec<u8>>,
     pub tx_hash: Option<Vec<u8>>,
     pub onchain_pubkey: Option<Vec<u8>>,
-    pub discriminator: Option<Vec<u8>>,
+    #[sea_orm(column_type = "Decimal(Some((23, 0)))", nullable)]
+    pub discriminator: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

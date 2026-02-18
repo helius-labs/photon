@@ -451,7 +451,7 @@ async fn append_output_accounts(
                 .account
                 .data
                 .as_ref()
-                .map(|x| x.discriminator.0.to_le_bytes().to_vec())),
+                .map(|x| Decimal::from(x.discriminator.0))),
             data: Set(account.account.data.as_ref().map(|x| x.data.clone().0)),
             data_hash: Set(account.account.data.as_ref().map(|x| x.data_hash.to_vec())),
             tree: Set(account.account.tree.to_bytes_vec()),

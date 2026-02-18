@@ -54,20 +54,6 @@ impl AccountV2 {
     }
 }
 
-/// Parse discriminator from BLOB (8 bytes little-endian) to u64
-fn parse_discriminator_blob(blob: Vec<u8>) -> Result<u64, PhotonApiError> {
-    if blob.len() != 8 {
-        return Err(PhotonApiError::UnexpectedError(format!(
-            "Discriminator has unexpected length {}, expected 8",
-            blob.len()
-        )));
-    }
-    let bytes: [u8; 8] = blob
-        .try_into()
-        .map_err(|_| PhotonApiError::UnexpectedError("Invalid discriminator bytes".to_string()))?;
-    Ok(u64::from_le_bytes(bytes))
-}
-
 impl TryFrom<Model> for AccountV2 {
     type Error = PhotonApiError;
 
@@ -76,7 +62,7 @@ impl TryFrom<Model> for AccountV2 {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),
                 data_hash: data_hash.try_into()?,
-                discriminator: UnsignedInteger(parse_discriminator_blob(discriminator)?),
+                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
             }),
             (None, None, None) => None,
             _ => {

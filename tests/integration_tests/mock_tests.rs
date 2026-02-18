@@ -563,7 +563,7 @@ async fn test_persist_token_data(
             lamports: Set(Decimal::from(10)),
             slot_created: Set(slot),
             leaf_index: Set(i as i64),
-            discriminator: Set(Some(vec![1, 0, 0, 0, 0, 0, 0, 0])),
+            discriminator: Set(Some(Decimal::from(1u64))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),

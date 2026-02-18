@@ -11,6 +11,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 use light_compressed_account::address::derive_address;
 use light_sdk_types::constants::ADDRESS_TREE_V2;
+use sea_orm::prelude::Decimal;
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_account::Account as SolanaAccount;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -226,10 +227,10 @@ async fn find_cold_models(
 
     // Filter out decompressed PDA placeholders — they are bookmarks in the
     // Merkle tree, not truly cold accounts.
-    let decompressed_disc_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
+    let decompressed_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
     let models: Vec<_> = by_hash
         .into_values()
-        .filter(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes))
+        .filter(|m| m.discriminator != Some(decompressed_disc))
         .collect();
     Ok((models, token_wallet_owners))
 }
@@ -939,11 +940,11 @@ mod tests {
         use crate::dao::generated::accounts;
         use sea_orm::prelude::Decimal;
 
-        let decompressed_disc = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
-        let normal_disc = 0x0807060504030201u64.to_le_bytes().to_vec();
+        let decompressed_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
+        let normal_disc = Decimal::from(0x0807060504030201u64);
 
         let make_model =
-            |hash: Vec<u8>, discriminator: Option<Vec<u8>>, lamports: i64| accounts::Model {
+            |hash: Vec<u8>, discriminator: Option<Decimal>, lamports: i64| accounts::Model {
                 hash,
                 address: None,
                 discriminator,
@@ -980,17 +981,17 @@ mod tests {
         .into_iter()
         .collect();
 
-        let decompressed_disc_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec();
+        let decompressed_disc_decimal = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
         let filtered: Vec<_> = by_hash
             .into_values()
-            .filter(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes))
+            .filter(|m| m.discriminator != Some(decompressed_disc_decimal))
             .collect();
 
         // Placeholder should be filtered out, normal and no-disc should remain.
         assert_eq!(filtered.len(), 2);
         assert!(filtered
             .iter()
-            .all(|m| m.discriminator.as_ref() != Some(&decompressed_disc_bytes)));
+            .all(|m| m.discriminator != Some(decompressed_disc_decimal)));
         let hashes: Vec<&Vec<u8>> = filtered.iter().map(|m| &m.hash).collect();
         assert!(hashes.contains(&&vec![2u8; 32]));
         assert!(hashes.contains(&&vec![3u8; 32]));
