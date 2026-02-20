@@ -447,6 +447,11 @@ async fn append_output_accounts(
             hash: Set(account.account.hash.to_vec()),
             address: Set(account.account.address.map(|x| x.to_bytes_vec())),
             onchain_pubkey: Set(onchain_pubkey),
+            discriminator_bytes: Set(account
+                .account
+                .data
+                .as_ref()
+                .map(|x| x.discriminator.0.to_le_bytes().to_vec())),
             discriminator: Set(account
                 .account
                 .data

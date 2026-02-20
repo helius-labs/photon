@@ -39,7 +39,7 @@ pub async fn get_compressed_accounts_by_owner(
     query_builder.build_base_query(conn, &request)?;
 
     let columns = format!(
-        "hash, {}, data_hash, address, onchain_pubkey, owner, tree, leaf_index, seq, slot_created, spent, prev_spent, lamports, discriminator, queue, in_output_queue, nullifier_queue_index, nullified_in_tree, nullifier, tx_hash, tree_type",
+        "hash, {}, data_hash, address, onchain_pubkey, owner, tree, leaf_index, seq, slot_created, spent, prev_spent, lamports, discriminator, discriminator_bytes, queue, in_output_queue, nullifier_queue_index, nullified_in_tree, nullifier, tx_hash, tree_type",
         query_builder.data_column
     );
 

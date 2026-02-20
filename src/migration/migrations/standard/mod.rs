@@ -19,6 +19,7 @@ pub mod m20260201_000001_add_discriminator_blob;
 pub mod m20260201_000002_add_ata_owner;
 pub mod m20260210_000001_backfill_mint_onchain_pubkey;
 pub mod m20260210_000002_add_ata_owner_index;
+pub mod m20260220_000001_add_discriminator_bytes;
 
 pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -41,5 +42,6 @@ pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260201_000002_add_ata_owner::Migration),
         Box::new(m20260210_000001_backfill_mint_onchain_pubkey::Migration),
         Box::new(m20260210_000002_add_ata_owner_index::Migration),
+        Box::new(m20260220_000001_add_discriminator_bytes::Migration),
     ]
 }

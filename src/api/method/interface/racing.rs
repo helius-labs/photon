@@ -10,6 +10,7 @@ use crate::common::typedefs::token_data::AccountState;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 use light_compressed_account::address::derive_address;
+use light_hasher::{sha256::Sha256BE, Hasher};
 use light_sdk_types::constants::ADDRESS_TREE_V2;
 use sea_orm::prelude::Decimal;
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
@@ -86,6 +87,58 @@ pub async fn cold_lookup(
         accounts: accounts_v2,
         token_wallet_owners,
     })
+}
+
+fn has_decompressed_placeholder_shape(model: &accounts::Model) -> bool {
+    let Some(data) = model.data.as_ref() else {
+        return false;
+    };
+    let Some(onchain_pubkey) = model.onchain_pubkey.as_ref() else {
+        return false;
+    };
+
+    data.len() == 32 && onchain_pubkey.len() == 32 && data.as_slice() == onchain_pubkey.as_slice()
+}
+
+fn has_decompressed_placeholder_hash(model: &accounts::Model) -> bool {
+    let Some(onchain_pubkey) = model.onchain_pubkey.as_ref() else {
+        return false;
+    };
+    let Some(data_hash) = model.data_hash.as_ref() else {
+        return false;
+    };
+
+    if onchain_pubkey.len() != 32 || data_hash.len() != 32 {
+        return false;
+    }
+
+    match Sha256BE::hash(onchain_pubkey) {
+        Ok(expected_hash) => expected_hash.as_slice() == data_hash.as_slice(),
+        Err(_) => false,
+    }
+}
+
+fn has_decompressed_placeholder_discriminator(model: &accounts::Model) -> bool {
+    let expected_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes();
+    if let Some(bytes) = model.discriminator_bytes.as_ref() {
+        return bytes.as_slice() == expected_bytes.as_slice();
+    }
+
+    let expected_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
+    let sqlite_rounded_disc = Decimal::from((DECOMPRESSED_ACCOUNT_DISCRIMINATOR as f64) as u64);
+    model.discriminator == Some(expected_disc) || model.discriminator == Some(sqlite_rounded_disc)
+}
+
+fn is_decompressed_placeholder_model(model: &accounts::Model) -> bool {
+    if !has_decompressed_placeholder_shape(model) {
+        return false;
+    }
+
+    if model.data_hash.is_some() && !has_decompressed_placeholder_hash(model) {
+        return false;
+    }
+
+    has_decompressed_placeholder_discriminator(model)
 }
 
 async fn find_cold_models(
@@ -227,10 +280,9 @@ async fn find_cold_models(
 
     // Filter out decompressed PDA placeholders — they are bookmarks in the
     // Merkle tree, not truly cold accounts.
-    let decompressed_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
     let models: Vec<_> = by_hash
         .into_values()
-        .filter(|m| m.discriminator != Some(decompressed_disc))
+        .filter(|m| !is_decompressed_placeholder_model(m))
         .collect();
     Ok((models, token_wallet_owners))
 }
@@ -935,42 +987,64 @@ mod tests {
 
     // ============ Decompressed placeholder filtering tests ============
 
+    use crate::dao::generated::accounts;
+    use sea_orm::prelude::Decimal;
+
+    fn make_account_model(
+        hash_byte: u8,
+        discriminator: Option<Decimal>,
+        data: Option<Vec<u8>>,
+        data_hash: Option<Vec<u8>>,
+        onchain_pubkey: Option<Vec<u8>>,
+        discriminator_bytes: Option<Vec<u8>>,
+    ) -> accounts::Model {
+        accounts::Model {
+            hash: vec![hash_byte; 32],
+            address: None,
+            discriminator,
+            discriminator_bytes,
+            data,
+            data_hash,
+            tree: vec![],
+            leaf_index: 0,
+            seq: Some(1),
+            slot_created: 100,
+            owner: vec![0u8; 32],
+            lamports: Decimal::from(0),
+            spent: false,
+            prev_spent: Some(false),
+            tx_hash: None,
+            onchain_pubkey,
+            tree_type: Some(3),
+            nullified_in_tree: false,
+            nullifier_queue_index: None,
+            in_output_queue: false,
+            queue: None,
+            nullifier: None,
+        }
+    }
+
     #[test]
     fn test_find_cold_models_filters_decompressed_placeholders() {
-        use crate::dao::generated::accounts;
-        use sea_orm::prelude::Decimal;
-
-        let decompressed_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
-        let normal_disc = Decimal::from(0x0807060504030201u64);
-
-        let make_model =
-            |hash: Vec<u8>, discriminator: Option<Decimal>, lamports: i64| accounts::Model {
-                hash,
-                address: None,
-                discriminator,
-                data: None,
-                data_hash: None,
-                tree: vec![],
-                leaf_index: 0,
-                seq: Some(1),
-                slot_created: 100,
-                owner: vec![0u8; 32],
-                lamports: Decimal::from(lamports),
-                spent: false,
-                prev_spent: Some(false),
-                tx_hash: None,
-                onchain_pubkey: None,
-                tree_type: Some(3),
-                nullified_in_tree: false,
-                nullifier_queue_index: None,
-                in_output_queue: false,
-                queue: None,
-                nullifier: None,
-            };
-
-        let placeholder = make_model(vec![1u8; 32], Some(decompressed_disc), 0);
-        let normal = make_model(vec![2u8; 32], Some(normal_disc), 1000);
-        let no_disc = make_model(vec![3u8; 32], None, 500);
+        let pda = vec![1u8; 32];
+        let data_hash = Sha256BE::hash(&pda).unwrap().to_vec();
+        let placeholder = make_account_model(
+            1,
+            Some(Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR)),
+            Some(pda.clone()),
+            Some(data_hash),
+            Some(pda),
+            Some(DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec()),
+        );
+        let normal = make_account_model(
+            2,
+            Some(Decimal::from(0x0807060504030201u64)),
+            None,
+            None,
+            None,
+            None,
+        );
+        let no_disc = make_account_model(3, None, None, None, None, None);
 
         // Simulate the filtering logic from find_cold_models.
         let by_hash: HashMap<Vec<u8>, accounts::Model> = vec![
@@ -981,20 +1055,71 @@ mod tests {
         .into_iter()
         .collect();
 
-        let decompressed_disc_decimal = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
         let filtered: Vec<_> = by_hash
             .into_values()
-            .filter(|m| m.discriminator != Some(decompressed_disc_decimal))
+            .filter(|m| !is_decompressed_placeholder_model(m))
             .collect();
 
         // Placeholder should be filtered out, normal and no-disc should remain.
         assert_eq!(filtered.len(), 2);
-        assert!(filtered
-            .iter()
-            .all(|m| m.discriminator != Some(decompressed_disc_decimal)));
         let hashes: Vec<&Vec<u8>> = filtered.iter().map(|m| &m.hash).collect();
         assert!(hashes.contains(&&vec![2u8; 32]));
         assert!(hashes.contains(&&vec![3u8; 32]));
+    }
+
+    #[test]
+    fn test_find_cold_models_filters_sqlite_rounded_decompressed_placeholder() {
+        // SQLite REAL rounding shifts this discriminator by +1 for large u64 values.
+        let rounded_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR + 1);
+        let pda = vec![9u8; 32];
+        let data_hash = Sha256BE::hash(&pda).unwrap().to_vec();
+        let placeholder = make_account_model(
+            9,
+            Some(rounded_disc),
+            Some(pda.clone()),
+            Some(data_hash),
+            Some(pda.clone()),
+            Some(DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec()),
+        );
+
+        assert!(is_decompressed_placeholder_model(&placeholder));
+    }
+
+    #[test]
+    fn test_find_cold_models_filters_legacy_sqlite_rounded_placeholder_without_disc_bytes() {
+        // Backward compatibility for rows created before discriminator_bytes existed.
+        let rounded_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR + 1);
+        let pda = vec![8u8; 32];
+        let placeholder = make_account_model(
+            8,
+            Some(rounded_disc),
+            Some(pda.clone()),
+            None,
+            Some(pda),
+            None,
+        );
+
+        assert!(is_decompressed_placeholder_model(&placeholder));
+    }
+
+    #[test]
+    fn test_find_cold_models_keeps_non_placeholder_with_onchain_pubkey() {
+        // Model shape similar to compressed mint linkage: has onchain_pubkey but
+        // does not store it in the first 32 bytes of data.
+        let rounded_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR + 1);
+        let mut mint_data = vec![0u8; 120];
+        let onchain = vec![7u8; 32];
+        mint_data[84..116].copy_from_slice(&onchain);
+
+        let model = make_account_model(
+            7,
+            Some(rounded_disc),
+            Some(mint_data),
+            None,
+            Some(onchain),
+            None,
+        );
+        assert!(!is_decompressed_placeholder_model(&model));
     }
 
     // ============ Fungible token amount aggregation tests ============

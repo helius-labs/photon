@@ -1,5 +1,5 @@
 use crate::api::error::PhotonApiError;
-use crate::api::method::utils::parse_decimal;
+use crate::api::method::utils::{parse_account_discriminator, parse_decimal};
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -75,11 +75,15 @@ impl TryFrom<Model> for Account {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {
-        let data = match (account.data, account.data_hash, account.discriminator) {
+        let parsed_discriminator = parse_account_discriminator(
+            account.discriminator.clone(),
+            account.discriminator_bytes.clone(),
+        )?;
+        let data = match (account.data, account.data_hash, parsed_discriminator) {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),
                 data_hash: data_hash.try_into()?,
-                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+                discriminator: UnsignedInteger(discriminator),
             }),
             (None, None, None) => None,
             _ => {
