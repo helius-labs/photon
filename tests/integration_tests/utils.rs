@@ -116,6 +116,14 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
             40,
             2400,
         ),
+        // V2 State Tree. For regression test at block 443787702.
+        (
+            "bmt2UxoBxB9xWev4BkLvkGdapsz6sZGkzViPNph7VFi",
+            "oq2UkeMsJLfXt2QHzim242SUi3nvjJs8Pn7Eac9H9vg",
+            TreeType::StateV2,
+            32,
+            5000,
+        ),
     ];
 
     let txn = db.begin().await.unwrap();
