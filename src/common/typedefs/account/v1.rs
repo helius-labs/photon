@@ -8,7 +8,6 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::error::IngesterError;
 use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
-use borsh::BorshDeserialize;
 use jsonrpsee_core::Serialize;
 use utoipa::ToSchema;
 
@@ -41,7 +40,7 @@ impl Account {
                 if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
             {
                 let data_slice = data.data.0.as_slice();
-                let token_data = TokenData::try_from_slice(data_slice).map_err(|e| {
+                let token_data = TokenData::parse(data_slice).map_err(|e| {
                     IngesterError::ParserError(format!("Failed to parse token data: {:?}", e))
                 })?;
                 Ok(Some(token_data))

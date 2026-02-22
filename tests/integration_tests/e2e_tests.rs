@@ -27,6 +27,7 @@ use photon_indexer::dao::generated::blocks;
 use photon_indexer::ingester::typedefs::block_info::{BlockInfo, BlockMetadata};
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
+use sea_orm::TransactionTrait;
 use sea_orm::{ColumnTrait, DatabaseConnection};
 use serial_test::serial;
 use std::str::FromStr;
@@ -719,4 +720,133 @@ async fn test_transaction_with_tree_rollover_fee(
         .unwrap();
     // Assert that status update has at least one account
     assert!(status_update.out_accounts.len() > 0);
+}
+
+/// Regression test for devnet block 443787702 parsing error.
+#[named]
+#[rstest]
+#[tokio::test]
+#[serial]
+async fn test_index_compress_and_close_with_tlv(
+    #[values(DatabaseBackend::Sqlite)] db_backend: DatabaseBackend,
+) {
+    use borsh::BorshDeserialize;
+    use photon_indexer::ingester::parser::parse_transaction;
+    use photon_indexer::ingester::typedefs::block_info::TransactionInfo;
+
+    if std::env::var("DEVNET_RPC_URL").is_err() {
+        eprintln!("Skipping test: DEVNET_RPC_URL not set");
+        return;
+    }
+
+    let name = trim_test_name(function_name!());
+    let setup = setup_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Network::Devnet,
+            db_backend,
+        },
+    )
+    .await;
+
+    let slot: u64 = 443787702;
+    let txn_sig =
+        "5rqnqJKFbBDwbLeX5Dv2q9LQNQUJWMP4wMRmbHoCA5F13nRvWFU8XRVzZKaZV1meXtmfbqF5uvaTndXMaxpQ4tBB";
+    let txn = cached_fetch_transaction(&name, setup.client.clone(), txn_sig).await;
+    let tx_info: TransactionInfo = txn.try_into().unwrap();
+
+    let state_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, slot)
+        .await
+        .expect("parse_transaction must not fail on CompressAndClose with TLV");
+
+    assert!(
+        !state_update.out_accounts.is_empty(),
+        "CompressAndClose should produce output compressed accounts"
+    );
+
+    let mut token_accounts_with_tlv = 0;
+    let mut token_owner: Option<SerializablePubkey> = None;
+    for account in &state_update.out_accounts {
+        let account_data = &account.account;
+        if let Some(data) = &account_data.data {
+            if data.is_c_token_discriminator() {
+                let raw = data.data.0.as_slice();
+
+                #[derive(Debug, borsh::BorshDeserialize)]
+                struct OldTokenData {
+                    pub _mint: SerializablePubkey,
+                    pub _owner: SerializablePubkey,
+                    pub _amount:
+                        photon_indexer::common::typedefs::unsigned_integer::UnsignedInteger,
+                    pub _delegate: Option<SerializablePubkey>,
+                    pub _state: u8,
+                    pub _tlv: Option<photon_indexer::common::typedefs::bs64_string::Base64String>,
+                }
+
+                let old_result = OldTokenData::try_from_slice(raw);
+                if old_result.is_err() {
+                    let err = old_result.unwrap_err();
+                    assert!(
+                        err.to_string().contains("Not all bytes read"),
+                        "Expected exact production error, got: {}",
+                        err
+                    );
+                }
+            }
+        }
+
+        if let Some(token_data) = account_data.parse_token_data().unwrap() {
+            if token_data.tlv.is_some() {
+                token_accounts_with_tlv += 1;
+                token_owner = Some(token_data.owner.clone());
+            }
+        }
+    }
+    assert!(
+        token_accounts_with_tlv > 0,
+        "At least one V3 compressed token account should have TLV data"
+    );
+    let token_owner = token_owner.expect("should have found a token owner");
+
+    {
+        let txn = setup.db_conn.begin().await.unwrap();
+        blocks::Entity::insert(blocks::ActiveModel {
+            slot: sea_orm::Set(slot as i64),
+            parent_slot: sea_orm::Set((slot - 1) as i64),
+            parent_blockhash: sea_orm::Set(vec![0u8; 32]),
+            blockhash: sea_orm::Set(vec![1u8; 32]),
+            block_height: sea_orm::Set(slot as i64),
+            block_time: sea_orm::Set(0),
+        })
+        .exec(&txn)
+        .await
+        .expect("inserting block metadata should not fail");
+        txn.commit().await.unwrap();
+    }
+    persist_state_update_using_connection(setup.db_conn.as_ref(), state_update)
+        .await
+        .expect("persisting state update with TLV token accounts should not fail");
+
+    let token_accounts = setup
+        .api
+        .get_compressed_token_accounts_by_owner(GetCompressedTokenAccountsByOwner {
+            owner: token_owner,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(
+        !token_accounts.value.items.is_empty(),
+        "Token accounts should be queryable by owner after persistence"
+    );
+    let mut api_accounts_with_tlv = 0;
+    for item in &token_accounts.value.items {
+        if item.token_data.tlv.is_some() {
+            api_accounts_with_tlv += 1;
+        }
+    }
+    assert!(
+        api_accounts_with_tlv > 0,
+        "API must return token accounts with TLV data"
+    );
 }
