@@ -111,6 +111,11 @@ struct Args {
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
+
+    /// Max concurrent HTTP connections for the JSON-RPC server (jsonrpsee).
+    /// Connections beyond this limit receive HTTP 429.
+    #[arg(long, default_value_t = 1024)]
+    max_http_connections: u32,
 }
 
 async fn start_api_server(
@@ -119,9 +124,12 @@ async fn start_api_server(
     prover_url: String,
     prover_api_key: Option<String>,
     api_port: u16,
+    max_http_connections: u32,
 ) -> ServerHandle {
     let api = PhotonApi::new(db, rpc_client, prover_url, prover_api_key);
-    api::rpc_server::run_server(api, api_port).await.unwrap()
+    api::rpc_server::run_server(api, api_port, max_http_connections)
+        .await
+        .unwrap()
 }
 
 async fn setup_temporary_sqlite_database_pool(max_connections: u32) -> SqlitePool {
@@ -374,7 +382,10 @@ async fn main() {
         }
     };
 
-    info!("Starting API server with port {}...", args.port);
+    info!(
+        "Starting API server with port {}, max_http_connections={}...",
+        args.port, args.max_http_connections
+    );
     let api_handler = if args.disable_api {
         None
     } else {
@@ -385,6 +396,7 @@ async fn main() {
                 args.prover_url,
                 args.prover_api_key,
                 args.port,
+                args.max_http_connections,
             )
             .await,
         )
