@@ -15,6 +15,7 @@ pub mod m20250910_000002_add_v2_queue_indexes;
 pub mod m20250923_000001_add_tree_metadata;
 pub mod m20251021_000001_optimize_nullifier_queue_index;
 pub mod m20260121_000001_add_mints_table;
+pub mod m20260127_000001_add_onchain_pubkey;
 
 pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -33,5 +34,6 @@ pub fn get_standard_migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20250923_000001_add_tree_metadata::Migration),
         Box::new(m20251021_000001_optimize_nullifier_queue_index::Migration),
         Box::new(m20260121_000001_add_mints_table::Migration),
+        Box::new(m20260127_000001_add_onchain_pubkey::Migration),
     ]
 }

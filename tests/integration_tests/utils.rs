@@ -108,7 +108,30 @@ pub async fn populate_test_tree_metadata(db: &DatabaseConnection) {
             32,
             2400,
         ),
-        // V2 Address Tree
+        // V2 State Trees (batched) - used by forester indexer_interface test
+        (
+            "bmt1LryLZUMmF7ZtqESaw7wifBXLfXHQYoE4GAmrahU",
+            "oq1na8gojfdUhsfCpyjNt6h4JaDWtHf1yQj4koBWfto",
+            TreeType::StateV2,
+            32,
+            2400,
+        ),
+        (
+            "bmt2UxoBxB9xWev4BkLvkGdapsz6sZGkzViPNph7VFi",
+            "oq2UkeMsJLfXt2QHzim242SUi3nvjJs8Pn7Eac9H9vg",
+            TreeType::StateV2,
+            32,
+            2400,
+        ),
+        // V2 State Tree - used by light-protocol default config (test_indexer_interface)
+        (
+            "bmt5yU97jC88YXTuSukYHa8Z5Bi2ZDUtmzfkDTA2mG2",
+            "oq5oh5ZR3yGomuQgFduNDzjtGvVWfDRGLuDVjv9a96P",
+            TreeType::StateV2,
+            32,
+            2400,
+        ),
+        // V2 Address Trees
         (
             "EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK",
             "EzKE84aVTkCUhDHLELqyJaq1Y7UVVmqxXqZjVHwHY3rK",
@@ -554,11 +577,12 @@ pub async fn index_transaction(
     rpc_client: Arc<RpcClient>,
     tx: &str,
 ) {
-    let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
-    let tx_info: TransactionInfo = tx.try_into().unwrap();
+    let tx_data = cached_fetch_transaction(test_name, rpc_client, tx).await;
+    let tx_info: TransactionInfo = tx_data.try_into().unwrap();
     let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0)
         .await
         .unwrap();
+
     persist_state_update_using_connection(db_conn.as_ref(), state_update)
         .await
         .unwrap();
