@@ -74,8 +74,9 @@ pub async fn hot_lookup(
 pub async fn cold_lookup(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
+    distinct_owners: Option<&[Vec<u8>]>,
 ) -> Result<ColdLookupResult, PhotonApiError> {
-    let (models, token_wallet_owners) = find_cold_models(conn, address).await?;
+    let (models, token_wallet_owners) = find_cold_models(conn, address, distinct_owners).await?;
 
     let mut accounts_v2 = Vec::with_capacity(models.len());
     for model in models {
@@ -144,6 +145,7 @@ fn is_decompressed_placeholder_model(model: &accounts::Model) -> bool {
 async fn find_cold_models(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
+    distinct_owners: Option<&[Vec<u8>]>,
 ) -> Result<(Vec<accounts::Model>, HashMap<Hash, [u8; 32]>), PhotonApiError> {
     let address_bytes: Vec<u8> = (*address).into();
     let pda_seed = address.0.to_bytes();
@@ -176,23 +178,34 @@ async fn find_cold_models(
     }
 
     // 2) Derived-address fallback (V2 only).
-    let owners_result = timeout(
-        Duration::from_millis(DB_TIMEOUT_MS),
-        get_distinct_owners_with_addresses(conn),
-    )
-    .await;
+    // Use pre-fetched owners when available (batch path), otherwise query.
+    let owned_owners;
+    let owners: &[Vec<u8>] = match distinct_owners {
+        Some(cached) => cached,
+        None => {
+            let owners_result = timeout(
+                Duration::from_millis(DB_TIMEOUT_MS),
+                get_distinct_owners_with_addresses(conn),
+            )
+            .await;
 
-    let owners = match owners_result {
-        Ok(Ok(o)) => o,
-        Ok(Err(e)) => return Err(PhotonApiError::DatabaseError(e)),
-        Err(_) => {
-            return Err(PhotonApiError::UnexpectedError(
-                "Database timeout getting owners".to_string(),
-            ))
+            owned_owners = match owners_result {
+                Ok(Ok(o)) => o,
+                Ok(Err(e)) => return Err(PhotonApiError::DatabaseError(e)),
+                Err(_) => {
+                    return Err(PhotonApiError::UnexpectedError(
+                        "Database timeout getting owners".to_string(),
+                    ))
+                }
+            };
+            &owned_owners
         }
     };
 
     if !owners.is_empty() {
+        // Derived address lookups use V2 address tree only — compressible
+        // programs (the only users of this path) always create accounts
+        // with ADDRESS_TREE_V2.
         let derived_addresses: Vec<Vec<u8>> = owners
             .iter()
             .filter_map(|owner| owner.as_slice().try_into().ok())
@@ -280,17 +293,19 @@ async fn find_cold_models(
 
     // Filter out decompressed PDA placeholders — they are bookmarks in the
     // Merkle tree, not truly cold accounts.
-    let models: Vec<_> = by_hash
+    // Sort by hash for deterministic ordering across identical queries.
+    let mut models: Vec<_> = by_hash
         .into_values()
         .filter(|m| !is_decompressed_placeholder_model(m))
         .collect();
+    models.sort_by(|a, b| a.hash.cmp(&b.hash));
     Ok((models, token_wallet_owners))
 }
 
 /// Get distinct owners from accounts that have derived addresses.
 /// These are accounts from compressible programs (their address is derived from PDA + tree + owner).
 /// This is typically a small set since most programs aren't compressible.
-async fn get_distinct_owners_with_addresses(
+pub async fn get_distinct_owners_with_addresses(
     conn: &DatabaseConnection,
 ) -> Result<Vec<Vec<u8>>, sea_orm::DbErr> {
     use sea_orm::{FromQueryResult, QuerySelect};
@@ -373,16 +388,17 @@ fn cold_to_synthetic_account_data(
         };
 
         let spl_bytes = build_spl_token_account_bytes(&token_data, &owner_arr);
+        let space = spl_bytes.len() as u64;
         return SolanaAccountData {
             lamports: account.lamports,
-            data: Base64String(spl_bytes.clone()),
+            data: Base64String(spl_bytes),
             // Preserve the original program owner from the cold account model.
             // This can be LIGHT token program and, depending on account source,
             // may also be SPL Token / Token-2022.
             owner: account.owner,
             executable: false,
             rent_epoch: UnsignedInteger(0),
-            space: UnsignedInteger(spl_bytes.len() as u64),
+            space: UnsignedInteger(space),
         };
     }
 
@@ -402,13 +418,14 @@ fn cold_to_synthetic_account_data(
         .map(|d| d.data.0.clone())
         .unwrap_or_default();
 
+    let space = full_data.len() as u64;
     SolanaAccountData {
         lamports: account.lamports,
-        data: Base64String(full_data.clone()),
+        data: Base64String(full_data),
         owner: account.owner,
         executable: false,
         rent_epoch: UnsignedInteger(0),
-        space: UnsignedInteger(full_data.len() as u64),
+        space: UnsignedInteger(space),
     }
 }
 
@@ -438,11 +455,14 @@ pub async fn race_hot_cold(
     rpc_client: &RpcClient,
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
+    distinct_owners: Option<&[Vec<u8>]>,
 ) -> Result<Option<AccountInterface>, PhotonApiError> {
     let pubkey = Pubkey::from(address.0.to_bytes());
 
-    let (hot_result, cold_result) =
-        tokio::join!(hot_lookup(rpc_client, &pubkey), cold_lookup(conn, address));
+    let (hot_result, cold_result) = tokio::join!(
+        hot_lookup(rpc_client, &pubkey),
+        cold_lookup(conn, address, distinct_owners)
+    );
 
     resolve_race_result(hot_result, cold_result, *address)
 }
@@ -549,13 +569,14 @@ fn cold_accounts_to_synthetic(
                     let mut spl_bytes = vec![0u8; SplTokenAccount::LEN];
                     SplTokenAccount::pack(spl, &mut spl_bytes)
                         .expect("buffer is exactly LEN bytes");
+                    let space = spl_bytes.len() as u64;
                     return SolanaAccountData {
                         lamports: UnsignedInteger(hot.lamports),
-                        data: Base64String(spl_bytes.clone()),
+                        data: Base64String(spl_bytes),
                         owner: SerializablePubkey::from(hot.owner.to_bytes()),
                         executable: false,
                         rent_epoch: UnsignedInteger(0),
-                        space: UnsignedInteger(spl_bytes.len() as u64),
+                        space: UnsignedInteger(space),
                     };
                 }
 
@@ -583,13 +604,14 @@ fn cold_accounts_to_synthetic(
                 };
 
                 let spl_bytes = build_spl_token_account_bytes(&aggregated, &owner_arr);
+                let space = spl_bytes.len() as u64;
                 return SolanaAccountData {
                     lamports: newest_acc.lamports,
-                    data: Base64String(spl_bytes.clone()),
+                    data: Base64String(spl_bytes),
                     owner: newest_acc.owner,
                     executable: false,
                     rent_epoch: UnsignedInteger(0),
-                    space: UnsignedInteger(spl_bytes.len() as u64),
+                    space: UnsignedInteger(space),
                 };
             }
         }

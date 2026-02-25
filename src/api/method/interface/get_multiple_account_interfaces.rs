@@ -1,15 +1,19 @@
 use sea_orm::DatabaseConnection;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use tokio::sync::Semaphore;
 
 use crate::api::error::PhotonApiError;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 
-use super::racing::race_hot_cold;
+use super::racing::{get_distinct_owners_with_addresses, race_hot_cold};
 use super::types::{
     AccountInterface, GetMultipleAccountInterfacesRequest, GetMultipleAccountInterfacesResponse,
     MAX_BATCH_SIZE,
 };
+
+/// Maximum concurrent hot+cold lookups per batch request.
+const MAX_CONCURRENT_LOOKUPS: usize = 20;
 
 /// Get multiple account data from either on-chain or compressed sources.
 /// Returns one unified AccountInterface shape for every input pubkey.
@@ -34,10 +38,18 @@ pub async fn get_multiple_account_interfaces(
 
     let context = Context::extract(conn).await?;
 
+    let distinct_owners = get_distinct_owners_with_addresses(conn)
+        .await
+        .map_err(PhotonApiError::DatabaseError)?;
+
+    let semaphore = Semaphore::new(MAX_CONCURRENT_LOOKUPS);
     let futures: Vec<_> = request
         .addresses
         .iter()
-        .map(|address| race_hot_cold(rpc_client, conn, address))
+        .map(|address| async {
+            let _permit = semaphore.acquire().await.unwrap();
+            race_hot_cold(rpc_client, conn, address, Some(&distinct_owners)).await
+        })
         .collect();
 
     let results = futures::future::join_all(futures).await;

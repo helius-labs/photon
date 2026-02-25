@@ -114,36 +114,25 @@ pub async fn cleanup_stale_address_queues(
     Ok(())
 }
 
-/// Cleans up address_queues entries where the address already exists in indexed_trees
+/// Cleans up address_queues entries where the address already exists in indexed_trees.
 async fn cleanup_duplicate_addresses(
     db: &DatabaseConnection,
 ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
     info!("Checking for duplicate addresses in queue...");
 
-    let queue_entries = address_queues::Entity::find().all(db).await?;
+    let backend = db.get_database_backend();
+    let sql = match backend {
+        DatabaseBackend::Postgres | DatabaseBackend::Sqlite => {
+            "DELETE FROM address_queues WHERE address IN (SELECT value FROM indexed_trees)"
+        }
+        _ => return Err("Unsupported database backend".into()),
+    };
 
-    if queue_entries.is_empty() {
-        return Ok(0);
-    }
-
-    let queue_addresses: Vec<Vec<u8>> = queue_entries.iter().map(|e| e.address.clone()).collect();
-
-    let existing_entries = indexed_trees::Entity::find()
-        .filter(indexed_trees::Column::Value.is_in(queue_addresses))
-        .all(db)
+    let result = db
+        .execute(Statement::from_string(backend, sql.to_string()))
         .await?;
 
-    if existing_entries.is_empty() {
-        return Ok(0);
-    }
-
-    let existing_addresses: Vec<Vec<u8>> =
-        existing_entries.iter().map(|e| e.value.clone()).collect();
-
-    let result = address_queues::Entity::delete_many()
-        .filter(address_queues::Column::Address.is_in(existing_addresses))
-        .exec(db)
-        .await?;
-
-    Ok(result.rows_affected)
+    Ok(result.rows_affected())
 }

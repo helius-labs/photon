@@ -16,7 +16,7 @@ pub async fn get_account_interface(
 ) -> Result<GetAccountInterfaceResponse, PhotonApiError> {
     let context = Context::extract(conn).await?;
 
-    let value = race_hot_cold(rpc_client, conn, &request.address).await?;
+    let value = race_hot_cold(rpc_client, conn, &request.address, None).await?;
 
     Ok(GetAccountInterfaceResponse { context, value })
 }

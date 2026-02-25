@@ -100,12 +100,12 @@ impl From<PublicTransactionEventLegacy> for PublicTransactionEvent {
 impl PublicTransactionEvent {
     /// Deserialize from bytes, trying the current format first, then falling back to legacy.
     pub fn deserialize_versioned(data: &mut &[u8]) -> Result<Self, std::io::Error> {
-        // Clone the slice to try multiple deserializations
         let data_copy = *data;
 
-        // Try current version first
         if let Ok(event) = Self::deserialize(data) {
-            return Ok(event);
+            if data.is_empty() {
+                return Ok(event);
+            }
         }
 
         // Fall back to legacy version

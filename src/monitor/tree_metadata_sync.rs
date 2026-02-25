@@ -93,8 +93,8 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        info!(
-            "DEBUG: Parsed as V1 state tree: {} (queue={}, owner={})",
+        debug!(
+            "Parsed as V1 state tree: {} (queue={}, owner={})",
             pubkey, data.queue_pubkey, data.owner
         );
         upsert_tree_metadata(db, pubkey, TreeType::StateV1, &data, slot).await?;
@@ -142,8 +142,8 @@ pub async fn process_tree_account(
             return Ok(false);
         }
 
-        info!(
-            "DEBUG: Parsed as V2 state tree: {} (queue={}, owner={})",
+        debug!(
+            "Parsed as V2 state tree: {} (queue={}, owner={})",
             pubkey, data.queue_pubkey, data.owner
         );
         upsert_tree_metadata(db, pubkey, TreeType::StateV2, &data, slot).await?;
