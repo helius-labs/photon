@@ -8,7 +8,7 @@ use crate::migration::model::table::Accounts;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-async fn execute_sql<'a>(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr> {
+async fn execute_sql(manager: &SchemaManager<'_>, sql: &str) -> Result<(), DbErr> {
     manager
         .get_connection()
         .execute(Statement::from_string(
@@ -22,7 +22,7 @@ async fn execute_sql<'a>(manager: &SchemaManager<'_>, sql: &str) -> Result<(), D
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let solayer_accounts = vec![
+        let solayer_accounts = [
             "ARDPkhymCbfdan375FCgPnBJQvUfHeb7nHVdBfwWSxrp",
             "2sYfW81EENCMe415CPhE2XzBA5iQf4TXRs31W1KP63YT",
         ];

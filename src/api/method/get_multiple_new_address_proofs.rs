@@ -1,9 +1,9 @@
 use light_compressed_account::TreeType;
+use light_sdk_types::constants::ADDRESS_TREE_V1;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Statement, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
-use solana_pubkey::{pubkey, Pubkey};
 use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
@@ -16,8 +16,6 @@ use crate::ingester::persist::indexed_merkle_tree::get_multiple_exclusion_ranges
 use std::collections::HashMap;
 
 pub const MAX_ADDRESSES: usize = 1000;
-
-pub const ADDRESS_TREE_V1: Pubkey = pubkey!("amt1Ayt45jfbdw5YSo7iz6WZxUmnZsQTYXy82hVwyC2");
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

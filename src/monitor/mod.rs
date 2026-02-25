@@ -5,7 +5,7 @@ pub mod v1_tree_accounts;
 
 use std::{
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
@@ -42,6 +42,15 @@ use std::mem;
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
+static TREE_VALIDATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+struct TreeValidationGuard;
+
+impl Drop for TreeValidationGuard {
+    fn drop(&mut self) {
+        TREE_VALIDATION_IN_PROGRESS.store(false, Ordering::SeqCst);
+    }
+}
 
 async fn fetch_last_indexed_slot_with_infinite_retry(db: &DatabaseConnection) -> u64 {
     loop {
@@ -77,11 +86,7 @@ pub fn continously_monitor_photon(
 
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
-            let lag = if latest_slot > last_indexed_slot {
-                latest_slot - last_indexed_slot
-            } else {
-                0
-            };
+            let lag = latest_slot.saturating_sub(last_indexed_slot);
             metric! {
                 statsd_gauge!("indexing_lag", lag);
             }
@@ -94,14 +99,20 @@ pub fn continously_monitor_photon(
                     error!("Indexing lag is too high: {}", lag);
                 }
             } else {
-                let db_clone = db.clone();
-                let rpc_clone = rpc_client.clone();
+                if TREE_VALIDATION_IN_PROGRESS
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
+                    let db_clone = db.clone();
+                    let rpc_clone = rpc_client.clone();
 
-                tokio::spawn(async move {
-                    let tree_roots =
-                        load_db_tree_roots_with_infinite_retry(db_clone.as_ref()).await;
-                    validate_tree_roots(rpc_clone.as_ref(), tree_roots).await;
-                });
+                    tokio::spawn(async move {
+                        let _validation_guard = TreeValidationGuard;
+                        let tree_roots =
+                            load_db_tree_roots_with_infinite_retry(db_clone.as_ref()).await;
+                        validate_tree_roots(rpc_clone.as_ref(), tree_roots).await;
+                    });
+                }
 
                 // Spawn parallel verification tasks for each V2 tree
                 let v2_trees = match queue_monitor::collect_v2_trees(db.as_ref()).await {
@@ -142,7 +153,7 @@ pub fn continously_monitor_photon(
 }
 
 pub async fn update_latest_slot(rpc_client: &RpcClient) {
-    let slot = fetch_current_slot_with_infinite_retry(&rpc_client).await;
+    let slot = fetch_current_slot_with_infinite_retry(rpc_client).await;
     LATEST_SLOT.fetch_max(slot, Ordering::SeqCst);
 }
 

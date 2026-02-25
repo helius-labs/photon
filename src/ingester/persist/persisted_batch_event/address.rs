@@ -131,7 +131,7 @@ pub async fn persist_batch_address_append_event(
     Ok(())
 }
 
-async fn cleanup_stale_address_queue_entries(
+pub async fn cleanup_stale_address_queue_entries(
     txn: &DatabaseTransaction,
     batch_address_append_event: &BatchEvent,
     queue_end: i64,

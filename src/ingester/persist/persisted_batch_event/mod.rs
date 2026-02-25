@@ -11,7 +11,7 @@ use log::debug;
 use sea_orm::DatabaseTransaction;
 use solana_pubkey::Pubkey;
 
-use self::address::persist_batch_address_append_event;
+use self::address::{cleanup_stale_address_queue_entries, persist_batch_address_append_event};
 use self::append::persist_batch_append_event;
 use self::helpers::{deduplicate_events, persist_leaf_nodes_chunked, ZKP_BATCH_SIZE};
 use self::nullify::persist_batch_nullify_event;
@@ -19,7 +19,7 @@ use self::sequence::should_process_event;
 
 /// We need to find the events of the same tree:
 /// - order them by sequence number and execute them in order
-///     HashMap<pubkey, Vec<Event(BatchAppendEvent, seq)>>
+///   HashMap<pubkey, Vec<Event(BatchAppendEvent, seq)>>
 /// - execute a single function call to persist all changed nodes
 pub async fn persist_batch_events(
     txn: &DatabaseTransaction,
@@ -74,6 +74,10 @@ pub async fn persist_batch_events(
                     "Skipping already processed event with sequence {}",
                     _event_seq
                 );
+                if let MerkleTreeEvent::BatchAddressAppend(batch_event) = event {
+                    let queue_end = (batch_event.new_next_index as i64) - 1;
+                    cleanup_stale_address_queue_entries(txn, batch_event, queue_end).await?;
+                }
                 continue;
             }
 

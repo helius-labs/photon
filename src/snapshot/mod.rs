@@ -1,7 +1,7 @@
 use std::{
     env::temp_dir,
     fs::{self, File, OpenOptions},
-    io::{BufReader, Error, ErrorKind, Read, Write},
+    io::{BufReader, Error, Read, Write},
     path::PathBuf,
     pin::Pin,
     sync::Arc,
@@ -157,8 +157,7 @@ impl R2DirectoryAdapter {
 
         pin_mut!(byte_stream);
         // Create a stream that converts `Result<u8, S3Error>` to `Result<Vec<u8>, S3Error>`
-        let byte_stream =
-            byte_stream.map(|bytes| bytes.map_err(|e| Error::new(ErrorKind::Other, e)));
+        let byte_stream = byte_stream.map(|bytes| bytes.map_err(Error::other));
 
         let mut stream_reader = StreamReader {
             stream: byte_stream,

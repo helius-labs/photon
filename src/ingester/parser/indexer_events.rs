@@ -2,7 +2,7 @@
 /// to avoid having to import all of Light's dependencies.
 use borsh::{BorshDeserialize, BorshSerialize};
 use light_compressed_account::Pubkey;
-use light_event::event::{BatchNullifyContext, NewAddress};
+use light_event::event::{AssociatedTokenAccountOwnerInfo, BatchNullifyContext, NewAddress};
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, BorshSerialize, BorshDeserialize)]
 pub struct OutputCompressedAccountWithPackedContext {
@@ -20,7 +20,7 @@ pub struct MerkleTreeSequenceNumberV2 {
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, Eq, PartialEq)]
 pub struct MerkleTreeSequenceNumberV1 {
-    pub pubkey: Pubkey,
+    pub tree_pubkey: Pubkey,
     pub seq: u64,
 }
 
@@ -33,7 +33,7 @@ pub enum MerkleTreeSequenceNumber {
 impl MerkleTreeSequenceNumber {
     pub fn tree_pubkey(&self) -> Pubkey {
         match self {
-            MerkleTreeSequenceNumber::V1(x) => x.pubkey,
+            MerkleTreeSequenceNumber::V1(x) => x.tree_pubkey,
             MerkleTreeSequenceNumber::V2(x) => x.tree_pubkey,
         }
     }
@@ -45,6 +45,7 @@ impl MerkleTreeSequenceNumber {
     }
 }
 
+/// Current version of PublicTransactionEvent (with ata_owners)
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, PartialEq, Eq)]
 pub struct PublicTransactionEvent {
     pub input_compressed_account_hashes: Vec<[u8; 32]>,
@@ -54,10 +55,64 @@ pub struct PublicTransactionEvent {
     pub sequence_numbers: Vec<MerkleTreeSequenceNumberV1>,
     pub relay_fee: Option<u64>,
     pub is_compress: bool,
-    pub compression_lamports: Option<u64>,
+    pub compress_or_decompress_lamports: Option<u64>,
     pub pubkey_array: Vec<Pubkey>,
     // TODO: remove(data can just be written into a compressed account)
     pub message: Option<Vec<u8>>,
+    /// ATA owner info for compressed ATAs (output_index -> wallet_owner_pubkey).
+    /// Only populated for compress_and_close operations where is_ata=true.
+    pub ata_owners: Vec<AssociatedTokenAccountOwnerInfo>,
+}
+
+/// Legacy version of PublicTransactionEvent (without ata_owners, with compression_lamports)
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Default, PartialEq, Eq)]
+pub struct PublicTransactionEventLegacy {
+    pub input_compressed_account_hashes: Vec<[u8; 32]>,
+    pub output_compressed_account_hashes: Vec<[u8; 32]>,
+    pub output_compressed_accounts: Vec<OutputCompressedAccountWithPackedContext>,
+    pub output_leaf_indices: Vec<u32>,
+    pub sequence_numbers: Vec<MerkleTreeSequenceNumberV1>,
+    pub relay_fee: Option<u64>,
+    pub is_compress: bool,
+    pub compression_lamports: Option<u64>,
+    pub pubkey_array: Vec<Pubkey>,
+    pub message: Option<Vec<u8>>,
+}
+
+impl From<PublicTransactionEventLegacy> for PublicTransactionEvent {
+    fn from(legacy: PublicTransactionEventLegacy) -> Self {
+        Self {
+            input_compressed_account_hashes: legacy.input_compressed_account_hashes,
+            output_compressed_account_hashes: legacy.output_compressed_account_hashes,
+            output_compressed_accounts: legacy.output_compressed_accounts,
+            output_leaf_indices: legacy.output_leaf_indices,
+            sequence_numbers: legacy.sequence_numbers,
+            relay_fee: legacy.relay_fee,
+            is_compress: legacy.is_compress,
+            compress_or_decompress_lamports: legacy.compression_lamports,
+            pubkey_array: legacy.pubkey_array,
+            message: legacy.message,
+            ata_owners: Vec::new(),
+        }
+    }
+}
+
+impl PublicTransactionEvent {
+    /// Deserialize from bytes, trying the current format first, then falling back to legacy.
+    pub fn deserialize_versioned(data: &mut &[u8]) -> Result<Self, std::io::Error> {
+        let data_copy = *data;
+
+        if let Ok(event) = Self::deserialize(data) {
+            if data.is_empty() {
+                return Ok(event);
+            }
+        }
+
+        // Fall back to legacy version
+        *data = data_copy;
+        let legacy = PublicTransactionEventLegacy::deserialize(data)?;
+        Ok(legacy.into())
+    }
 }
 
 #[derive(Debug, Clone)]

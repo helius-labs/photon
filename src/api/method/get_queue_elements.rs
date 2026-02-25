@@ -28,6 +28,8 @@ use utoipa::ToSchema;
 const MAX_QUEUE_ELEMENTS: u16 = 30_000;
 const MAX_QUEUE_ELEMENTS_SQLITE: u16 = 500;
 
+const MAX_SQL_PARAMS: usize = 30_000;
+
 /// Encode tree node position as a single u64
 /// Format: [level: u8][position: 56 bits]
 /// Level 0 = leaves, Level tree_height-1 = root
@@ -236,13 +238,26 @@ pub async fn get_queue_elements(
         let (nodes, initial_root, root_seq) =
             merge_state_queue_proofs(&output_proof_data, &input_proof_data)?;
 
-        Some(StateQueueData {
-            nodes,
-            initial_root,
-            root_seq,
-            output_queue,
-            input_queue,
-        })
+        let has_output_data = output_queue
+            .as_ref()
+            .map(|oq| !oq.leaf_indices.is_empty())
+            .unwrap_or(false);
+        let has_input_data = input_queue
+            .as_ref()
+            .map(|iq| !iq.leaf_indices.is_empty())
+            .unwrap_or(false);
+
+        if has_output_data || has_input_data {
+            Some(StateQueueData {
+                nodes,
+                initial_root,
+                root_seq,
+                output_queue,
+                input_queue,
+            })
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -821,12 +836,16 @@ async fn fetch_address_queue_v2(
         let mut current_hash = hashed_leaf;
 
         for (level, sibling_hash) in proof.proof.iter().enumerate() {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_pos = if pos.is_multiple_of(2) {
+                pos + 1
+            } else {
+                pos - 1
+            };
 
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_info.height as u8);
             nodes_map.insert(sibling_idx, sibling_hash.clone());
 
-            let parent_hash = if pos % 2 == 0 {
+            let parent_hash = if pos.is_multiple_of(2) {
                 Poseidon::hashv(&[&current_hash.0, &sibling_hash.0])
             } else {
                 Poseidon::hashv(&[&sibling_hash.0, &current_hash.0])
@@ -982,7 +1001,11 @@ fn deduplicate_nodes_from_refs(
 
         // Walk up the proof path, storing sibling hashes and path node hashes from DB
         for (level, sibling_hash) in proof_ctx.proof.iter().enumerate() {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_pos = if pos.is_multiple_of(2) {
+                pos + 1
+            } else {
+                pos - 1
+            };
 
             // Store the sibling (from proof)
             let sibling_idx = encode_node_index(level as u8, sibling_pos, tree_height);
@@ -1052,24 +1075,29 @@ async fn fetch_path_nodes_from_db(
         return Ok(HashMap::new());
     }
 
-    let path_nodes = state_trees::Entity::find()
-        .filter(
-            state_trees::Column::Tree
-                .eq(tree_bytes)
-                .and(state_trees::Column::NodeIdx.is_in(all_path_indices)),
-        )
-        .all(tx)
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
-        })?;
-
     let mut result = HashMap::new();
-    for node in path_nodes {
-        let hash = Hash::try_from(node.hash).map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
-        })?;
-        result.insert(node.node_idx, hash);
+
+    let tree_bytes_ref = tree_bytes.clone();
+
+    for chunk in all_path_indices.chunks(MAX_SQL_PARAMS) {
+        let path_nodes = state_trees::Entity::find()
+            .filter(
+                state_trees::Column::Tree
+                    .eq(tree_bytes_ref.clone())
+                    .and(state_trees::Column::NodeIdx.is_in(chunk.to_vec())),
+            )
+            .all(tx)
+            .await
+            .map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Failed to fetch path nodes: {}", e))
+            })?;
+
+        for node in path_nodes {
+            let hash = Hash::try_from(node.hash).map_err(|e| {
+                PhotonApiError::UnexpectedError(format!("Invalid hash in path node: {}", e))
+            })?;
+            result.insert(node.node_idx, hash);
+        }
     }
 
     Ok(result)

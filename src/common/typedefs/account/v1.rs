@@ -1,5 +1,5 @@
 use crate::api::error::PhotonApiError;
-use crate::api::method::utils::parse_decimal;
+use crate::api::method::utils::{parse_account_discriminator, parse_decimal};
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
@@ -7,12 +7,16 @@ use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use jsonrpsee_core::Serialize;
+use light_sdk_types::TOKEN_COMPRESSED_ACCOUNT_DISCRIMINATOR;
 use utoipa::ToSchema;
 
-pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = [2, 0, 0, 0, 0, 0, 0, 0];
+/// Re-export V1 discriminator from light-sdk-types under local naming convention.
+pub const C_TOKEN_DISCRIMINATOR_V1: [u8; 8] = TOKEN_COMPRESSED_ACCOUNT_DISCRIMINATOR;
+/// V2: batched Merkle trees (not yet exported from SDK crates)
 pub const C_TOKEN_DISCRIMINATOR_V2: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
+/// V3/ShaFlat: SHA256 flat hash with TLV extensions (not yet exported from SDK crates)
 pub const C_TOKEN_DISCRIMINATOR_V3: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 4];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
@@ -37,7 +41,7 @@ impl Account {
     pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
         match self.data.as_ref() {
             Some(data)
-                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
+                if self.owner.0 == LIGHT_TOKEN_PROGRAM_ID && data.is_c_token_discriminator() =>
             {
                 let data_slice = data.data.0.as_slice();
                 let token_data = TokenData::parse(data_slice).map_err(|e| {
@@ -71,11 +75,15 @@ impl TryFrom<Model> for Account {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {
-        let data = match (account.data, account.data_hash, account.discriminator) {
+        let parsed_discriminator = parse_account_discriminator(
+            account.discriminator.clone(),
+            account.discriminator_bytes.clone(),
+        )?;
+        let data = match (account.data, account.data_hash, parsed_discriminator) {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),
                 data_hash: data_hash.try_into()?,
-                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+                discriminator: UnsignedInteger(discriminator),
             }),
             (None, None, None) => None,
             _ => {

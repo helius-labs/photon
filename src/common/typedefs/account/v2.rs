@@ -1,6 +1,6 @@
 use crate::api::error::PhotonApiError;
 use crate::api::method::get_validity_proof::MerkleContextV2;
-use crate::api::method::utils::parse_decimal;
+use crate::api::method::utils::{parse_account_discriminator, parse_decimal};
 use crate::common::typedefs::account::{AccountData, AccountWithContext};
 use crate::common::typedefs::bs64_string::Base64String;
 use crate::common::typedefs::hash::Hash;
@@ -9,7 +9,7 @@ use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::accounts::Model;
 use crate::ingester::error::IngesterError;
-use crate::ingester::persist::COMPRESSED_TOKEN_PROGRAM;
+use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -41,7 +41,7 @@ impl AccountV2 {
     pub fn parse_token_data(&self) -> Result<Option<TokenData>, IngesterError> {
         match self.data.as_ref() {
             Some(data)
-                if self.owner.0 == COMPRESSED_TOKEN_PROGRAM && data.is_c_token_discriminator() =>
+                if self.owner.0 == LIGHT_TOKEN_PROGRAM_ID && data.is_c_token_discriminator() =>
             {
                 let data_slice = data.data.0.as_slice();
                 let token_data = TokenData::parse(data_slice).map_err(|e| {
@@ -58,11 +58,15 @@ impl TryFrom<Model> for AccountV2 {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {
-        let data = match (account.data, account.data_hash, account.discriminator) {
+        let parsed_discriminator = parse_account_discriminator(
+            account.discriminator.clone(),
+            account.discriminator_bytes.clone(),
+        )?;
+        let data = match (account.data, account.data_hash, parsed_discriminator) {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),
                 data_hash: data_hash.try_into()?,
-                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+                discriminator: UnsignedInteger(discriminator),
             }),
             (None, None, None) => None,
             _ => {
@@ -90,7 +94,11 @@ impl TryFrom<Model> for AccountV2 {
             merkle_context: MerkleContextV2 {
                 tree_type: account.tree_type.map(|t| t as u16).unwrap_or(0),
                 tree: account.tree.try_into()?,
-                queue: account.queue.unwrap_or_default().try_into()?,
+                queue: account
+                    .queue
+                    .map(SerializablePubkey::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
                 cpi_context: None,
                 next_tree_context: None,
             },
@@ -102,9 +110,9 @@ impl From<&AccountWithContext> for AccountV2 {
     fn from(x: &AccountWithContext) -> Self {
         AccountV2 {
             hash: x.account.hash.clone(),
-            address: x.account.address.clone(),
+            address: x.account.address,
             data: x.account.data.clone(),
-            owner: x.account.owner.clone(),
+            owner: x.account.owner,
             lamports: x.account.lamports,
             leaf_index: x.account.leaf_index,
             seq: x.account.seq,
@@ -112,8 +120,8 @@ impl From<&AccountWithContext> for AccountV2 {
             prove_by_index: x.context.in_output_queue,
             merkle_context: MerkleContextV2 {
                 tree_type: x.context.tree_type,
-                tree: x.account.tree.clone(),
-                queue: x.context.queue.clone(),
+                tree: x.account.tree,
+                queue: x.context.queue,
                 cpi_context: None,
                 next_tree_context: None,
             },

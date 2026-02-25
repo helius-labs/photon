@@ -5,7 +5,7 @@ use async_stream::stream;
 use clap::Parser;
 use futures::pin_mut;
 use jsonrpsee::server::ServerHandle;
-use log::{error, info};
+use log::{error, info, warn};
 use photon_indexer::api::{self, api::PhotonApi};
 
 use photon_indexer::common::{
@@ -73,6 +73,10 @@ struct Args {
     #[arg(long, default_value = "http://127.0.0.1:3001")]
     prover_url: String,
 
+    /// API key for the Light Prover service
+    #[arg(long)]
+    prover_api_key: Option<String>,
+
     /// Snasphot directory
     #[arg(long, default_value = None)]
     snapshot_dir: Option<String>,
@@ -107,16 +111,25 @@ struct Args {
     /// If provided, metrics will be sent to the specified statsd server.
     #[arg(long, default_value = None)]
     metrics_endpoint: Option<String>,
+
+    /// Max concurrent HTTP connections for the JSON-RPC server (jsonrpsee).
+    /// Connections beyond this limit receive HTTP 429.
+    #[arg(long, default_value_t = 1024)]
+    max_http_connections: u32,
 }
 
 async fn start_api_server(
     db: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     prover_url: String,
+    prover_api_key: Option<String>,
     api_port: u16,
+    max_http_connections: u32,
 ) -> ServerHandle {
-    let api = PhotonApi::new(db, rpc_client, prover_url);
-    api::rpc_server::run_server(api, api_port).await.unwrap()
+    let api = PhotonApi::new(db, rpc_client, prover_url, prover_api_key);
+    api::rpc_server::run_server(api, api_port, max_http_connections)
+        .await
+        .unwrap()
 }
 
 async fn setup_temporary_sqlite_database_pool(max_connections: u32) -> SqlitePool {
@@ -219,6 +232,14 @@ async fn main() {
         info!("Running migrations...");
         Migrator::up(db_conn.as_ref(), None).await.unwrap();
     }
+
+    if let Err(e) =
+        photon_indexer::ingester::startup_cleanup::cleanup_stale_address_queues(db_conn.as_ref())
+            .await
+    {
+        error!("Failed to cleanup stale address queues: {}", e);
+    }
+
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
     let rpc_client = get_rpc_client(&args.rpc_url);
 
@@ -295,6 +316,19 @@ async fn main() {
         }
         false => {
             info!("Starting indexer...");
+
+            info!("Syncing tree metadata...");
+            if let Err(e) = photon_indexer::monitor::tree_metadata_sync::sync_tree_metadata(
+                rpc_client.as_ref(),
+                db_conn.as_ref(),
+            )
+            .await
+            {
+                warn!("Failed to sync tree metadata on startup: {}. Will retry in background monitor.", e);
+            } else {
+                info!("Tree metadata sync completed successfully");
+            }
+
             // For localnet we can safely use a large batch size to speed up indexing.
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
                 Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
@@ -348,7 +382,10 @@ async fn main() {
         }
     };
 
-    info!("Starting API server with port {}...", args.port);
+    info!(
+        "Starting API server with port {}, max_http_connections={}...",
+        args.port, args.max_http_connections
+    );
     let api_handler = if args.disable_api {
         None
     } else {
@@ -357,7 +394,9 @@ async fn main() {
                 db_conn.clone(),
                 rpc_client.clone(),
                 args.prover_url,
+                args.prover_api_key,
                 args.port,
+                args.max_http_connections,
             )
             .await,
         )

@@ -24,7 +24,7 @@ pub async fn persist_batch_append_event(
         .saturating_sub(batch_append_event.old_next_index) as usize;
 
     let current_next_index =
-        get_tree_next_index(txn, &batch_append_event.merkle_tree_pubkey.to_vec()).await?;
+        get_tree_next_index(txn, batch_append_event.merkle_tree_pubkey.as_ref()).await?;
 
     // If old_next_index doesn't match current state, check if already processed
     if batch_append_event.old_next_index != current_next_index {
@@ -53,7 +53,7 @@ pub async fn persist_batch_append_event(
 
     let accounts = fetch_accounts_to_append(
         txn,
-        &batch_append_event.merkle_tree_pubkey.to_vec(),
+        batch_append_event.merkle_tree_pubkey.as_ref(),
         batch_append_event.old_next_index as i64,
         batch_append_event.new_next_index as i64,
     )

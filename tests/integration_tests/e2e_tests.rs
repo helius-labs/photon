@@ -609,8 +609,9 @@ async fn test_get_latest_non_voting_signatures_with_failures(
 async fn test_nullfiier_and_address_queue_transactions(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use light_sdk_types::constants::ADDRESS_TREE_V1;
     use photon_indexer::api::method::get_multiple_new_address_proofs::{
-        AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
+        AddressListWithTrees, AddressWithTree,
     };
 
     let name = trim_test_name(function_name!());

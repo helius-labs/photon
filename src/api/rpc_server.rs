@@ -10,7 +10,11 @@ use tower_http::cors::{Any, CorsLayer};
 
 use super::api::PhotonApi;
 
-pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
+pub async fn run_server(
+    api: PhotonApi,
+    port: u16,
+    max_connections: u32,
+) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors = CorsLayer::new()
         .allow_methods([Method::POST, Method::GET])
@@ -21,6 +25,7 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
         .layer(ProxyGetRequestLayer::new("/liveness", "liveness")?)
         .layer(ProxyGetRequestLayer::new("/readiness", "readiness")?);
     let server = ServerBuilder::default()
+        .max_connections(max_connections)
         .set_middleware(middleware)
         .build(addr)
         .await?;
@@ -415,6 +420,27 @@ fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, 
             let api = rpc_context.as_ref();
             let payload = rpc_params.parse()?;
             api.get_transaction_with_compression_info_v2(payload)
+                .await
+                .map_err(Into::into)
+        },
+    )?;
+
+    // Interface endpoints - race hot (on-chain) and cold (compressed) lookups
+    module.register_async_method(
+        "getAccountInterface",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_account_interface(payload).await.map_err(Into::into)
+        },
+    )?;
+
+    module.register_async_method(
+        "getMultipleAccountInterfaces",
+        |rpc_params, rpc_context| async move {
+            let api = rpc_context.as_ref();
+            let payload = rpc_params.parse()?;
+            api.get_multiple_account_interfaces(payload)
                 .await
                 .map_err(Into::into)
         },

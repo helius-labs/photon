@@ -35,6 +35,24 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
 }
 
+pub fn parse_account_discriminator(
+    discriminator: Option<Decimal>,
+    discriminator_bytes: Option<Vec<u8>>,
+) -> Result<Option<u64>, PhotonApiError> {
+    if let Some(bytes) = discriminator_bytes {
+        if bytes.len() != 8 {
+            return Err(PhotonApiError::UnexpectedError(
+                "Invalid discriminator bytes length".to_string(),
+            ));
+        }
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&bytes);
+        return Ok(Some(u64::from_le_bytes(arr)));
+    }
+
+    discriminator.map(parse_decimal).transpose()
+}
+
 pub(crate) fn parse_leaf_index(leaf_index: i64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()

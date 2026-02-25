@@ -19,8 +19,6 @@ pub struct Model {
     pub prev_spent: Option<bool>,
     #[sea_orm(column_type = "Decimal(Some((23, 0)))")]
     pub lamports: Decimal,
-    #[sea_orm(column_type = "Decimal(Some((23, 0)))", nullable)]
-    pub discriminator: Option<Decimal>,
     pub tree_type: Option<i32>,
     pub nullified_in_tree: bool,
     pub nullifier_queue_index: Option<i64>,
@@ -28,12 +26,24 @@ pub struct Model {
     pub queue: Option<Vec<u8>>,
     pub nullifier: Option<Vec<u8>>,
     pub tx_hash: Option<Vec<u8>>,
+    pub onchain_pubkey: Option<Vec<u8>>,
+    pub discriminator_bytes: Option<Vec<u8>>,
+    #[sea_orm(column_type = "Decimal(Some((23, 0)))", nullable)]
+    pub discriminator: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::token_accounts::Entity")]
+    #[sea_orm(has_many = "super::account_transactions::Entity")]
+    AccountTransactions,
+    #[sea_orm(has_one = "super::token_accounts::Entity")]
     TokenAccounts,
+}
+
+impl Related<super::account_transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AccountTransactions.def()
+    }
 }
 
 impl Related<super::token_accounts::Entity> for Entity {
