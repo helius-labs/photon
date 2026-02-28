@@ -18,6 +18,7 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
         .allow_headers([hyper::header::CONTENT_TYPE]);
     let middleware = tower::ServiceBuilder::new()
         .layer(cors)
+        .layer(ProxyGetRequestLayer::new("/health", "health")?)
         .layer(ProxyGetRequestLayer::new("/liveness", "liveness")?)
         .layer(ProxyGetRequestLayer::new("/readiness", "readiness")?);
     let server = ServerBuilder::default()
@@ -30,6 +31,12 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
 
 fn build_rpc_module(api_and_indexer: PhotonApi) -> Result<RpcModule<PhotonApi>, anyhow::Error> {
     let mut module = RpcModule::new(api_and_indexer);
+
+    module.register_async_method("health", |_rpc_params, rpc_context| async move {
+        debug!("Checking Health");
+        let api = rpc_context.as_ref();
+        api.health().await.map_err(Into::into)
+    })?;
 
     module.register_async_method("liveness", |_rpc_params, rpc_context| async move {
         debug!("Checking Liveness");
