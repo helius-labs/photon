@@ -17,6 +17,7 @@ pub enum Accounts {
     Hash,
     Address,
     OnchainPubkey,
+    DiscriminatorV2,
     Data,
     DataHash,
     Owner,
