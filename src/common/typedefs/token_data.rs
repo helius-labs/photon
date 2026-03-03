@@ -44,13 +44,11 @@ pub struct TokenData {
     pub delegate: Option<SerializablePubkey>,
     /// The account's state
     pub state: AccountState,
-    /// TokenExtension TLV data (raw bytes, opaque to the indexer)
+    /// TokenExtension TLV data
     pub tlv: Option<Base64String>,
 }
 
 impl TokenData {
-    /// Deserializes base fields via Borsh, then reads TLV as raw bytes (1-byte
-    /// option tag + remaining bytes).
     pub fn parse(data: &[u8]) -> Result<Self, std::io::Error> {
         let mut buf = data;
 
@@ -66,17 +64,19 @@ impl TokenData {
             let option_tag = buf[0];
             buf = &buf[1..];
 
-            match option_tag {
-                0 => None,
-                1 if !buf.is_empty() => Some(Base64String(buf.to_vec())),
-                other => {
+            if option_tag == 0 {
+                None
+            } else if option_tag == 1 && !buf.is_empty() {
+                Some(Base64String(buf.to_vec()))
+            } else {
+                if option_tag != 0 && option_tag != 1 {
                     log::warn!(
-                        "Unexpected TLV: option_tag={}, remaining_bytes={}",
-                        other,
+                        "Unknown TLV option_tag={} with {} bytes remaining",
+                        option_tag,
                         buf.len()
                     );
-                    None
                 }
+                None
             }
         };
 
@@ -114,177 +114,218 @@ mod tests {
     use super::*;
     use solana_pubkey::Pubkey;
 
-    fn build_onchain_token_data_bytes(has_delegate: bool, tlv: Option<&[u8]>) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&[0x11u8; 32]); // mint
-        bytes.extend_from_slice(&[0x22u8; 32]); // owner
-        bytes.extend_from_slice(&100u64.to_le_bytes()); // amount
-        if has_delegate {
-            bytes.push(1);
-            bytes.extend_from_slice(&[0x33u8; 32]);
-        } else {
-            bytes.push(0);
-        }
-        bytes.push(0); // state = initialized
-        match tlv {
-            Some(tlv_data) => {
-                bytes.push(1); // Option tag = Some
-                bytes.extend_from_slice(tlv_data);
-            }
-            None => {
-                bytes.push(0); // Option tag = None
-            }
-        }
-        bytes
-    }
-
-    fn build_compressed_only_tlv() -> Vec<u8> {
-        let mut tlv = Vec::new();
-        tlv.extend_from_slice(&1u32.to_le_bytes()); // vec len = 1 element
-        tlv.push(31); // ExtensionStruct enum variant = CompressedOnly
-        tlv.extend_from_slice(&500u64.to_le_bytes()); // delegated_amount
-        tlv.extend_from_slice(&0u64.to_le_bytes()); // withheld_transfer_fee
-        tlv.push(1); // is_ata
-        tlv
-    }
-
-    #[test]
-    fn parse_v1_no_delegate_no_tlv() {
-        let bytes = build_onchain_token_data_bytes(false, None);
-        let td = TokenData::parse(&bytes).unwrap();
-        assert_eq!(td.mint.0, Pubkey::from([0x11; 32]));
-        assert_eq!(td.owner.0, Pubkey::from([0x22; 32]));
-        assert_eq!(td.amount.0, 100);
-        assert!(td.delegate.is_none());
-        assert_eq!(td.state, AccountState::initialized);
-        assert!(td.tlv.is_none());
-    }
-
-    #[test]
-    fn parse_v1_with_delegate_no_tlv() {
-        let bytes = build_onchain_token_data_bytes(true, None);
-        let td = TokenData::parse(&bytes).unwrap();
-        assert_eq!(td.delegate.unwrap().0, Pubkey::from([0x33; 32]));
-        assert!(td.tlv.is_none());
-    }
-
-    #[test]
-    fn parse_v3_with_compressed_only_tlv() {
-        let tlv_raw = build_compressed_only_tlv();
-        let bytes = build_onchain_token_data_bytes(true, Some(&tlv_raw));
-
-        let td = TokenData::parse(&bytes).unwrap();
-        assert_eq!(td.amount.0, 100);
-        assert!(td.delegate.is_some());
-        let tlv = td.tlv.unwrap();
-        assert_eq!(tlv.0, tlv_raw);
-    }
-
-    #[test]
-    fn parse_v3_no_delegate_with_tlv() {
-        let tlv_raw = build_compressed_only_tlv();
-        let bytes = build_onchain_token_data_bytes(false, Some(&tlv_raw));
-
-        let td = TokenData::parse(&bytes).unwrap();
-        assert!(td.delegate.is_none());
-        assert!(td.tlv.is_some());
-        assert_eq!(td.tlv.unwrap().0, tlv_raw);
-    }
-
-    #[derive(Debug, BorshDeserialize)]
-    struct OldTokenData {
-        pub mint: SerializablePubkey,
-        pub owner: SerializablePubkey,
-        pub amount: UnsignedInteger,
-        pub delegate: Option<SerializablePubkey>,
-        pub state: AccountState,
-        pub tlv: Option<Base64String>,
-    }
-
-    #[test]
-    fn old_try_from_slice_fails_with_not_all_bytes_read() {
-        let tlv_raw = build_compressed_only_tlv();
-        let bytes = build_onchain_token_data_bytes(true, Some(&tlv_raw));
-
-        let err = OldTokenData::try_from_slice(&bytes)
-            .expect_err("old BorshDeserialize must fail on V3 TLV data");
-
-        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        assert!(
-            err.to_string().contains("Not all bytes read"),
-            "Expected exact production error 'Not all bytes read', got: {}",
-            err
-        );
-    }
-
-    #[test]
-    fn new_parse_succeeds_where_old_try_from_slice_fails() {
-        let tlv_raw = build_compressed_only_tlv();
-        let bytes = build_onchain_token_data_bytes(true, Some(&tlv_raw));
-
-        // Old code fails:
-        assert!(OldTokenData::try_from_slice(&bytes).is_err());
-        // New code succeeds and captures TLV:
-        let td = TokenData::parse(&bytes).unwrap();
-        assert_eq!(td.tlv.unwrap().0, tlv_raw);
-    }
-
-    #[test]
-    fn roundtrip_no_tlv() {
-        let original = TokenData {
-            mint: SerializablePubkey(Pubkey::new_unique()),
-            owner: SerializablePubkey(Pubkey::new_unique()),
+    fn sample_token_data(tlv: Option<Vec<u8>>) -> TokenData {
+        TokenData {
+            mint: SerializablePubkey::from(Pubkey::new_unique()),
+            owner: SerializablePubkey::from(Pubkey::new_unique()),
             amount: UnsignedInteger(42),
+            delegate: Some(SerializablePubkey::from(Pubkey::new_unique())),
+            state: AccountState::initialized,
+            tlv: tlv.map(Base64String),
+        }
+    }
+
+    #[test]
+    fn serialize_parse_roundtrip_without_tlv() {
+        let token_data = sample_token_data(None);
+
+        let mut bytes = Vec::new();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        let parsed = TokenData::parse(&bytes).unwrap();
+        assert_eq!(parsed, token_data);
+    }
+
+    #[test]
+    fn serialize_parse_roundtrip_with_tlv_raw_bytes() {
+        // Starts with a vec-length-like prefix to ensure serializer doesn't add another one.
+        let raw_tlv = vec![2, 0, 0, 0, 7, 8, 9, 10];
+        let token_data = sample_token_data(Some(raw_tlv.clone()));
+
+        let mut bytes = Vec::new();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // Fixed fields: mint(32) + owner(32) + amount(8) + delegate_option(1+32) + state(1)
+        let fixed_len = 32 + 32 + 8 + 33 + 1;
+        assert_eq!(bytes[fixed_len], 1); // tlv option tag
+        assert_eq!(&bytes[(fixed_len + 1)..], raw_tlv.as_slice());
+
+        let parsed = TokenData::parse(&bytes).unwrap();
+        assert_eq!(parsed, token_data);
+    }
+
+    #[test]
+    fn serialize_parse_roundtrip_without_delegate() {
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(Pubkey::new_unique()),
+            owner: SerializablePubkey::from(Pubkey::new_unique()),
+            amount: UnsignedInteger(123456789),
+            delegate: None,
+            state: AccountState::frozen,
+            tlv: None,
+        };
+
+        let mut bytes = Vec::new();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // Fixed fields: mint(32) + owner(32) + amount(8) + delegate_option(1) + state(1) + tlv_option(1) = 75
+        assert_eq!(bytes.len(), 75);
+
+        let parsed = TokenData::parse(&bytes).unwrap();
+        assert_eq!(parsed, token_data);
+    }
+
+    #[test]
+    fn serialize_tlv_option_none_explicit() {
+        let token_data = TokenData {
+            mint: SerializablePubkey::from([1u8; 32]),
+            owner: SerializablePubkey::from([2u8; 32]),
+            amount: UnsignedInteger(100),
             delegate: None,
             state: AccountState::initialized,
             tlv: None,
         };
+
         let mut bytes = Vec::new();
-        borsh::BorshSerialize::serialize(&original, &mut bytes).unwrap();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // TLV should serialize as a single 0 byte at the end
+        assert_eq!(bytes.len(), 75); // 32+32+8+1+1+1 = 75
+        assert_eq!(*bytes.last().unwrap(), 0); // Last byte should be 0 (None option)
+
         let parsed = TokenData::parse(&bytes).unwrap();
-        assert_eq!(parsed, original);
+        assert_eq!(parsed.tlv, None);
     }
 
     #[test]
-    fn roundtrip_with_tlv() {
-        let original = TokenData {
-            mint: SerializablePubkey(Pubkey::new_unique()),
-            owner: SerializablePubkey(Pubkey::new_unique()),
-            amount: UnsignedInteger(1_000_000),
-            delegate: Some(SerializablePubkey(Pubkey::new_unique())),
+    fn serialize_empty_tlv_vec() {
+        let token_data = TokenData {
+            mint: SerializablePubkey::from([3u8; 32]),
+            owner: SerializablePubkey::from([4u8; 32]),
+            amount: UnsignedInteger(999),
+            delegate: Some(SerializablePubkey::from([5u8; 32])),
             state: AccountState::frozen,
-            tlv: Some(Base64String(vec![0xAA, 0xBB, 0xCC])),
+            tlv: Some(Base64String(vec![])),
         };
+
         let mut bytes = Vec::new();
-        borsh::BorshSerialize::serialize(&original, &mut bytes).unwrap();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // Fixed + tlv option tag (1)
+        let fixed_len = 32 + 32 + 8 + 33 + 1;
+        assert_eq!(bytes[fixed_len], 1); // Option::Some tag
+        assert_eq!(bytes.len(), fixed_len + 1); // No data after the tag
+
+        // NOTE: parse() treats empty TLV (option=1, no data) as None per line 69
         let parsed = TokenData::parse(&bytes).unwrap();
-        assert_eq!(parsed, original);
+        assert_eq!(parsed.tlv, None); // parse behavior: empty TLV -> None
     }
 
     #[test]
-    fn byte_layout_no_delegate_no_tlv() {
-        let bytes = build_onchain_token_data_bytes(false, None);
-        // mint(32) + owner(32) + amount(8) + delegate_none(1) + state(1) + tlv_none(1) = 75
-        assert_eq!(bytes.len(), 75);
-        let td = TokenData::parse(&bytes).unwrap();
-        assert!(td.tlv.is_none());
+    fn byte_layout_consistency() {
+        // Verify exact byte layout matches what parse() expects
+        let mint = [11u8; 32];
+        let owner = [22u8; 32];
+        let amount = 42u64;
+        let delegate = [33u8; 32];
+        let state = 1u8; // frozen
+        let tlv_data = vec![0xAA, 0xBB, 0xCC];
+
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from(owner),
+            amount: UnsignedInteger(amount),
+            delegate: Some(SerializablePubkey::from(delegate)),
+            state: AccountState::frozen,
+            tlv: Some(Base64String(tlv_data.clone())),
+        };
+
+        let mut bytes = Vec::new();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // Verify manual layout
+        assert_eq!(&bytes[0..32], &mint);
+        assert_eq!(&bytes[32..64], &owner);
+        assert_eq!(&bytes[64..72], &amount.to_le_bytes());
+        assert_eq!(bytes[72], 1); // delegate option tag
+        assert_eq!(&bytes[73..105], &delegate);
+        assert_eq!(bytes[105], state);
+        assert_eq!(bytes[106], 1); // tlv option tag
+        assert_eq!(&bytes[107..], &tlv_data[..]);
     }
 
     #[test]
-    fn byte_layout_with_delegate_no_tlv() {
-        let bytes = build_onchain_token_data_bytes(true, None);
-        // mint(32) + owner(32) + amount(8) + delegate_some(1+32) + state(1) + tlv_none(1) = 107
+    fn compatibility_with_light_token_format() {
+        // This test ensures our serialization matches the light program's expected format
+        // based on the TokenData struct from light-token-interface
+        let token_data = TokenData {
+            mint: SerializablePubkey::from([0x10; 32]),
+            owner: SerializablePubkey::from([0x20; 32]),
+            amount: UnsignedInteger(1_000_000),
+            delegate: Some(SerializablePubkey::from([0x30; 32])),
+            state: AccountState::initialized,
+            tlv: None,
+        };
+
+        let mut bytes = Vec::new();
+        borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+
+        // Verify the format:
+        // 32 bytes: mint pubkey
+        // 32 bytes: owner pubkey
+        // 8 bytes: amount (u64 LE)
+        // 1 byte: delegate option (1 = Some)
+        // 32 bytes: delegate pubkey
+        // 1 byte: state (0 = initialized)
+        // 1 byte: tlv option (0 = None)
         assert_eq!(bytes.len(), 107);
+
+        let parsed = TokenData::parse(&bytes).unwrap();
+        assert_eq!(parsed, token_data);
     }
 
     #[test]
-    fn byte_layout_with_delegate_and_tlv() {
-        let tlv_raw = build_compressed_only_tlv();
-        // tlv_raw: u32(4) + discriminant(1) + u64(8) + u64(8) + u8(1) = 22
-        assert_eq!(tlv_raw.len(), 22);
-        let bytes = build_onchain_token_data_bytes(true, Some(&tlv_raw));
-        // 107 (with delegate, no tlv excl the None byte) - 1 (remove None byte)
-        // + 1 (Some tag) + 22 (tlv_raw) = 129
-        assert_eq!(bytes.len(), 129);
+    fn various_amounts() {
+        for amount in [0u64, 1, 1000, u64::MAX] {
+            let token_data = TokenData {
+                mint: SerializablePubkey::from(Pubkey::new_unique()),
+                owner: SerializablePubkey::from(Pubkey::new_unique()),
+                amount: UnsignedInteger(amount),
+                delegate: None,
+                state: AccountState::initialized,
+                tlv: None,
+            };
+
+            let mut bytes = Vec::new();
+            borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+            let parsed = TokenData::parse(&bytes).unwrap();
+
+            assert_eq!(parsed.amount.0, amount);
+        }
+    }
+
+    #[test]
+    fn various_tlv_sizes() {
+        for tlv_size in [0, 1, 10, 100, 1000] {
+            let tlv_data = vec![0x42u8; tlv_size];
+            let token_data = TokenData {
+                mint: SerializablePubkey::from(Pubkey::new_unique()),
+                owner: SerializablePubkey::from(Pubkey::new_unique()),
+                amount: UnsignedInteger(100),
+                delegate: None,
+                state: AccountState::initialized,
+                tlv: if tlv_size == 0 {
+                    None
+                } else {
+                    Some(Base64String(tlv_data.clone()))
+                },
+            };
+
+            let mut bytes = Vec::new();
+            borsh::BorshSerialize::serialize(&token_data, &mut bytes).unwrap();
+            let parsed = TokenData::parse(&bytes).unwrap();
+
+            assert_eq!(parsed, token_data);
+        }
     }
 }

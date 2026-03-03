@@ -566,7 +566,7 @@ async fn test_persist_token_data(
             lamports: Set(Decimal::from(10)),
             slot_created: Set(slot),
             leaf_index: Set(i as i64),
-            discriminator: Set(Some(Decimal::from(1))),
+            discriminator: Set(Some(Decimal::from(1u64))),
             data_hash: Set(Some(Hash::new_unique().to_vec())),
             tree: Set(Pubkey::new_unique().to_bytes().to_vec()),
             queue: Set(Some(Pubkey::new_unique().to_bytes().to_vec())),
@@ -578,6 +578,7 @@ async fn test_persist_token_data(
         token_datas.push(EnrichedTokenAccount {
             hash,
             token_data: token_data.clone(),
+            ata_owner: None,
         });
     }
 
@@ -963,6 +964,13 @@ async fn test_persisted_state_trees(
     }
 }
 
+/// Helper to create a 32-byte padded value from a single byte for AddressV2 tests
+fn padded_value(val: u8) -> Vec<u8> {
+    let mut v = vec![0u8; 31];
+    v.push(val);
+    v
+}
+
 #[named]
 #[rstest]
 #[tokio::test]
@@ -981,7 +989,10 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = (0..num_nodes).map(|i| vec![i * 4 + 1]).collect();
+    // Use 32-byte padded values for AddressV2 hash compatibility
+    let values: Vec<Vec<u8>> = (0..num_nodes)
+        .map(|i| padded_value((i * 4 + 1) as u8))
+        .collect();
     let tree_height = 33; // prev. 4
 
     // Create tree info cache - convert SerializablePubkey to Pubkey
@@ -1015,7 +1026,7 @@ async fn test_indexed_merkle_trees(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![3],
+        padded_value(3),
     )
     .await
     .unwrap();
@@ -1023,9 +1034,9 @@ async fn test_indexed_merkle_trees(
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
         leaf_index: 1,
-        value: vec![1],
+        value: padded_value(1),
         next_index: 2,
-        next_value: vec![5],
+        next_value: padded_value(5),
         seq: Some(0),
     };
 
@@ -1035,7 +1046,7 @@ async fn test_indexed_merkle_trees(
         .await
         .unwrap();
 
-    let values = vec![vec![3]];
+    let values = vec![padded_value(3)];
 
     multi_append(
         &txn,
@@ -1056,7 +1067,7 @@ async fn test_indexed_merkle_trees(
         &setup.db_conn.begin().await.unwrap(),
         tree.to_bytes_vec(),
         tree_height,
-        vec![4],
+        padded_value(4),
     )
     .await
     .unwrap();
@@ -1064,9 +1075,9 @@ async fn test_indexed_merkle_trees(
     let expected_model = indexed_trees::Model {
         tree: tree.to_bytes_vec(),
         leaf_index: 3,
-        value: vec![3],
+        value: padded_value(3),
         next_index: 2,
-        next_value: vec![5],
+        next_value: padded_value(5),
         seq: Some(1),
     };
 
@@ -1119,10 +1130,11 @@ async fn test_get_multiple_new_address_proofs(
 async fn test_get_multiple_new_address_proofs_interop(
     #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] db_backend: DatabaseBackend,
 ) {
+    use light_sdk_types::constants::ADDRESS_TREE_V1;
     use photon_indexer::api::method::{
         get_multiple_new_address_proofs::{
             get_multiple_new_address_proofs, get_multiple_new_address_proofs_v2, AddressList,
-            AddressListWithTrees, AddressWithTree, ADDRESS_TREE_V1,
+            AddressListWithTrees, AddressWithTree,
         },
         get_validity_proof::CompressedProof,
     };
@@ -1157,6 +1169,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof = get_validity_proof(
         &setup.db_conn,
         &setup.prover_url,
+        None,
         GetValidityProofRequest {
             new_addresses: addresses.clone(),
             new_addresses_with_trees: vec![],
@@ -1190,6 +1203,7 @@ async fn test_get_multiple_new_address_proofs_interop(
     let mut validity_proof_v2 = get_validity_proof_v2(
         &setup.db_conn,
         &setup.prover_url,
+        None,
         GetValidityProofRequestV2 {
             new_addresses_with_trees: addresses_with_trees.clone(),
             hashes: vec![],

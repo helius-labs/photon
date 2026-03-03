@@ -16,6 +16,7 @@ pub enum Accounts {
     Table,
     Hash,
     Address,
+    OnchainPubkey,
     Data,
     DataHash,
     Owner,
@@ -45,6 +46,7 @@ pub enum TokenAccounts {
     Tlv,
     Spent,
     PrevSpent,
+    AtaOwner,
 }
 
 #[derive(Copy, Clone, Iden)]

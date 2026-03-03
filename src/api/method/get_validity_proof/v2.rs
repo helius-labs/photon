@@ -130,6 +130,7 @@ impl From<Option<u64>> for RootIndex {
 pub async fn get_validity_proof_v2(
     conn: &DatabaseConnection,
     prover_url: &str,
+    prover_api_key: Option<&str>,
     request: GetValidityProofRequestV2,
 ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
     if request.hashes.is_empty() && request.new_addresses_with_trees.is_empty() {
@@ -244,7 +245,7 @@ pub async fn get_validity_proof_v2(
         // Try to get tree from prove-by-index accounts
         accounts_for_prove_by_index_inputs
             .iter()
-            .find_map(|opt_acc| opt_acc.as_ref().map(|acc| acc.merkle_context.tree.clone()))
+            .find_map(|opt_acc| opt_acc.as_ref().map(|acc| acc.merkle_context.tree))
     };
 
     let root_history_capacity = if let Some(tree_pubkey) = tree_pubkey {
@@ -281,6 +282,7 @@ pub async fn get_validity_proof_v2(
             db_new_address_proofs_for_prover,
             root_history_capacity,
             prover_url,
+            prover_api_key,
         )
         .await?;
 

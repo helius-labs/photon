@@ -24,6 +24,7 @@ pub(crate) async fn generate_proof(
     db_new_address_proofs: Vec<MerkleContextWithNewAddressProof>,
     root_history_capacity: u64,
     prover_url: &str,
+    prover_api_key: Option<&str>,
 ) -> Result<ProverResult, PhotonApiError> {
     let state_tree_height = if db_account_proofs.is_empty() {
         0
@@ -106,15 +107,18 @@ pub(crate) async fn generate_proof(
         PhotonApiError::UnexpectedError(format!("Error serializing prover request: {}", e))
     })?;
 
-    let res = client
+    let mut request_builder = client
         .post(&prover_request_url)
         .body(json_body)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Error sending request to prover: {}", e))
-        })?;
+        .header("Content-Type", "application/json");
+
+    if let Some(api_key) = prover_api_key {
+        request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
+    }
+
+    let res = request_builder.send().await.map_err(|e| {
+        PhotonApiError::UnexpectedError(format!("Error sending request to prover: {}", e))
+    })?;
 
     if !res.status().is_success() {
         return Err(PhotonApiError::UnexpectedError(format!(

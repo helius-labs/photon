@@ -10,7 +10,11 @@ use tower_http::cors::{Any, CorsLayer};
 
 use super::api::PhotonApi;
 
-pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyhow::Error> {
+pub async fn run_server(
+    api: PhotonApi,
+    port: u16,
+    max_connections: u32,
+) -> Result<ServerHandle, anyhow::Error> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let cors = CorsLayer::new()
         .allow_methods([Method::POST, Method::GET])
@@ -21,6 +25,7 @@ pub async fn run_server(api: PhotonApi, port: u16) -> Result<ServerHandle, anyho
         .layer(ProxyGetRequestLayer::new("/liveness", "liveness")?)
         .layer(ProxyGetRequestLayer::new("/readiness", "readiness")?);
     let server = ServerBuilder::default()
+        .max_connections(max_connections)
         .set_middleware(middleware)
         .build(addr)
         .await?;

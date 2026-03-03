@@ -35,6 +35,12 @@ pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
         .map_err(|_| PhotonApiError::UnexpectedError("Invalid decimal value".to_string()))
 }
 
+pub fn parse_account_discriminator(
+    discriminator: Option<Decimal>,
+) -> Result<Option<u64>, PhotonApiError> {
+    discriminator.map(parse_decimal).transpose()
+}
+
 pub(crate) fn parse_leaf_index(leaf_index: i64) -> Result<u64, PhotonApiError> {
     leaf_index
         .try_into()

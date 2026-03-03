@@ -97,7 +97,7 @@ async fn verify_output_queue_hash_chains(
         batch_metadata.zkp_batch_size,
         currently_processing_batch_index,
         current_batch.get_num_inserted_zkps(),
-        current_batch.get_num_inserted_zkp_batch(),
+        current_batch.get_num_inserted_zkp_batch() > 0,
     )
     .await
 }
@@ -139,7 +139,7 @@ async fn verify_input_queue_hash_chains(
         queue_batches.zkp_batch_size,
         pending_batch_index,
         pending_batch.get_num_inserted_zkps(),
-        pending_batch.get_num_inserted_zkp_batch(),
+        pending_batch.get_num_inserted_zkp_batch() > 0,
     )
     .await
 }
@@ -185,11 +185,12 @@ async fn verify_address_queue_hash_chains(
         queue_batches.zkp_batch_size,
         pending_batch_index,
         current_batch.get_num_inserted_zkps(),
-        current_batch.get_num_inserted_zkp_batch(),
+        current_batch.get_num_inserted_zkp_batch() > 0,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn verify_queue_hash_chains(
     db: &DatabaseConnection,
     queue_type: QueueType,
@@ -199,17 +200,9 @@ async fn verify_queue_hash_chains(
     zkp_batch_size: u64,
     pending_batch_index: usize,
     num_inserted_zkps: u64,
-    num_inserted_in_current_zkp: u64,
+    has_partial_zkp_batch: bool,
 ) -> Result<(), Vec<HashChainDivergence>> {
     let mut divergences = Vec::new();
-
-    if num_inserted_in_current_zkp > 0 && num_inserted_in_current_zkp < zkp_batch_size {
-        debug!(
-            "Skipping ZKP verification for tree {} type {:?} - incomplete batch: {}/{} elements",
-            tree_pubkey, queue_type, num_inserted_in_current_zkp, zkp_batch_size
-        );
-        return Ok(());
-    }
 
     let on_chain_batch_hash_chains = &on_chain_hash_chains[pending_batch_index];
     let total_on_chain_zkps = on_chain_batch_hash_chains.len() as u64;
@@ -221,10 +214,24 @@ async fn verify_queue_hash_chains(
         return Ok(());
     }
 
+    let chains_to_check = if has_partial_zkp_batch {
+        total_on_chain_zkps.saturating_sub(1)
+    } else {
+        total_on_chain_zkps
+    };
+    if num_inserted_zkps >= chains_to_check {
+        debug!(
+            "Tree {} type {:?}: {} hash chains, skipping partial batch validation",
+            tree_pubkey, queue_type, total_on_chain_zkps
+        );
+        return Ok(());
+    }
+
     let on_chain_chains: Vec<[u8; 32]> = on_chain_batch_hash_chains
         .iter()
         .skip(num_inserted_zkps as usize)
-        .map(|h| *h)
+        .take((chains_to_check - num_inserted_zkps) as usize)
+        .copied()
         .collect();
 
     if on_chain_chains.is_empty() {
@@ -543,9 +550,9 @@ pub fn log_divergence(divergence: &HashChainDivergence) {
     );
     error!(
         "  Expected: {}",
-        hex::encode(&divergence.expected_hash_chain)
+        hex::encode(divergence.expected_hash_chain)
     );
-    error!("  On-chain: {}", hex::encode(&divergence.actual_hash_chain));
+    error!("  On-chain: {}", hex::encode(divergence.actual_hash_chain));
 }
 
 pub async fn verify_single_queue(

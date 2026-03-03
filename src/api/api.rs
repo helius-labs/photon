@@ -101,6 +101,7 @@ pub struct PhotonApi {
     db_conn: Arc<DatabaseConnection>,
     rpc_client: Arc<RpcClient>,
     prover_url: String,
+    prover_api_key: Option<String>,
 }
 
 impl PhotonApi {
@@ -108,11 +109,13 @@ impl PhotonApi {
         db_conn: Arc<DatabaseConnection>,
         rpc_client: Arc<RpcClient>,
         prover_url: String,
+        prover_api_key: Option<String>,
     ) -> Self {
         Self {
             db_conn,
             rpc_client,
             prover_url,
+            prover_api_key,
         }
     }
 }
@@ -363,14 +366,26 @@ impl PhotonApi {
         &self,
         request: GetValidityProofRequest,
     ) -> Result<GetValidityProofResponse, PhotonApiError> {
-        get_validity_proof(self.db_conn.as_ref(), &self.prover_url, request).await
+        get_validity_proof(
+            self.db_conn.as_ref(),
+            &self.prover_url,
+            self.prover_api_key.as_deref(),
+            request,
+        )
+        .await
     }
 
     pub async fn get_validity_proof_v2(
         &self,
         request: GetValidityProofRequestV2,
     ) -> Result<GetValidityProofResponseV2, PhotonApiError> {
-        get_validity_proof_v2(self.db_conn.as_ref(), &self.prover_url, request).await
+        get_validity_proof_v2(
+            self.db_conn.as_ref(),
+            &self.prover_url,
+            self.prover_api_key.as_deref(),
+            request,
+        )
+        .await
     }
 
     pub async fn get_latest_compression_signatures(

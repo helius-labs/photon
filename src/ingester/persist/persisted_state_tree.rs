@@ -102,7 +102,8 @@ where
         for (tree, index) in leaf_nodes_locations.iter() {
             result.entry((tree.clone(), *index)).or_insert_with(|| {
                 let tree_height_with_level = tree_height + 1;
-                let model = state_trees::Model {
+
+                state_trees::Model {
                     tree: tree.clone(),
                     level: get_level_by_node_index(*index, tree_height_with_level),
                     node_idx: *index,
@@ -111,8 +112,7 @@ where
                         .to_vec(),
                     leaf_idx: None,
                     seq: None,
-                };
-                model
+                }
             });
         }
     }
