@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use solana_pubkey::{pubkey, Pubkey};
 use utoipa::ToSchema;
 
 use crate::common::typedefs::account::AccountV2;

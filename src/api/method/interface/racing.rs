@@ -1030,6 +1030,7 @@ mod tests {
             prev_spent: Some(false),
             tx_hash: None,
             onchain_pubkey,
+            discriminator_v2: None,
             tree_type: Some(3),
             nullified_in_tree: false,
             nullifier_queue_index: None,
