@@ -4,8 +4,7 @@ use crate::{
     api::method::utils::PAGE_LIMIT,
     common::{
         token_layout::{
-            ACCOUNT_TYPE_MINT, COMPRESSED_MINT_PDA_END, COMPRESSED_MINT_PDA_OFFSET,
-            TOKEN_ACCOUNT_TYPE_OFFSET,
+            ACCOUNT_TYPE_MINT, LIGHT_MINT_PDA_END, LIGHT_MINT_PDA_OFFSET, TOKEN_ACCOUNT_TYPE_OFFSET,
         },
         typedefs::{hash::Hash, token_data::TokenData},
     },
@@ -521,7 +520,7 @@ fn extract_onchain_pubkey(account: &AccountWithContext) -> Option<Vec<u8>> {
         && data.data.0.len() > TOKEN_ACCOUNT_TYPE_OFFSET
         && data.data.0[TOKEN_ACCOUNT_TYPE_OFFSET] == ACCOUNT_TYPE_MINT
     {
-        return Some(data.data.0[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].to_vec());
+        return Some(data.data.0[LIGHT_MINT_PDA_OFFSET..LIGHT_MINT_PDA_END].to_vec());
     }
 
     None
@@ -739,7 +738,7 @@ mod tests {
     fn test_extract_onchain_pubkey_for_compressed_mint() {
         let mut data = vec![0u8; TOKEN_ACCOUNT_TYPE_OFFSET + 1];
         let expected = [7u8; 32];
-        data[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].copy_from_slice(&expected);
+        data[LIGHT_MINT_PDA_OFFSET..LIGHT_MINT_PDA_END].copy_from_slice(&expected);
         data[TOKEN_ACCOUNT_TYPE_OFFSET] = ACCOUNT_TYPE_MINT;
 
         let account = sample_account_with_context(LIGHT_TOKEN_PROGRAM_ID, 0, data);
@@ -750,7 +749,7 @@ mod tests {
     #[test]
     fn test_extract_onchain_pubkey_skips_ctoken_discriminator() {
         let mut data = vec![0u8; TOKEN_ACCOUNT_TYPE_OFFSET + 1];
-        data[COMPRESSED_MINT_PDA_OFFSET..COMPRESSED_MINT_PDA_END].copy_from_slice(&[8u8; 32]);
+        data[LIGHT_MINT_PDA_OFFSET..LIGHT_MINT_PDA_END].copy_from_slice(&[8u8; 32]);
         data[TOKEN_ACCOUNT_TYPE_OFFSET] = ACCOUNT_TYPE_MINT;
 
         let account = sample_account_with_context(
