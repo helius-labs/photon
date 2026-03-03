@@ -82,6 +82,3 @@ pub const RPC_TIMEOUT_MS: u64 = 5000;
 
 /// Database timeout in milliseconds for cold lookups
 pub const DB_TIMEOUT_MS: u64 = 3000;
-
-/// SPL Token program ID (on-chain Token program)
-pub const SPL_TOKEN_PROGRAM_ID: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
