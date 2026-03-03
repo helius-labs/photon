@@ -107,10 +107,7 @@ impl TryFrom<Model> for AccountWithContext {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {
-        let parsed_discriminator = parse_account_discriminator(
-            account.discriminator.clone(),
-            account.discriminator_bytes.clone(),
-        )?;
+        let parsed_discriminator = parse_account_discriminator(account.discriminator.clone())?;
         let data = match (account.data, account.data_hash, parsed_discriminator) {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),

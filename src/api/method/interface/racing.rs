@@ -120,11 +120,6 @@ fn has_decompressed_placeholder_hash(model: &accounts::Model) -> bool {
 }
 
 fn has_decompressed_placeholder_discriminator(model: &accounts::Model) -> bool {
-    let expected_bytes = DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes();
-    if let Some(bytes) = model.discriminator_bytes.as_ref() {
-        return bytes.as_slice() == expected_bytes.as_slice();
-    }
-
     let expected_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR);
     let sqlite_rounded_disc = Decimal::from((DECOMPRESSED_ACCOUNT_DISCRIMINATOR as f64) as u64);
     model.discriminator == Some(expected_disc) || model.discriminator == Some(sqlite_rounded_disc)
@@ -1018,13 +1013,11 @@ mod tests {
         data: Option<Vec<u8>>,
         data_hash: Option<Vec<u8>>,
         onchain_pubkey: Option<Vec<u8>>,
-        discriminator_bytes: Option<Vec<u8>>,
     ) -> accounts::Model {
         accounts::Model {
             hash: vec![hash_byte; 32],
             address: None,
             discriminator,
-            discriminator_bytes,
             data,
             data_hash,
             tree: vec![],
@@ -1056,7 +1049,6 @@ mod tests {
             Some(pda.clone()),
             Some(data_hash),
             Some(pda),
-            Some(DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec()),
         );
         let normal = make_account_model(
             2,
@@ -1064,9 +1056,8 @@ mod tests {
             None,
             None,
             None,
-            None,
         );
-        let no_disc = make_account_model(3, None, None, None, None, None);
+        let no_disc = make_account_model(3, None, None, None, None);
 
         // Simulate the filtering logic from find_cold_models.
         let by_hash: HashMap<Vec<u8>, accounts::Model> = vec![
@@ -1101,7 +1092,6 @@ mod tests {
             Some(pda.clone()),
             Some(data_hash),
             Some(pda.clone()),
-            Some(DECOMPRESSED_ACCOUNT_DISCRIMINATOR.to_le_bytes().to_vec()),
         );
 
         assert!(is_decompressed_placeholder_model(&placeholder));
@@ -1109,17 +1099,10 @@ mod tests {
 
     #[test]
     fn test_find_cold_models_filters_legacy_sqlite_rounded_placeholder_without_disc_bytes() {
-        // Backward compatibility for rows created before discriminator_bytes existed.
         let rounded_disc = Decimal::from(DECOMPRESSED_ACCOUNT_DISCRIMINATOR + 1);
         let pda = vec![8u8; 32];
-        let placeholder = make_account_model(
-            8,
-            Some(rounded_disc),
-            Some(pda.clone()),
-            None,
-            Some(pda),
-            None,
-        );
+        let placeholder =
+            make_account_model(8, Some(rounded_disc), Some(pda.clone()), None, Some(pda));
 
         assert!(is_decompressed_placeholder_model(&placeholder));
     }
@@ -1133,14 +1116,7 @@ mod tests {
         let onchain = vec![7u8; 32];
         mint_data[84..116].copy_from_slice(&onchain);
 
-        let model = make_account_model(
-            7,
-            Some(rounded_disc),
-            Some(mint_data),
-            None,
-            Some(onchain),
-            None,
-        );
+        let model = make_account_model(7, Some(rounded_disc), Some(mint_data), None, Some(onchain));
         assert!(!is_decompressed_placeholder_model(&model));
     }
 
