@@ -5,7 +5,6 @@ use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tree_info::{TreeInfo, TreeResolver};
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
-use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use log::info;
 use solana_signature::Signature;
@@ -31,24 +30,17 @@ where
             slot, tx.signature
         );
 
-        let public_transaction_event = PublicTransactionEvent::deserialize(
-            &mut noop_instruction.data.as_slice(),
-        )
-        .map_err(|e| {
-            IngesterError::ParserError(format!(
-                "Failed to deserialize PublicTransactionEvent: {}",
-                e
-            ))
-        })?;
-        create_state_update_v1(
-            conn,
-            tx.signature,
-            slot,
-            public_transaction_event.into(),
-            resolver,
-        )
-        .await
-        .map(Some)
+        let public_transaction_event =
+            PublicTransactionEvent::deserialize_versioned(&mut noop_instruction.data.as_slice())
+                .map_err(|e| {
+                    IngesterError::ParserError(format!(
+                        "Failed to deserialize PublicTransactionEvent: {}",
+                        e
+                    ))
+                })?;
+        create_state_update_v1(conn, tx.signature, slot, public_transaction_event, resolver)
+            .await
+            .map(Some)
     } else {
         Ok(None)
     }
@@ -68,18 +60,31 @@ where
     let mut tree_to_seq_number = transaction_event
         .sequence_numbers
         .iter()
-        .map(|seq| (seq.pubkey, seq.seq))
+        .map(|seq| (seq.tree_pubkey, seq.seq))
         .collect::<HashMap<_, _>>();
 
-    for hash in transaction_event.input_compressed_account_hashes {
-        state_update.in_accounts.insert(hash.into());
+    for hash in transaction_event.input_compressed_account_hashes.iter() {
+        state_update.in_accounts.insert((*hash).into());
     }
 
-    for ((out_account, hash), leaf_index) in transaction_event
+    // Build index from output_index to ATA owner
+    let ata_owner_by_index: HashMap<u8, solana_pubkey::Pubkey> = transaction_event
+        .ata_owners
+        .iter()
+        .map(|info| {
+            (
+                info.output_index,
+                solana_pubkey::Pubkey::new_from_array(info.wallet_owner.to_bytes()),
+            )
+        })
+        .collect();
+
+    for (output_index, ((out_account, hash), leaf_index)) in transaction_event
         .output_compressed_accounts
-        .into_iter()
-        .zip(transaction_event.output_compressed_account_hashes)
+        .iter()
+        .zip(transaction_event.output_compressed_account_hashes.iter())
         .zip(transaction_event.output_leaf_indices.iter())
+        .enumerate()
     {
         let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
         let tree_solana = solana_pubkey::Pubkey::new_from_array(tree.to_bytes());
@@ -127,7 +132,7 @@ where
 
         let enriched_account = AccountWithContext::new(
             out_account.compressed_account.clone(),
-            &hash,
+            hash,
             tree_pubkey,
             queue_pubkey,
             *leaf_index,
@@ -139,6 +144,11 @@ where
             None,
             tree_and_queue.tree_type,
         );
+
+        // If this output has an ATA owner, map the account hash to the owner
+        if let Some(ata_owner) = ata_owner_by_index.get(&(output_index as u8)) {
+            state_update.ata_owners.insert((*hash).into(), *ata_owner);
+        }
 
         state_update.out_accounts.push(enriched_account);
     }

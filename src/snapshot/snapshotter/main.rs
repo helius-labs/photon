@@ -115,7 +115,7 @@ async fn stream_bytes(
     let byte_stream = byte_stream.map(|bytes| {
         bytes.map_err(|e| {
             error!("Error reading byte: {:?}", e);
-            io::Error::new(io::ErrorKind::Other, "Stream Error")
+            io::Error::other("Stream Error")
         })
     });
 
