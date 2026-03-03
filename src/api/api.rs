@@ -85,6 +85,11 @@ use crate::api::method::get_validity_proof::{
     GetValidityProofRequestDocumentation, GetValidityProofRequestV2, GetValidityProofResponse,
     GetValidityProofResponseV2,
 };
+use crate::api::method::interface::{
+    get_account_interface, get_multiple_account_interfaces, GetAccountInterfaceRequest,
+    GetAccountInterfaceResponse, GetMultipleAccountInterfacesRequest,
+    GetMultipleAccountInterfacesResponse,
+};
 use crate::api::method::utils::{
     AccountBalanceResponse, GetLatestSignaturesRequest, GetNonPaginatedSignaturesResponse,
     GetNonPaginatedSignaturesResponseWithError, GetPaginatedSignaturesResponse, HashRequest,
@@ -402,6 +407,21 @@ impl PhotonApi {
         get_latest_non_voting_signatures(self.db_conn.as_ref(), request).await
     }
 
+    // Interface endpoints - race hot (on-chain) and cold (compressed) lookups
+    pub async fn get_account_interface(
+        &self,
+        request: GetAccountInterfaceRequest,
+    ) -> Result<GetAccountInterfaceResponse, PhotonApiError> {
+        get_account_interface(&self.db_conn, &self.rpc_client, request).await
+    }
+
+    pub async fn get_multiple_account_interfaces(
+        &self,
+        request: GetMultipleAccountInterfacesRequest,
+    ) -> Result<GetMultipleAccountInterfacesResponse, PhotonApiError> {
+        get_multiple_account_interfaces(&self.db_conn, &self.rpc_client, request).await
+    }
+
     pub fn method_api_specs() -> Vec<OpenApiSpec> {
         vec![
             OpenApiSpec {
@@ -590,6 +610,17 @@ impl PhotonApi {
                 name: "getIndexerSlot".to_string(),
                 request: None,
                 response: UnsignedInteger::schema().1,
+            },
+            // Interface endpoints
+            OpenApiSpec {
+                name: "getAccountInterface".to_string(),
+                request: Some(GetAccountInterfaceRequest::schema().1),
+                response: GetAccountInterfaceResponse::schema().1,
+            },
+            OpenApiSpec {
+                name: "getMultipleAccountInterfaces".to_string(),
+                request: Some(GetMultipleAccountInterfacesRequest::schema().1),
+                response: GetMultipleAccountInterfacesResponse::schema().1,
             },
         ]
     }
