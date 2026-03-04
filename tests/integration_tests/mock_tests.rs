@@ -74,6 +74,7 @@ async fn test_persist_state_update_basic(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -164,6 +165,7 @@ async fn test_multiple_accounts(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -447,6 +449,7 @@ async fn test_persist_token_data(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -1094,6 +1097,7 @@ async fn test_get_multiple_new_address_proofs(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -1136,6 +1140,7 @@ async fn test_get_multiple_new_address_proofs_interop(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -1217,6 +1222,7 @@ async fn load_test(#[values(DatabaseBackend::Postgres)] db_backend: DatabaseBack
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -1283,6 +1289,7 @@ async fn test_persisted_state_trees_bug_with_latter_smaller_seq_values(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();
@@ -1369,6 +1376,7 @@ async fn test_gpa_filters(
             },
             ..Default::default()
         },
+        setup.client.as_ref(),
     )
     .await
     .unwrap();

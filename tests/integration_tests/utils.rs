@@ -554,9 +554,9 @@ pub async fn index_transaction(
     rpc_client: Arc<RpcClient>,
     tx: &str,
 ) {
-    let tx = cached_fetch_transaction(test_name, rpc_client, tx).await;
-    let tx_info: TransactionInfo = tx.try_into().unwrap();
-    let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0)
+    let tx_data = cached_fetch_transaction(test_name, rpc_client.clone(), tx).await;
+    let tx_info: TransactionInfo = tx_data.try_into().unwrap();
+    let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0, rpc_client.as_ref())
         .await
         .unwrap();
     persist_state_update_using_connection(db_conn.as_ref(), state_update)
@@ -577,9 +577,10 @@ pub async fn index_multiple_transactions(
     }
     let mut state_updates = Vec::new();
     for transaction_info in transactions_infos {
-        let tx_state_update = parse_transaction(db_conn.as_ref(), &transaction_info, 0)
-            .await
-            .unwrap();
+        let tx_state_update =
+            parse_transaction(db_conn.as_ref(), &transaction_info, 0, rpc_client.as_ref())
+                .await
+                .unwrap();
         state_updates.push(tx_state_update);
     }
     let state_update = StateUpdate::merge_updates(state_updates);
@@ -672,6 +673,7 @@ pub async fn index(
                     },
                     ..Default::default()
                 },
+                rpc_client.as_ref(),
             )
             .await
             .unwrap();

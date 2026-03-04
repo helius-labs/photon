@@ -14,6 +14,7 @@ use sea_orm::EntityTrait;
 use sea_orm::QueryTrait;
 use sea_orm::Set;
 use sea_orm::TransactionTrait;
+use solana_client::nonblocking::rpc_client::RpcClient;
 
 use self::parser::state_update::StateUpdate;
 use self::persist::persist_state_update;
@@ -32,18 +33,28 @@ pub mod typedefs;
 async fn derive_block_state_update(
     conn: &DatabaseConnection,
     block: &BlockInfo,
+    rpc_client: &RpcClient,
 ) -> Result<StateUpdate, IngesterError> {
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     for transaction in &block.transactions {
-        state_updates.push(parse_transaction(conn, transaction, block.metadata.slot).await?);
+        state_updates
+            .push(parse_transaction(conn, transaction, block.metadata.slot, rpc_client).await?);
     }
     Ok(StateUpdate::merge_updates(state_updates))
 }
 
-pub async fn index_block(db: &DatabaseConnection, block: &BlockInfo) -> Result<(), IngesterError> {
+pub async fn index_block(
+    db: &DatabaseConnection,
+    block: &BlockInfo,
+    rpc_client: &RpcClient,
+) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
-    persist_state_update(&txn, derive_block_state_update(db, block).await?).await?;
+    persist_state_update(
+        &txn,
+        derive_block_state_update(db, block, rpc_client).await?,
+    )
+    .await?;
     txn.commit().await?;
     Ok(())
 }
@@ -84,6 +95,7 @@ async fn index_block_metadatas(
 pub async fn index_block_batch(
     db: &DatabaseConnection,
     block_batch: &Vec<BlockInfo>,
+    rpc_client: &RpcClient,
 ) -> Result<(), IngesterError> {
     let blocks_len = block_batch.len();
     let tx = db.begin().await?;
@@ -91,7 +103,7 @@ pub async fn index_block_batch(
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
     for block in block_batch {
-        state_updates.push(derive_block_state_update(db, block).await?);
+        state_updates.push(derive_block_state_update(db, block, rpc_client).await?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {
@@ -104,9 +116,10 @@ pub async fn index_block_batch(
 pub async fn index_block_batch_with_infinite_retries(
     db: &DatabaseConnection,
     block_batch: Vec<BlockInfo>,
+    rpc_client: &RpcClient,
 ) {
     loop {
-        match index_block_batch(db, &block_batch).await {
+        match index_block_batch(db, &block_batch, rpc_client).await {
             Ok(()) => return,
             Err(e) => {
                 let start_block = block_batch.first().unwrap().metadata.slot;

@@ -1,7 +1,10 @@
 use crate::api::error::PhotonApiError;
 use crate::dao::generated::{prelude::*, tree_metadata};
+use crate::ingester::error::IngesterError;
+use crate::monitor::tree_metadata_sync;
 use light_compressed_account::TreeType;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, TransactionTrait};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
 
@@ -214,5 +217,32 @@ impl TreeInfo {
             tree_type,
             root_history_capacity: metadata.root_history_capacity as u64,
         })
+    }
+}
+
+pub async fn discover_tree<T>(
+    rpc_client: &RpcClient,
+    conn: &T,
+    pubkey: &Pubkey,
+    slot: u64,
+) -> Result<Option<TreeInfo>, IngesterError>
+where
+    T: ConnectionTrait + TransactionTrait,
+{
+    let mut account = rpc_client.get_account(pubkey).await.map_err(|e| {
+        IngesterError::ParserError(format!("RPC error fetching tree {}: {}", pubkey, e))
+    })?;
+    match tree_metadata_sync::process_tree_account(conn, *pubkey, &mut account, slot).await {
+        Ok(true) => {
+            log::info!("Discovered and synced new tree: {}", pubkey);
+            TreeInfo::get_by_pubkey(conn, pubkey)
+                .await
+                .map_err(|e| IngesterError::ParserError(e.to_string()))
+        }
+        Ok(false) => Ok(None),
+        Err(e) => {
+            log::warn!("Failed to process discovered tree {}: {}", pubkey, e);
+            Ok(None)
+        }
     }
 }

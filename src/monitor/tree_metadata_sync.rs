@@ -78,12 +78,15 @@ pub async fn sync_tree_metadata(
     Ok(())
 }
 
-pub async fn process_tree_account(
-    db: &DatabaseConnection,
+pub async fn process_tree_account<C>(
+    db: &C,
     pubkey: Pubkey,
     account: &mut Account,
     slot: u64,
-) -> Result<bool, PhotonApiError> {
+) -> Result<bool, PhotonApiError>
+where
+    C: ConnectionTrait,
+{
     if let Ok(data) = process_v1_state_account(account) {
         if !check_tree_owner(&data.owner) {
             debug!(

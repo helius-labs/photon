@@ -210,6 +210,7 @@ pub async fn get_transaction_helper(
     conn: &DatabaseConnection,
     signature: SerializableSignature,
     txn: EncodedConfirmedTransactionWithStatusMeta,
+    rpc_client: &RpcClient,
 ) -> Result<GetTransactionResponse, PhotonApiError> {
     // Ignore if tx failed or meta is missed
     let meta = txn.transaction.meta.as_ref();
@@ -223,7 +224,7 @@ pub async fn get_transaction_helper(
     let tx_info: TransactionInfo = clone_tx(&txn).try_into().map_err(|_e| {
         PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
-    let status_update = parse_transaction(conn, &tx_info, slot)
+    let status_update = parse_transaction(conn, &tx_info, slot, rpc_client)
         .await
         .map_err(|_e| {
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
@@ -276,7 +277,7 @@ pub async fn get_transaction_with_compression_info(
     request: GetTransactionRequest,
 ) -> Result<GetTransactionResponse, PhotonApiError> {
     let txn = fetch_transaction_from_rpc(rpc_client, &request.signature).await?;
-    get_transaction_helper(conn, request.signature, txn).await
+    get_transaction_helper(conn, request.signature, txn, rpc_client).await
 }
 
 fn parse_optional_token_data_v2(
@@ -339,6 +340,7 @@ pub async fn get_transaction_helper_v2(
     conn: &DatabaseConnection,
     signature: SerializableSignature,
     txn: EncodedConfirmedTransactionWithStatusMeta,
+    rpc_client: &RpcClient,
 ) -> Result<GetTransactionResponseV2, PhotonApiError> {
     // Ignore if tx failed or meta is missed
     let meta = txn.transaction.meta.as_ref();
@@ -353,7 +355,7 @@ pub async fn get_transaction_helper_v2(
         PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
 
-    let status_update = parse_transaction(conn, &tx_info, slot)
+    let status_update = parse_transaction(conn, &tx_info, slot, rpc_client)
         .await
         .map_err(|_e| {
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
@@ -395,5 +397,5 @@ pub async fn get_transaction_with_compression_info_v2(
     request: GetTransactionRequest,
 ) -> Result<GetTransactionResponseV2, PhotonApiError> {
     let txn = fetch_transaction_from_rpc(rpc_client, &request.signature).await?;
-    get_transaction_helper_v2(conn, request.signature, txn).await
+    get_transaction_helper_v2(conn, request.signature, txn, rpc_client).await
 }

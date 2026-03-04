@@ -1,4 +1,5 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use std::sync::OnceLock;
 use tx_event_parser::parse_public_transaction_event_v1;
@@ -43,12 +44,11 @@ pub fn set_compression_program_id(program_id_str: &str) -> Result<(), String> {
 pub const EXPECTED_TREE_OWNER: Option<Pubkey> =
     Some(pubkey!("24rt4RgeyjUCWGS2eF7L7gyNMuz6JWdqYpAvb1KRoHxs"));
 
-const SKIP_UNKNOWN_TREES: bool = true;
-
 pub async fn parse_transaction<T>(
     conn: &T,
     tx: &TransactionInfo,
     slot: u64,
+    rpc_client: &RpcClient,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -83,7 +83,8 @@ where
         if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
-            let state_update = create_state_update_v2(conn, tx.signature, slot, event).await?;
+            let state_update =
+                create_state_update_v2(conn, tx.signature, slot, event, rpc_client).await?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
@@ -127,6 +128,7 @@ where
                                     slot,
                                     instruction,
                                     &ordered_instructions[noop_index],
+                                    rpc_client,
                                 )
                                 .await?
                                 {
