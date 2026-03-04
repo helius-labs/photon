@@ -37,6 +37,7 @@ fn all_indexing_methodologies_for_interface(
                 },
                 ..Default::default()
             },
+            &rpc_client,
         )
         .await
         .unwrap();
