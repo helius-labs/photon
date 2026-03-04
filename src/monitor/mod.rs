@@ -193,8 +193,26 @@ async fn load_db_tree_roots_with_infinite_retry(db: &DatabaseConnection) -> Vec<
             .await;
         match models {
             Ok(models) => {
+                // Filter to only include trees that exist in tree_metadata
+                // (which already filters by EXPECTED_TREE_OWNER during sync).
+                // This avoids root mismatch errors for unknown/external trees.
+                let known_trees = {
+                    use crate::dao::generated::tree_metadata;
+                    match tree_metadata::Entity::find().all(db).await {
+                        Ok(metadata) => metadata
+                            .into_iter()
+                            .map(|m| m.tree_pubkey)
+                            .collect::<std::collections::HashSet<_>>(),
+                        Err(e) => {
+                            log::error!("Error loading tree metadata: {}", e);
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            continue;
+                        }
+                    }
+                };
                 return models
                     .iter()
+                    .filter(|model| known_trees.contains(&model.tree))
                     .map(|model| {
                         (
                             Pubkey::try_from(model.tree.clone()).unwrap(),
