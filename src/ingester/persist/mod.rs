@@ -224,6 +224,51 @@ pub async fn persist_state_update(
 
     debug!("Persisting account transactions...");
     let account_transactions = account_transactions.into_iter().collect::<Vec<_>>();
+
+    // Pre-filter account_transactions to only include entries whose hash exists in the
+    // accounts table. This prevents FK violations when an input (spent) account was never
+    // indexed (e.g. it belonged to an unknown/unregistered tree). Without this check the
+    // ingestor gets stuck in an infinite retry loop on the failing block.
+    let account_transactions = if !account_transactions.is_empty() {
+        let all_hashes: Vec<Vec<u8>> = account_transactions
+            .iter()
+            .map(|at| at.hash.to_vec())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let mut existing_hashes = std::collections::HashSet::new();
+        for chunk in all_hashes.chunks(MAX_SQL_INSERTS) {
+            let found: Vec<accounts::Model> = accounts::Entity::find()
+                .filter(accounts::Column::Hash.is_in(chunk.to_vec()))
+                .all(txn)
+                .await
+                .map_err(|e| {
+                    IngesterError::DatabaseError(format!(
+                        "Failed to query existing accounts for FK check: {}",
+                        e
+                    ))
+                })?;
+            existing_hashes.extend(found.into_iter().map(|a| a.hash));
+        }
+
+        let before = account_transactions.len();
+        let filtered: Vec<_> = account_transactions
+            .into_iter()
+            .filter(|at| existing_hashes.contains(&at.hash.to_vec()))
+            .collect();
+        let dropped = before - filtered.len();
+        if dropped > 0 {
+            log::warn!(
+                "Dropped {} account_transactions with missing account hashes (FK would fail)",
+                dropped
+            );
+        }
+        filtered
+    } else {
+        account_transactions
+    };
+
     for chunk in account_transactions.chunks(MAX_SQL_INSERTS) {
         persist_account_transactions(txn, chunk).await?;
     }
