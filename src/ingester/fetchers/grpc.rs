@@ -17,7 +17,9 @@ use solana_pubkey::Pubkey as SdkPubkey;
 use solana_signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
-use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor};
+use yellowstone_grpc_client::{
+    ClientTlsConfig, GeyserGrpcBuilderResult, GeyserGrpcClient, Interceptor,
+};
 use yellowstone_grpc_proto::convert_from::create_tx_error;
 use yellowstone_grpc_proto::geyser::{
     subscribe_update::UpdateOneof, CommitmentLevel, SubscribeRequest, SubscribeRequestPing,
@@ -158,7 +160,11 @@ fn is_healthy(slot: u64) -> bool {
     (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE
 }
 
-fn get_grpc_block_stream(endpoint: String, auth_header: String, mut last_indexed_slot: Option<u64>) -> impl Stream<Item = BlockInfo> {
+fn get_grpc_block_stream(
+    endpoint: String,
+    auth_header: String,
+    mut last_indexed_slot: Option<u64>,
+) -> impl Stream<Item = BlockInfo> {
     stream! {
         loop {
             let mut grpc_tx;
@@ -255,7 +261,10 @@ fn generate_random_string(len: usize) -> String {
 }
 
 fn get_block_subscribe_request(from_slot: Option<u64>) -> SubscribeRequest {
-    info!("Subscribing to gRPC block stream from slot {}", from_slot.unwrap_or(0));
+    info!(
+        "Subscribing to gRPC block stream from slot {}",
+        from_slot.unwrap_or(0)
+    );
     SubscribeRequest {
         blocks: HashMap::from_iter(vec![(
             generate_random_string(20),

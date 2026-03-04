@@ -232,7 +232,6 @@ mod tests {
         hex::decode(padded).unwrap().try_into().unwrap()
     }
 
-
     /// combined proofs incorrectly returned non_inclusion_chain instead of
     /// hash(inclusion_chain, non_inclusion_chain).
     #[test]
@@ -251,9 +250,7 @@ mod tests {
         let non_inclusion_chain =
             create_two_inputs_hash_chain(&[address_root], &[address]).unwrap();
 
-
         let old_result = non_inclusion_chain;
-
 
         let correct_result =
             create_two_inputs_hash_chain(&[inclusion_chain], &[non_inclusion_chain]).unwrap();

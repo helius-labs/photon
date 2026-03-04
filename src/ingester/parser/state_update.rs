@@ -185,9 +185,48 @@ impl StateUpdate {
         // Track which account hashes we're keeping for filtering account_transactions later
         let mut kept_account_hashes = HashSet::new();
 
-        // Add input (spent) account hashes - these don't have tree info but should be kept
-        // for account_transactions tracking
-        kept_account_hashes.extend(self.in_accounts.iter().cloned());
+        // Only keep in_accounts whose hashes exist in the accounts table.
+        // Input accounts from unknown trees were never persisted as outputs,
+        // so referencing them in account_transactions would violate the FK constraint.
+        if !self.in_accounts.is_empty() {
+            let hash_bytes: Vec<Vec<u8>> = self.in_accounts.iter().map(|h| h.to_vec()).collect();
+            let placeholders: Vec<String> =
+                (1..=hash_bytes.len()).map(|i| format!("${}", i)).collect();
+            let sql = format!(
+                "SELECT hash FROM accounts WHERE hash IN ({})",
+                placeholders.join(", ")
+            );
+            let values: Vec<sea_orm::Value> = hash_bytes
+                .iter()
+                .map(|b| sea_orm::Value::Bytes(Some(Box::new(b.clone()))))
+                .collect();
+            let stmt = sea_orm::Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                &sql,
+                values,
+            );
+            let rows = txn.query_all(stmt).await.map_err(|e| {
+                PhotonApiError::UnexpectedError(format!(
+                    "Failed to query existing input accounts: {}",
+                    e
+                ))
+            })?;
+            let existing_hashes: HashSet<Hash> = rows
+                .iter()
+                .filter_map(|row| {
+                    let bytes: Vec<u8> = row.try_get("", "hash").ok()?;
+                    Hash::try_from(bytes).ok()
+                })
+                .collect();
+            let filtered_count = self.in_accounts.len() - existing_hashes.len();
+            if filtered_count > 0 {
+                debug!(
+                    "Filtered {} input account hashes not found in accounts table",
+                    filtered_count
+                );
+            }
+            kept_account_hashes.extend(existing_hashes);
+        }
 
         // Filter out_accounts
         let out_accounts: Vec<_> = self
@@ -575,5 +614,32 @@ mod tests {
             .account_transactions
             .iter()
             .any(|tx| tx.hash == unknown_hash));
+    }
+
+    #[tokio::test]
+    async fn test_filter_by_known_trees_filters_input_account_transactions_for_missing_accounts() {
+        let db = setup_test_db().await;
+
+        let mut state_update = StateUpdate::new();
+
+        // Simulate input accounts that were never persisted (from unknown trees in earlier txs)
+        let missing_hash = crate::common::typedefs::hash::Hash::new_unique();
+        state_update.in_accounts.insert(missing_hash.clone());
+
+        // Add an account_transaction referencing the missing input hash
+        state_update
+            .account_transactions
+            .insert(AccountTransaction {
+                hash: missing_hash.clone(),
+                signature: Signature::default(),
+            });
+
+        // Filter the state update
+        let result = state_update.filter_by_known_trees(&db).await.unwrap();
+
+        // The missing input hash should NOT be in kept_account_hashes,
+        // so the account_transaction referencing it should be filtered out.
+        // This prevents FK violations in persist_account_transactions.
+        assert_eq!(result.state_update.account_transactions.len(), 0);
     }
 }
