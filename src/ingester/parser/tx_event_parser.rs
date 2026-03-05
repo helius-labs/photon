@@ -2,13 +2,12 @@ use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
-use crate::ingester::parser::tree_info::{discover_tree, TreeInfo};
+use crate::ingester::parser::tree_info::{TreeInfo, TreeResolver};
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
 use light_compressed_account::TreeType;
 use log::info;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_signature::Signature;
 use std::collections::HashMap;
 
@@ -18,7 +17,7 @@ pub async fn parse_public_transaction_event_v1<T>(
     slot: u64,
     compression_instruction: &Instruction,
     noop_instruction: &Instruction,
-    rpc_client: &RpcClient,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<Option<StateUpdate>, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -46,7 +45,7 @@ where
             tx.signature,
             slot,
             public_transaction_event.into(),
-            rpc_client,
+            resolver,
         )
         .await
         .map(Some)
@@ -60,7 +59,7 @@ pub async fn create_state_update_v1<T>(
     tx: Signature,
     slot: u64,
     transaction_event: PublicTransactionEvent,
-    rpc_client: &RpcClient,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -97,7 +96,7 @@ where
                 );
                 info
             }
-            None => match discover_tree(rpc_client, conn, &tree_solana, slot).await {
+            None => match resolver.discover_tree(conn, &tree_solana, slot).await {
                 Ok(Some(info)) => info,
                 Ok(None) => {
                     log::debug!("Tree {} not discoverable, skipping", tree_solana);

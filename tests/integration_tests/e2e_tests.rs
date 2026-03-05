@@ -10,6 +10,7 @@ use photon_indexer::api::method::get_transaction_with_compression_info::{
 use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidityProofRequestV2};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::parser::TreeResolver;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 
@@ -726,10 +727,10 @@ async fn test_transaction_with_tree_rollover_fee(
         "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn).await;
     let tx_info: TransactionInfo = txn.try_into().unwrap();
-    let status_update =
-        parse_transaction(setup.db_conn.as_ref(), &tx_info, 0, setup.client.as_ref())
-            .await
-            .unwrap();
+    let mut resolver = TreeResolver::new(setup.client.as_ref());
+    let status_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, 0, &mut resolver)
+        .await
+        .unwrap();
     // Assert that status update has at least one account
     assert!(status_update.out_accounts.len() > 0);
 }
@@ -767,14 +768,10 @@ async fn test_index_compress_and_close_with_tlv(
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn_sig).await;
     let tx_info: TransactionInfo = txn.try_into().unwrap();
 
-    let state_update = parse_transaction(
-        setup.db_conn.as_ref(),
-        &tx_info,
-        slot,
-        setup.client.as_ref(),
-    )
-    .await
-    .expect("parse_transaction must not fail on CompressAndClose with TLV");
+    let mut resolver = TreeResolver::new(setup.client.as_ref());
+    let state_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, slot, &mut resolver)
+        .await
+        .expect("parse_transaction must not fail on CompressAndClose with TLV");
 
     assert!(
         !state_update.out_accounts.is_empty(),

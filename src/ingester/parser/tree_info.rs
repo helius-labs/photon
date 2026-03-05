@@ -220,29 +220,152 @@ impl TreeInfo {
     }
 }
 
-pub async fn discover_tree<T>(
-    rpc_client: &RpcClient,
-    conn: &T,
-    pubkey: &Pubkey,
-    slot: u64,
-) -> Result<Option<TreeInfo>, IngesterError>
-where
-    T: ConnectionTrait + TransactionTrait,
-{
-    let mut account = rpc_client.get_account(pubkey).await.map_err(|e| {
-        IngesterError::ParserError(format!("RPC error fetching tree {}: {}", pubkey, e))
-    })?;
-    match tree_metadata_sync::process_tree_account(conn, *pubkey, &mut account, slot).await {
-        Ok(true) => {
-            log::info!("Discovered and synced new tree: {}", pubkey);
-            TreeInfo::get_by_pubkey(conn, pubkey)
-                .await
-                .map_err(|e| IngesterError::ParserError(e.to_string()))
+/// Bundles an RPC client with a negative cache of pubkeys that failed discovery.
+/// Created once per block batch and threaded through the parsing call chain,
+/// so the same garbage pubkey is never queried twice.
+pub struct TreeResolver<'a> {
+    rpc_client: &'a RpcClient,
+    failed_discoveries: std::collections::HashSet<Pubkey>,
+}
+
+impl<'a> TreeResolver<'a> {
+    pub fn new(rpc_client: &'a RpcClient) -> Self {
+        Self {
+            rpc_client,
+            failed_discoveries: std::collections::HashSet::new(),
         }
-        Ok(false) => Ok(None),
-        Err(e) => {
-            log::warn!("Failed to process discovered tree {}: {}", pubkey, e);
-            Ok(None)
+    }
+
+    pub async fn discover_tree<T>(
+        &mut self,
+        conn: &T,
+        pubkey: &Pubkey,
+        slot: u64,
+    ) -> Result<Option<TreeInfo>, IngesterError>
+    where
+        T: ConnectionTrait + TransactionTrait,
+    {
+        if self.failed_discoveries.contains(pubkey) {
+            log::debug!("Skipping previously failed tree discovery for {}", pubkey);
+            return Ok(None);
         }
+
+        let mut account = match self.rpc_client.get_account(pubkey).await {
+            Ok(account) => account,
+            Err(e) => {
+                log::warn!("RPC error fetching tree {}: {}", pubkey, e);
+                self.failed_discoveries.insert(*pubkey);
+                return Ok(None);
+            }
+        };
+
+        match tree_metadata_sync::process_tree_account(conn, *pubkey, &mut account, slot).await {
+            Ok(true) => {
+                log::info!("Discovered and synced new tree: {}", pubkey);
+                TreeInfo::get_by_pubkey(conn, pubkey)
+                    .await
+                    .map_err(|e| IngesterError::ParserError(e.to_string()))
+            }
+            Ok(false) => {
+                self.failed_discoveries.insert(*pubkey);
+                Ok(None)
+            }
+            Err(e) => {
+                log::warn!("Failed to process discovered tree {}: {}", pubkey, e);
+                self.failed_discoveries.insert(*pubkey);
+                Ok(None)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm_migration::MigratorTrait;
+
+    async fn setup_test_db() -> sea_orm::DatabaseConnection {
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        crate::migration::MigractorWithCustomMigrations::up(&db, None)
+            .await
+            .unwrap();
+        db
+    }
+
+    #[tokio::test]
+    async fn test_discover_tree_rpc_error_returns_none_and_caches() {
+        let rpc_client = RpcClient::new("http://localhost:1".to_string());
+        let db = setup_test_db().await;
+        let mut resolver = TreeResolver::new(&rpc_client);
+        let pubkey = Pubkey::new_unique();
+
+        let result = resolver.discover_tree(&db, &pubkey, 0).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+        assert!(resolver.failed_discoveries.contains(&pubkey));
+    }
+
+    #[tokio::test]
+    async fn test_discover_tree_skips_cached_failures() {
+        let rpc_client = RpcClient::new("http://localhost:1".to_string());
+        let db = setup_test_db().await;
+        let mut resolver = TreeResolver::new(&rpc_client);
+        let pubkey = Pubkey::new_unique();
+        resolver.failed_discoveries.insert(pubkey);
+
+        // Should return immediately without making RPC call
+        let start = std::time::Instant::now();
+        let result = resolver.discover_tree(&db, &pubkey, 0).await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+        assert!(elapsed.as_millis() < 10);
+    }
+
+    #[tokio::test]
+    async fn test_discover_tree_multiple_unknown_pubkeys_all_cached() {
+        let rpc_client = RpcClient::new("http://localhost:1".to_string());
+        let db = setup_test_db().await;
+        let mut resolver = TreeResolver::new(&rpc_client);
+
+        let pubkeys: Vec<Pubkey> = (0..5).map(|_| Pubkey::new_unique()).collect();
+
+        for pk in &pubkeys {
+            let result = resolver.discover_tree(&db, pk, 0).await;
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_none());
+        }
+        assert_eq!(resolver.failed_discoveries.len(), 5);
+
+        // Second round: all should skip immediately
+        let start = std::time::Instant::now();
+        for pk in &pubkeys {
+            let result = resolver.discover_tree(&db, pk, 0).await;
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_none());
+        }
+        assert!(start.elapsed().as_millis() < 10);
+        assert_eq!(resolver.failed_discoveries.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_process_tree_account_garbage_data_returns_false() {
+        let db = setup_test_db().await;
+        let pubkey = Pubkey::new_unique();
+        let mut account = solana_account::Account {
+            lamports: 1_000_000,
+            data: vec![0u8; 256],
+            owner: Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let result = tree_metadata_sync::process_tree_account(&db, pubkey, &mut account, 0).await;
+        assert!(result.is_ok());
+        assert!(
+            !result.unwrap(),
+            "Garbage account should not be recognized as a tree"
+        );
     }
 }

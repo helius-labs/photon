@@ -15,7 +15,7 @@ use photon_indexer::{
         typedefs::{account::Account, token_data::TokenData},
     },
     ingester::{
-        parser::{parse_transaction, state_update::StateUpdate, EXPECTED_TREE_OWNER},
+        parser::{parse_transaction, state_update::StateUpdate, TreeResolver, EXPECTED_TREE_OWNER},
         persist::persist_state_update,
         typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo, TransactionInfo},
     },
@@ -556,7 +556,8 @@ pub async fn index_transaction(
 ) {
     let tx_data = cached_fetch_transaction(test_name, rpc_client.clone(), tx).await;
     let tx_info: TransactionInfo = tx_data.try_into().unwrap();
-    let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0, rpc_client.as_ref())
+    let mut resolver = TreeResolver::new(rpc_client.as_ref());
+    let state_update = parse_transaction(db_conn.as_ref(), &tx_info, 0, &mut resolver)
         .await
         .unwrap();
     persist_state_update_using_connection(db_conn.as_ref(), state_update)
@@ -576,9 +577,10 @@ pub async fn index_multiple_transactions(
         transactions_infos.push(tx.try_into().unwrap());
     }
     let mut state_updates = Vec::new();
+    let mut resolver = TreeResolver::new(rpc_client.as_ref());
     for transaction_info in transactions_infos {
         let tx_state_update =
-            parse_transaction(db_conn.as_ref(), &transaction_info, 0, rpc_client.as_ref())
+            parse_transaction(db_conn.as_ref(), &transaction_info, 0, &mut resolver)
                 .await
                 .unwrap();
         state_updates.push(tx_state_update);

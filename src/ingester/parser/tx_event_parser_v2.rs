@@ -7,7 +7,6 @@ use crate::ingester::parser::indexer_events::{
 };
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
 use crate::ingester::parser::tx_event_parser::create_state_update_v1;
-use solana_client::nonblocking::rpc_client::RpcClient;
 
 use super::state_update::AddressQueueUpdate;
 use crate::common::typedefs::hash::Hash;
@@ -127,7 +126,7 @@ pub async fn create_state_update_v2<T>(
     tx: Signature,
     slot: u64,
     transaction_event: Vec<BatchPublicTransactionEvent>,
-    rpc_client: &RpcClient,
+    resolver: &mut crate::ingester::parser::tree_info::TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -138,7 +137,7 @@ where
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
         let mut state_update_event =
-            create_state_update_v1(conn, tx, slot, event.clone().event, rpc_client).await?;
+            create_state_update_v1(conn, tx, slot, event.clone().event, resolver).await?;
 
         state_update_event
             .batch_nullify_context

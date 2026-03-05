@@ -5,6 +5,7 @@ use cadence_macros::statsd_count;
 use error::IngesterError;
 
 use parser::parse_transaction;
+use parser::TreeResolver;
 use sea_orm::sea_query::OnConflict;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseConnection;
@@ -33,12 +34,12 @@ pub mod typedefs;
 async fn derive_block_state_update(
     conn: &DatabaseConnection,
     block: &BlockInfo,
-    rpc_client: &RpcClient,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError> {
     let mut state_updates: Vec<StateUpdate> = Vec::new();
     for transaction in &block.transactions {
         state_updates
-            .push(parse_transaction(conn, transaction, block.metadata.slot, rpc_client).await?);
+            .push(parse_transaction(conn, transaction, block.metadata.slot, resolver).await?);
     }
     Ok(StateUpdate::merge_updates(state_updates))
 }
@@ -50,9 +51,10 @@ pub async fn index_block(
 ) -> Result<(), IngesterError> {
     let txn = db.begin().await?;
     index_block_metadatas(&txn, vec![&block.metadata]).await?;
+    let mut resolver = TreeResolver::new(rpc_client);
     persist_state_update(
         &txn,
-        derive_block_state_update(db, block, rpc_client).await?,
+        derive_block_state_update(db, block, &mut resolver).await?,
     )
     .await?;
     txn.commit().await?;
@@ -102,8 +104,9 @@ pub async fn index_block_batch(
     let block_metadatas: Vec<&BlockMetadata> = block_batch.iter().map(|b| &b.metadata).collect();
     index_block_metadatas(&tx, block_metadatas).await?;
     let mut state_updates = Vec::new();
+    let mut resolver = TreeResolver::new(rpc_client);
     for block in block_batch {
-        state_updates.push(derive_block_state_update(db, block, rpc_client).await?);
+        state_updates.push(derive_block_state_update(db, block, &mut resolver).await?);
     }
     persist::persist_state_update(&tx, StateUpdate::merge_updates(state_updates)).await?;
     metric! {

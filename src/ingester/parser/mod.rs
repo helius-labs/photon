@@ -1,5 +1,4 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use std::sync::OnceLock;
 use tx_event_parser::parse_public_transaction_event_v1;
@@ -8,6 +7,7 @@ use tx_event_parser_v2::create_state_update_v2;
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::state_update::{StateUpdate, Transaction};
+pub use self::tree_info::TreeResolver;
 
 pub mod indexer_events;
 pub mod merkle_tree_events_parser;
@@ -48,7 +48,7 @@ pub async fn parse_transaction<T>(
     conn: &T,
     tx: &TransactionInfo,
     slot: u64,
-    rpc_client: &RpcClient,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -84,7 +84,7 @@ where
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
             let state_update =
-                create_state_update_v2(conn, tx.signature, slot, event, rpc_client).await?;
+                create_state_update_v2(conn, tx.signature, slot, event, resolver).await?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
@@ -128,7 +128,7 @@ where
                                     slot,
                                     instruction,
                                     &ordered_instructions[noop_index],
-                                    rpc_client,
+                                    resolver,
                                 )
                                 .await?
                                 {

@@ -7,7 +7,7 @@ use crate::common::typedefs::hash::Hash;
 use crate::common::typedefs::token_data::TokenData;
 use crate::common::typedefs::{account::Account, serializable_signature::SerializableSignature};
 use crate::dao::generated::accounts::Model;
-use crate::ingester::parser::parse_transaction;
+use crate::ingester::parser::{parse_transaction, TreeResolver};
 use crate::ingester::typedefs::block_info::TransactionInfo;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -224,7 +224,8 @@ pub async fn get_transaction_helper(
     let tx_info: TransactionInfo = clone_tx(&txn).try_into().map_err(|_e| {
         PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
-    let status_update = parse_transaction(conn, &tx_info, slot, rpc_client)
+    let mut resolver = TreeResolver::new(rpc_client);
+    let status_update = parse_transaction(conn, &tx_info, slot, &mut resolver)
         .await
         .map_err(|_e| {
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
@@ -355,7 +356,8 @@ pub async fn get_transaction_helper_v2(
         PhotonApiError::UnexpectedError(format!("Failed to convert transaction {}", signature.0))
     })?;
 
-    let status_update = parse_transaction(conn, &tx_info, slot, rpc_client)
+    let mut resolver = TreeResolver::new(rpc_client);
+    let status_update = parse_transaction(conn, &tx_info, slot, &mut resolver)
         .await
         .map_err(|_e| {
             PhotonApiError::UnexpectedError(format!("Failed to parse transaction {}", signature.0))
