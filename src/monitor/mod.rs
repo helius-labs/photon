@@ -201,7 +201,7 @@ async fn load_db_tree_roots_with_infinite_retry(db: &DatabaseConnection) -> Vec<
                             Hash::try_from(model.hash.clone()).unwrap(),
                         )
                     })
-                    .collect()
+                    .collect();
             }
             Err(e) => {
                 log::error!("Error loading tree roots: {}", e);

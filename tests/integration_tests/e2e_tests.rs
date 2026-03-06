@@ -10,6 +10,7 @@ use photon_indexer::api::method::get_transaction_with_compression_info::{
 use photon_indexer::api::method::get_validity_proof::{CompressedProof, GetValidityProofRequestV2};
 use photon_indexer::common::typedefs::serializable_pubkey::SerializablePubkey;
 use photon_indexer::ingester::index_block;
+use photon_indexer::ingester::parser::TreeResolver;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 
@@ -79,6 +80,7 @@ fn all_indexing_methodologies(
                         },
                         ..Default::default()
                     },
+                    rpc_client.as_ref(),
                 ).await
                 .unwrap();
 
@@ -263,14 +265,14 @@ async fn test_e2e_mint_and_transfer_transactions(
                 cached_fetch_transaction(&setup.name, setup.client.clone(), txn_signature).await;
             let txn_signature = SerializableSignature(Signature::from_str(txn_signature).unwrap());
             // Test get transaction
-            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature.clone(), txn).await.unwrap();
+            let parsed_transaction: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponse = get_transaction_helper(&setup.db_conn, txn_signature.clone(), txn, setup.client.as_ref()).await.unwrap();
             assert_json_snapshot!(
                 format!("{}-{}-transaction", name.clone(), txn_name),
                 parsed_transaction
             );
 
             // V2 Test for Transactions
-            let parsed_transaction_v2: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponseV2 = get_transaction_helper_v2(&setup.db_conn, txn_signature, txn_clone).await.unwrap();
+            let parsed_transaction_v2: photon_indexer::api::method::get_transaction_with_compression_info::GetTransactionResponseV2 = get_transaction_helper_v2(&setup.db_conn, txn_signature, txn_clone, setup.client.as_ref()).await.unwrap();
             assert_json_snapshot!(
                 format!("{}-{}-transaction-v2", name.clone(), txn_name),
                 parsed_transaction_v2
@@ -498,7 +500,9 @@ async fn test_index_block_metadata(
 
     let slot = 254170887;
     let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
-    index_block(&setup.db_conn, &block).await.unwrap();
+    index_block(&setup.db_conn, &block, setup.client.as_ref())
+        .await
+        .unwrap();
     let filter = blocks::Column::Slot.eq(block.metadata.slot);
 
     let block_model = blocks::Entity::find()
@@ -524,12 +528,16 @@ async fn test_index_block_metadata(
     assert_eq!(block_model.block_time, 1710441678);
 
     // Verify that we don't get an error if we try to index the same block again
-    index_block(&setup.db_conn, &block).await.unwrap();
+    index_block(&setup.db_conn, &block, setup.client.as_ref())
+        .await
+        .unwrap();
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot);
 
     // Verify that get_indexer_slot() gets updated a new block is indexed.
     let block = cached_fetch_block(&setup.name, setup.client.clone(), slot + 1).await;
-    index_block(&setup.db_conn, &block).await.unwrap();
+    index_block(&setup.db_conn, &block, setup.client.as_ref())
+        .await
+        .unwrap();
     assert_eq!(setup.api.get_indexer_slot().await.unwrap().0, slot + 1);
 }
 
@@ -552,7 +560,9 @@ async fn test_get_latest_non_voting_signatures(
 
     let slot = 270893658;
     let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
-    index_block(&setup.db_conn, &block).await.unwrap();
+    index_block(&setup.db_conn, &block, setup.client.as_ref())
+        .await
+        .unwrap();
     let all_nonvoting_transactions = setup
         .api
         .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
@@ -587,7 +597,9 @@ async fn test_get_latest_non_voting_signatures_with_failures(
 
     let slot = 279620356;
     let block = cached_fetch_block(&setup.name, setup.client.clone(), slot).await;
-    index_block(&setup.db_conn, &block).await.unwrap();
+    index_block(&setup.db_conn, &block, setup.client.as_ref())
+        .await
+        .unwrap();
     let all_nonvoting_transactions = setup
         .api
         .get_latest_non_voting_signatures(GetLatestSignaturesRequest {
@@ -715,7 +727,8 @@ async fn test_transaction_with_tree_rollover_fee(
         "2cBtegqLxQztcngNF4qWGZYEuGiwFvmSpak4dqNaGHHQRDBGuYg24ZSG54BpRaWS5Cr4v6AWLV42FWvEjQk2ESWy";
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn).await;
     let tx_info: TransactionInfo = txn.try_into().unwrap();
-    let status_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, 0)
+    let mut resolver = TreeResolver::new(setup.client.as_ref());
+    let status_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, 0, &mut resolver)
         .await
         .unwrap();
     // Assert that status update has at least one account
@@ -755,7 +768,8 @@ async fn test_index_compress_and_close_with_tlv(
     let txn = cached_fetch_transaction(&name, setup.client.clone(), txn_sig).await;
     let tx_info: TransactionInfo = txn.try_into().unwrap();
 
-    let state_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, slot)
+    let mut resolver = TreeResolver::new(setup.client.as_ref());
+    let state_update = parse_transaction(setup.db_conn.as_ref(), &tx_info, slot, &mut resolver)
         .await
         .expect("parse_transaction must not fail on CompressAndClose with TLV");
 

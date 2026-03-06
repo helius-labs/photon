@@ -102,6 +102,7 @@ async fn test_batched_tree_transactions(
             &setup.db_conn,
             SerializableSignature(Signature::from_str(signature).unwrap()),
             transaction,
+            setup.client.as_ref(),
         )
         .await
         .unwrap()
@@ -734,6 +735,7 @@ async fn test_batched_tree_token_transactions(
                 &setup.db_conn,
                 SerializableSignature(Signature::from_str(&signatures[1]).unwrap()),
                 transaction,
+                setup.client.as_ref(),
             )
             .await
             .unwrap()

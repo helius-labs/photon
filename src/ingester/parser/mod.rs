@@ -7,6 +7,7 @@ use tx_event_parser_v2::create_state_update_v2;
 use super::{error::IngesterError, typedefs::block_info::TransactionInfo};
 
 use self::state_update::{StateUpdate, Transaction};
+pub use self::tree_info::TreeResolver;
 
 pub mod indexer_events;
 pub mod merkle_tree_events_parser;
@@ -43,12 +44,11 @@ pub fn set_compression_program_id(program_id_str: &str) -> Result<(), String> {
 pub const EXPECTED_TREE_OWNER: Option<Pubkey> =
     Some(pubkey!("24rt4RgeyjUCWGS2eF7L7gyNMuz6JWdqYpAvb1KRoHxs"));
 
-const SKIP_UNKNOWN_TREES: bool = true;
-
 pub async fn parse_transaction<T>(
     conn: &T,
     tx: &TransactionInfo,
     slot: u64,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -83,7 +83,8 @@ where
         if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
         {
-            let state_update = create_state_update_v2(conn, tx.signature, slot, event).await?;
+            let state_update =
+                create_state_update_v2(conn, tx.signature, slot, event, resolver).await?;
             is_compression_transaction = true;
             state_updates.push(state_update);
         } else {
@@ -127,6 +128,7 @@ where
                                     slot,
                                     instruction,
                                     &ordered_instructions[noop_index],
+                                    resolver,
                                 )
                                 .await?
                                 {

@@ -2,7 +2,7 @@ use crate::common::typedefs::account::AccountWithContext;
 use crate::ingester::error::IngesterError;
 use crate::ingester::parser::indexer_events::PublicTransactionEvent;
 use crate::ingester::parser::state_update::{AccountTransaction, StateUpdate};
-use crate::ingester::parser::tree_info::TreeInfo;
+use crate::ingester::parser::tree_info::{TreeInfo, TreeResolver};
 use crate::ingester::parser::{get_compression_program_id, NOOP_PROGRAM_ID};
 use crate::ingester::typedefs::block_info::{Instruction, TransactionInfo};
 use borsh::BorshDeserialize;
@@ -17,6 +17,7 @@ pub async fn parse_public_transaction_event_v1<T>(
     slot: u64,
     compression_instruction: &Instruction,
     noop_instruction: &Instruction,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<Option<StateUpdate>, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -39,9 +40,15 @@ where
                 e
             ))
         })?;
-        create_state_update_v1(conn, tx.signature, slot, public_transaction_event.into())
-            .await
-            .map(Some)
+        create_state_update_v1(
+            conn,
+            tx.signature,
+            slot,
+            public_transaction_event.into(),
+            resolver,
+        )
+        .await
+        .map(Some)
     } else {
         Ok(None)
     }
@@ -52,6 +59,7 @@ pub async fn create_state_update_v1<T>(
     tx: Signature,
     slot: u64,
     transaction_event: PublicTransactionEvent,
+    resolver: &mut TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -79,18 +87,26 @@ where
             .await
             .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
         {
-            Some(info) => info,
-            None => {
-                if super::SKIP_UNKNOWN_TREES {
-                    log::warn!("Skipping unknown tree: {}", tree_solana);
-                    continue;
-                } else {
-                    return Err(IngesterError::ParserError(format!(
-                        "Missing queue for tree: {}",
-                        tree_solana
-                    )));
-                }
+            Some(info) => {
+                log::debug!(
+                    "tx_event_parser tree={}, tree_type={:?}, queue={}",
+                    tree_solana,
+                    info.tree_type,
+                    info.queue
+                );
+                info
             }
+            None => match resolver.discover_tree(conn, &tree_solana, slot).await {
+                Ok(Some(info)) => info,
+                Ok(None) => {
+                    log::debug!("Tree {} not discoverable, skipping", tree_solana);
+                    continue;
+                }
+                Err(e) => {
+                    log::warn!("Failed to discover tree {}: {}", tree_solana, e);
+                    continue;
+                }
+            },
         };
 
         let mut seq = None;

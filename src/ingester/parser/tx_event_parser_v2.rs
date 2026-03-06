@@ -126,6 +126,7 @@ pub async fn create_state_update_v2<T>(
     tx: Signature,
     slot: u64,
     transaction_event: Vec<BatchPublicTransactionEvent>,
+    resolver: &mut crate::ingester::parser::tree_info::TreeResolver<'_>,
 ) -> Result<StateUpdate, IngesterError>
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
@@ -136,7 +137,7 @@ where
     let mut state_updates = Vec::new();
     for event in transaction_event.iter() {
         let mut state_update_event =
-            create_state_update_v1(conn, tx, slot, event.clone().event).await?;
+            create_state_update_v1(conn, tx, slot, event.clone().event, resolver).await?;
 
         state_update_event
             .batch_nullify_context
