@@ -38,15 +38,9 @@ where
                         e
                     ))
                 })?;
-        create_state_update_v1(
-            conn,
-            tx.signature,
-            slot,
-            public_transaction_event,
-            resolver,
-        )
-        .await
-        .map(Some)
+        create_state_update_v1(conn, tx.signature, slot, public_transaction_event, resolver)
+            .await
+            .map(Some)
     } else {
         Ok(None)
     }
