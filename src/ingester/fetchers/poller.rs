@@ -77,11 +77,7 @@ fn pop_cached_blocks_to_index(
     mut last_indexed_slot: u64,
 ) -> (Vec<BlockInfo>, u64) {
     let mut blocks = Vec::new();
-    loop {
-        let min_slot = match block_cache.keys().min() {
-            Some(&slot) => slot,
-            None => break,
-        };
+    while let Some(&min_slot) = block_cache.keys().min() {
         let block: &BlockInfo = block_cache.get(&min_slot).unwrap();
         if block.metadata.parent_slot == last_indexed_slot {
             last_indexed_slot = block.metadata.slot;

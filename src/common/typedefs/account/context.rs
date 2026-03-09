@@ -17,7 +17,7 @@ use utoipa::ToSchema;
 /// - Internal (state_updates,..)
 /// - GetTransactionWithCompressionInfo (internally)
 /// - GetTransactionWithCompressionInfoV2 (internally)
-/// All endpoints return AccountV2.
+///   All endpoints return AccountV2.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AccountContext {
@@ -107,11 +107,20 @@ impl TryFrom<Model> for AccountWithContext {
     type Error = PhotonApiError;
 
     fn try_from(account: Model) -> Result<Self, Self::Error> {
-        let data = match (account.data, account.data_hash, account.discriminator) {
+        let parsed_discriminator = match account.discriminator_v2 {
+            Some(bytes) => {
+                let arr: [u8; 8] = bytes.try_into().map_err(|_| {
+                    PhotonApiError::UnexpectedError("Invalid discriminator_v2 length".to_string())
+                })?;
+                Some(u64::from_le_bytes(arr))
+            }
+            None => account.discriminator.map(parse_decimal).transpose()?,
+        };
+        let data = match (account.data, account.data_hash, parsed_discriminator) {
             (Some(data), Some(data_hash), Some(discriminator)) => Some(AccountData {
                 data: Base64String(data),
                 data_hash: data_hash.try_into()?,
-                discriminator: UnsignedInteger(parse_decimal(discriminator)?),
+                discriminator: UnsignedInteger(discriminator),
             }),
             (None, None, None) => None,
             _ => {

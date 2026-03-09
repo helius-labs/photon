@@ -4,12 +4,12 @@ info:
   description: Solana indexer for general compression
   license:
     name: Apache-2.0
-  version: 0.50.0
+  version: 0.51.2
 servers:
 - url: https://devnet.helius-rpc.com?api-key=<api_key>
 paths:
-  /getBatchAddressUpdateInfo:
-    summary: getBatchAddressUpdateInfo
+  /getAccountInterface:
+    summary: getAccountInterface
     post:
       requestBody:
         content:
@@ -36,19 +36,15 @@ paths:
                   type: string
                   description: The name of the method to invoke.
                   enum:
-                  - getBatchAddressUpdateInfo
+                  - getAccountInterface
                 params:
                   type: object
+                  description: Request for getAccountInterface
                   required:
-                  - tree
-                  - batchSize
+                  - address
                   properties:
-                    batchSize:
-                      type: integer
-                      format: uint16
-                      minimum: 0
-                    tree:
-                      $ref: '#/components/schemas/Hash'
+                    address:
+                      $ref: '#/components/schemas/SerializablePubkey'
                   additionalProperties: false
         required: true
       responses:
@@ -81,33 +77,14 @@ paths:
                     - '2.0'
                   result:
                     type: object
+                    description: Response for getAccountInterface
                     required:
                     - context
-                    - startIndex
-                    - addresses
-                    - nonInclusionProofs
-                    - subtrees
                     properties:
-                      addresses:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/AddressSeq'
                       context:
                         $ref: '#/components/schemas/Context'
-                      nonInclusionProofs:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/MerkleContextWithNewAddressProof'
-                      startIndex:
-                        type: integer
-                        format: uint64
-                        minimum: 0
-                      subtrees:
-                        type: array
-                        items:
-                          type: string
-                          format: binary
-                    additionalProperties: false
+                      value:
+                        $ref: '#/components/schemas/AccountInterface'
         '429':
           description: Exceeded rate limit.
           content:
@@ -3004,6 +2981,128 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getMultipleAccountInterfaces:
+    summary: getMultipleAccountInterfaces
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getMultipleAccountInterfaces
+                params:
+                  type: object
+                  description: Request for getMultipleAccountInterfaces
+                  required:
+                  - addresses
+                  properties:
+                    addresses:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/SerializablePubkey'
+                      description: List of account addresses to look up (max 100)
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    description: Response for getMultipleAccountInterfaces
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          allOf:
+                          - $ref: '#/components/schemas/AccountInterface'
+                          nullable: true
+                        description: List of account results (Some for found accounts, None for not found)
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getMultipleCompressedAccountProofs:
     summary: getMultipleCompressedAccountProofs
     post:
@@ -3261,8 +3360,8 @@ paths:
                   default:
                     addresses: null
                     hashes:
-                    - 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM
-                    - 1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh
+                    - 11157t3sqMV725NVRLrVQbAu98Jjfk1uCKehJnXXQs
+                    - 1117mWrzzrZr312ebPDHu8tbfMwFNvCvMbr6WepCNG
                   properties:
                     addresses:
                       type: array
@@ -3278,8 +3377,8 @@ paths:
                   example:
                     addresses: null
                     hashes:
-                    - 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM
-                    - 1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh
+                    - 11157t3sqMV725NVRLrVQbAu98Jjfk1uCKehJnXXQs
+                    - 1117mWrzzrZr312ebPDHu8tbfMwFNvCvMbr6WepCNG
         required: true
       responses:
         '200':
@@ -3391,8 +3490,8 @@ paths:
                   default:
                     addresses: null
                     hashes:
-                    - 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
-                    - 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+                    - 1119DWteoLSdjvrT6g6L8C2PfDD2faiTQUpsjY2RiF
+                    - 111BuZ6b86gm7XhxjvTakhRvxSMjXp2GqgifkNUmDK
                   properties:
                     addresses:
                       type: array
@@ -3408,8 +3507,8 @@ paths:
                   example:
                     addresses: null
                     hashes:
-                    - 11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3
-                    - 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+                    - 1119DWteoLSdjvrT6g6L8C2PfDD2faiTQUpsjY2RiF
+                    - 111BuZ6b86gm7XhxjvTakhRvxSMjXp2GqgifkNUmDK
         required: true
       responses:
         '200':
@@ -3740,28 +3839,20 @@ paths:
                   required:
                   - tree
                   properties:
+                    addressQueue:
+                      allOf:
+                      - $ref: '#/components/schemas/QueueRequest'
+                      nullable: true
+                    inputQueue:
+                      allOf:
+                      - $ref: '#/components/schemas/QueueRequest'
+                      nullable: true
+                    outputQueue:
+                      allOf:
+                      - $ref: '#/components/schemas/QueueRequest'
+                      nullable: true
                     tree:
                       $ref: '#/components/schemas/Hash'
-                    outputQueueStartIndex:
-                      type: integer
-                      format: uint64
-                      nullable: true
-                      minimum: 0
-                    outputQueueLimit:
-                      type: integer
-                      format: uint16
-                      nullable: true
-                      minimum: 0
-                    inputQueueStartIndex:
-                      type: integer
-                      format: uint64
-                      nullable: true
-                      minimum: 0
-                    inputQueueLimit:
-                      type: integer
-                      format: uint16
-                      nullable: true
-                      minimum: 0
                   additionalProperties: false
         required: true
       responses:
@@ -3797,29 +3888,130 @@ paths:
                     required:
                     - context
                     properties:
+                      addressQueue:
+                        $ref: '#/components/schemas/AddressQueueData'
                       context:
                         $ref: '#/components/schemas/Context'
-                      outputQueueElements:
-                        type: array
-                        nullable: true
-                        items:
-                          $ref: '#/components/schemas/GetQueueElementsResponseValue'
-                      outputQueueIndex:
-                        type: integer
-                        format: uint64
-                        nullable: true
-                        minimum: 0
-                      inputQueueElements:
-                        type: array
-                        nullable: true
-                        items:
-                          $ref: '#/components/schemas/GetQueueElementsResponseValue'
-                      inputQueueIndex:
-                        type: integer
-                        format: uint64
-                        nullable: true
-                        minimum: 0
+                      stateQueue:
+                        $ref: '#/components/schemas/StateQueueData'
                     additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getQueueInfo:
+    summary: getQueueInfo
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getQueueInfo
+                params:
+                  type: object
+                  properties:
+                    trees:
+                      type: array
+                      items:
+                        type: string
+                      nullable: true
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    required:
+                    - queues
+                    - slot
+                    properties:
+                      queues:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QueueInfo'
+                      slot:
+                        type: integer
+                        format: uint64
+                        minimum: 0
         '429':
           description: Exceeded rate limit.
           content:
@@ -4417,6 +4609,23 @@ components:
         discriminator:
           $ref: '#/components/schemas/UnsignedInteger'
       additionalProperties: false
+    AccountInterface:
+      type: object
+      description: Unified account interface — works for both on-chain and compressed accounts
+      required:
+      - key
+      - account
+      properties:
+        account:
+          $ref: '#/components/schemas/SolanaAccountData'
+        cold:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountV2'
+          description: Compressed accounts associated with this pubkey
+          nullable: true
+        key:
+          $ref: '#/components/schemas/SerializablePubkey'
     AccountList:
       type: object
       required:
@@ -4440,6 +4649,27 @@ components:
             allOf:
             - $ref: '#/components/schemas/AccountV2'
             nullable: true
+    AccountProofInputs:
+      type: object
+      required:
+      - hash
+      - root
+      - rootIndex
+      - leafIndex
+      - merkleContext
+      properties:
+        hash:
+          type: string
+        leafIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+        merkleContext:
+          $ref: '#/components/schemas/MerkleContextV2'
+        root:
+          type: string
+        rootIndex:
+          $ref: '#/components/schemas/RootIndex'
     AccountState:
       type: string
       enum:
@@ -4512,18 +4742,93 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/AddressWithTree'
-    AddressSeq:
+    AddressProofInputs:
       type: object
       required:
       - address
-      - seq
+      - root
+      - rootIndex
+      - merkleContext
       properties:
         address:
-          $ref: '#/components/schemas/SerializablePubkey'
-        seq:
+          type: string
+        merkleContext:
+          $ref: '#/components/schemas/MerkleContextV2'
+        root:
+          type: string
+        rootIndex:
+          type: integer
+          format: uint16
+          minimum: 0
+    AddressQueueData:
+      type: object
+      required:
+      - addresses
+      - queueIndices
+      - nodes
+      - lowElementIndices
+      - lowElementValues
+      - lowElementNextIndices
+      - lowElementNextValues
+      - leavesHashChains
+      - initialRoot
+      - startIndex
+      - subtrees
+      - rootSeq
+      properties:
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/SerializablePubkey'
+        initialRoot:
+          $ref: '#/components/schemas/Hash'
+        leavesHashChains:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        lowElementIndices:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 0
+        lowElementNextIndices:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 0
+        lowElementNextValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        lowElementValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+          description: Deduplicated tree nodes - clients reconstruct proofs from these using low_element_indices
+        queueIndices:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 0
+        rootSeq:
           type: integer
           format: uint64
           minimum: 0
+        startIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+        subtrees:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
       additionalProperties: false
     AddressWithTree:
       type: object
@@ -4578,14 +4883,17 @@ components:
       - c
       properties:
         a:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
         b:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
         c:
-          type: string
-          format: binary
+          type: array
+          items:
+            type: integer
     CompressedProofWithContext:
       type: object
       required:
@@ -4625,36 +4933,19 @@ components:
     CompressedProofWithContextV2:
       type: object
       required:
-      - roots
-      - rootIndices
-      - leafIndices
-      - leaves
-      - merkleContexts
+      - accounts
+      - addresses
       properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountProofInputs'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressProofInputs'
         compressedProof:
           $ref: '#/components/schemas/CompressedProof'
-        leafIndices:
-          type: array
-          items:
-            type: integer
-            format: uint32
-            minimum: 0
-        leaves:
-          type: array
-          items:
-            type: string
-        merkleContexts:
-          type: array
-          items:
-            $ref: '#/components/schemas/MerkleContextV2'
-        rootIndices:
-          type: array
-          items:
-            $ref: '#/components/schemas/RootIndex'
-        roots:
-          type: array
-          items:
-            type: string
     CompressionInfoV2:
       type: object
       required:
@@ -4758,44 +5049,52 @@ components:
         treeContext:
           $ref: '#/components/schemas/TreeContextInfo'
       additionalProperties: false
-    GetQueueElementsResponseValue:
-      type: object
-      required:
-      - proof
-      - root
-      - leafIndex
-      - leaf
-      - tree
-      - rootSeq
-      - accountHash
-      properties:
-        accountHash:
-          $ref: '#/components/schemas/Hash'
-        leaf:
-          $ref: '#/components/schemas/Hash'
-        leafIndex:
-          type: integer
-          format: uint64
-          minimum: 0
-        proof:
-          type: array
-          items:
-            $ref: '#/components/schemas/Hash'
-        root:
-          $ref: '#/components/schemas/Hash'
-        rootSeq:
-          type: integer
-          format: uint64
-          minimum: 0
-        tree:
-          $ref: '#/components/schemas/Hash'
-        txHash:
-          $ref: '#/components/schemas/Hash'
-      additionalProperties: false
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
       example: 11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP
+    InputQueueData:
+      type: object
+      required:
+      - leafIndices
+      - accountHashes
+      - leaves
+      - txHashes
+      - nullifiers
+      - firstQueueIndex
+      - leavesHashChains
+      properties:
+        accountHashes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        firstQueueIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+        leafIndices:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 0
+        leaves:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        leavesHashChains:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        nullifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        txHashes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+      additionalProperties: false
     Limit:
       type: integer
       format: uint64
@@ -4870,6 +5169,58 @@ components:
           format: uint64
           minimum: 0
       additionalProperties: false
+    Node:
+      type: object
+      description: A tree node with its encoded index and hash
+      required:
+      - index
+      - hash
+      properties:
+        hash:
+          $ref: '#/components/schemas/Hash'
+        index:
+          type: integer
+          format: uint64
+          description: 'Encoded node index: (level << 56) | position'
+          minimum: 0
+      additionalProperties: false
+    OutputQueueData:
+      type: object
+      required:
+      - leafIndices
+      - accountHashes
+      - leaves
+      - firstQueueIndex
+      - nextIndex
+      - leavesHashChains
+      properties:
+        accountHashes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        firstQueueIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+        leafIndices:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 0
+        leaves:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        leavesHashChains:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hash'
+        nextIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+      additionalProperties: false
     OwnerBalance:
       type: object
       required:
@@ -4938,6 +5289,47 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureInfo'
+    QueueInfo:
+      type: object
+      required:
+      - tree
+      - queue
+      - queueType
+      - queueSize
+      properties:
+        queue:
+          type: string
+        queueSize:
+          type: integer
+          format: uint64
+          minimum: 0
+        queueType:
+          type: integer
+          format: uint8
+          minimum: 0
+        tree:
+          type: string
+    QueueRequest:
+      type: object
+      description: Parameters for requesting queue elements
+      required:
+      - limit
+      properties:
+        limit:
+          type: integer
+          format: uint16
+          minimum: 0
+        startIndex:
+          type: integer
+          format: uint64
+          nullable: true
+          minimum: 0
+        zkpBatchSize:
+          type: integer
+          format: uint16
+          nullable: true
+          minimum: 0
+      additionalProperties: false
     RootIndex:
       type: object
       required:
@@ -4953,8 +5345,8 @@ components:
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.
-      default: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
-      example: 111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj
+      default: 111FJo4zLAGU9nzTWa6EnbV4VAmtG4FR8kcokrtZYr
+      example: 111FJo4zLAGU9nzTWa6EnbV4VAmtG4FR8kcokrtZYr
     SerializableSignature:
       type: string
       description: A Solana transaction signature.
@@ -5007,6 +5399,53 @@ components:
           $ref: '#/components/schemas/SerializableSignature'
         slot:
           $ref: '#/components/schemas/UnsignedInteger'
+    SolanaAccountData:
+      type: object
+      description: Nested Solana account fields (matches getAccountInfo shape)
+      required:
+      - lamports
+      - data
+      - owner
+      - executable
+      - rentEpoch
+      - space
+      properties:
+        data:
+          $ref: '#/components/schemas/Base64String'
+        executable:
+          type: boolean
+        lamports:
+          $ref: '#/components/schemas/UnsignedInteger'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        rentEpoch:
+          $ref: '#/components/schemas/UnsignedInteger'
+        space:
+          $ref: '#/components/schemas/UnsignedInteger'
+    StateQueueData:
+      type: object
+      description: State queue data with shared tree nodes for output and input queues
+      required:
+      - initialRoot
+      - rootSeq
+      properties:
+        initialRoot:
+          $ref: '#/components/schemas/Hash'
+        inputQueue:
+          $ref: '#/components/schemas/InputQueueData'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+          description: Shared deduplicated tree nodes for state queues (output + input)
+        outputQueue:
+          $ref: '#/components/schemas/OutputQueueData'
+        rootSeq:
+          type: integer
+          format: uint64
+          description: Sequence number of the root
+          minimum: 0
+      additionalProperties: false
     TokenAccount:
       type: object
       required:
