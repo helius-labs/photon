@@ -37,6 +37,7 @@ pub async fn get_multiple_account_interfaces(
     }
 
     let context = Context::extract(conn).await?;
+    let commitment = request.commitment.unwrap_or_default();
 
     let distinct_owners = get_distinct_owners_with_addresses(conn)
         .await
@@ -48,7 +49,14 @@ pub async fn get_multiple_account_interfaces(
         .iter()
         .map(|address| async {
             let _permit = semaphore.acquire().await.unwrap();
-            race_hot_cold(rpc_client, conn, address, Some(&distinct_owners)).await
+            race_hot_cold(
+                rpc_client,
+                conn,
+                address,
+                Some(&distinct_owners),
+                commitment,
+            )
+            .await
         })
         .collect();
 

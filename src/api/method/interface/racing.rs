@@ -16,7 +16,6 @@ use sea_orm::prelude::Decimal;
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_account::Account as SolanaAccount;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_commitment_config::CommitmentConfig;
 use solana_program_option::COption;
 use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
@@ -27,7 +26,9 @@ use tokio::time::timeout;
 use crate::common::typedefs::token_data::TokenData;
 use crate::ingester::persist::DECOMPRESSED_ACCOUNT_DISCRIMINATOR;
 
-use super::types::{AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS};
+use super::types::{
+    AccountInterface, RpcCommitment, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
+};
 
 /// Result from a hot (on-chain RPC) lookup.
 #[derive(Debug)]
@@ -48,10 +49,11 @@ pub struct ColdLookupResult {
 pub async fn hot_lookup(
     rpc_client: &RpcClient,
     address: &Pubkey,
+    commitment: RpcCommitment,
 ) -> Result<HotLookupResult, PhotonApiError> {
     let result = timeout(
         Duration::from_millis(RPC_TIMEOUT_MS),
-        rpc_client.get_account_with_commitment(address, CommitmentConfig::confirmed()),
+        rpc_client.get_account_with_commitment(address, commitment.to_commitment_config()),
     )
     .await;
 
@@ -334,6 +336,66 @@ fn hot_to_solana_account_data(account: &SolanaAccount) -> SolanaAccountData {
     }
 }
 
+const COMPRESSED_ONLY_DISCRIMINATOR: u8 = 31;
+
+fn extension_data_size(discriminator: u8) -> Option<usize> {
+    match discriminator {
+        0..=18 => Some(0),
+        19 => None, // TokenMetadata (variable)
+        20..=28 => Some(0),
+        29 => Some(8),  // TransferFeeAccountExtension (u64)
+        30 => Some(1),  // TransferHookAccountExtension (u8)
+        31 => Some(17), // CompressedOnlyExtension (u64 + u64 + u8)
+        32 => None,     // CompressibleExtension (variable)
+        _ => None,
+    }
+}
+
+fn extract_delegated_amount_from_tlv(tlv: Option<&Base64String>) -> Option<u64> {
+    let bytes = tlv?.0.as_slice();
+    if bytes.len() < 4 {
+        return None;
+    }
+
+    let mut offset = 0usize;
+    let vec_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+    offset += 4;
+
+    for _ in 0..vec_len {
+        if offset >= bytes.len() {
+            return None;
+        }
+        let discriminator = bytes[offset];
+        offset += 1;
+
+        if discriminator == COMPRESSED_ONLY_DISCRIMINATOR {
+            if offset + 8 > bytes.len() {
+                return None;
+            }
+            let amount = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+            return Some(amount);
+        }
+
+        let size = extension_data_size(discriminator)?;
+        if offset + size > bytes.len() {
+            return None;
+        }
+        offset += size;
+    }
+
+    None
+}
+
+fn delegated_contribution(token_data: &TokenData) -> u64 {
+    if token_data.delegate.is_none() {
+        return 0;
+    }
+
+    let delegated =
+        extract_delegated_amount_from_tlv(token_data.tlv.as_ref()).unwrap_or(token_data.amount.0);
+    delegated.min(token_data.amount.0)
+}
+
 /// Build the 165-byte SPL Token Account layout from compressed TokenData +
 /// corrected wallet owner.
 fn build_spl_token_account_bytes(token_data: &TokenData, wallet_owner: &[u8; 32]) -> Vec<u8> {
@@ -352,7 +414,7 @@ fn build_spl_token_account_bytes(token_data: &TokenData, wallet_owner: &[u8; 32]
         },
         state: spl_state,
         is_native: COption::None,
-        delegated_amount: 0,
+        delegated_amount: delegated_contribution(token_data),
         close_authority: COption::None,
     };
 
@@ -451,11 +513,12 @@ pub async fn race_hot_cold(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
     distinct_owners: Option<&[Vec<u8>]>,
+    commitment: RpcCommitment,
 ) -> Result<Option<AccountInterface>, PhotonApiError> {
     let pubkey = Pubkey::from(address.0.to_bytes());
 
     let (hot_result, cold_result) = tokio::join!(
-        hot_lookup(rpc_client, &pubkey),
+        hot_lookup(rpc_client, &pubkey, commitment),
         cold_lookup(conn, address, distinct_owners)
     );
 
@@ -556,11 +619,71 @@ fn cold_accounts_to_synthetic(
                 let hot_amount = hot_contribution.as_ref().map_or(0, |spl| spl.amount);
                 let total_amount = cold_total + hot_amount;
 
+                let has_frozen_cold = parsed
+                    .iter()
+                    .any(|(_, td)| td.state == AccountState::frozen);
+                let has_frozen_hot = hot_contribution
+                    .as_ref()
+                    .map(|spl| spl.state == SplAccountState::Frozen)
+                    .unwrap_or(false);
+                let any_frozen = has_frozen_hot || has_frozen_cold;
+
+                let newest_delegated_cold = parsed
+                    .iter()
+                    .filter(|(_, td)| td.delegate.is_some())
+                    .max_by_key(|(acc, _)| acc.slot_created.0)
+                    .and_then(|(_, td)| td.delegate.as_ref())
+                    .map(|d| Pubkey::from(d.0.to_bytes()));
+                let canonical_delegate = hot_contribution
+                    .as_ref()
+                    .and_then(|spl| match spl.delegate {
+                        COption::Some(d) => Some(d),
+                        COption::None => None,
+                    })
+                    .or(newest_delegated_cold);
+
+                let cold_delegated_total: u64 = if let Some(delegate) = canonical_delegate.as_ref()
+                {
+                    parsed
+                        .iter()
+                        .filter(|(_, td)| {
+                            td.delegate
+                                .as_ref()
+                                .map(|d| Pubkey::from(d.0.to_bytes()) == *delegate)
+                                .unwrap_or(false)
+                        })
+                        .map(|(_, td)| delegated_contribution(td))
+                        .sum()
+                } else {
+                    0
+                };
+                let hot_delegated_contribution = if let (Some(delegate), Some(spl)) =
+                    (canonical_delegate.as_ref(), hot_contribution.as_ref())
+                {
+                    match spl.delegate {
+                        COption::Some(d) if d == *delegate => spl.delegated_amount.min(spl.amount),
+                        _ => 0,
+                    }
+                } else {
+                    0
+                };
+                let canonical_delegated = cold_delegated_total + hot_delegated_contribution;
+
                 // When a hot account matches, use it as the base for the
                 // synthetic view — it already has the correct wallet owner,
                 // delegate, state, etc.  Unpack, set aggregated amount, repack.
                 if let (Some(hot), Some(mut spl)) = (hot_account, hot_contribution) {
                     spl.amount = total_amount;
+                    spl.delegate = match canonical_delegate {
+                        Some(delegate) => COption::Some(delegate),
+                        None => COption::None,
+                    };
+                    spl.delegated_amount = canonical_delegated.min(spl.amount);
+                    spl.state = if any_frozen {
+                        SplAccountState::Frozen
+                    } else {
+                        SplAccountState::Initialized
+                    };
                     let mut spl_bytes = vec![0u8; SplTokenAccount::LEN];
                     SplTokenAccount::pack(spl, &mut spl_bytes)
                         .expect("buffer is exactly LEN bytes");
@@ -593,8 +716,12 @@ fn cold_accounts_to_synthetic(
                     mint: newest_td.mint,
                     owner: newest_td.owner,
                     amount: UnsignedInteger(total_amount),
-                    delegate: newest_td.delegate,
-                    state: newest_td.state,
+                    delegate: canonical_delegate.map(|d| SerializablePubkey::from(d.to_bytes())),
+                    state: if any_frozen {
+                        AccountState::frozen
+                    } else {
+                        AccountState::initialized
+                    },
                     tlv: newest_td.tlv.clone(),
                 };
 

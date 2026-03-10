@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use solana_commitment_config::CommitmentConfig;
 use utoipa::ToSchema;
 
 use crate::common::typedefs::account::AccountV2;
@@ -39,6 +40,8 @@ pub struct AccountInterface {
 pub struct GetAccountInterfaceRequest {
     /// The account address to look up
     pub address: SerializablePubkey,
+    /// Optional RPC commitment for the hot (on-chain) lookup
+    pub commitment: Option<RpcCommitment>,
 }
 
 /// Request for getMultipleAccountInterfaces
@@ -47,6 +50,27 @@ pub struct GetAccountInterfaceRequest {
 pub struct GetMultipleAccountInterfacesRequest {
     /// List of account addresses to look up (max 100)
     pub addresses: Vec<SerializablePubkey>,
+    /// Optional RPC commitment for hot (on-chain) lookups
+    pub commitment: Option<RpcCommitment>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcCommitment {
+    Processed,
+    #[default]
+    Confirmed,
+    Finalized,
+}
+
+impl RpcCommitment {
+    pub fn to_commitment_config(self) -> CommitmentConfig {
+        match self {
+            RpcCommitment::Processed => CommitmentConfig::processed(),
+            RpcCommitment::Confirmed => CommitmentConfig::confirmed(),
+            RpcCommitment::Finalized => CommitmentConfig::finalized(),
+        }
+    }
 }
 
 // ============ Response Types ============
