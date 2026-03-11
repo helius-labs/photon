@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: buildjet-16vcpu-ubuntu-2204
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3
       # Count the number of commits on the current branch
