@@ -87,6 +87,7 @@ async fn test_get_account_interface_token_owner(
             .api
             .get_account_interface(GetAccountInterfaceRequest {
                 address: bob_pubkey,
+                commitment: None,
             })
             .await
             .unwrap();
@@ -145,6 +146,7 @@ async fn test_get_multiple_account_interfaces(
             .api
             .get_multiple_account_interfaces(GetMultipleAccountInterfacesRequest {
                 addresses: vec![bob_pubkey, charlie_pubkey, nonexistent_address],
+                commitment: None,
             })
             .await
             .unwrap();
@@ -184,7 +186,10 @@ async fn test_get_multiple_account_interfaces_validation(
     // Test empty request - should fail
     let empty_result = setup
         .api
-        .get_multiple_account_interfaces(GetMultipleAccountInterfacesRequest { addresses: vec![] })
+        .get_multiple_account_interfaces(GetMultipleAccountInterfacesRequest {
+            addresses: vec![],
+            commitment: None,
+        })
         .await;
 
     assert!(empty_result.is_err());
@@ -197,6 +202,7 @@ async fn test_get_multiple_account_interfaces_validation(
         .api
         .get_multiple_account_interfaces(GetMultipleAccountInterfacesRequest {
             addresses: over_limit,
+            commitment: None,
         })
         .await;
 

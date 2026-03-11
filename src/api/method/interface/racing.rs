@@ -16,7 +16,6 @@ use sea_orm::prelude::Decimal;
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use solana_account::Account as SolanaAccount;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_commitment_config::CommitmentConfig;
 use solana_program_option::COption;
 use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
@@ -27,7 +26,9 @@ use tokio::time::timeout;
 use crate::common::typedefs::token_data::TokenData;
 use crate::ingester::persist::DECOMPRESSED_ACCOUNT_DISCRIMINATOR;
 
-use super::types::{AccountInterface, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS};
+use super::types::{
+    AccountInterface, RpcCommitment, SolanaAccountData, DB_TIMEOUT_MS, RPC_TIMEOUT_MS,
+};
 
 /// Result from a hot (on-chain RPC) lookup.
 #[derive(Debug)]
@@ -48,10 +49,11 @@ pub struct ColdLookupResult {
 pub async fn hot_lookup(
     rpc_client: &RpcClient,
     address: &Pubkey,
+    commitment: RpcCommitment,
 ) -> Result<HotLookupResult, PhotonApiError> {
     let result = timeout(
         Duration::from_millis(RPC_TIMEOUT_MS),
-        rpc_client.get_account_with_commitment(address, CommitmentConfig::confirmed()),
+        rpc_client.get_account_with_commitment(address, commitment.to_commitment_config()),
     )
     .await;
 
@@ -334,6 +336,66 @@ fn hot_to_solana_account_data(account: &SolanaAccount) -> SolanaAccountData {
     }
 }
 
+const COMPRESSED_ONLY_DISCRIMINATOR: u8 = 31;
+
+fn extension_data_size(discriminator: u8) -> Option<usize> {
+    match discriminator {
+        0..=18 => Some(0),
+        19 => None, // TokenMetadata (variable)
+        20..=28 => Some(0),
+        29 => Some(8),  // TransferFeeAccountExtension (u64)
+        30 => Some(1),  // TransferHookAccountExtension (u8)
+        31 => Some(17), // CompressedOnlyExtension (u64 + u64 + u8)
+        32 => None,     // CompressibleExtension (variable)
+        _ => None,
+    }
+}
+
+fn extract_delegated_amount_from_tlv(tlv: Option<&Base64String>) -> Option<u64> {
+    let bytes = tlv?.0.as_slice();
+    if bytes.len() < 4 {
+        return None;
+    }
+
+    let mut offset = 0usize;
+    let vec_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+    offset += 4;
+
+    for _ in 0..vec_len {
+        if offset >= bytes.len() {
+            return None;
+        }
+        let discriminator = bytes[offset];
+        offset += 1;
+
+        if discriminator == COMPRESSED_ONLY_DISCRIMINATOR {
+            if offset + 8 > bytes.len() {
+                return None;
+            }
+            let amount = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+            return Some(amount);
+        }
+
+        let size = extension_data_size(discriminator)?;
+        if offset + size > bytes.len() {
+            return None;
+        }
+        offset += size;
+    }
+
+    None
+}
+
+fn delegated_contribution(token_data: &TokenData) -> u64 {
+    if token_data.delegate.is_none() {
+        return 0;
+    }
+
+    let delegated =
+        extract_delegated_amount_from_tlv(token_data.tlv.as_ref()).unwrap_or(token_data.amount.0);
+    delegated.min(token_data.amount.0)
+}
+
 /// Build the 165-byte SPL Token Account layout from compressed TokenData +
 /// corrected wallet owner.
 fn build_spl_token_account_bytes(token_data: &TokenData, wallet_owner: &[u8; 32]) -> Vec<u8> {
@@ -352,7 +414,7 @@ fn build_spl_token_account_bytes(token_data: &TokenData, wallet_owner: &[u8; 32]
         },
         state: spl_state,
         is_native: COption::None,
-        delegated_amount: 0,
+        delegated_amount: delegated_contribution(token_data),
         close_authority: COption::None,
     };
 
@@ -451,11 +513,12 @@ pub async fn race_hot_cold(
     conn: &DatabaseConnection,
     address: &SerializablePubkey,
     distinct_owners: Option<&[Vec<u8>]>,
+    commitment: RpcCommitment,
 ) -> Result<Option<AccountInterface>, PhotonApiError> {
     let pubkey = Pubkey::from(address.0.to_bytes());
 
     let (hot_result, cold_result) = tokio::join!(
-        hot_lookup(rpc_client, &pubkey),
+        hot_lookup(rpc_client, &pubkey, commitment),
         cold_lookup(conn, address, distinct_owners)
     );
 
@@ -556,11 +619,71 @@ fn cold_accounts_to_synthetic(
                 let hot_amount = hot_contribution.as_ref().map_or(0, |spl| spl.amount);
                 let total_amount = cold_total + hot_amount;
 
+                let has_frozen_cold = parsed
+                    .iter()
+                    .any(|(_, td)| td.state == AccountState::frozen);
+                let has_frozen_hot = hot_contribution
+                    .as_ref()
+                    .map(|spl| spl.state == SplAccountState::Frozen)
+                    .unwrap_or(false);
+                let any_frozen = has_frozen_hot || has_frozen_cold;
+
+                let newest_delegated_cold = parsed
+                    .iter()
+                    .filter(|(_, td)| td.delegate.is_some())
+                    .max_by_key(|(acc, _)| acc.slot_created.0)
+                    .and_then(|(_, td)| td.delegate.as_ref())
+                    .map(|d| Pubkey::from(d.0.to_bytes()));
+                let canonical_delegate = hot_contribution
+                    .as_ref()
+                    .and_then(|spl| match spl.delegate {
+                        COption::Some(d) => Some(d),
+                        COption::None => None,
+                    })
+                    .or(newest_delegated_cold);
+
+                let cold_delegated_total: u64 = if let Some(delegate) = canonical_delegate.as_ref()
+                {
+                    parsed
+                        .iter()
+                        .filter(|(_, td)| {
+                            td.delegate
+                                .as_ref()
+                                .map(|d| Pubkey::from(d.0.to_bytes()) == *delegate)
+                                .unwrap_or(false)
+                        })
+                        .map(|(_, td)| delegated_contribution(td))
+                        .sum()
+                } else {
+                    0
+                };
+                let hot_delegated_contribution = if let (Some(delegate), Some(spl)) =
+                    (canonical_delegate.as_ref(), hot_contribution.as_ref())
+                {
+                    match spl.delegate {
+                        COption::Some(d) if d == *delegate => spl.delegated_amount.min(spl.amount),
+                        _ => 0,
+                    }
+                } else {
+                    0
+                };
+                let canonical_delegated = cold_delegated_total + hot_delegated_contribution;
+
                 // When a hot account matches, use it as the base for the
                 // synthetic view — it already has the correct wallet owner,
                 // delegate, state, etc.  Unpack, set aggregated amount, repack.
                 if let (Some(hot), Some(mut spl)) = (hot_account, hot_contribution) {
                     spl.amount = total_amount;
+                    spl.delegate = match canonical_delegate {
+                        Some(delegate) => COption::Some(delegate),
+                        None => COption::None,
+                    };
+                    spl.delegated_amount = canonical_delegated.min(spl.amount);
+                    spl.state = if any_frozen {
+                        SplAccountState::Frozen
+                    } else {
+                        SplAccountState::Initialized
+                    };
                     let mut spl_bytes = vec![0u8; SplTokenAccount::LEN];
                     SplTokenAccount::pack(spl, &mut spl_bytes)
                         .expect("buffer is exactly LEN bytes");
@@ -593,8 +716,12 @@ fn cold_accounts_to_synthetic(
                     mint: newest_td.mint,
                     owner: newest_td.owner,
                     amount: UnsignedInteger(total_amount),
-                    delegate: newest_td.delegate,
-                    state: newest_td.state,
+                    delegate: canonical_delegate.map(|d| SerializablePubkey::from(d.to_bytes())),
+                    state: if any_frozen {
+                        AccountState::frozen
+                    } else {
+                        AccountState::initialized
+                    },
                     tlv: newest_td.tlv.clone(),
                 };
 
@@ -665,6 +792,46 @@ mod tests {
     use crate::ingester::persist::LIGHT_TOKEN_PROGRAM_ID;
     use solana_program_pack::Pack;
     use spl_token_interface::state::Account as SplTokenAccount;
+
+    // Test matrix for race + synthetic account logic:
+    //
+    // resolve_single_race dispatch:
+    // - (hot, cold) => test_resolve_single_race_prefers_hot_when_newer_or_equal
+    // - (hot, colder/newer) => test_resolve_single_race_prefers_newer_cold_by_slot
+    // - (hot deleted lamports=0, cold) => test_resolve_single_race_falls_back_to_cold_when_hot_deleted
+    // - (hot only) => test_resolve_single_race_only_hot
+    // - (cold only) => test_resolve_single_race_only_cold
+    // - (none) => test_resolve_single_race_neither
+    //
+    // cold_accounts_to_synthetic token aggregation path:
+    // - cold-only same mint aggregation => test_resolve_aggregates_fungible_token_amounts
+    // - hot+cold same mint aggregation => test_resolve_aggregates_hot_and_cold_token_amounts
+    // - same-mint aggregation even when hot slot older => test_resolve_same_mint_aggregates_even_when_hot_slot_is_older
+    // - mixed mints fallback to newest cold => test_resolve_mixed_mints_uses_newest
+    // - hot token mint mismatch fallback (hot newer) => test_resolve_hot_token_different_mint_from_cold_uses_hot
+    // - hot token mint mismatch fallback (cold newer) => test_resolve_hot_token_different_mint_from_cold_uses_cold_when_newer
+    // - hot non-token fallback (hot newer) => test_resolve_hot_non_token_with_cold_tokens_uses_hot
+    // - hot non-token fallback (cold newer) => test_resolve_hot_non_token_with_cold_tokens_uses_cold_when_newer
+    //
+    // delegate + delegated_amount + frozen semantics:
+    // - TLV delegated amount extraction => test_build_spl_token_account_bytes_uses_tlv_delegated_amount
+    // - delegated amount capping => test_build_spl_token_account_bytes_caps_tlv_delegated_amount_to_amount
+    // - hot delegate canonical + matching-cold contribution => test_resolve_hot_delegate_is_canonical_and_only_matching_cold_contributes
+    // - cold-only canonical delegate = newest delegated cold => test_resolve_cold_only_uses_newest_delegated_delegate
+    // - any frozen source marks synthetic frozen (cold frozen) => test_resolve_same_mint_any_frozen_marks_synthetic_frozen
+    // - any frozen source marks synthetic frozen (hot frozen) => test_resolve_same_mint_hot_frozen_marks_synthetic_frozen
+    // - hot delegated contribution capped by hot amount => test_resolve_hot_delegated_amount_is_capped_by_hot_amount
+    //
+    // cold synthetic reconstruction + decompressed filtering:
+    // - token reconstruction with wallet owner => test_cold_to_synthetic_token_with_wallet_owner
+    // - token reconstruction without wallet owner => test_cold_to_synthetic_token_without_wallet_owner
+    // - token reconstruction with invalid wallet owner => test_cold_to_synthetic_token_invalid_wallet_owner_uses_compressed_owner
+    // - non-token cold reconstruction => test_cold_to_synthetic_non_token
+    // - decompressed placeholder filtering variants:
+    //   test_find_cold_models_filters_decompressed_placeholders
+    //   test_find_cold_models_filters_sqlite_rounded_decompressed_placeholder
+    //   test_find_cold_models_filters_legacy_sqlite_rounded_placeholder_without_disc_bytes
+    //   test_find_cold_models_keeps_non_placeholder_with_onchain_pubkey
 
     fn sample_cold(slot_created: u64, lamports: u64) -> AccountV2 {
         AccountV2 {
@@ -1300,6 +1467,59 @@ mod tests {
         }
     }
 
+    fn sample_hot_token_account_with_delegate(
+        mint: &Pubkey,
+        owner: &Pubkey,
+        amount: u64,
+        delegate: Option<&Pubkey>,
+        delegated_amount: u64,
+        frozen: bool,
+    ) -> SolanaAccount {
+        use solana_program_option::COption;
+        use spl_token_interface::state::AccountState as SplAccountState;
+
+        let spl_account = SplTokenAccount {
+            mint: *mint,
+            owner: *owner,
+            amount,
+            delegate: match delegate {
+                Some(d) => COption::Some(*d),
+                None => COption::None,
+            },
+            state: if frozen {
+                SplAccountState::Frozen
+            } else {
+                SplAccountState::Initialized
+            },
+            is_native: COption::None,
+            delegated_amount,
+            close_authority: COption::None,
+        };
+
+        let mut data = vec![0u8; SplTokenAccount::LEN];
+        SplTokenAccount::pack(spl_account, &mut data).unwrap();
+
+        let spl_token_program = Pubkey::try_from(spl_token_interface::ID.as_ref()).unwrap();
+
+        SolanaAccount {
+            lamports: 2_039_280,
+            data,
+            owner: spl_token_program,
+            executable: false,
+            rent_epoch: 0,
+        }
+    }
+
+    fn compressed_only_tlv(delegated_amount: u64) -> Base64String {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // vec len = 1 extension
+        bytes.push(COMPRESSED_ONLY_DISCRIMINATOR);
+        bytes.extend_from_slice(&delegated_amount.to_le_bytes());
+        bytes.extend_from_slice(&0u64.to_le_bytes()); // withheld_transfer_fee
+        bytes.push(1u8); // is_ata
+        Base64String(bytes)
+    }
+
     #[test]
     fn test_resolve_aggregates_hot_and_cold_token_amounts() {
         let mint = Pubkey::new_unique();
@@ -1421,5 +1641,358 @@ mod tests {
         // Hot is not a token → can't aggregate → fallback to hot.
         assert_eq!(result.account.lamports.0, 1000);
         assert_eq!(result.account.data.0, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_resolve_same_mint_aggregates_even_when_hot_slot_is_older() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        // Hot token account is older than cold by slot, but still contributes
+        // when mint matches.
+        let hot = sample_hot_token_account(&mint, &wallet_owner, 500);
+        let td = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(300),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let cold = sample_token_cold_with_hash(300, 0, &td, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            100, // older than cold slot
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.mint, mint);
+        assert_eq!(parsed.owner, wallet_owner);
+        assert_eq!(parsed.amount, 800); // 500 hot + 300 cold
+    }
+
+    #[test]
+    fn test_resolve_hot_token_different_mint_from_cold_uses_cold_when_newer() {
+        let mint_hot = Pubkey::new_unique();
+        let mint_cold = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let hot = sample_hot_token_account(&mint_hot, &wallet_owner, 500);
+        let td = TokenData {
+            mint: SerializablePubkey::from(mint_cold),
+            owner: SerializablePubkey::from([88u8; 32]),
+            amount: UnsignedInteger(300),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let cold = sample_token_cold_with_hash(300, 0, &td, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            100, // older than cold slot, so fallback should choose cold
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.mint, mint_cold);
+        assert_eq!(parsed.amount, 300);
+    }
+
+    #[test]
+    fn test_resolve_hot_non_token_with_cold_tokens_uses_cold_when_newer() {
+        let mint = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let hot = SolanaAccount {
+            lamports: 1000,
+            data: vec![1, 2, 3], // non-token
+            owner: Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let td = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([77u8; 32]),
+            amount: UnsignedInteger(300),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let cold = sample_token_cold_with_hash(300, 0, &td, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            100, // older than cold slot, so fallback should choose cold
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.mint, mint);
+        assert_eq!(parsed.amount, 300);
+    }
+
+    #[test]
+    fn test_build_spl_token_account_bytes_uses_tlv_delegated_amount() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [22u8; 32];
+        let delegate = Pubkey::new_unique();
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(500),
+            delegate: Some(SerializablePubkey::from(delegate)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(123)),
+        };
+
+        let bytes = build_spl_token_account_bytes(&token_data, &wallet_owner);
+        let parsed = SplTokenAccount::unpack(&bytes).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 500);
+        assert_eq!(parsed.delegated_amount, 123);
+    }
+
+    #[test]
+    fn test_build_spl_token_account_bytes_caps_tlv_delegated_amount_to_amount() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = [33u8; 32];
+        let delegate = Pubkey::new_unique();
+        let token_data = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(200),
+            delegate: Some(SerializablePubkey::from(delegate)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(500)),
+        };
+
+        let bytes = build_spl_token_account_bytes(&token_data, &wallet_owner);
+        let parsed = SplTokenAccount::unpack(&bytes).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 200);
+        assert_eq!(parsed.delegated_amount, 200);
+    }
+
+    #[test]
+    fn test_resolve_hot_delegate_is_canonical_and_only_matching_cold_contributes() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let hot_delegate = Pubkey::new_unique();
+        let other_delegate = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+        let hash2 = Hash::try_from(vec![2u8; 32]).unwrap();
+
+        let hot = sample_hot_token_account_with_delegate(
+            &mint,
+            &wallet_owner,
+            400,
+            Some(&hot_delegate),
+            50,
+            false,
+        );
+
+        let td_matching_delegate = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(120),
+            delegate: Some(SerializablePubkey::from(hot_delegate)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(60)),
+        };
+        let td_other_delegate = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(80),
+            delegate: Some(SerializablePubkey::from(other_delegate)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(70)),
+        };
+
+        let cold1 = sample_token_cold_with_hash(100, 0, &td_matching_delegate, hash1);
+        let cold2 = sample_token_cold_with_hash(200, 0, &td_other_delegate, hash2);
+        let result = resolve_single_race(
+            Some(&hot),
+            &[cold1, cold2],
+            300,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 600); // 400 + 120 + 80
+        assert_eq!(
+            parsed.delegate,
+            solana_program_option::COption::Some(hot_delegate)
+        );
+        // canonical delegate is hot delegate: 50 (hot) + 60 (matching cold) only
+        assert_eq!(parsed.delegated_amount, 110);
+    }
+
+    #[test]
+    fn test_resolve_cold_only_uses_newest_delegated_delegate() {
+        let mint = Pubkey::new_unique();
+        let delegate_old = Pubkey::new_unique();
+        let delegate_new = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+        let hash2 = Hash::try_from(vec![2u8; 32]).unwrap();
+
+        let td_old = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(100),
+            delegate: Some(SerializablePubkey::from(delegate_old)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(40)),
+        };
+        let td_new = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(200),
+            delegate: Some(SerializablePubkey::from(delegate_new)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(90)),
+        };
+
+        let cold_old = sample_token_cold_with_hash(100, 0, &td_old, hash1);
+        let cold_new = sample_token_cold_with_hash(300, 0, &td_new, hash2);
+        let result = resolve_single_race(
+            None,
+            &[cold_old, cold_new],
+            0,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 300);
+        assert_eq!(
+            parsed.delegate,
+            solana_program_option::COption::Some(delegate_new)
+        );
+        assert_eq!(parsed.delegated_amount, 90);
+    }
+
+    #[test]
+    fn test_resolve_same_mint_any_frozen_marks_synthetic_frozen() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let hot = sample_hot_token_account_with_delegate(&mint, &wallet_owner, 500, None, 0, false);
+        let td_frozen_cold = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(100),
+            delegate: None,
+            state: AccountState::frozen,
+            tlv: None,
+        };
+        let cold = sample_token_cold_with_hash(100, 0, &td_frozen_cold, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            300,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 600);
+        assert_eq!(
+            parsed.state,
+            spl_token_interface::state::AccountState::Frozen
+        );
+    }
+
+    #[test]
+    fn test_resolve_same_mint_hot_frozen_marks_synthetic_frozen() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let hot = sample_hot_token_account_with_delegate(&mint, &wallet_owner, 500, None, 0, true);
+        let td_cold = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(100),
+            delegate: None,
+            state: AccountState::initialized,
+            tlv: None,
+        };
+        let cold = sample_token_cold_with_hash(100, 0, &td_cold, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            300,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        assert_eq!(parsed.amount, 600);
+        assert_eq!(
+            parsed.state,
+            spl_token_interface::state::AccountState::Frozen
+        );
+    }
+
+    #[test]
+    fn test_resolve_hot_delegated_amount_is_capped_by_hot_amount() {
+        let mint = Pubkey::new_unique();
+        let wallet_owner = Pubkey::new_unique();
+        let delegate = Pubkey::new_unique();
+        let hash1 = Hash::try_from(vec![1u8; 32]).unwrap();
+
+        let hot = sample_hot_token_account_with_delegate(
+            &mint,
+            &wallet_owner,
+            100,
+            Some(&delegate),
+            500, // intentionally above hot amount
+            false,
+        );
+        let td_matching_delegate = TokenData {
+            mint: SerializablePubkey::from(mint),
+            owner: SerializablePubkey::from([99u8; 32]),
+            amount: UnsignedInteger(80),
+            delegate: Some(SerializablePubkey::from(delegate)),
+            state: AccountState::initialized,
+            tlv: Some(compressed_only_tlv(60)),
+        };
+        let cold = sample_token_cold_with_hash(100, 0, &td_matching_delegate, hash1);
+
+        let result = resolve_single_race(
+            Some(&hot),
+            std::slice::from_ref(&cold),
+            300,
+            SerializablePubkey::default(),
+            &HashMap::new(),
+        )
+        .expect("expected Some interface");
+
+        let parsed = SplTokenAccount::unpack(&result.account.data.0).expect("valid SPL layout");
+        // amount = 100 hot + 80 cold
+        assert_eq!(parsed.amount, 180);
+        // delegated = min(hot_delegated, hot_amount)=100 + cold 60
+        assert_eq!(parsed.delegated_amount, 160);
     }
 }
