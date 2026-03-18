@@ -155,3 +155,6 @@ debug = 0
 # Some standard library files already come precompiled with debuginfo. We strip it for faster linking
 # and smaller binaries.
 strip = "debuginfo"
+
+[patch.crates-io]
+light-event = { path = "light-event-patched" }

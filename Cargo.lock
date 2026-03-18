@@ -3469,8 +3469,6 @@ dependencies = [
 [[package]]
 name = "light-event"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae607b61749246439e9e302a75dc565c98d6b9a81efcb1c6dd5e755a24b427ab"
 dependencies = [
  "borsh 0.10.4",
  "light-compressed-account",
