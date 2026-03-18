@@ -123,10 +123,6 @@ pub async fn index_block_batch_with_infinite_retries(
     rpc_client: &RpcClient,
 ) {
     loop {
-        // Use AssertUnwindSafe + catch_unwind on the synchronous wrapper to catch
-        // any panics that escape the per-transaction catch_unwind in the parser.
-        // The future itself cannot be wrapped in catch_unwind (not UnwindSafe),
-        // so panics in async code are caught at the per-tx level in parse_transaction.
         match index_block_batch(db, &block_batch, rpc_client).await {
             Ok(()) => return,
             Err(e) => {
