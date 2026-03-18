@@ -1,6 +1,5 @@
 use merkle_tree_events_parser::parse_merkle_tree_event;
 use solana_pubkey::Pubkey;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::OnceLock;
 use tx_event_parser::parse_public_transaction_event_v1;
 use tx_event_parser_v2::create_state_update_v2;
@@ -81,35 +80,9 @@ where
             program_ids.push(inner_instruction.program_id);
         });
 
-        // Wrap V2 parser in catch_unwind to handle panics from external light-* crates.
-        // This prevents a panic in light-event (or any other Light Protocol dependency)
-        // from killing the ingestor and halting indexing.
-        let v2_result = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(event) =
             parse_public_transaction_event_v2(&program_ids, &vec_instructions_data, vec_accounts)
-        }));
-
-        let v2_event = match v2_result {
-            Ok(event) => event,
-            Err(panic_info) => {
-                let panic_msg = if let Some(s) = panic_info.downcast_ref::<String>() {
-                    s.clone()
-                } else if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    s.to_string()
-                } else {
-                    "unknown panic".to_string()
-                };
-                log::error!(
-                    "Caught panic in V2 transaction parser for tx {} at slot {}. Skipping transaction. Panic: {}",
-                    tx.signature,
-                    slot,
-                    panic_msg
-                );
-                cadence_macros::statsd_count!("parser_panic_caught", 1);
-                None
-            }
-        };
-
-        if let Some(event) = v2_event {
+        {
             let state_update =
                 create_state_update_v2(conn, tx.signature, slot, event, resolver).await?;
             is_compression_transaction = true;
