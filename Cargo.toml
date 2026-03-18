@@ -91,17 +91,17 @@ spl-token-interface = "2.0.0"
 
 
 light-zero-copy = { version = "0.6", default-features = false}
-light-concurrent-merkle-tree = {version = "4", default-features = false }
-light-batched-merkle-tree = { version = "0.10", default-features = false}
-light-merkle-tree-metadata = { version = "0.10", default-features = false }
-light-compressed-account = { version = "0.10.1", default-features = false }
+light-concurrent-merkle-tree = {version = "5", default-features = false }
+light-batched-merkle-tree = { version = "0.11", default-features = false}
+light-merkle-tree-metadata = { version = "0.11", default-features = false }
+light-compressed-account = { version = "0.11", default-features = false }
 light-hasher = { version = "5", features = ["poseidon", "keccak", "sha256"], default-features = false}
 light-poseidon = "0.4.0"
-light-indexed-merkle-tree = { version = "4", default-features = false }
-light-event = "0.21"
+light-indexed-merkle-tree = { version = "5", default-features = false }
+light-event = "0.23.1"
 
-light-token-interface = "0.4"
-light-sdk-types = "0.20"
+light-token-interface = "0.5"
+light-sdk-types = "0.23"
 
 
 sqlx = { version = "0.6.2", features = [
