@@ -18,6 +18,37 @@ use light_batched_merkle_tree::constants::{
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
 
+/// Computes a proof's index into its tree's circular root-history buffer.
+///
+/// Each tree (V1/V2, state/address) has its OWN `root_history_capacity`, so the
+/// modulo MUST use the capacity of the tree the proof actually came from. Using
+/// a different tree's capacity yields a stale/wrong index that only happens to
+/// be correct while `root_seq` is smaller than both capacities (e.g. on quiet
+/// devnet trees that have not wrapped yet).
+fn root_index_mod_queue(
+    root_seq: u64,
+    tree_capacity: u64,
+    fallback_capacity: u64,
+) -> Result<u64, PhotonApiError> {
+    // Prefer the proof's own tree capacity. Only fall back to the request-level
+    // capacity when the per-tree value is unavailable (0), which preserves the
+    // prior behavior for that degenerate case rather than newly rejecting it.
+    // If neither is known we cannot place the root in the ring buffer, so error
+    // instead of computing `% 0` (which would panic).
+    let capacity = match (tree_capacity, fallback_capacity) {
+        (0, 0) => {
+            return Err(PhotonApiError::UnexpectedError(
+                "root_history_capacity is unknown for this tree (tree metadata not synced); \
+                 cannot compute root index"
+                    .to_string(),
+            ))
+        }
+        (0, fallback) => fallback,
+        (capacity, _) => capacity,
+    };
+    Ok(root_seq % capacity)
+}
+
 pub(crate) async fn generate_proof(
     conn: &DatabaseConnection,
     db_account_proofs: Vec<MerkleProofWithContext>,
@@ -142,19 +173,20 @@ pub(crate) async fn generate_proof(
     let compressed_proof = compress_proof(&proof)?;
     let mut account_details = Vec::with_capacity(db_account_proofs.len());
     for acc_proof in db_account_proofs.iter() {
-        log::debug!("Proof generation: tree {} leaf_index {} root_seq {} queue_size {} root_index_mod_queue {}",
-            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, queue_size, acc_proof.root_seq % queue_size);
-
         let tree_info = TreeInfo::get(conn, &acc_proof.merkle_tree.to_string())
             .await?
             .ok_or(PhotonApiError::UnexpectedError(format!(
                 "Failed to get TreeInfo for account tree '{}'",
                 acc_proof.merkle_tree
             )))?;
+        let root_index_mod_queue =
+            root_index_mod_queue(acc_proof.root_seq, tree_info.root_history_capacity, queue_size)?;
+        log::debug!("Proof generation: tree {} leaf_index {} root_seq {} tree_capacity {} root_index_mod_queue {}",
+            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, tree_info.root_history_capacity, root_index_mod_queue);
         account_details.push(AccountProofDetail {
             hash: acc_proof.hash.to_string(),
             root: acc_proof.root.to_string(),
-            root_index_mod_queue: acc_proof.root_seq % queue_size,
+            root_index_mod_queue,
             leaf_index: acc_proof.leaf_index,
             merkle_tree_id: acc_proof.merkle_tree.to_string(),
             tree_info,
@@ -169,10 +201,12 @@ pub(crate) async fn generate_proof(
                 "Failed to get TreeInfo for address tree '{}'",
                 addr_proof.merkleTree
             )))?;
+        let root_index_mod_queue =
+            root_index_mod_queue(addr_proof.rootSeq, tree_info.root_history_capacity, queue_size)?;
         address_details.push(AddressProofDetail {
             address: addr_proof.address.to_string(),
             root: addr_proof.root.to_string(),
-            root_index_mod_queue: addr_proof.rootSeq % queue_size,
+            root_index_mod_queue,
             path_index: addr_proof.lowElementLeafIndex,
             merkle_tree_id: addr_proof.merkleTree.to_string(),
             tree_info,
