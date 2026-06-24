@@ -5,14 +5,13 @@ use crate::api::method::get_validity_proof::prover::prove::generate_proof;
 use crate::api::method::get_validity_proof::CompressedProof;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
-use crate::dao::generated::{prelude::*, tree_metadata};
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
 };
 use jsonrpsee_core::Serialize;
 use light_sdk_types::constants::ADDRESS_TREE_V1;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -109,32 +108,13 @@ pub async fn get_validity_proof(
         Vec::new()
     };
 
-    // Fetch tree metadata for root_history_capacity
-    let tree_pubkey = if !db_account_proofs.is_empty() {
-        db_account_proofs[0].merkle_tree
-    } else if !db_new_address_proofs.is_empty() {
-        db_new_address_proofs[0].merkleTree
-    } else {
-        // This should not happen as we check for empty proofs later
-        return Err(PhotonApiError::ValidationError(
-            "No proofs available to determine tree".to_string(),
-        ));
-    };
-
-    let tree_bytes = tree_pubkey.to_bytes_vec();
-    let tree_metadata_result = TreeMetadata::find()
-        .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes))
-        .one(&tx)
-        .await?;
-
-    let root_history_capacity = tree_metadata_result
-        .map(|m| m.root_history_capacity as u64)
-        .ok_or_else(|| {
-            PhotonApiError::ValidationError(format!(
-                "Tree metadata not found for {}. Please ensure tree metadata sync has been run.",
-                tree_pubkey
-            ))
-        })?;
+    // Fetch root_history_capacity per tree so each proof uses its own tree's modulus.
+    let trees: Vec<Vec<u8>> = db_account_proofs
+        .iter()
+        .map(|p| p.merkle_tree.to_bytes_vec())
+        .chain(db_new_address_proofs.iter().map(|p| p.merkleTree.to_bytes_vec()))
+        .collect();
+    let root_history_capacities = super::fetch_root_history_capacities(&tx, trees).await?;
 
     tx.commit().await?;
 
@@ -149,7 +129,7 @@ pub async fn get_validity_proof(
         conn,
         db_account_proofs,
         db_new_address_proofs,
-        root_history_capacity,
+        &root_history_capacities,
         prover_url,
         prover_api_key,
     )

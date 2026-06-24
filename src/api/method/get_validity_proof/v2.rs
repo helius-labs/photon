@@ -6,7 +6,7 @@ use crate::api::method::get_validity_proof::v1::GetValidityProofRequest;
 use crate::api::method::get_validity_proof::CompressedProof;
 use crate::common::typedefs::context::Context;
 use crate::common::typedefs::hash::Hash;
-use crate::dao::generated::{accounts, prelude::*, tree_metadata};
+use crate::dao::generated::accounts;
 use crate::ingester::persist::get_multiple_compressed_leaf_proofs;
 use crate::{
     api::error::PhotonApiError, common::typedefs::serializable_pubkey::SerializablePubkey,
@@ -233,41 +233,17 @@ pub async fn get_validity_proof_v2(
         Vec::new()
     };
 
-    // Fetch tree metadata for root_history_capacity
-    // First try to get tree from accounts needing full proofs, then from prove-by-index accounts
-    let tree_pubkey = if !db_account_proofs_for_prover.is_empty() {
-        Some(db_account_proofs_for_prover[0].merkle_tree)
-    } else if !db_new_address_proofs_for_prover.is_empty() {
-        Some(db_new_address_proofs_for_prover[0].merkleTree)
-    } else if !request.new_addresses_with_trees.is_empty() {
-        Some(request.new_addresses_with_trees[0].tree)
-    } else {
-        // Try to get tree from prove-by-index accounts
-        accounts_for_prove_by_index_inputs
-            .iter()
-            .find_map(|opt_acc| opt_acc.as_ref().map(|acc| acc.merkle_context.tree))
-    };
-
-    let root_history_capacity = if let Some(tree_pubkey) = tree_pubkey {
-        let tree_bytes = tree_pubkey.to_bytes_vec();
-        let tree_metadata_result = TreeMetadata::find()
-            .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes))
-            .one(&tx)
-            .await?;
-
-        tree_metadata_result
-            .map(|m| m.root_history_capacity as u64)
-            .ok_or_else(|| {
-                PhotonApiError::ValidationError(format!(
-                    "Tree metadata not found for {}. Please ensure tree metadata sync has been run.",
-                    tree_pubkey
-                ))
-            })?
-    } else {
-        return Err(PhotonApiError::ValidationError(
-            "Cannot determine tree for fetching metadata".to_string(),
-        ));
-    };
+    // Fetch root_history_capacity per tree so each proof uses its own tree's modulus.
+    let trees: Vec<Vec<u8>> = db_account_proofs_for_prover
+        .iter()
+        .map(|p| p.merkle_tree.to_bytes_vec())
+        .chain(
+            db_new_address_proofs_for_prover
+                .iter()
+                .map(|p| p.merkleTree.to_bytes_vec()),
+        )
+        .collect();
+    let root_history_capacities = super::fetch_root_history_capacities(&tx, trees).await?;
 
     tx.commit().await?;
 
@@ -280,7 +256,7 @@ pub async fn get_validity_proof_v2(
             conn,
             db_account_proofs_for_prover,
             db_new_address_proofs_for_prover,
-            root_history_capacity,
+            &root_history_capacities,
             prover_url,
             prover_api_key,
         )

@@ -17,12 +17,13 @@ use light_batched_merkle_tree::constants::{
 };
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
+use std::collections::HashMap;
 
 pub(crate) async fn generate_proof(
     conn: &DatabaseConnection,
     db_account_proofs: Vec<MerkleProofWithContext>,
     db_new_address_proofs: Vec<MerkleContextWithNewAddressProof>,
-    root_history_capacity: u64,
+    root_history_capacities: &HashMap<Vec<u8>, u64>,
     prover_url: &str,
     prover_api_key: Option<&str>,
 ) -> Result<ProverResult, PhotonApiError> {
@@ -81,15 +82,10 @@ pub(crate) async fn generate_proof(
         None
     };
 
-    // Always use the actual root_history_capacity from the database
-    // Each tree (V1 or V2) has its own queue size stored as root_history_capacity
-    let queue_size = root_history_capacity;
-
     log::debug!(
-        "Queue size: state_tree_height={}, address_tree_height={}, queue_size={}",
+        "Generating proof: state_tree_height={}, address_tree_height={}",
         state_tree_height,
         address_tree_height,
-        queue_size
     );
 
     let batch_inputs = HexBatchInputsForProver {
@@ -142,9 +138,20 @@ pub(crate) async fn generate_proof(
     let compressed_proof = compress_proof(&proof)?;
     let mut account_details = Vec::with_capacity(db_account_proofs.len());
     for acc_proof in db_account_proofs.iter() {
-        log::debug!("Proof generation: tree {} leaf_index {} root_seq {} queue_size {} root_index_mod_queue {}",
-            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, queue_size, acc_proof.root_seq % queue_size);
-
+        let tree_key = acc_proof.merkle_tree.to_bytes_vec();
+        let capacity = root_history_capacities
+            .get(&tree_key)
+            .copied()
+            .ok_or_else(|| {
+                PhotonApiError::UnexpectedError(format!(
+                    "No root_history_capacity found for account tree '{}'",
+                    acc_proof.merkle_tree
+                ))
+            })?;
+        log::debug!(
+            "Proof generation: tree {} leaf_index {} root_seq {} capacity {} root_index_mod_queue {}",
+            acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, capacity, acc_proof.root_seq % capacity
+        );
         let tree_info = TreeInfo::get(conn, &acc_proof.merkle_tree.to_string())
             .await?
             .ok_or(PhotonApiError::UnexpectedError(format!(
@@ -154,7 +161,7 @@ pub(crate) async fn generate_proof(
         account_details.push(AccountProofDetail {
             hash: acc_proof.hash.to_string(),
             root: acc_proof.root.to_string(),
-            root_index_mod_queue: acc_proof.root_seq % queue_size,
+            root_index_mod_queue: acc_proof.root_seq % capacity,
             leaf_index: acc_proof.leaf_index,
             merkle_tree_id: acc_proof.merkle_tree.to_string(),
             tree_info,
@@ -163,6 +170,16 @@ pub(crate) async fn generate_proof(
 
     let mut address_details = Vec::with_capacity(db_new_address_proofs.len());
     for addr_proof in db_new_address_proofs.iter() {
+        let tree_key = addr_proof.merkleTree.to_bytes_vec();
+        let capacity = root_history_capacities
+            .get(&tree_key)
+            .copied()
+            .ok_or_else(|| {
+                PhotonApiError::UnexpectedError(format!(
+                    "No root_history_capacity found for address tree '{}'",
+                    addr_proof.merkleTree
+                ))
+            })?;
         let tree_info = TreeInfo::get(conn, &addr_proof.merkleTree.to_string())
             .await?
             .ok_or(PhotonApiError::UnexpectedError(format!(
@@ -172,7 +189,7 @@ pub(crate) async fn generate_proof(
         address_details.push(AddressProofDetail {
             address: addr_proof.address.to_string(),
             root: addr_proof.root.to_string(),
-            root_index_mod_queue: addr_proof.rootSeq % queue_size,
+            root_index_mod_queue: addr_proof.rootSeq % capacity,
             path_index: addr_proof.lowElementLeafIndex,
             merkle_tree_id: addr_proof.merkleTree.to_string(),
             tree_info,
