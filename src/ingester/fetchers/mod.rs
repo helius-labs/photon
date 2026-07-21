@@ -14,6 +14,7 @@ use poller::get_block_poller_stream;
 
 pub struct BlockStreamConfig {
     pub rpc_client: Arc<RpcClient>,
+    pub fallback_rpc_clients: Vec<Arc<RpcClient>>,
     pub geyser_url: Option<String>,
     pub max_concurrent_block_fetches: usize,
     pub last_indexed_slot: u64,
@@ -27,6 +28,7 @@ impl BlockStreamConfig {
                 geyser_url.clone(),
                 auth_header,
                 self.rpc_client.clone(),
+                self.fallback_rpc_clients.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,
             )
@@ -35,6 +37,7 @@ impl BlockStreamConfig {
         let poller_stream = if self.geyser_url.is_none() {
             Some(get_block_poller_stream(
                 self.rpc_client.clone(),
+                self.fallback_rpc_clients.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,
             ))

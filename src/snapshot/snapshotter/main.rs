@@ -273,6 +273,7 @@ async fn main() {
                 directory_adapter.clone(),
                 BlockStreamConfig {
                     rpc_client: rpc_client.clone(),
+                    fallback_rpc_clients: vec![],
                     max_concurrent_block_fetches: args.max_concurrent_block_fetches.unwrap_or(20),
                     last_indexed_slot,
                     geyser_url: args.grpc_url.clone(),

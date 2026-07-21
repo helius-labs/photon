@@ -43,6 +43,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
     auth_header: String,
     rpc_client: Arc<RpcClient>,
+    fallback_rpc_clients: Vec<Arc<RpcClient>>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
@@ -53,6 +54,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
             Box::pin(get_block_poller_stream(
                 rpc_client.clone(),
+                fallback_rpc_clients.clone(),
                 last_indexed_slot,
                 max_concurrent_block_fetches,
             ))
@@ -115,6 +117,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             info!("gRPC stream timed out, enabling RPC block fetching");
                             rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                                 rpc_client.clone(),
+                                fallback_rpc_clients.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
                             )));
@@ -132,6 +135,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         info!("Switching to RPC block fetching");
                         rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                             rpc_client.clone(),
+                            fallback_rpc_clients.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
                         )));
@@ -144,6 +148,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         }
                         rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
                             rpc_client.clone(),
+                            fallback_rpc_clients.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
                         )));
