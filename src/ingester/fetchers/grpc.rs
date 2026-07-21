@@ -1,6 +1,5 @@
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use async_stream::stream;
@@ -11,7 +10,6 @@ use futures::{pin_mut, Stream, StreamExt};
 use log::info;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use solana_pubkey::Pubkey as SdkPubkey;
 use solana_signature::Signature;
@@ -31,7 +29,7 @@ use yellowstone_grpc_proto::solana::storage::confirmed_block::InnerInstructions;
 
 use crate::api::method::get_indexer_health::HEALTH_CHECK_SLOT_DISTANCE;
 use crate::common::typedefs::hash::Hash;
-use crate::ingester::fetchers::poller::get_block_poller_stream;
+use crate::ingester::fetchers::poller::{get_block_poller_stream, BlockFetchSources};
 use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
@@ -42,17 +40,17 @@ use crate::monitor::{start_latest_slot_updater, LATEST_SLOT};
 pub fn get_grpc_stream_with_rpc_fallback(
     endpoint: String,
     auth_header: String,
-    rpc_client: Arc<RpcClient>,
+    block_fetch_sources: BlockFetchSources,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
-        start_latest_slot_updater(rpc_client.clone()).await;
+        start_latest_slot_updater(block_fetch_sources.primary.clone()).await;
         let grpc_stream = get_grpc_block_stream(endpoint, auth_header, Some(last_indexed_slot));
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
             Box::pin(get_block_poller_stream(
-                rpc_client.clone(),
+                block_fetch_sources.clone(),
                 last_indexed_slot,
                 max_concurrent_block_fetches,
             ))
@@ -97,6 +95,14 @@ pub fn get_grpc_stream_with_rpc_fallback(
                                 metric! {
                                     statsd_count!("rpc_block_indexed", blocks_len as i64);
                                 }
+                            } else {
+                                error!(
+                                    "Dropping RPC batch of {} blocks ({}..={}): first parent {} does not chain to cursor {}",
+                                    blocks_len, parent_slot + 1, last_slot, parent_slot, last_indexed_slot
+                                );
+                                metric! {
+                                    statsd_count!("rpc_batch_dropped_parent_mismatch", blocks_len as i64);
+                                }
                             }
                         }
                         Either::Right((None, _)) => {
@@ -114,7 +120,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             }
                             info!("gRPC stream timed out, enabling RPC block fetching");
                             rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
-                                rpc_client.clone(),
+                                block_fetch_sources.clone(),
                                 last_indexed_slot,
                                 max_concurrent_block_fetches,
                             )));
@@ -131,7 +137,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                         }
                         info!("Switching to RPC block fetching");
                         rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
-                            rpc_client.clone(),
+                            block_fetch_sources.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
                         )));
@@ -143,7 +149,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             statsd_count!("grpc_stale", 1);
                         }
                         rpc_poll_stream = Some(Box::pin(get_block_poller_stream(
-                            rpc_client.clone(),
+                            block_fetch_sources.clone(),
                             last_indexed_slot,
                             max_concurrent_block_fetches,
                         )));

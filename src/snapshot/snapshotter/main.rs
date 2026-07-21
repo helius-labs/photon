@@ -5,7 +5,7 @@ use photon_indexer::common::{
     fetch_block_parent_slot, fetch_current_slot_with_infinite_retry, get_network_start_slot,
     get_rpc_client, setup_logging, setup_metrics, LoggingFormat,
 };
-use photon_indexer::ingester::fetchers::BlockStreamConfig;
+use photon_indexer::ingester::fetchers::{poller::BlockFetchSources, BlockStreamConfig};
 use photon_indexer::snapshot::{
     get_snapshot_files_with_metadata, load_byte_stream_from_directory_adapter, DirectoryAdapter,
 };
@@ -272,7 +272,11 @@ async fn main() {
             continously_run_snapshotter(
                 directory_adapter.clone(),
                 BlockStreamConfig {
-                    rpc_client: rpc_client.clone(),
+                    block_fetch_sources: BlockFetchSources {
+                        primary: rpc_client.clone(),
+                        fallbacks: vec![],
+                        db: None,
+                    },
                     max_concurrent_block_fetches: args.max_concurrent_block_fetches.unwrap_or(20),
                     last_indexed_slot,
                     geyser_url: args.grpc_url.clone(),

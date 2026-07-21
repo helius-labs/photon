@@ -13,7 +13,7 @@ use photon_indexer::common::{
     get_rpc_client, setup_logging, setup_metrics, setup_pg_pool, LoggingFormat,
 };
 
-use photon_indexer::ingester::fetchers::BlockStreamConfig;
+use photon_indexer::ingester::fetchers::{poller::BlockFetchSources, BlockStreamConfig};
 use photon_indexer::ingester::indexer::{
     fetch_last_indexed_slot_with_infinite_retry, index_block_stream,
 };
@@ -33,6 +33,7 @@ use sqlx::{
 };
 use std::env::temp_dir;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Photon: a compressed transaction Solana indexer
 #[derive(Parser, Debug)]
@@ -68,6 +69,13 @@ struct Args {
     /// as possible without reaching RPC rate limits.
     #[arg(short, long)]
     max_concurrent_block_fetches: Option<usize>,
+
+    /// Additional RPC URLs consulted (in order) when the primary RPC claims a
+    /// slot was skipped or persistently fails to serve a block. A slot is only
+    /// ever classified as skipped after every source agrees repeatedly, and a
+    /// published block is never silently dropped. May be repeated.
+    #[arg(long, action = clap::ArgAction::Append)]
+    fallback_rpc_url: Vec<String>,
 
     /// Light Prover url to use for verifying proofs
     #[arg(long, default_value = "http://127.0.0.1:3001")]
@@ -360,8 +368,23 @@ async fn main() {
                     .unwrap(),
             };
 
+            let fallback_rpc_clients = args
+                .fallback_rpc_url
+                .iter()
+                .map(|url| Arc::new(RpcClient::new_with_timeout(url.clone(), Duration::from_secs(30))))
+                .collect::<Vec<_>>();
+            if !fallback_rpc_clients.is_empty() {
+                info!(
+                    "Using {} fallback RPC source(s) for block fetching",
+                    fallback_rpc_clients.len()
+                );
+            }
             let block_stream_config = BlockStreamConfig {
-                rpc_client: rpc_client.clone(),
+                block_fetch_sources: BlockFetchSources {
+                    primary: rpc_client.clone(),
+                    fallbacks: fallback_rpc_clients,
+                    db: Some(db_conn.clone()),
+                },
                 max_concurrent_block_fetches,
                 last_indexed_slot,
                 geyser_url: args.grpc_url,
@@ -402,31 +425,52 @@ async fn main() {
         )
     };
 
-    match tokio::signal::ctrl_c().await {
-        Ok(()) => {
-            if let Some(indexer_handle) = indexer_handle {
-                info!("Shutting down indexer...");
-                indexer_handle.abort();
-                indexer_handle
-                    .await
-                    .expect_err("Indexer should have been aborted");
-            }
-            if let Some(api_handler) = &api_handler {
-                info!("Shutting down API server...");
-                api_handler.stop().unwrap();
-            }
-
-            if let Some(monitor_handle) = monitor_handle {
-                info!("Shutting down monitor...");
-                monitor_handle.abort();
-                monitor_handle
-                    .await
-                    .expect_err("Monitor should have been aborted");
+    // Wait for shutdown signal, but also watch the indexer task: if it ever
+    // exits on its own (e.g. a panic), the process must die loudly so the
+    // orchestrator restarts it, instead of lingering as a zombie that serves
+    // the API while silently indexing nothing.
+    let mut indexer_handle = indexer_handle;
+    match indexer_handle.as_mut() {
+        Some(handle) => {
+            tokio::select! {
+                result = handle => {
+                    error!(
+                        "Indexer task exited unexpectedly ({:?}); terminating so the \
+                         process is restarted instead of running as a zombie",
+                        result
+                    );
+                    std::process::exit(1);
+                }
+                ctrl_c = tokio::signal::ctrl_c() => {
+                    if let Err(err) = ctrl_c {
+                        error!("Unable to listen for shutdown signal: {}", err);
+                    }
+                }
             }
         }
-        Err(err) => {
-            error!("Unable to listen for shutdown signal: {}", err);
+        None => {
+            if let Err(err) = tokio::signal::ctrl_c().await {
+                error!("Unable to listen for shutdown signal: {}", err);
+            }
         }
+    }
+    if let Some(indexer_handle) = indexer_handle {
+        info!("Shutting down indexer...");
+        indexer_handle.abort();
+        indexer_handle
+            .await
+            .expect_err("Indexer should have been aborted");
+    }
+    if let Some(api_handler) = &api_handler {
+        info!("Shutting down API server...");
+        api_handler.stop().unwrap();
+    }
+    if let Some(monitor_handle) = monitor_handle {
+        info!("Shutting down monitor...");
+        monitor_handle.abort();
+        monitor_handle
+            .await
+            .expect_err("Monitor should have been aborted");
     }
     // We need to wait for the API server to stop to ensure that all clean up is done
     if let Some(api_handler) = api_handler {
