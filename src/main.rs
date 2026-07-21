@@ -69,6 +69,13 @@ struct Args {
     #[arg(short, long)]
     max_concurrent_block_fetches: Option<usize>,
 
+    /// Backup RPC URLs consulted when the primary RPC cannot serve a block
+    /// (e.g. archival gaps reported as "slot was skipped, or missing in
+    /// long-term storage"). A slot is only treated as skipped once every
+    /// source agrees. May be repeated.
+    #[arg(long, action = clap::ArgAction::Append)]
+    fallback_rpc_url: Vec<String>,
+
     /// Light Prover url to use for verifying proofs
     #[arg(long, default_value = "http://127.0.0.1:3001")]
     prover_url: String,
@@ -360,8 +367,25 @@ async fn main() {
                     .unwrap(),
             };
 
+            let fallback_rpc_clients: Vec<Arc<RpcClient>> = args
+                .fallback_rpc_url
+                .iter()
+                .map(|url| {
+                    Arc::new(RpcClient::new_with_timeout(
+                        url.clone(),
+                        std::time::Duration::from_secs(30),
+                    ))
+                })
+                .collect();
+            if !fallback_rpc_clients.is_empty() {
+                info!(
+                    "Using {} backup RPC source(s) for block fetching",
+                    fallback_rpc_clients.len()
+                );
+            }
             let block_stream_config = BlockStreamConfig {
                 rpc_client: rpc_client.clone(),
+                fallback_rpc_clients,
                 max_concurrent_block_fetches,
                 last_indexed_slot,
                 geyser_url: args.grpc_url,

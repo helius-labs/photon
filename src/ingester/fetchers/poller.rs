@@ -19,7 +19,9 @@ use crate::{
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
 
-const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
+// -32009/-32004 conflate "slot was skipped" with "missing in long-term storage",
+// so a skip answer from one source is only trusted if every source agrees.
+const SKIPPED_BLOCK_ERRORS: [i64; 3] = [-32007, -32009, -32004];
 
 fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<Item = u64> {
     stream! {
@@ -38,6 +40,7 @@ fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<I
 
 pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
+    fallback_rpc_clients: Vec<Arc<RpcClient>>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
@@ -48,10 +51,15 @@ pub fn get_block_poller_stream(
         };
         let slot_stream = get_slot_stream(rpc_client.clone(), start_slot);
         pin_mut!(slot_stream);
+        let rpc_clients: Arc<Vec<Arc<RpcClient>>> = Arc::new(
+            std::iter::once(rpc_client.clone())
+                .chain(fallback_rpc_clients.into_iter())
+                .collect(),
+        );
         let block_stream = slot_stream
-            .map(|slot| {
-                let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
+            .map(move |slot| {
+                let rpc_clients = rpc_clients.clone();
+                async move { fetch_block_with_infinite_retries(&rpc_clients, slot).await }
             })
             .buffer_unordered(max_concurrent_block_fetches);
         pin_mut!(block_stream);
@@ -93,46 +101,56 @@ fn pop_cached_blocks_to_index(
 }
 
 pub async fn fetch_block_with_infinite_retries(
-    rpc_client: Arc<RpcClient>,
+    rpc_clients: &[Arc<RpcClient>],
     slot: u64,
 ) -> Option<BlockInfo> {
     loop {
-        match rpc_client
-            .get_block_with_config(
-                slot,
-                RpcBlockConfig {
-                    encoding: Some(UiTransactionEncoding::Base64),
-                    transaction_details: Some(TransactionDetails::Full),
-                    rewards: None,
-                    commitment: Some(CommitmentConfig::confirmed()),
-                    max_supported_transaction_version: Some(0),
-                },
-            )
-            .await
-        {
-            Ok(block) => {
-                metric! {
-                    statsd_count!("rpc_block_fetched", 1);
+        let mut all_sources_claim_skip = true;
+        for rpc_client in rpc_clients {
+            match rpc_client
+                .get_block_with_config(
+                    slot,
+                    RpcBlockConfig {
+                        encoding: Some(UiTransactionEncoding::Base64),
+                        transaction_details: Some(TransactionDetails::Full),
+                        rewards: None,
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        max_supported_transaction_version: Some(0),
+                    },
+                )
+                .await
+            {
+                Ok(block) => {
+                    metric! {
+                        statsd_count!("rpc_block_fetched", 1);
+                    }
+                    return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
                 }
-                return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
-            }
-            Err(e) => {
-                if let solana_client::client_error::ClientErrorKind::RpcError(
-                    RpcError::RpcResponseError { code, .. },
-                ) = *e.kind
-                {
-                    if SKIPPED_BLOCK_ERRORS.contains(&code) {
-                        metric! {
-                            statsd_count!("rpc_skipped_block", 1);
+                Err(e) => {
+                    if let solana_client::client_error::ClientErrorKind::RpcError(
+                        RpcError::RpcResponseError { code, .. },
+                    ) = *e.kind
+                    {
+                        if SKIPPED_BLOCK_ERRORS.contains(&code) {
+                            continue;
                         }
-                        log::info!("Skipped block: {}", slot);
-                        return None;
+                    }
+                    all_sources_claim_skip = false;
+                    metric! {
+                        statsd_count!("rpc_block_fetch_failed", 1);
                     }
                 }
-                metric! {
-                    statsd_count!("rpc_block_fetch_failed", 1);
-                }
             }
+        }
+        // Only classify the slot as skipped once every source, including
+        // backups, says so; a lone skip answer can also mean the block is
+        // merely missing from that source's long-term storage.
+        if all_sources_claim_skip {
+            metric! {
+                statsd_count!("rpc_skipped_block", 1);
+            }
+            log::info!("Skipped block: {} (all {} sources)", slot, rpc_clients.len());
+            return None;
         }
     }
 }
