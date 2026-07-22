@@ -24,5 +24,6 @@ pub mod get_queue_elements;
 pub mod get_queue_info;
 pub mod get_transaction_with_compression_info;
 pub mod get_validity_proof;
+pub mod interface;
 
 pub mod utils;
