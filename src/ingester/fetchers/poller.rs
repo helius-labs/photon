@@ -105,7 +105,7 @@ pub async fn fetch_block_with_infinite_retries(
                     transaction_details: Some(TransactionDetails::Full),
                     rewards: None,
                     commitment: Some(CommitmentConfig::confirmed()),
-                    max_supported_transaction_version: Some(0),
+                    max_supported_transaction_version: Some(1),
                 },
             )
             .await
