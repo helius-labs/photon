@@ -28,7 +28,7 @@ const RPC_CONFIG: RpcTransactionConfig = RpcTransactionConfig {
     commitment: Some(CommitmentConfig {
         commitment: CommitmentLevel::Confirmed,
     }),
-    max_supported_transaction_version: Some(0),
+    max_supported_transaction_version: Some(1),
 };
 
 // We do not use generics to simply documentation generation.
@@ -185,6 +185,7 @@ fn clone_tx(
         slot: txn.slot,
         transaction: txn.transaction.clone(),
         block_time: txn.block_time,
+        transaction_index: txn.transaction_index,
     }
 }
 
