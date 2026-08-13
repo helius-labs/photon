@@ -185,6 +185,7 @@ fn clone_tx(
         slot: txn.slot,
         transaction: txn.transaction.clone(),
         block_time: txn.block_time,
+        transaction_index: txn.transaction_index,
     }
 }
 
