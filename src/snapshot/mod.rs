@@ -288,9 +288,15 @@ pub struct FileSystemDirectoryApapter {
 impl FileSystemDirectoryApapter {
     async fn read_file(&self, path: String) -> impl Stream<Item = Result<Bytes>> + Send {
         let path = format!("{}/{}", self.snapshot_dir, path);
-        let file = OpenOptions::new().read(true).open(path).unwrap();
-        let bytes = BufReader::new(file).bytes();
         stream! {
+            let file = match OpenOptions::new().read(true).open(&path) {
+                Ok(f) => f,
+                Err(e) => {
+                    log::warn!("Failed to open snapshot file {:?}: {}", path, e);
+                    return;
+                }
+            };
+            let bytes = BufReader::new(file).bytes();
             let mut byte_chunk = vec![];
             for byte in bytes.into_iter() {
                 byte_chunk.push(byte.with_context(|| "Failed to read byte from file")?);
@@ -761,8 +767,17 @@ pub async fn load_block_stream_from_directory_adapter(
         let byte_stream = load_byte_stream_from_directory_adapter(directory_adapter.clone()).await;
         pin_mut!(byte_stream);
         // Skip the snapshot version byte
-        let snapshot_version = byte_stream.next().await.unwrap().unwrap();
-        let snapshot_version = snapshot_version[0];
+        let snapshot_version = match byte_stream.next().await {
+            Some(Ok(b)) => b[0],
+            Some(Err(e)) => {
+                log::warn!("Failed to read snapshot version: {}", e);
+                return;
+            }
+            None => {
+                log::warn!("Snapshot stream ended before version");
+                return;
+            }
+        };
 
 
         if snapshot_version != SNAPSHOT_VERSION {
@@ -770,7 +785,17 @@ pub async fn load_block_stream_from_directory_adapter(
         }
         // Skip the start slot and end slot
         for _ in 0..2 {
-            byte_stream.next().await.unwrap().unwrap();
+            match byte_stream.next().await {
+                Some(Ok(_)) => {},
+                Some(Err(e)) => {
+                    log::warn!("Failed to read snapshot slots: {}", e);
+                    return;
+                }
+                None => {
+                    log::warn!("Snapshot stream ended before slots");
+                    return;
+                }
+            }
         }
 
         let mut reader = Vec::new();
@@ -779,10 +804,24 @@ pub async fn load_block_stream_from_directory_adapter(
         let mut accumulated_transactions = 0;
 
         while let Some(bytes) = byte_stream.next().await {
-            let bytes = bytes.unwrap();
+            let bytes = match bytes {
+                Ok(b) => b,
+                Err(e) => {
+                    log::warn!("Snapshot byte stream error: {}", e);
+                    continue;
+                }
+            };
             reader.extend(&bytes);
             while reader.len() - index > CHUNK_SIZE {
-                let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
+                let block: BlockInfo = match bincode::deserialize(&reader[index..]) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        log::warn!("Skipping corrupt snapshot block at index {}: {}", index, e);
+                        // Skip one byte to avoid infinite loop on corrupt data
+                        index += 1;
+                        continue;
+                    }
+                };
                 let size = bincode::serialized_size(&block).unwrap() as usize;
                 index += size;
                 accumulated_transactions += block.transactions.len();
@@ -800,7 +839,15 @@ pub async fn load_block_stream_from_directory_adapter(
         }
 
         while index < reader.len() {
-            let block: BlockInfo = bincode::deserialize(&reader[index..]).unwrap();
+                let block: BlockInfo = match bincode::deserialize(&reader[index..]) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        log::warn!("Skipping corrupt snapshot block at index {}: {}", index, e);
+                        // Skip one byte to avoid infinite loop on corrupt data
+                        index += 1;
+                        continue;
+                    }
+                };
             let size = bincode::serialized_size(&block).unwrap() as usize;
             index += size;
             accumulated_transactions += block.transactions.len();
