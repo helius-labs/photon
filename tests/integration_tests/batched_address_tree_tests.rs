@@ -3,6 +3,7 @@ use function_name::named;
 use light_hasher::hash_to_field_size::hashv_to_bn254_field_size_be_const_array;
 use light_hasher::Poseidon;
 use num_bigint::BigUint;
+use photon_indexer::api::error::PhotonApiError;
 use photon_indexer::api::method::get_multiple_new_address_proofs::{
     AddressListWithTrees, AddressWithTree,
 };
@@ -255,13 +256,32 @@ async fn run_batched_address_test(
             .expect("Failed to update reference tree");
     }
     let final_reference_root = reference_tree.root();
-    let new_addresses: Vec<AddressWithTree> = vec![AddressWithTree {
-        address: SerializablePubkey::from(Pubkey::from(expected_addresses[0].0)),
-        tree: SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes())),
-    }];
+    let tree = SerializablePubkey::from(Pubkey::new_from_array(address_tree_pubkey.to_bytes()));
+    let existing_address = SerializablePubkey::from(Pubkey::from(expected_addresses[0].0));
+    let existing_err = setup
+        .api
+        .get_multiple_new_address_proofs_v2(AddressListWithTrees(vec![AddressWithTree {
+            address: existing_address,
+            tree,
+        }]))
+        .await
+        .expect_err("existing address should be rejected");
+    assert_eq!(
+        existing_err,
+        PhotonApiError::InvalidParams(format!("Address {} already exists", existing_address))
+    );
+
+    let unused_address = SerializablePubkey::from(Pubkey::from(derive_address(
+        &rng.gen(),
+        &address_tree_pubkey.to_bytes(),
+        &program_id.to_bytes(),
+    )));
     let proof = setup
         .api
-        .get_multiple_new_address_proofs_v2(AddressListWithTrees(new_addresses))
+        .get_multiple_new_address_proofs_v2(AddressListWithTrees(vec![AddressWithTree {
+            address: unused_address,
+            tree,
+        }]))
         .await
         .expect("Failed to get multiple new address proofs");
 
