@@ -47,6 +47,20 @@ pub struct GetMultipleNewAddressProofsResponse {
     pub value: Vec<MerkleContextWithNewAddressProof>,
 }
 
+fn validate_new_address(
+    address: &SerializablePubkey,
+    higher_range_address: &[u8],
+) -> Result<(), PhotonApiError> {
+    if address.0.as_ref() == higher_range_address {
+        return Err(PhotonApiError::InvalidParams(format!(
+            "Address {} already exists",
+            address
+        )));
+    }
+
+    Ok(())
+}
+
 pub async fn get_multiple_new_address_proofs_helper(
     txn: &DatabaseTransaction,
     addresses: Vec<AddressWithTree>,
@@ -118,7 +132,7 @@ pub async fn get_multiple_new_address_proofs_helper(
                         PhotonApiError::UnexpectedError(format!("Failed to get address: {}", e))
                     })?;
                 let queued_address = SerializablePubkey::try_from(queued_address)?;
-                return Err(PhotonApiError::ValidationError(format!(
+                return Err(PhotonApiError::InvalidParams(format!(
                     "Address {} already exists",
                     queued_address
                 )));
@@ -148,6 +162,7 @@ pub async fn get_multiple_new_address_proofs_helper(
             let (model, proof) = results.get(&address_bytes).ok_or_else(|| {
                 PhotonApiError::RecordNotFound(format!("No proof found for address {}", address))
             })?;
+            validate_new_address(&address, &model.next_value)?;
 
             let new_address_proof = MerkleContextWithNewAddressProof {
                 root: proof.root.clone(),
@@ -213,4 +228,26 @@ pub async fn get_multiple_new_address_proofs_v2(
         value: new_address_proofs,
         context,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn existing_address_is_rejected_before_proving() {
+        let address = SerializablePubkey::try_from(vec![1; 32]).unwrap();
+        let different_address = SerializablePubkey::try_from(vec![2; 32]).unwrap();
+
+        let error = validate_new_address(&address, &address.to_bytes_vec()).unwrap_err();
+
+        assert_eq!(
+            error,
+            PhotonApiError::InvalidParams(format!("Address {} already exists", address))
+        );
+        assert_eq!(
+            validate_new_address(&address, &different_address.to_bytes_vec()),
+            Ok(())
+        );
+    }
 }

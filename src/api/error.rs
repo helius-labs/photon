@@ -11,6 +11,8 @@ use thiserror::Error;
 pub enum PhotonApiError {
     #[error("Validation Error: {0}")]
     ValidationError(String),
+    #[error("Invalid parameters: {0}")]
+    InvalidParams(String),
     #[error("Invalid Public Key: field '{field}'")]
     InvalidPubkey { field: String },
     #[error("Database Error: {0}")]
@@ -28,6 +30,12 @@ pub enum PhotonApiError {
 impl From<PhotonApiError> for RpcError {
     fn from(val: PhotonApiError) -> Self {
         match val {
+            PhotonApiError::InvalidParams(_) => {
+                metric! {
+                    statsd_count!("validation_api_error", 1);
+                }
+                invalid_params(val)
+            }
             PhotonApiError::ValidationError(_) => {
                 metric! {
                     statsd_count!("validation_api_error", 1);
@@ -88,6 +96,29 @@ fn invalid_request(e: PhotonApiError) -> RpcError {
     RpcError::Call(CallError::from_std_error(e))
 }
 
+fn invalid_params(e: PhotonApiError) -> RpcError {
+    RpcError::Call(CallError::InvalidParams(anyhow::anyhow!(e)))
+}
+
 fn internal_server_error() -> RpcError {
     RpcError::Call(CallError::Failed(anyhow::anyhow!("Internal server error")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jsonrpsee::types::ErrorObjectOwned;
+
+    #[test]
+    fn invalid_params_uses_standard_json_rpc_code() {
+        let rpc_error: RpcError =
+            PhotonApiError::InvalidParams("Address already exists".to_string()).into();
+        let error: ErrorObjectOwned = rpc_error.into();
+
+        assert_eq!(error.code(), -32602);
+        assert_eq!(
+            error.message(),
+            "Invalid parameters: Address already exists"
+        );
+    }
 }
