@@ -128,13 +128,33 @@ pub async fn index_block_batch_with_infinite_retries(
             Err(e) => {
                 let start_block = block_batch.first().unwrap().metadata.slot;
                 let end_block = block_batch.last().unwrap().metadata.slot;
-                log::error!(
-                    "Failed to index block batch {}-{}. Got error {}",
-                    start_block,
-                    end_block,
-                    e
-                );
-                sleep(Duration::from_secs(1));
+                // Permanent parser errors (e.g., sequence gap from malformed batch) will never
+                // succeed on retry and would stall the indexer forever. Log and skip the batch
+                // instead of retrying indefinitely. Transient database errors continue to retry.
+                match &e {
+                    IngesterError::ParserError(_)
+                    | IngesterError::MalformedEvent { .. }
+                    | IngesterError::InvalidEvent
+                    | IngesterError::EmptyBatchEvent
+                    | IngesterError::EventNotImplemented { .. } => {
+                        log::error!(
+                            "Skipping unrecoverable block batch {}-{}: {}",
+                            start_block,
+                            end_block,
+                            e
+                        );
+                        return;
+                    }
+                    _ => {
+                        log::error!(
+                            "Failed to index block batch {}-{}. Got error {}",
+                            start_block,
+                            end_block,
+                            e
+                        );
+                        sleep(Duration::from_secs(1));
+                    }
+                }
             }
         }
     }
