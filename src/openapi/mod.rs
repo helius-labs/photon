@@ -24,6 +24,9 @@ use crate::api::method::get_queue_elements::{
     AddressQueueData, InputQueueData, Node, OutputQueueData, QueueRequest, StateQueueData,
 };
 use crate::api::method::get_queue_info::QueueInfo;
+use crate::api::method::get_queue_leaf_indices::{
+    GetQueueLeafIndicesRequest, GetQueueLeafIndicesResponse, QueueLeafIndex,
+};
 use crate::api::method::get_transaction_with_compression_info::CompressionInfoV2;
 use crate::api::method::get_transaction_with_compression_info::{
     AccountWithOptionalTokenData, AccountWithOptionalTokenDataV2, ClosedAccountV2,
@@ -33,6 +36,8 @@ use crate::api::method::get_validity_proof::{
     AccountProofInputs, AddressProofInputs, CompressedProof, CompressedProofWithContext,
     CompressedProofWithContextV2, MerkleContextV2, RootIndex, TreeContextInfo,
 };
+use crate::api::method::interface::types::RpcCommitment;
+use crate::api::method::interface::types::{AccountInterface, SolanaAccountData};
 use crate::api::method::utils::PaginatedSignatureInfoList;
 use crate::api::method::utils::SignatureInfo;
 use crate::api::method::utils::SignatureInfoList;
@@ -148,6 +153,14 @@ const JSON_CONTENT_TYPE: &str = "application/json";
     TreeContextInfo,
     GetCompressedAccountProofResponseValue,
     GetCompressedAccountProofResponseValueV2,
+    // Interface types
+    AccountInterface,
+    SolanaAccountData,
+    // Queue leaf indices
+    QueueLeafIndex,
+    GetQueueLeafIndicesRequest,
+    GetQueueLeafIndicesResponse,
+    RpcCommitment,
 )))]
 struct ApiDoc;
 

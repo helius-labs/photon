@@ -4048,6 +4048,135 @@ paths:
                     type: string
                   jsonrpc:
                     type: string
+  /getQueueLeafIndices:
+    summary: getQueueLeafIndices
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getQueueLeafIndices
+                params:
+                  type: object
+                  description: |-
+                    Parameters for requesting input queue leaf indices.
+                    Returns (hash, queue_index, leaf_index) for nullifier queue items.
+                  required:
+                  - tree
+                  - limit
+                  properties:
+                    limit:
+                      type: integer
+                      format: uint16
+                      minimum: 0
+                    startIndex:
+                      type: integer
+                      format: uint64
+                      nullable: true
+                      minimum: 0
+                    tree:
+                      $ref: '#/components/schemas/Hash'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    description: Response containing queue leaf indices
+                    required:
+                    - context
+                    - value
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/QueueLeafIndex'
+                    additionalProperties: false
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
   /getTransactionWithCompressionInfo:
     summary: getTransactionWithCompressionInfo
     post:
@@ -5049,6 +5178,41 @@ components:
         treeContext:
           $ref: '#/components/schemas/TreeContextInfo'
       additionalProperties: false
+    GetQueueLeafIndicesRequest:
+      type: object
+      description: |-
+        Parameters for requesting input queue leaf indices.
+        Returns (hash, queue_index, leaf_index) for nullifier queue items.
+      required:
+      - tree
+      - limit
+      properties:
+        limit:
+          type: integer
+          format: uint16
+          minimum: 0
+        startIndex:
+          type: integer
+          format: uint64
+          nullable: true
+          minimum: 0
+        tree:
+          $ref: '#/components/schemas/Hash'
+      additionalProperties: false
+    GetQueueLeafIndicesResponse:
+      type: object
+      description: Response containing queue leaf indices
+      required:
+      - context
+      - value
+      properties:
+        context:
+          $ref: '#/components/schemas/Context'
+        value:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueueLeafIndex'
+      additionalProperties: false
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
@@ -5309,6 +5473,25 @@ components:
           minimum: 0
         tree:
           type: string
+    QueueLeafIndex:
+      type: object
+      description: A lightweight queue leaf index entry
+      required:
+      - hash
+      - queueIndex
+      - leafIndex
+      properties:
+        hash:
+          $ref: '#/components/schemas/Hash'
+        leafIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+        queueIndex:
+          type: integer
+          format: uint64
+          minimum: 0
+      additionalProperties: false
     QueueRequest:
       type: object
       description: Parameters for requesting queue elements
