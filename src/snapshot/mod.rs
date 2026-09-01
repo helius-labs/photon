@@ -117,13 +117,46 @@ impl R2DirectoryAdapter {
     ) -> impl Stream<Item = Result<Bytes>> + std::marker::Send + 'static {
         stream! {
             let r2_directory_adapter = arc_self.clone();
-            let mut result = r2_directory_adapter.r2_bucket.get_object_stream(path.clone()).await.with_context(|| format!("Failed to read file: {:?}", path))?;
-            let stream = result.bytes();
 
-            while let Some(byte) = stream.next().await {
-                let byte = byte.with_context(|| "Failed to read byte from file")?;
-                yield Ok(byte);
+            // Download the entire object with retries to handle transient connection failures.
+            // R2/S3 streaming can fail mid-transfer with "end of file before message length reached"
+            // errors, so we retry the full download rather than trying to resume partial streams.
+            const MAX_RETRIES: u32 = 3;
+            const RETRY_DELAY_SECS: u64 = 5;
+
+            let mut last_error = None;
+            for attempt in 1..=MAX_RETRIES {
+                match r2_directory_adapter.r2_bucket.get_object(&path).await {
+                    Ok(response) => {
+                        let data = response.to_vec();
+                        // Yield data in chunks to match expected streaming behavior
+                        let mut offset = 0;
+                        while offset < data.len() {
+                            let end = std::cmp::min(offset + CHUNK_SIZE, data.len());
+                            yield Ok(Bytes::from(data[offset..end].to_vec()));
+                            offset = end;
+                        }
+                        return;
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to read file {:?} (attempt {}/{}): {:?}",
+                            path, attempt, MAX_RETRIES, e
+                        );
+                        last_error = Some(e);
+                        if attempt < MAX_RETRIES {
+                            tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+                        }
+                    }
+                }
             }
+
+            yield Err(anyhow::anyhow!(
+                "Failed to read file {:?} after {} attempts: {:?}",
+                path,
+                MAX_RETRIES,
+                last_error
+            ));
         }
     }
 
