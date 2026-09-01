@@ -1,0 +1,264 @@
+specVersion: 1
+name: getAtaInterface
+status: draft
+owner: photon-api
+lastUpdated: 2026-03-19
+
+summary: >
+  Return canonical ATA interface state for (owner, mint) with server-side
+  aggregation. This is a read contract only (no server-planned write actions).
+
+method:
+  rpc: getAtaInterface
+  httpPath: /getAtaInterface
+  transport: json-rpc-2.0
+
+request:
+  type: object
+  additionalProperties: false
+  required:
+    - owner
+    - mint
+  properties:
+    owner:
+      $ref: "#/components/schemas/SerializablePubkey"
+      description: Wallet owner used for ATA derivation.
+    mint:
+      $ref: "#/components/schemas/SerializablePubkey"
+      description: Mint used for ATA derivation and cold mint scoping.
+    config:
+      $ref: "#/components/schemas/GetAtaInterfaceConfig"
+      description: Optional Solana-style config object.
+
+response:
+  type: object
+  required: [context, value]
+  properties:
+    context:
+      $ref: "#/components/schemas/Context"
+    value:
+      oneOf:
+        - type: "null"
+        - $ref: "#/components/schemas/GetAtaInterfaceValue"
+      description: Null when no relevant hot or cold state is found.
+
+components:
+  schemas:
+    GetAtaInterfaceValue:
+      type: object
+      required:
+        - key
+        - owner
+        - mint
+        - mode
+        - wrap
+        - account
+        - cold
+        - hot
+      properties:
+        key:
+          $ref: "#/components/schemas/SerializablePubkey"
+          description: Canonical ATA pubkey for selected mode.
+        owner:
+          $ref: "#/components/schemas/SerializablePubkey"
+        mint:
+          $ref: "#/components/schemas/SerializablePubkey"
+        mode:
+          type: string
+          enum: [auto, light, spl, token2022]
+        wrap:
+          type: boolean
+        addresses:
+          $ref: "#/components/schemas/GetAtaDerivedAddresses"
+        account:
+          $ref: "#/components/schemas/SolanaAccountData"
+          description: |
+            Canonical synthetic account view after aggregation.
+            For token accounts this is packed SPL token account bytes.
+        cold:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/AccountV2"
+          description: |
+            Raw compressed inputs used for synthesis (same shape as getAccountInterface).
+        hot:
+          $ref: "#/components/schemas/GetAtaHotSources"
+          description: |
+            Program-specific hot account snapshot for write planners.
+            Amounts are full hot balances per account.
+
+    GetAtaHotSources:
+      type: object
+      required: [light, spl, token2022]
+      properties:
+        light:
+          $ref: "#/components/schemas/GetAtaHotEntry"
+        spl:
+          $ref: "#/components/schemas/GetAtaHotEntry"
+        token2022:
+          $ref: "#/components/schemas/GetAtaHotEntry"
+
+    GetAtaHotEntry:
+      oneOf:
+        - type: "null"
+        - type: object
+          required: [address, amount]
+          properties:
+            address:
+              $ref: "#/components/schemas/SerializablePubkey"
+            amount:
+              $ref: "#/components/schemas/UnsignedInteger"
+
+    GetAtaInterfaceConfig:
+      type: object
+      additionalProperties: false
+      properties:
+        commitment:
+          type: string
+          enum: [processed, confirmed, finalized]
+          default: confirmed
+        minContextSlot:
+          $ref: "#/components/schemas/UnsignedInteger"
+        programId:
+          $ref: "#/components/schemas/SerializablePubkey"
+          description: Optional explicit token program id (light/spl/token2022).
+        wrap:
+          type: boolean
+          default: false
+        allowOwnerOffCurve:
+          type: boolean
+          default: false
+
+    GetAtaDerivedAddresses:
+      type: object
+      required: [light, spl, token2022, canonical]
+      properties:
+        light:
+          $ref: "#/components/schemas/SerializablePubkey"
+        spl:
+          $ref: "#/components/schemas/SerializablePubkey"
+        token2022:
+          $ref: "#/components/schemas/SerializablePubkey"
+        canonical:
+          $ref: "#/components/schemas/SerializablePubkey"
+
+behavior:
+  validation:
+    - owner and mint must be valid pubkeys.
+    - if config.allowOwnerOffCurve=false and owner is off-curve, return ValidationError.
+    - if config.programId is set and config.wrap=true, return ValidationError.
+    - if config.programId is set to unsupported program, return ValidationError.
+    - if context.slot < config.minContextSlot, return StaleSlot.
+
+  addressDerivation:
+    - derive light ATA from (owner, mint, LIGHT_TOKEN_PROGRAM_ID).
+    - derive SPL ATA from (owner, mint, SPL_TOKEN_PROGRAM_ID).
+    - derive Token-2022 ATA from (owner, mint, TOKEN_2022_PROGRAM_ID).
+    - canonical key selection:
+      - auto/light => light ATA
+      - spl => SPL ATA
+      - token2022 => Token-2022 ATA
+
+  sourceFetchPlan:
+    - hot:
+      - light ATA always read in auto/light mode
+      - SPL ATA read in spl mode, and in auto when wrap=true
+      - Token-2022 ATA read in token2022 mode, and in auto when wrap=true
+    - cold:
+      - base query is owner+mint scoped via getCompressedTokenAccountsByOwner(owner, { mint })
+      - only token-shaped compressed accounts are retained
+
+  aggregation:
+    - canonical account is synthesized from selected hot/cold sources.
+    - source priority:
+      - auto/wrap=false: light-hot > light-cold
+      - auto/wrap=true: light-hot > light-cold > spl-hot > token2022-hot
+      - light: light-hot > light-cold
+      - spl: spl-hot > spl-cold
+      - token2022: token2022-hot > token2022-cold
+    - delegate and frozen semantics follow existing getAccountInterface synthesis rules.
+    - cold token synthetic owner uses ata_owner metadata when present and valid;
+      fallback to compressed token owner.
+
+  notFound:
+    - if no relevant hot/cold state remains after filtering, return value=null.
+
+  partialFailure:
+    - if at least one valid source family succeeds, return best-effort result.
+    - if all relevant source families fail, return UnexpectedError.
+
+errorModel:
+  - ValidationError:
+      - invalid pubkeys
+      - off-curve owner when allowOwnerOffCurve=false
+      - wrap=true with non-auto mode
+  - UnexpectedError:
+      - all-source rpc/db timeout/failure
+
+e2eAcceptance:
+  - name: light_hot_only
+    request:
+      owner: <wallet>
+      mint: <mint>
+      config:
+        programId: <light-token-program-id>
+    expect:
+      - value.key == derived_light_ata
+      - value.hot.light is not null
+      - value.hot.spl is null
+      - value.hot.token2022 is null
+
+  - name: light_cold_only
+    request:
+      owner: <wallet>
+      mint: <mint>
+      config:
+        programId: <light-token-program-id>
+    setup:
+      - no light hot account
+      - cold compressed token accounts exist for owner+mint
+    expect:
+      - value.account exists
+      - value.cold not empty
+
+  - name: ata_mode_owner_and_ata_owner_semantics
+    request:
+      owner: <wallet>
+      mint: <mint>
+      config:
+        programId: <light-token-program-id>
+    setup:
+      - ATA-mode compressed owner semantics present
+      - ata_owner metadata present with wallet owner
+    expect:
+      - lookup includes ATA-mode compressed rows
+      - synthetic SPL owner uses ata_owner when valid
+
+  - name: unified_wrap_includes_spl_t22_hot
+    request:
+      owner: <wallet>
+      mint: <mint>
+      config:
+        wrap: true
+    setup:
+      - light hot/cold + SPL hot + T22 hot exist
+    expect:
+      - value.hot.light is not null
+      - value.hot.spl is not null
+      - value.hot.token2022 is not null
+
+  - name: mode_wrap_validation
+    request:
+      owner: <wallet>
+      mint: <mint>
+      config:
+        programId: <spl-token-program-id>
+        wrap: true
+    expect:
+      - ValidationError
+
+notes:
+  - This contract intentionally avoids client-legacy planner flags.
+  - Write planners derive load/wrap steps from canonical account + cold + hot fields.
+  - Keep getAccountInterface/getMultipleAccountInterfaces contracts unchanged.
