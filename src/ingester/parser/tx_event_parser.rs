@@ -56,6 +56,15 @@ pub async fn create_state_update_v1<T>(
 where
     T: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
 {
+    if transaction_event.output_compressed_accounts.len()
+        != transaction_event.output_compressed_account_hashes.len()
+        || transaction_event.output_compressed_accounts.len()
+            != transaction_event.output_leaf_indices.len()
+    {
+        return Err(IngesterError::MalformedEvent {
+            msg: "Output accounts, hashes and leaf indices have different lengths".into(),
+        });
+    }
     let mut state_update = StateUpdate::new();
     let mut tree_to_seq_number = transaction_event
         .sequence_numbers
@@ -86,12 +95,14 @@ where
         .zip(transaction_event.output_leaf_indices.iter())
         .enumerate()
     {
-        let tree = transaction_event.pubkey_array[out_account.merkle_tree_index as usize];
+        let tree = *transaction_event
+            .pubkey_array
+            .get(usize::from(out_account.merkle_tree_index))
+            .ok_or_else(|| IngesterError::MalformedEvent {
+                msg: "Output tree index is out of bounds".into(),
+            })?;
         let tree_solana = solana_pubkey::Pubkey::new_from_array(tree.to_bytes());
-        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree_solana)
-            .await
-            .map_err(|e| IngesterError::ParserError(format!("Failed to get tree info: {}", e)))?
-        {
+        let tree_and_queue = match TreeInfo::get_by_pubkey(conn, &tree_solana).await? {
             Some(info) => {
                 log::debug!(
                     "tx_event_parser tree={}, tree_type={:?}, queue={}",
@@ -101,14 +112,10 @@ where
                 );
                 info
             }
-            None => match resolver.discover_tree(conn, &tree_solana, slot).await {
-                Ok(Some(info)) => info,
-                Ok(None) => {
+            None => match resolver.discover_tree(conn, &tree_solana, slot).await? {
+                Some(info) => info,
+                None => {
                     log::debug!("Tree {} not discoverable, skipping", tree_solana);
-                    continue;
-                }
-                Err(e) => {
-                    log::warn!("Failed to discover tree {}: {}", tree_solana, e);
                     continue;
                 }
             },

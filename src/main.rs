@@ -47,6 +47,10 @@ struct Args {
     #[arg(short, long, default_value = "http://127.0.0.1:8899")]
     rpc_url: String,
 
+    /// Additional RPC endpoints on the same cluster, tried when a provider fails or lacks history.
+    #[arg(long, value_delimiter = ',')]
+    rpc_fallback_url: Vec<String>,
+
     /// DB URL to store indexing data. By default we use an in-memory SQLite database.
     #[arg(short, long)]
     db_url: Option<String>,
@@ -67,7 +71,7 @@ struct Args {
     /// Max number of blocks to fetch concurrently. Generally, this should be set to be as high
     /// as possible without reaching RPC rate limits.
     #[arg(short, long)]
-    max_concurrent_block_fetches: Option<usize>,
+    max_concurrent_block_fetches: Option<std::num::NonZeroUsize>,
 
     /// Light Prover url to use for verifying proofs
     #[arg(long, default_value = "http://127.0.0.1:3001")]
@@ -194,20 +198,8 @@ async fn setup_database_connection(
 fn continously_index_new_blocks(
     block_stream_config: BlockStreamConfig,
     db: Arc<DatabaseConnection>,
-    rpc_client: Arc<RpcClient>,
-    last_indexed_slot: u64,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let block_stream = block_stream_config.load_block_stream();
-        index_block_stream(
-            block_stream,
-            db,
-            rpc_client.clone(),
-            last_indexed_slot,
-            None,
-        )
-        .await;
-    })
+    photon_indexer::ingester::supervisor::spawn_indexer(block_stream_config, db)
 }
 
 #[tokio::main]
@@ -241,7 +233,10 @@ async fn main() {
     }
 
     let is_rpc_node_local = args.rpc_url.contains("127.0.0.1");
-    let rpc_client = get_rpc_client(&args.rpc_url);
+    let rpc_client = photon_indexer::common::rpc::with_fallbacks(
+        get_rpc_client(&args.rpc_url),
+        &args.rpc_fallback_url,
+    );
 
     // Load snapshot if provided (either from local directory or GCS)
     let directory_adapter = match (args.snapshot_dir.clone(), args.gcs_bucket.clone()) {
@@ -305,7 +300,11 @@ async fn main() {
                 last_indexed_slot,
                 Some(last_slot),
             )
-            .await;
+            .await
+            .unwrap_or_else(|error| {
+                error!("Snapshot ingestion failed: {}", error);
+                std::process::exit(1);
+            });
         }
     }
 
@@ -331,7 +330,7 @@ async fn main() {
 
             // For localnet we can safely use a large batch size to speed up indexing.
             let max_concurrent_block_fetches = match args.max_concurrent_block_fetches {
-                Some(max_concurrent_block_fetches) => max_concurrent_block_fetches,
+                Some(max_concurrent_block_fetches) => max_concurrent_block_fetches.get(),
                 None => {
                     if is_rpc_node_local {
                         200
@@ -344,20 +343,20 @@ async fn main() {
                 Some(start_slot) => match start_slot.as_str() {
                     "latest" => fetch_current_slot_with_infinite_retry(&rpc_client).await,
                     _ => {
-                        fetch_block_parent_slot(&rpc_client, start_slot.parse::<u64>().unwrap())
-                            .await
+                        let slot = start_slot.parse::<u64>().unwrap_or_else(|error| {
+                            error!("Invalid start slot: {}", error);
+                            std::process::exit(1);
+                        });
+                        fetch_block_parent_slot(&rpc_client, slot).await
                     }
                 },
-                None => fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref())
-                    .await
-                    .unwrap_or(
-                        get_network_start_slot(&rpc_client)
-                            .await
-                            .try_into()
-                            .unwrap(),
-                    )
-                    .try_into()
-                    .unwrap(),
+                None => match fetch_last_indexed_slot_with_infinite_retry(db_conn.as_ref()).await {
+                    Some(slot) => slot.try_into().unwrap_or_else(|_| {
+                        error!("Database checkpoint must be nonnegative");
+                        std::process::exit(1);
+                    }),
+                    None => get_network_start_slot(&rpc_client).await,
+                },
             };
 
             let block_stream_config = BlockStreamConfig {
@@ -371,8 +370,6 @@ async fn main() {
                 Some(continously_index_new_blocks(
                     block_stream_config,
                     db_conn.clone(),
-                    rpc_client.clone(),
-                    last_indexed_slot,
                 )),
                 Some(continously_monitor_photon(
                     db_conn.clone(),

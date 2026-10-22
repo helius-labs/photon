@@ -13,7 +13,6 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
-use solana_pubkey::Pubkey as SdkPubkey;
 use solana_signature::Signature;
 use tokio::time::sleep;
 use tracing::error;
@@ -36,6 +35,7 @@ use crate::ingester::typedefs::block_info::{
     BlockInfo, BlockMetadata, Instruction, InstructionGroup, TransactionInfo,
 };
 
+use crate::ingester::error::IngesterError;
 use crate::metric;
 use crate::monitor::{start_latest_slot_updater, LATEST_SLOT};
 
@@ -48,7 +48,8 @@ pub fn get_grpc_stream_with_rpc_fallback(
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
         start_latest_slot_updater(rpc_client.clone()).await;
-        let grpc_stream = get_grpc_block_stream(endpoint, auth_header, Some(last_indexed_slot));
+        let accepted_slot = Arc::new(std::sync::atomic::AtomicU64::new(last_indexed_slot));
+        let grpc_stream = get_grpc_block_stream(endpoint, auth_header, accepted_slot.clone());
         pin_mut!(grpc_stream);
         let mut rpc_poll_stream:  Option<Pin<Box<dyn Stream<Item = Vec<BlockInfo>> + Send>>> = Some(
             Box::pin(get_block_poller_stream(
@@ -67,6 +68,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             let slot = grpc_block.metadata.slot;
                             if grpc_block.metadata.parent_slot == last_indexed_slot {
                                 last_indexed_slot = grpc_block.metadata.slot;
+                                accepted_slot.store(last_indexed_slot, Ordering::SeqCst);
                                 yield vec![grpc_block];
                                 metric! {
                                     statsd_count!("grpc_block_indexed", 1);
@@ -78,7 +80,8 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             }
                         }
                         Either::Left((None, _)) => {
-                            panic!("gRPC stream ended unexpectedly");
+                            error!("gRPC stream ended unexpectedly; restarting from the committed checkpoint");
+                            return;
                         }
                         Either::Right((Some(rpc_blocks), _)) => {
                             let rpc_blocks: Vec<BlockInfo> = rpc_blocks
@@ -93,6 +96,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             let last_slot = rpc_blocks.last().unwrap().metadata.slot;
                             if parent_slot == last_indexed_slot {
                                 last_indexed_slot = last_slot;
+                                accepted_slot.store(last_indexed_slot, Ordering::SeqCst);
                                 yield rpc_blocks;
                                 metric! {
                                     statsd_count!("rpc_block_indexed", blocks_len as i64);
@@ -100,14 +104,15 @@ pub fn get_grpc_stream_with_rpc_fallback(
                             }
                         }
                         Either::Right((None, _)) => {
-                            panic!("RPC stream ended unexpectedly");
+                            error!("RPC stream ended unexpectedly; restarting from the committed checkpoint");
+                            return;
                         }
                     }
                 }
                 None => {
                     let block = match tokio::time::timeout(Duration::from_secs(5), grpc_stream.next()).await {
                         Ok(Some(block)) => block,
-                        Ok(None) => panic!("gRPC stream ended unexpectedly"),
+                        Ok(None) => { error!("gRPC stream ended unexpectedly"); return; },
                         Err(_) => {
                             metric! {
                                 statsd_count!("grpc_timeout", 1);
@@ -124,6 +129,7 @@ pub fn get_grpc_stream_with_rpc_fallback(
                     let slot = block.metadata.slot;
                     if block.metadata.parent_slot == last_indexed_slot {
                         last_indexed_slot = block.metadata.slot;
+                                accepted_slot.store(last_indexed_slot, Ordering::SeqCst);
                         yield vec![block];
                     } else {
                         metric! {
@@ -157,52 +163,58 @@ pub fn get_grpc_stream_with_rpc_fallback(
 }
 
 fn is_healthy(slot: u64) -> bool {
-    (LATEST_SLOT.load(Ordering::SeqCst) as i64 - slot as i64) <= HEALTH_CHECK_SLOT_DISTANCE
+    LATEST_SLOT.load(Ordering::SeqCst).saturating_sub(slot) <= HEALTH_CHECK_SLOT_DISTANCE as u64
 }
 
 fn get_grpc_block_stream(
     endpoint: String,
     auth_header: String,
-    mut last_indexed_slot: Option<u64>,
+    accepted_slot: Arc<std::sync::atomic::AtomicU64>,
 ) -> impl Stream<Item = BlockInfo> {
     stream! {
+        let mut backoff = crate::ingester::retry::Backoff::default();
         loop {
             let mut grpc_tx;
             let mut grpc_rx;
             {
-                let grpc_client =
-                    build_geyser_client(endpoint.clone(), auth_header.clone()).await;
-                if let Err(e) = grpc_client {
-                    error!("Error connecting to gRPC, waiting one second then retrying connect: {}", e);
-                    metric! {
-                        statsd_count!("grpc_connect_error", 1);
+                let mut grpc_client = match build_geyser_client(endpoint.clone(), auth_header.clone()).await {
+                    Ok(client) => client,
+                    Err(error) => {
+                        error!("Error connecting to gRPC: {}", error);
+                        metric! { statsd_count!("grpc_connect_error", 1); }
+                        sleep(backoff.next_delay()).await;
+                        continue;
                     }
-                    sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
+                };
                 let subscription = grpc_client
-                    .unwrap()
-                    .subscribe_with_request(Some(get_block_subscribe_request(last_indexed_slot.map(|slot| slot + 1))))
+                    .subscribe_with_request(Some(get_block_subscribe_request(accepted_slot.load(Ordering::SeqCst).checked_add(1))))
                     .await;
-                if let Err(e) = subscription {
-                    error!("Error subscribing to gRPC stream, waiting one second then retrying connect: {}", e);
-                    metric! {
-                        statsd_count!("grpc_subscribe_error", 1);
+                match subscription {
+                    Ok(subscription) => (grpc_tx, grpc_rx) = subscription,
+                    Err(error) => {
+                        error!("Error subscribing to gRPC stream: {}", error);
+                        metric! { statsd_count!("grpc_subscribe_error", 1); }
+                        sleep(backoff.next_delay()).await;
+                        continue;
                     }
-                    sleep(Duration::from_secs(1)).await;
-                    continue;
                 }
-                (grpc_tx, grpc_rx) = subscription.unwrap();
             }
             while let Some(message) = grpc_rx.next().await {
                 match message {
                     Ok(message) => match message.update_oneof {
                         Some(UpdateOneof::Block(block)) => {
-                            last_indexed_slot = Some(block.slot);
-                            let block = parse_block(block);
+                            let block = match parse_block(block) {
+                                Ok(block) => block,
+                                Err(error) => {
+                                    error!("Failed to parse gRPC block; reconnecting from accepted checkpoint: {}", error);
+                                    metric! { statsd_count!("grpc_block_parse_failed", 1); }
+                                    break;
+                                }
+                            };
                             metric! {
                                 statsd_count!("grpc_block_emitted", 1);
                             }
+                            backoff = crate::ingester::retry::Backoff::default();
                             yield block;
                         }
                         Some(UpdateOneof::Ping(_)) => {
@@ -233,7 +245,7 @@ fn get_grpc_block_stream(
                     }
                 }
             }
-        sleep(Duration::from_secs(1)).await;
+        sleep(backoff.next_delay()).await;
         }
     }
 }
@@ -288,29 +300,50 @@ fn ping() -> SubscribeRequest {
     }
 }
 
-fn parse_block(block: SubscribeUpdateBlock) -> BlockInfo {
+fn parse_block(block: SubscribeUpdateBlock) -> Result<BlockInfo, IngesterError> {
+    if block.executed_transaction_count != block.transactions.len() as u64 {
+        return Err(IngesterError::ParserError(format!(
+            "Incomplete gRPC block {}: expected {} transactions, got {}",
+            block.slot,
+            block.executed_transaction_count,
+            block.transactions.len()
+        )));
+    }
     let metadata = BlockMetadata {
         slot: block.slot,
         parent_slot: block.parent_slot,
-        block_time: block.block_time.unwrap().timestamp,
-        blockhash: Hash::try_from(block.blockhash.as_str()).unwrap(),
-        parent_blockhash: Hash::try_from(block.parent_blockhash.as_str()).unwrap(),
-        block_height: block.block_height.unwrap().block_height,
+        block_time: block
+            .block_time
+            .ok_or_else(|| IngesterError::ParserError("Missing block_time".to_string()))?
+            .timestamp,
+        blockhash: Hash::try_from(block.blockhash.as_str())
+            .map_err(|e| IngesterError::ParserError(format!("Failed to parse blockhash: {}", e)))?,
+        parent_blockhash: Hash::try_from(block.parent_blockhash.as_str()).map_err(|e| {
+            IngesterError::ParserError(format!("Failed to parse parent_blockhash: {}", e))
+        })?,
+        block_height: block
+            .block_height
+            .ok_or_else(|| IngesterError::ParserError("Missing block_height".to_string()))?
+            .block_height,
     };
     let transactions = block
         .transactions
         .into_iter()
         .map(parse_transaction)
-        .collect();
+        .collect::<Result<Vec<_>, IngesterError>>()?;
 
-    BlockInfo {
+    Ok(BlockInfo {
         metadata,
         transactions,
-    }
+    })
 }
 
-fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> TransactionInfo {
-    let meta = transaction.meta.unwrap();
+fn parse_transaction(
+    transaction: SubscribeUpdateTransactionInfo,
+) -> Result<TransactionInfo, IngesterError> {
+    let meta = transaction
+        .meta
+        .ok_or_else(|| IngesterError::ParserError("Missing transaction metadata".to_string()))?;
     let error = create_tx_error(meta.err.as_ref());
     if let Err(e) = &error {
         error!(
@@ -318,13 +351,18 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
             e, meta.err
         );
     }
-    let error = error.unwrap();
+    let error = error
+        .map_err(|e| IngesterError::ParserError(e.to_string()))?
+        .map(|e| e.to_string());
 
-    let error = error.map(|e| e.to_string());
-
-    let signature = Signature::try_from(transaction.signature).unwrap();
-    let message = transaction.transaction.unwrap().message.unwrap();
-    let outer_intructions = message.instructions;
+    let signature = Signature::try_from(transaction.signature)
+        .map_err(|_| IngesterError::ParserError("Invalid transaction signature".to_string()))?;
+    let message = transaction
+        .transaction
+        .ok_or_else(|| IngesterError::ParserError("Missing transaction".to_string()))?
+        .message
+        .ok_or_else(|| IngesterError::ParserError("Missing transaction message".to_string()))?;
+    let outer_instructions = message.instructions;
     let mut accounts = message.account_keys;
     for account in meta.loaded_writable_addresses {
         accounts.push(account);
@@ -333,33 +371,33 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
         accounts.push(account);
     }
 
-    let mut instruction_groups: Vec<InstructionGroup> = outer_intructions
+    let mut instruction_groups: Vec<InstructionGroup> = outer_instructions
         .iter()
         .map(|ix| {
-            let sdk_program_id =
-                SdkPubkey::try_from(accounts[ix.program_id_index as usize].clone()).unwrap();
-            let program_id = Pubkey::new_from_array(sdk_program_id.to_bytes());
+            let program_id = account_pubkey(
+                &accounts,
+                ix.program_id_index,
+                "outer instruction program id",
+            )?;
             let data = ix.data.clone();
-            let accounts: Vec<Pubkey> = ix
+            let accounts: Result<Vec<Pubkey>, IngesterError> = ix
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    let sdk_pubkey =
-                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
-                    Pubkey::new_from_array(sdk_pubkey.to_bytes())
+                    account_pubkey(&accounts, *account_index, "outer instruction account")
                 })
                 .collect();
 
-            InstructionGroup {
+            Ok(InstructionGroup {
                 outer_instruction: Instruction {
                     program_id,
                     data,
-                    accounts,
+                    accounts: accounts?,
                 },
                 inner_instructions: Vec::new(),
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, IngesterError>>()?;
 
     for inner_instruction_group in meta.inner_instructions {
         let InnerInstructions {
@@ -367,32 +405,65 @@ fn parse_transaction(transaction: SubscribeUpdateTransactionInfo) -> Transaction
             instructions,
         } = inner_instruction_group;
         for instruction in instructions {
-            let instruction_group = &mut instruction_groups[index as usize];
-            let sdk_program_id =
-                SdkPubkey::try_from(accounts[instruction.program_id_index as usize].clone())
-                    .unwrap();
-            let program_id = Pubkey::new_from_array(sdk_program_id.to_bytes());
+            let group_index = usize::try_from(index).map_err(|_| {
+                IngesterError::ParserError(format!(
+                    "Inner instruction group index {} does not fit in usize",
+                    index
+                ))
+            })?;
+            let instruction_group = instruction_groups.get_mut(group_index).ok_or_else(|| {
+                IngesterError::ParserError(format!(
+                    "Inner instruction group index {} is out of bounds",
+                    index
+                ))
+            })?;
+            let program_id = account_pubkey(
+                &accounts,
+                instruction.program_id_index,
+                "inner instruction program id",
+            )?;
             let data = instruction.data.clone();
-            let accounts: Vec<Pubkey> = instruction
+            let accounts: Result<Vec<Pubkey>, IngesterError> = instruction
                 .accounts
                 .iter()
                 .map(|account_index| {
-                    let sdk_pubkey =
-                        SdkPubkey::try_from(accounts[*account_index as usize].clone()).unwrap();
-                    Pubkey::new_from_array(sdk_pubkey.to_bytes())
+                    account_pubkey(&accounts, *account_index, "inner instruction account")
                 })
                 .collect();
             instruction_group.inner_instructions.push(Instruction {
                 program_id,
                 data,
-                accounts,
+                accounts: accounts?,
             });
         }
     }
 
-    TransactionInfo {
+    Ok(TransactionInfo {
         instruction_groups,
         signature,
         error,
-    }
+    })
 }
+
+fn account_pubkey<I>(accounts: &[Vec<u8>], index: I, context: &str) -> Result<Pubkey, IngesterError>
+where
+    I: TryInto<usize> + Copy + std::fmt::Display,
+{
+    let index_usize = index.try_into().map_err(|_| {
+        IngesterError::ParserError(format!("{} index {} does not fit usize", context, index))
+    })?;
+    let account = accounts.get(index_usize).ok_or_else(|| {
+        IngesterError::ParserError(format!(
+            "{} account index {} is out of bounds for {} accounts",
+            context,
+            index,
+            accounts.len()
+        ))
+    })?;
+    Pubkey::try_from(account.clone())
+        .map_err(|_| IngesterError::ParserError(format!("Invalid {} pubkey bytes", context)))
+}
+
+#[cfg(test)]
+#[path = "grpc_test.rs"]
+mod tests;
