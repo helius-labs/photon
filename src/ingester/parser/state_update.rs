@@ -115,28 +115,8 @@ pub struct FilteredStateUpdate {
 }
 
 impl StateUpdate {
-    pub fn new() -> Self {
-        StateUpdate::default()
-    }
-
-    /// Filters the StateUpdate to only include data from trees that exist in the database
-    /// and match the expected owner. This prevents processing events from external/unauthorized trees.
-    ///
-    /// A "known tree" is one that:
-    /// 1. Exists in the `tree_metadata` table
-    /// 2. Has an owner matching `EXPECTED_TREE_OWNER` (if configured)
-    ///
-    /// All data structures referencing unknown trees are filtered out, and account_transactions
-    /// are filtered to match the kept accounts.
-    ///
-    /// Returns the filtered StateUpdate and a cache of tree metadata for the known trees.
-    pub async fn filter_by_known_trees<C>(
-        self,
-        txn: &C,
-    ) -> Result<FilteredStateUpdate, PhotonApiError>
-    where
-        C: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
-    {
+    /// Every tree needed by this update, including events with no account outputs.
+    pub(crate) fn tree_pubkeys(&self) -> HashSet<Pubkey> {
         // Collect all tree pubkeys referenced in this state update
         let mut all_tree_pubkeys: HashSet<Pubkey> = self
             .indexed_merkle_tree_updates
@@ -165,6 +145,33 @@ impl StateUpdate {
                 all_tree_pubkeys.insert(tree_pubkey);
             }
         }
+
+        all_tree_pubkeys
+    }
+
+    pub fn new() -> Self {
+        StateUpdate::default()
+    }
+
+    /// Filters the StateUpdate to only include data from trees that exist in the database
+    /// and match the expected owner. This prevents processing events from external/unauthorized trees.
+    ///
+    /// A "known tree" is one that:
+    /// 1. Exists in the `tree_metadata` table
+    /// 2. Has an owner matching `EXPECTED_TREE_OWNER` (if configured)
+    ///
+    /// All data structures referencing unknown trees are filtered out, and account_transactions
+    /// are filtered to match the kept accounts.
+    ///
+    /// Returns the filtered StateUpdate and a cache of tree metadata for the known trees.
+    pub async fn filter_by_known_trees<C>(
+        self,
+        txn: &C,
+    ) -> Result<FilteredStateUpdate, PhotonApiError>
+    where
+        C: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
+    {
+        let all_tree_pubkeys = self.tree_pubkeys();
 
         // Query database for tree metadata - only trees with correct owner will be in cache
         let tree_info_cache = if !all_tree_pubkeys.is_empty() {

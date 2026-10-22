@@ -60,6 +60,47 @@ photon --start-slot=123
 photon --help
 ```
 
+#### Ingestion recovery
+
+Configure fallback RPC endpoints with access to the same cluster and the history
+you need to index:
+
+```bash
+photon --db-url=postgres://postgres@localhost/photon \
+  --rpc-url=https://primary.example.com \
+  --rpc-fallback-url=https://archive.example.com
+```
+
+`--rpc-fallback-url` accepts repeated flags or comma-separated URLs. Without it,
+the native Solana RPC client is used directly. Optional failover for `get*` calls delegates HTTP,
+JSON-RPC parsing, timeouts and HTTP 429 retries to that same SDK.
+
+RPC polling enumerates produced slots and fetches ordered windows bounded by
+`--max-concurrent-block-fetches`, repairing omitted predecessors through parent
+links. Memory depends on that configured window and decoded block sizes; later
+windows are not fetched while the current window waits on a missing predecessor.
+
+Transient failures back off with jitter up to 30 seconds. All referenced trees,
+including V2 queues and events without outputs, must be resolved or confirmed
+excluded before the batch commits. Indexing restarts from the database checkpoint
+after a panic or unexpected stream termination. RPC request timeouts and the
+five-second gRPC-to-RPC fallback handle source outages. Quiet chains can wait;
+valid batches and SDK retries are not cancelled by a blanket progress timeout. Replayed
+blocks must match committed hashes. Errors keep the checkpoint in place and
+`getIndexerHealth` reports failed workers or unresolved work. Deterministic
+indexing failures are rechecked every 30 seconds. Metadata is refreshed each minute.
+
+Parent or committed-block hash conflicts require canonical-chain reconciliation
+or restoring a consistent snapshot. The main ingestor detects these conflicts
+and stops advancing; it does not automatically roll back indexed state.
+
+Run the ingestion fault-injection tests without external services:
+
+```bash
+cargo test --lib
+cargo test --test integration_tests ingester_robustness
+```
+
 ## 📸 Snapshots
 
 Photon supports snapshots for quick bootstrapping. 

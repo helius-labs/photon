@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_std::stream::StreamExt;
 use futures::{pin_mut, Stream};
@@ -6,12 +6,10 @@ use log::info;
 use sea_orm::{sea_query::Expr, DatabaseConnection, EntityTrait, FromQueryResult, QuerySelect};
 use solana_client::nonblocking::rpc_client::RpcClient;
 
-use crate::{
-    common::fetch_current_slot_with_infinite_retry, dao::generated::blocks,
-    ingester::index_block_batch_with_infinite_retries,
-};
+use crate::{dao::generated::blocks, ingester::index_block_batch_with_infinite_retries};
 
 use super::typedefs::block_info::BlockInfo;
+use super::{error::IngesterError, supervisor::record_commit};
 const POST_BACKFILL_FREQUENCY: u64 = 10;
 const PRE_BACKFILL_FREQUENCY: u64 = 10;
 
@@ -33,14 +31,10 @@ pub async fn fetch_last_indexed_slot_with_infinite_retry(
             .await;
 
         match context {
-            Ok(context) => {
-                return context
-                    .expect("Always expected maximum query to return a result")
-                    .slot
-            }
+            Ok(context) => return context.and_then(|context| context.slot),
             Err(e) => {
                 log::error!("Failed to fetch current slot from database: {}", e);
-                sleep(Duration::from_secs(5));
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     }
@@ -52,10 +46,16 @@ pub async fn index_block_stream(
     rpc_client: Arc<RpcClient>,
     last_indexed_slot_at_start: u64,
     end_slot: Option<u64>,
-) {
+) -> Result<(), IngesterError> {
     pin_mut!(block_stream);
-    let current_slot =
-        end_slot.unwrap_or(fetch_current_slot_with_infinite_retry(&rpc_client).await);
+    let current_slot = match end_slot {
+        Some(slot) => slot,
+        None => tokio::time::timeout(Duration::from_secs(5), rpc_client.get_slot())
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or(last_indexed_slot_at_start),
+    };
     let number_of_blocks_to_backfill = current_slot.saturating_sub(last_indexed_slot_at_start);
     info!(
         "Backfilling historical blocks. Current number of blocks to backfill: {}",
@@ -66,8 +66,11 @@ pub async fn index_block_stream(
     let mut finished_backfill_slot = None;
 
     while let Some(blocks) = block_stream.next().await {
-        let last_slot_in_block = blocks.last().unwrap().metadata.slot;
-        index_block_batch_with_infinite_retries(db.as_ref(), blocks, rpc_client.as_ref()).await;
+        let Some(last_slot_in_block) = blocks.last().map(|block| block.metadata.slot) else {
+            continue;
+        };
+        index_block_batch_with_infinite_retries(db.as_ref(), blocks, rpc_client.as_ref()).await?;
+        record_commit();
 
         for slot in (last_indexed_slot + 1)..(last_slot_in_block + 1) {
             let blocks_indexed = slot - last_indexed_slot_at_start;
@@ -91,4 +94,5 @@ pub async fn index_block_stream(
             last_indexed_slot = slot;
         }
     }
+    Ok(())
 }
