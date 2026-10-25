@@ -45,10 +45,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install additional tools
-        run: |
-          npm install -g @apidevtools/swagger-cli
-          wget https://dl.min.io/server/minio/release/linux-amd64/minio
-          chmod +x minio
+        run: npm install -g @apidevtools/swagger-cli
 
       - name: Start light-prover container
         run: |
