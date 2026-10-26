@@ -439,13 +439,11 @@ fn compute_search_filter_and_arg(
             ("JOIN accounts ON account_transactions.hash = accounts.hash WHERE accounts.address = $1".to_string(), address.into())
         }
         SignatureFilter::Owner(owner) => {
-            let mut filter = format!(
-                "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
+            // Both history indexes start with spent; retain spent and unspent accounts.
+            let filter = format!(
+                "JOIN {base_table} ON account_transactions.hash = {base_table}.hash \
+                 WHERE {base_table}.owner = $1 AND {base_table}.spent IN (FALSE, TRUE)"
             );
-            if search_type == SignatureSearchType::Standard {
-                // Enumerate both non-null spent states to use the (spent, owner, hash) index.
-                filter.push_str(" AND accounts.spent IN (FALSE, TRUE)");
-            }
             (filter, owner.into())
         }
     };
@@ -506,10 +504,7 @@ fn compute_raw_sql_query_and_args(
     limit: u64,
 ) -> Result<(String, Vec<Value>), PhotonApiError> {
     match signature_filter {
-        Some(SignatureFilter::Owner(owner))
-            if search_type == SignatureSearchType::Standard
-                && backend == DatabaseBackend::Postgres =>
-        {
+        Some(SignatureFilter::Owner(owner)) if backend == DatabaseBackend::Postgres => {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
             let (filter, arg) =
                 compute_search_filter_and_arg(search_type, SignatureFilter::Owner(owner))?;
@@ -589,8 +584,7 @@ pub async fn search_for_signatures(
     limit: Option<Limit>,
 ) -> Result<PaginatedSignatureInfoListWithError, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
-    let owner_search = search_type == SignatureSearchType::Standard
-        && matches!(signature_filter.as_ref(), Some(SignatureFilter::Owner(_)));
+    let owner_search = matches!(signature_filter.as_ref(), Some(SignatureFilter::Owner(_)));
     let (raw_sql, args) = compute_raw_sql_query_and_args(
         conn.get_database_backend(),
         search_type,
