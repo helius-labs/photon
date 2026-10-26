@@ -478,10 +478,12 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
+            // Bound both indexes so merge joins can start at the cursor.
             let cursor_filter = format!(
-                "AND (transactions.slot, transactions.signature) < (${}, ${})",
+                "AND (transactions.slot, transactions.signature) < (${}, ${}) AND blocks.slot <= ${}",
                 num_preceding_args + 1,
-                num_preceding_args + 2
+                num_preceding_args + 2,
+                num_preceding_args + 1
             );
             Ok((
                 cursor_filter,
