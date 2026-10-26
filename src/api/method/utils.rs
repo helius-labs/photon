@@ -10,8 +10,8 @@ use crate::dao::generated::{accounts, token_accounts};
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Statement, Value,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use solana_signature::Signature;
@@ -552,6 +552,8 @@ pub async fn search_for_signatures(
     limit: Option<Limit>,
 ) -> Result<PaginatedSignatureInfoListWithError, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
+    let owner_search = search_type == SignatureSearchType::Standard
+        && matches!(signature_filter.as_ref(), Some(SignatureFilter::Owner(_)));
     let (raw_sql, args) = compute_raw_sql_query_and_args(
         search_type,
         signature_filter,
@@ -560,11 +562,27 @@ pub async fn search_for_signatures(
         limit,
     )?;
 
-    let signatures: Vec<SignatureInfoModel> = SignatureInfoModel::find_by_statement(
-        Statement::from_sql_and_values(conn.get_database_backend(), &raw_sql, args.clone()),
-    )
-    .all(conn)
-    .await?;
+    let query = SignatureInfoModel::find_by_statement(Statement::from_sql_and_values(
+        conn.get_database_backend(),
+        &raw_sql,
+        args,
+    ));
+    let signatures = if owner_search && conn.get_database_backend() == DatabaseBackend::Postgres {
+        let transaction = conn.begin().await?;
+        // A cached generic plan can scan a large owner's history before applying LIMIT.
+        // SET LOCAL keeps owner-specific planning scoped to this search transaction.
+        transaction
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                "SET LOCAL plan_cache_mode = force_custom_plan".to_string(),
+            ))
+            .await?;
+        let signatures = query.all(&transaction).await?;
+        transaction.commit().await?;
+        signatures
+    } else {
+        query.all(conn).await?
+    };
 
     let signatures = parse_signatures_infos(signatures)?;
 

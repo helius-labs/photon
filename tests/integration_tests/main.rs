@@ -10,6 +10,7 @@ mod merkle_tree_deserialization;
 mod mock_tests;
 mod monitor_tests;
 mod open_api_tests;
+mod owner_signature_tests;
 mod prod_tests;
 mod snapshot_tests;
 mod utils;
