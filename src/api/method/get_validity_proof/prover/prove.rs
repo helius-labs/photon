@@ -15,8 +15,11 @@ use crate::ingester::persist::MerkleProofWithContext;
 use light_batched_merkle_tree::constants::{
     DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
 };
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
+
+static PROVER_HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 /// Computes a proof's index into its tree's circular root-history buffer.
 ///
@@ -132,13 +135,12 @@ pub(crate) async fn generate_proof(
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(db_new_address_proofs.clone()),
     };
 
-    let client = Client::new();
     let prover_request_url = format!("{}/prove", prover_url);
     let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
         PhotonApiError::UnexpectedError(format!("Error serializing prover request: {}", e))
     })?;
 
-    let mut request_builder = client
+    let mut request_builder = PROVER_HTTP_CLIENT
         .post(&prover_request_url)
         .body(json_body)
         .header("Content-Type", "application/json");
