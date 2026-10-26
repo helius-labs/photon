@@ -18,6 +18,7 @@ mod open_api_tests;
 mod owner_signature_history_tests;
 mod owner_signature_tests;
 mod prod_tests;
+mod proof_root_sequence_tests;
 mod queue_info_tests;
 mod snapshot_tests;
 mod utils;

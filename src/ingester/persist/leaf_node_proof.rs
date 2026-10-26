@@ -4,7 +4,6 @@ use crate::common::typedefs::serializable_pubkey::SerializablePubkey;
 use crate::dao::generated::state_trees;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::leaf_node::{leaf_index_to_node_index, LeafNode};
-use crate::ingester::persist::persisted_batch_event::sequence::get_current_tree_sequence;
 use crate::ingester::persist::persisted_state_tree::{get_proof_nodes, get_proof_path, ZERO_BYTES};
 use crate::ingester::persist::MerkleProofWithContext;
 use sea_orm::QueryFilter;
@@ -21,19 +20,10 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
         return Ok(Vec::new());
     }
 
-    let tree_bytes = merkle_tree_pubkey.0.to_bytes();
-    let root_seq = get_current_tree_sequence(txn, &tree_bytes)
-        .await
-        .map_err(|e| {
-            PhotonApiError::UnexpectedError(format!("Failed to get tree sequence: {}", e))
-        })? as u32;
-    let root_seq = if root_seq == 0 { None } else { Some(root_seq) };
-
     log::debug!(
-        "Fetching proofs for {} indices on tree {}, current root_seq: {:?}",
+        "Fetching proofs for {} indices on tree {}",
         indices.len(),
         merkle_tree_pubkey,
-        root_seq
     );
 
     let existing_leaves = state_trees::Entity::find()
@@ -70,7 +60,7 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                     tree: merkle_tree_pubkey,
                     leaf_index: idx as u32,
                     hash: Hash::try_from(existing.hash)?,
-                    seq: root_seq,
+                    seq: None,
                 },
                 existing.node_idx,
             ));
@@ -79,7 +69,7 @@ pub async fn get_multiple_compressed_leaf_proofs_by_indices(
                 tree: merkle_tree_pubkey,
                 leaf_index: idx as u32,
                 hash: Hash::from(ZERO_BYTES[0]),
-                seq: root_seq,
+                seq: None,
             };
             let node_idx = leaf_index_to_node_index(zero_leaf.leaf_index, tree_height);
             leaf_nodes.push((zero_leaf.clone(), node_idx));
@@ -106,54 +96,18 @@ pub async fn get_multiple_compressed_leaf_proofs(
         .all(txn)
         .await?;
 
-    // Get unique trees from the leaf records
-    let unique_trees: Vec<Vec<u8>> = leaf_records
-        .iter()
-        .map(|x| x.tree.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    // Fetch root seq for each tree using the helper function
-    let mut tree_to_root_seq = HashMap::new();
-    for tree in unique_trees {
-        // Convert Vec<u8> to [u8; 32] for the helper
-        let tree_array: [u8; 32] = tree.clone().try_into().map_err(|_| {
-            PhotonApiError::UnexpectedError("Invalid tree bytes length".to_string())
-        })?;
-
-        let root_seq = get_current_tree_sequence(txn, &tree_array)
-            .await
-            .map_err(|e| {
-                PhotonApiError::UnexpectedError(format!("Failed to get tree sequence: {}", e))
-            })?;
-
-        let root_seq = if root_seq == 0 {
-            None
-        } else {
-            Some(root_seq as u32)
-        };
-
-        if let Ok(tree_pubkey) = SerializablePubkey::try_from(tree.clone()) {
-            log::debug!("Tree {} root seq: {:?}", tree_pubkey, root_seq);
-        }
-
-        tree_to_root_seq.insert(tree, root_seq);
-    }
-
+    // The proof builder reads root sequences with the sibling nodes in one batched query.
     let leaf_nodes_with_node_index = leaf_records
         .into_iter()
         .map(|x| {
-            let tree_bytes = x.tree.clone();
-            let root_seq = tree_to_root_seq.get(&tree_bytes).and_then(|&s| s);
             Ok((
                 LeafNode {
-                    tree: SerializablePubkey::try_from(tree_bytes)?,
+                    tree: SerializablePubkey::try_from(x.tree)?,
                     leaf_index: x.leaf_idx.ok_or(PhotonApiError::RecordNotFound(
                         "Leaf index not found".to_string(),
                     ))? as u32,
-                    hash: Hash::try_from(x.hash.clone())?,
-                    seq: root_seq,
+                    hash: Hash::try_from(x.hash)?,
+                    seq: None,
                 },
                 x.node_idx,
             ))
