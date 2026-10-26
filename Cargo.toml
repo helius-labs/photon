@@ -33,6 +33,9 @@ path = "src/snapshot/loader/main.rs"
 name = "photon-tree-validator"
 path = "src/tools/tree_validator/main.rs"
 
+[features]
+api-profiling = []
+
 [dependencies]
 ark-serialize = "0.5"
 ark-bn254 = "0.5"

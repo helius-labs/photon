@@ -127,10 +127,12 @@ pub struct OpenApiSpec {
 }
 
 impl PhotonApi {
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn liveness(&self) -> Result<(), PhotonApiError> {
         Ok(())
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn readiness(&self) -> Result<(), PhotonApiError> {
         self.db_conn
             .execute(Statement::from_string(
@@ -142,6 +144,7 @@ impl PhotonApi {
             .map_err(Into::into)
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_account(
         &self,
         request: CompressedAccountRequest,
@@ -149,6 +152,7 @@ impl PhotonApi {
         get_compressed_account(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_account_v2(
         &self,
         request: CompressedAccountRequest,
@@ -156,6 +160,7 @@ impl PhotonApi {
         get_compressed_account_v2(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_account_proof(
         &self,
         request: HashRequest,
@@ -163,6 +168,7 @@ impl PhotonApi {
         get_compressed_account_proof(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_account_proof_v2(
         &self,
         request: HashRequest,
@@ -170,6 +176,7 @@ impl PhotonApi {
         get_compressed_account_proof_v2(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_compressed_account_proofs(
         &self,
         request: HashList,
@@ -177,6 +184,7 @@ impl PhotonApi {
         get_multiple_compressed_account_proofs(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_compressed_account_proofs_v2(
         &self,
         request: HashList,
@@ -184,6 +192,7 @@ impl PhotonApi {
         get_multiple_compressed_account_proofs_v2(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_new_address_proofs(
         &self,
         request: AddressList,
@@ -191,6 +200,7 @@ impl PhotonApi {
         get_multiple_new_address_proofs(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_new_address_proofs_v2(
         &self,
         request: AddressListWithTrees,
@@ -198,6 +208,7 @@ impl PhotonApi {
         get_multiple_new_address_proofs_v2(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_accounts_by_owner(
         &self,
         request: GetCompressedTokenAccountsByOwner,
@@ -205,6 +216,7 @@ impl PhotonApi {
         get_compressed_token_accounts_by_owner(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_accounts_by_owner_v2(
         &self,
         request: GetCompressedTokenAccountsByOwner,
@@ -212,6 +224,7 @@ impl PhotonApi {
         get_compressed_token_accounts_by_owner_v2(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_accounts_by_delegate(
         &self,
         request: GetCompressedTokenAccountsByDelegate,
@@ -219,6 +232,7 @@ impl PhotonApi {
         get_compressed_account_token_accounts_by_delegate(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_accounts_by_delegate_v2(
         &self,
         request: GetCompressedTokenAccountsByDelegate,
@@ -226,6 +240,7 @@ impl PhotonApi {
         get_compressed_account_token_accounts_by_delegate_v2(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_balance_by_owner(
         &self,
         request: GetCompressedBalanceByOwnerRequest,
@@ -233,6 +248,7 @@ impl PhotonApi {
         get_compressed_balance_by_owner(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_balances_by_owner(
         &self,
         request: GetCompressedTokenBalancesByOwnerRequest,
@@ -240,6 +256,7 @@ impl PhotonApi {
         get_compressed_token_balances_by_owner(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_balances_by_owner_v2(
         &self,
         request: GetCompressedTokenBalancesByOwnerRequest,
@@ -247,6 +264,7 @@ impl PhotonApi {
         get_compressed_token_balances_by_owner_v2(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_token_account_balance(
         &self,
         request: CompressedAccountRequest,
@@ -254,6 +272,7 @@ impl PhotonApi {
         get_compressed_token_account_balance(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_account_balance(
         &self,
         request: CompressedAccountRequest,
@@ -261,14 +280,17 @@ impl PhotonApi {
         get_compressed_account_balance(&self.db_conn, request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_indexer_health(&self) -> Result<String, PhotonApiError> {
         get_indexer_health(self.db_conn.as_ref(), &self.rpc_client).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_indexer_slot(&self) -> Result<UnsignedInteger, PhotonApiError> {
         get_indexer_slot(self.db_conn.as_ref()).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_queue_elements(
         &self,
         request: GetQueueElementsRequest,
@@ -276,6 +298,7 @@ impl PhotonApi {
         get_queue_elements(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_queue_info(
         &self,
         request: GetQueueInfoRequest,
@@ -283,6 +306,7 @@ impl PhotonApi {
         get_queue_info(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_accounts_by_owner(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
@@ -290,6 +314,7 @@ impl PhotonApi {
         get_compressed_accounts_by_owner(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_accounts_by_owner_v2(
         &self,
         request: GetCompressedAccountsByOwnerRequest,
@@ -297,6 +322,7 @@ impl PhotonApi {
         get_compressed_accounts_by_owner_v2(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compressed_mint_token_holders(
         &self,
         request: GetCompressedMintTokenHoldersRequest,
@@ -304,6 +330,7 @@ impl PhotonApi {
         get_compressed_mint_token_holders(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_compressed_accounts(
         &self,
         request: GetMultipleCompressedAccountsRequest,
@@ -311,6 +338,7 @@ impl PhotonApi {
         get_multiple_compressed_accounts(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_multiple_compressed_accounts_v2(
         &self,
         request: GetMultipleCompressedAccountsRequest,
@@ -318,6 +346,7 @@ impl PhotonApi {
         get_multiple_compressed_accounts_v2(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compression_signatures_for_account(
         &self,
         request: HashRequest,
@@ -325,6 +354,7 @@ impl PhotonApi {
         get_compression_signatures_for_account(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compression_signatures_for_address(
         &self,
         request: GetCompressionSignaturesForAddressRequest,
@@ -332,6 +362,7 @@ impl PhotonApi {
         get_compression_signatures_for_address(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compression_signatures_for_owner(
         &self,
         request: GetCompressionSignaturesForOwnerRequest,
@@ -339,6 +370,7 @@ impl PhotonApi {
         get_compression_signatures_for_owner(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_compression_signatures_for_token_owner(
         &self,
         request: GetCompressionSignaturesForTokenOwnerRequest,
@@ -346,6 +378,7 @@ impl PhotonApi {
         get_compression_signatures_for_token_owner(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_transaction_with_compression_info(
         &self,
         request: GetTransactionRequest,
@@ -354,6 +387,7 @@ impl PhotonApi {
             .await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_transaction_with_compression_info_v2(
         &self,
         request: GetTransactionRequest,
@@ -362,6 +396,7 @@ impl PhotonApi {
             .await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_validity_proof(
         &self,
         request: GetValidityProofRequest,
@@ -375,6 +410,7 @@ impl PhotonApi {
         .await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_validity_proof_v2(
         &self,
         request: GetValidityProofRequestV2,
@@ -388,6 +424,7 @@ impl PhotonApi {
         .await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_latest_compression_signatures(
         &self,
         request: GetLatestSignaturesRequest,
@@ -395,6 +432,7 @@ impl PhotonApi {
         get_latest_compression_signatures(self.db_conn.as_ref(), request).await
     }
 
+    #[cfg_attr(feature = "api-profiling", tracing::instrument(skip_all, err))]
     pub async fn get_latest_non_voting_signatures(
         &self,
         request: GetLatestSignaturesRequest,

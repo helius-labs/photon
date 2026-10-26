@@ -2,6 +2,8 @@
 // binary. This has a number of benefits:
 // 1. Faster compile time since we only have 1 binary.
 // 2. The ability to add global locks on the DB to prevent tests from interfering with each other.
+#[cfg(feature = "api-profiling")]
+mod api_profile;
 mod batch_append_nullified_test;
 mod batched_address_tree_tests;
 mod batched_state_tree_tests;

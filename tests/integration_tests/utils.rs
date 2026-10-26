@@ -63,6 +63,9 @@ static INIT: Lazy<Mutex<Option<()>>> = Lazy::new(|| Mutex::new(None));
 fn setup_logging() {
     let env_filter =
         env::var("RUST_LOG").unwrap_or("info,sqlx=error,sea_orm_migration=error".to_string());
+    #[cfg(feature = "api-profiling")]
+    crate::api_profile::setup_logging(env_filter);
+    #[cfg(not(feature = "api-profiling"))]
     tracing_subscriber::fmt()
         .with_test_writer()
         .with_env_filter(env_filter)
@@ -212,7 +215,7 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
     // Skip transaction isolation level settings in tests to avoid read-after-write visibility issues
     env::set_var("PHOTON_SKIP_ISOLATION_LEVEL", "true");
 
-    let db_conn: Arc<DatabaseConnection> = Arc::new(match opts.db_backend {
+    let db_conn = match opts.db_backend {
         DatabaseBackend::Postgres => {
             let local_db = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
             if !(local_db.contains("127.0.0.1") || local_db.contains("localhost")) {
@@ -225,7 +228,10 @@ pub async fn setup_with_options(name: String, opts: TestSetupOptions) -> TestSet
             SqlxSqliteConnector::from_sqlx_sqlite_pool(setup_sqllite_pool().await)
         }
         _ => unimplemented!(),
-    });
+    };
+    #[cfg(feature = "api-profiling")]
+    let db_conn = crate::api_profile::instrument_connection(db_conn);
+    let db_conn = Arc::new(db_conn);
     run_one_time_setup(&db_conn).await;
     match opts.db_backend {
         DatabaseBackend::Postgres => {
