@@ -43,13 +43,18 @@ async fn database(backend: DatabaseBackend) -> anyhow::Result<DatabaseConnection
         }
         _ => panic!("Unsupported test backend"),
     };
+    let (false_literal, true_literal) = if backend == DatabaseBackend::Sqlite {
+        ("0", "1")
+    } else {
+        ("FALSE", "TRUE")
+    };
     for sql in [
         format!("CREATE {temporary}TABLE blocks (slot BIGINT PRIMARY KEY)"),
         format!("CREATE {temporary}TABLE tree_metadata (tree_pubkey {binary} PRIMARY KEY, queue_pubkey {binary} NOT NULL, tree_type INTEGER NOT NULL, height INTEGER NOT NULL DEFAULT 32, root_history_capacity BIGINT NOT NULL DEFAULT 1000, sequence_number BIGINT NOT NULL DEFAULT 0, next_index BIGINT NOT NULL DEFAULT 0, last_synced_slot BIGINT NOT NULL DEFAULT 0)"),
         format!("CREATE {temporary}TABLE accounts (hash {binary} PRIMARY KEY, data {binary}, data_hash {binary}, address {binary}, owner {binary}, tree {binary} NOT NULL, leaf_index BIGINT DEFAULT 0, seq BIGINT, slot_created BIGINT DEFAULT 0, spent BOOLEAN NOT NULL, prev_spent BOOLEAN, lamports NUMERIC DEFAULT 0, tree_type INTEGER, nullified_in_tree BOOLEAN NOT NULL, nullifier_queue_index BIGINT, in_output_queue BOOLEAN NOT NULL, queue {binary}, nullifier {binary}, tx_hash {binary}, onchain_pubkey {binary}, discriminator_v2 {binary}, discriminator NUMERIC)"),
         format!("CREATE {temporary}TABLE address_queues (tree {binary} NOT NULL, address {binary} PRIMARY KEY, queue_index BIGINT NOT NULL)"),
-        "CREATE INDEX queue_info_input_idx ON accounts (tree, nullifier_queue_index) WHERE nullified_in_tree = FALSE AND nullifier_queue_index IS NOT NULL".to_string(),
-        "CREATE INDEX queue_info_output_idx ON accounts (tree, in_output_queue, leaf_index) WHERE in_output_queue = TRUE".to_string(),
+        format!("CREATE INDEX queue_info_input_idx ON accounts (tree, nullifier_queue_index) WHERE nullified_in_tree = {false_literal} AND nullifier_queue_index IS NOT NULL"),
+        format!("CREATE INDEX queue_info_output_idx ON accounts (tree, in_output_queue, leaf_index) WHERE in_output_queue = {true_literal}"),
         "CREATE INDEX queue_info_address_idx ON address_queues (tree, queue_index)".to_string(),
         "INSERT INTO blocks VALUES (17), (41)".to_string(),
     ] {
@@ -259,5 +264,45 @@ async fn queue_info_batches_large_mixed_tree_sets(
     account(&db, 1001, 503, true, Some(1), false, true).await?;
     address(&db, 1002, 502).await?;
     assert_queues(&db, None, 41, expected).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn queue_info_sqlite_uses_existing_partial_indexes() -> anyhow::Result<()> {
+    use std::sync::{Arc, Mutex};
+
+    let mut db = database(DatabaseBackend::Sqlite).await?;
+    tree(&db, 1, TreeType::StateV2).await?;
+    account(&db, 101, 1, false, Some(1), false, true).await?;
+    let statements = Arc::new(Mutex::new(Vec::new()));
+    let observed = statements.clone();
+    db.set_metric_callback(move |info| {
+        observed.lock().unwrap().push(info.statement.clone());
+    });
+    get_queue_info(&db, GetQueueInfoRequest { trees: None }).await?;
+    let mut statement = statements
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|statement| statement.sql.contains("UNION ALL"))
+        .cloned()
+        .unwrap();
+    statement.sql = format!("EXPLAIN QUERY PLAN {}", statement.sql);
+    let plan = db
+        .query_all(statement)
+        .await?
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "detail"))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(
+        (
+            plan.iter()
+                .any(|step| step.contains("queue_info_input_idx")),
+            plan.iter()
+                .any(|step| step.contains("queue_info_output_idx")),
+        ),
+        (true, true),
+        "Queue counts must use the numeric partial indexes created by SQLite migrations: {plan:?}"
+    );
     Ok(())
 }

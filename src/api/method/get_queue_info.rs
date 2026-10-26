@@ -7,7 +7,8 @@ use crate::common::typedefs::context::Context;
 use crate::dao::generated::tree_metadata;
 use light_compressed_account::{QueueType, TreeType};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, Statement, Value,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
+    Statement, Value,
 };
 use std::collections::HashMap;
 
@@ -41,6 +42,12 @@ async fn fetch_queue_sizes(
     trees: &[tree_metadata::Model],
 ) -> Result<HashMap<(Vec<u8>, u8), u64>, PhotonApiError> {
     let mut result = HashMap::new();
+    // SQLite's partial-index matcher requires the numeric predicates used by its migrations.
+    let (false_literal, true_literal) = if db.get_database_backend() == DatabaseBackend::Sqlite {
+        ("0", "1")
+    } else {
+        ("FALSE", "TRUE")
+    };
     // Reuse parameters across the two state-queue arms, keeping each statement below
     // SQLite's portable parameter limit even when no explicit tree filter was supplied.
     for chunk in trees.chunks(MAX_TREE_PARAMETERS) {
@@ -70,12 +77,12 @@ async fn fetch_queue_sizes(
             queries.push(format!(
                 "SELECT tree, CAST({} AS BIGINT) AS queue_type, COUNT(*) AS queue_size \
                  FROM accounts WHERE tree IN ({trees}) \
-                 AND nullifier_queue_index IS NOT NULL AND nullified_in_tree = FALSE GROUP BY tree",
+                 AND nullifier_queue_index IS NOT NULL AND nullified_in_tree = {false_literal} GROUP BY tree",
                 QueueType::InputStateV2 as u8,
             ));
             queries.push(format!(
                 "SELECT tree, CAST({} AS BIGINT) AS queue_type, COUNT(*) AS queue_size \
-                 FROM accounts WHERE tree IN ({trees}) AND in_output_queue = TRUE GROUP BY tree",
+                 FROM accounts WHERE tree IN ({trees}) AND in_output_queue = {true_literal} GROUP BY tree",
                 QueueType::OutputStateV2 as u8,
             ));
         }
