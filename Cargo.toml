@@ -33,6 +33,9 @@ path = "src/snapshot/loader/main.rs"
 name = "photon-tree-validator"
 path = "src/tools/tree_validator/main.rs"
 
+[features]
+api-profiling = []
+
 [dependencies]
 ark-serialize = "0.5"
 ark-bn254 = "0.5"
@@ -44,6 +47,7 @@ base64 = "0.21.0"
 borsh = "0.10.3"
 borsh1 = { package = "borsh", version = "1.5" }
 bs58 = "0.4.0"
+five8 = "1.0.0"
 byteorder = "1.5.0"
 cadence-macros = "1.2.0"
 clap = { "version" = "4.5.2", features = ["derive"] }
@@ -97,7 +101,7 @@ light-batched-merkle-tree = { version = "0.11", default-features = false}
 light-merkle-tree-metadata = { version = "0.11", default-features = false }
 light-compressed-account = { version = "0.11", default-features = false }
 light-hasher = { version = "5", features = ["poseidon", "keccak", "sha256"], default-features = false}
-light-poseidon = "0.4.0"
+light-poseidon = { git = "https://github.com/Lightprotocol/light-poseidon", rev = "4435b0b11b68036b0b31b57e22af89cd1774f25b" }
 light-indexed-merkle-tree = { version = "5", default-features = false }
 light-event = "0.23.1"
 

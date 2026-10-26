@@ -15,8 +15,70 @@ use crate::ingester::persist::{
     MerkleProofWithContext,
 };
 use light_compressed_account::TreeType;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, Statement, TransactionTrait};
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseTransaction, QueryResult, Statement, TransactionTrait,
+};
 use std::collections::{BTreeMap, HashMap};
+
+#[cfg(test)]
+#[path = "../../../../tests/unit_tests/indexed_address_batch_tests.rs"]
+mod tests;
+
+async fn query_sqlite_predecessors<T>(
+    txn_or_conn: &T,
+    values: &[Vec<u8>],
+    tree: &[u8],
+) -> Result<Vec<QueryResult>, IngesterError>
+where
+    T: ConnectionTrait,
+{
+    const BATCH_SIZE: usize = 1000;
+    let tree_literal = format_bytes(tree.to_vec(), DatabaseBackend::Sqlite);
+    let mut predecessor_rows = Vec::new();
+    for chunk in values.chunks(BATCH_SIZE) {
+        let query = if let [value] = chunk {
+            let value_literal = format_bytes(value.clone(), DatabaseBackend::Sqlite);
+            format!(
+                "SELECT CAST({value_literal} AS BLOB) AS input_address, tree, leaf_index, value,
+                        next_index, next_value, seq FROM indexed_trees
+                 WHERE tree = {tree_literal} AND value < {value_literal} ORDER BY value DESC LIMIT 1"
+            )
+        } else {
+            let inputs = chunk
+                .iter()
+                .map(|value| {
+                    format!(
+                        "(CAST({} AS BLOB))",
+                        format_bytes(value.clone(), DatabaseBackend::Sqlite)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "WITH requested(input_address) AS (VALUES {inputs})
+             SELECT requested.input_address, node.tree, node.leaf_index, node.value,
+                    node.next_index, node.next_value, node.seq
+             FROM requested
+             JOIN indexed_trees node ON node.tree = {tree_literal} AND node.value = (
+                 SELECT candidate.value FROM indexed_trees candidate
+                 WHERE candidate.tree = {tree_literal} AND candidate.value < requested.input_address
+                 ORDER BY candidate.value DESC LIMIT 1
+             )"
+            )
+        };
+        predecessor_rows.extend(
+            txn_or_conn
+                .query_all(Statement::from_string(DatabaseBackend::Sqlite, query))
+                .await
+                .map_err(|error| {
+                    IngesterError::DatabaseError(format!(
+                        "Failed to execute indexed query: {error}"
+                    ))
+                })?,
+        );
+    }
+    Ok(predecessor_rows)
+}
 
 pub async fn get_exclusion_range_with_proof_v2(
     txn: &DatabaseTransaction,
@@ -216,30 +278,7 @@ where
             }
             all_results
         }
-        DatabaseBackend::Sqlite => {
-            let mut response = vec![];
-
-            for value in values {
-                let full_query = format!(
-                    "SELECT * FROM indexed_trees WHERE tree = {} AND value < {} ORDER BY value DESC LIMIT 1",
-                    format_bytes(tree.clone(), txn_or_conn.get_database_backend()),
-                    format_bytes(value.clone(), txn_or_conn.get_database_backend())
-                );
-                let result = txn_or_conn
-                    .query_all(Statement::from_string(
-                        txn_or_conn.get_database_backend(),
-                        full_query,
-                    ))
-                    .await
-                    .map_err(|e| {
-                        IngesterError::DatabaseError(format!(
-                            "Failed to execute indexed query: {e}"
-                        ))
-                    })?;
-                response.extend(result);
-            }
-            response
-        }
+        DatabaseBackend::Sqlite => query_sqlite_predecessors(txn_or_conn, &values, &tree).await?,
         _ => unimplemented!(),
     };
 
@@ -273,12 +312,12 @@ where
         return Ok(HashMap::new());
     }
 
-    let tree_bytes = format_bytes(tree.clone(), txn_or_conn.get_database_backend());
     let mut indexed_tree: HashMap<Vec<u8>, indexed_trees::Model> =
         HashMap::with_capacity(values.len());
 
     match txn_or_conn.get_database_backend() {
         DatabaseBackend::Postgres => {
+            let tree_bytes = format_bytes(tree.clone(), DatabaseBackend::Postgres);
             // Batch queries in chunks to avoid query plan explosion
             // Each chunk uses UNION ALL which PostgreSQL optimizes well with index scans
             // Include input_address as a constant column to track which result belongs to which input
@@ -323,38 +362,17 @@ where
             }
         }
         DatabaseBackend::Sqlite => {
-            for value in values {
-                let value_bytes = format_bytes(value.clone(), txn_or_conn.get_database_backend());
-                let full_query = format!(
-                    "SELECT CAST({val} AS BLOB) as input_address, tree, leaf_index, value, next_index, next_value, seq \
-                     FROM indexed_trees WHERE tree = {tree} AND value < {val} ORDER BY value DESC LIMIT 1",
-                    val = value_bytes,
-                    tree = tree_bytes,
-                );
-                let results = txn_or_conn
-                    .query_all(Statement::from_string(
-                        txn_or_conn.get_database_backend(),
-                        full_query,
-                    ))
-                    .await
-                    .map_err(|e| {
-                        IngesterError::DatabaseError(format!(
-                            "Failed to execute indexed query: {e}"
-                        ))
-                    })?;
-
-                for row in results {
-                    let input_address: Vec<u8> = row.try_get("", "input_address")?;
-                    let model = indexed_trees::Model {
-                        tree: row.try_get("", "tree")?,
-                        leaf_index: row.try_get("", "leaf_index")?,
-                        value: row.try_get("", "value")?,
-                        next_index: row.try_get("", "next_index")?,
-                        next_value: row.try_get("", "next_value")?,
-                        seq: row.try_get("", "seq")?,
-                    };
-                    indexed_tree.insert(input_address, model);
-                }
+            for row in query_sqlite_predecessors(txn_or_conn, &values, &tree).await? {
+                let input_address: Vec<u8> = row.try_get("", "input_address")?;
+                let model = indexed_trees::Model {
+                    tree: row.try_get("", "tree")?,
+                    leaf_index: row.try_get("", "leaf_index")?,
+                    value: row.try_get("", "value")?,
+                    next_index: row.try_get("", "next_index")?,
+                    next_value: row.try_get("", "next_value")?,
+                    seq: row.try_get("", "seq")?,
+                };
+                indexed_tree.insert(input_address, model);
             }
         }
         _ => unimplemented!(),
@@ -390,10 +408,17 @@ pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
     let mut results = HashMap::new();
     let mut leaf_nodes_with_indices = Vec::new();
     let mut address_to_model: HashMap<Vec<u8>, indexed_trees::Model> = HashMap::new();
+    let mut range_by_leaf = HashMap::new();
 
     // Process addresses that have range proofs - O(1) lookup per address
     for address in &addresses {
         if let Some(range_node) = address_to_range.get(address) {
+            address_to_model.insert(address.clone(), range_node.clone());
+            // Only an identical range version can share the computed leaf hash and proof.
+            if range_by_leaf.get(&range_node.leaf_index) == Some(&range_node) {
+                continue;
+            }
+            range_by_leaf.insert(range_node.leaf_index, range_node);
             let hash = compute_hash_by_tree_type(range_node, tree_type).map_err(|e| {
                 PhotonApiError::UnexpectedError(format!("Failed to compute hash: {}", e))
             })?;
@@ -408,7 +433,6 @@ pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
             };
             let node_index = leaf_node.node_index(tree_height);
             leaf_nodes_with_indices.push((leaf_node, node_index));
-            address_to_model.insert(address.clone(), range_node.clone());
         }
     }
 
@@ -423,11 +447,13 @@ pub async fn get_multiple_exclusion_ranges_with_proofs_v2(
         Vec::new()
     };
 
+    let mut proof_by_leaf = HashMap::with_capacity(leaf_proofs.len());
+    for proof in leaf_proofs {
+        // Preserve the first-match behavior of the previous linear search.
+        proof_by_leaf.entry(proof.leaf_index).or_insert(proof);
+    }
     for (address, model) in address_to_model {
-        if let Some(proof) = leaf_proofs
-            .iter()
-            .find(|p| p.leaf_index == model.leaf_index as u32)
-        {
+        if let Some(proof) = proof_by_leaf.get(&(model.leaf_index as u32)) {
             results.insert(address, (model, proof.clone()));
         }
     }

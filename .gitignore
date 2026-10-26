@@ -17,3 +17,5 @@ docker-compose.yml
 .cursor
 **/photon.log
 proto/**/*.bin
+
+/docs/perf-loop/

@@ -40,7 +40,7 @@ impl Hash {
     }
 
     pub fn to_base58(&self) -> String {
-        bs58::encode(self.0).into_string()
+        self.to_string()
     }
 
     pub fn new_unique() -> Self {
@@ -133,7 +133,10 @@ impl TryFrom<Vec<u8>> for Hash {
 
 impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_base58())
+        let mut encoded_hash_bytes = [0; five8::BASE58_ENCODED_32_MAX_LEN];
+        let encoded_length = usize::from(five8::encode_32(&self.0, &mut encoded_hash_bytes));
+        let encoded_hash_text = encoded_hash_bytes.get(..encoded_length).ok_or(fmt::Error)?;
+        f.write_str(std::str::from_utf8(encoded_hash_text).map_err(|_| fmt::Error)?)
     }
 }
 
@@ -171,8 +174,7 @@ impl<'de> Deserialize<'de> for Hash {
 
 impl Serialize for Hash {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let base58_string = bs58::encode(self.0).into_string();
-        serializer.serialize_str(&base58_string)
+        serializer.collect_str(self)
     }
 }
 

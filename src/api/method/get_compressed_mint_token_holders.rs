@@ -1,5 +1,8 @@
 use byteorder::{ByteOrder, LittleEndian};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -69,11 +72,14 @@ pub async fn get_compressed_mint_token_holders(
         let balance = LittleEndian::read_u64(balance);
 
         filter = filter.and(
-            token_owner_balances::Column::Amount.lt(balance).or(
-                token_owner_balances::Column::Amount
-                    .eq(balance)
-                    .and(token_owner_balances::Column::Owner.lt::<Vec<u8>>(owner.into())),
-            ),
+            Expr::tuple([
+                Expr::col(token_owner_balances::Column::Amount.as_column_ref()).into_simple_expr(),
+                Expr::col(token_owner_balances::Column::Owner.as_column_ref()).into_simple_expr(),
+            ])
+            .less_than(Expr::tuple([
+                Expr::value(balance),
+                Expr::value(owner.to_vec()),
+            ])),
         );
     }
     let limit = limit.map(|l| l.value()).unwrap_or(PAGE_LIMIT);

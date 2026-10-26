@@ -4,10 +4,15 @@ use utoipa::ToSchema;
 
 use crate::api::error::PhotonApiError;
 use crate::common::typedefs::context::Context;
-use crate::dao::generated::{accounts, address_queues, tree_metadata};
+use crate::dao::generated::tree_metadata;
 use light_compressed_account::{QueueType, TreeType};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
+    Statement, Value,
+};
 use std::collections::HashMap;
+
+const MAX_TREE_PARAMETERS: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -34,64 +39,75 @@ pub struct QueueInfo {
 
 async fn fetch_queue_sizes(
     db: &DatabaseConnection,
-    tree_filter: Option<Vec<Vec<u8>>>,
+    trees: &[tree_metadata::Model],
 ) -> Result<HashMap<(Vec<u8>, u8), u64>, PhotonApiError> {
     let mut result = HashMap::new();
-
-    let mut query = tree_metadata::Entity::find().filter(
-        tree_metadata::Column::TreeType
-            .is_in([TreeType::StateV2 as i32, TreeType::AddressV2 as i32]),
-    );
-
-    if let Some(trees) = tree_filter {
-        query = query.filter(tree_metadata::Column::TreePubkey.is_in(trees));
-    }
-
-    let trees = query
-        .all(db)
-        .await
-        .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-    for tree in trees {
-        let tree_pubkey = tree.tree_pubkey.clone();
-
-        match tree.tree_type {
-            t if t == TreeType::StateV2 as i32 => {
-                let nullifier_count = accounts::Entity::find()
-                    .filter(accounts::Column::Tree.eq(tree_pubkey.clone()))
-                    .filter(accounts::Column::NullifierQueueIndex.is_not_null())
-                    .filter(accounts::Column::NullifiedInTree.eq(false))
-                    .count(db)
-                    .await
-                    .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-                result.insert(
-                    (tree_pubkey.clone(), QueueType::InputStateV2 as u8),
-                    nullifier_count,
-                );
-
-                let output_queue_size = accounts::Entity::find()
-                    .filter(accounts::Column::Tree.eq(tree_pubkey.clone()))
-                    .filter(accounts::Column::InOutputQueue.eq(true))
-                    .count(db)
-                    .await
-                    .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
-
-                result.insert(
-                    (tree_pubkey, QueueType::OutputStateV2 as u8),
-                    output_queue_size,
-                );
+    // SQLite's partial-index matcher requires the numeric predicates used by its migrations.
+    let (false_literal, true_literal) = if db.get_database_backend() == DatabaseBackend::Sqlite {
+        ("0", "1")
+    } else {
+        ("FALSE", "TRUE")
+    };
+    // Reuse parameters across the two state-queue arms, keeping each statement below
+    // SQLite's portable parameter limit even when no explicit tree filter was supplied.
+    for chunk in trees.chunks(MAX_TREE_PARAMETERS) {
+        let mut values: Vec<Value> = Vec::with_capacity(chunk.len());
+        let mut state_placeholders = Vec::new();
+        let mut address_placeholders = Vec::new();
+        let state_trees = chunk
+            .iter()
+            .filter(|tree| tree.tree_type == TreeType::StateV2 as i32);
+        let address_trees = chunk
+            .iter()
+            .filter(|tree| tree.tree_type == TreeType::AddressV2 as i32);
+        // SQLite binds named parameters by their first appearance in the UNION arms.
+        for tree in state_trees.chain(address_trees) {
+            values.push(tree.tree_pubkey.clone().into());
+            let placeholder = format!("${}", values.len());
+            match tree.tree_type {
+                t if t == TreeType::StateV2 as i32 => state_placeholders.push(placeholder),
+                t if t == TreeType::AddressV2 as i32 => address_placeholders.push(placeholder),
+                _ => continue,
             }
-            t if t == TreeType::AddressV2 as i32 => {
-                let address_count = address_queues::Entity::find()
-                    .filter(address_queues::Column::Tree.eq(tree_pubkey.clone()))
-                    .count(db)
-                    .await
-                    .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
+        }
 
-                result.insert((tree_pubkey, QueueType::AddressV2 as u8), address_count);
-            }
-            _ => continue,
+        let mut queries = Vec::new();
+        if !state_placeholders.is_empty() {
+            let trees = state_placeholders.join(", ");
+            queries.push(format!(
+                "SELECT tree, CAST({} AS BIGINT) AS queue_type, COUNT(*) AS queue_size \
+                 FROM accounts WHERE tree IN ({trees}) \
+                 AND nullifier_queue_index IS NOT NULL AND nullified_in_tree = {false_literal} GROUP BY tree",
+                QueueType::InputStateV2 as u8,
+            ));
+            queries.push(format!(
+                "SELECT tree, CAST({} AS BIGINT) AS queue_type, COUNT(*) AS queue_size \
+                 FROM accounts WHERE tree IN ({trees}) AND in_output_queue = {true_literal} GROUP BY tree",
+                QueueType::OutputStateV2 as u8,
+            ));
+        }
+        if !address_placeholders.is_empty() {
+            let trees = address_placeholders.join(", ");
+            queries.push(format!(
+                "SELECT tree, CAST({} AS BIGINT) AS queue_type, COUNT(*) AS queue_size \
+                 FROM address_queues WHERE tree IN ({trees}) GROUP BY tree",
+                QueueType::AddressV2 as u8,
+            ));
+        }
+
+        for row in db
+            .query_all(Statement::from_sql_and_values(
+                db.get_database_backend(),
+                &queries.join(" UNION ALL "),
+                values,
+            ))
+            .await
+            .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?
+        {
+            let tree: Vec<u8> = row.try_get("", "tree")?;
+            let queue_type: i64 = row.try_get("", "queue_type")?;
+            let queue_size: i64 = row.try_get("", "queue_size")?;
+            result.insert((tree, queue_type as u8), queue_size as u64);
         }
     }
 
@@ -116,42 +132,39 @@ pub async fn get_queue_info(
         None
     };
 
-    let queue_sizes = fetch_queue_sizes(db, tree_filter).await?;
-
-    let tree_pubkeys: Vec<Vec<u8>> = queue_sizes
-        .keys()
-        .map(|(tree, _)| tree.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    let tree_metadata_list = tree_metadata::Entity::find()
-        .filter(tree_metadata::Column::TreePubkey.is_in(tree_pubkeys))
+    let mut query = tree_metadata::Entity::find().filter(
+        tree_metadata::Column::TreeType
+            .is_in([TreeType::StateV2 as i32, TreeType::AddressV2 as i32]),
+    );
+    if let Some(trees) = tree_filter {
+        query = query.filter(tree_metadata::Column::TreePubkey.is_in(trees));
+    }
+    let trees = query
         .all(db)
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("DB error: {}", e)))?;
+    let mut queue_sizes = fetch_queue_sizes(db, &trees).await?;
 
-    let tree_to_queue: HashMap<Vec<u8>, Vec<u8>> = tree_metadata_list
-        .into_iter()
-        .map(|t| (t.tree_pubkey, t.queue_pubkey))
-        .collect();
-
-    let queues: Vec<QueueInfo> = queue_sizes
-        .into_iter()
-        .map(|((tree_bytes, queue_type), size)| {
-            let queue_bytes = tree_to_queue
-                .get(&tree_bytes)
-                .cloned()
-                .unwrap_or_else(|| vec![0u8; 32]);
-
-            QueueInfo {
-                tree: bs58::encode(&tree_bytes).into_string(),
-                queue: bs58::encode(&queue_bytes).into_string(),
+    let mut queues = Vec::new();
+    for tree in trees {
+        let queue_types: &[QueueType] = if tree.tree_type == TreeType::StateV2 as i32 {
+            &[QueueType::InputStateV2, QueueType::OutputStateV2]
+        } else {
+            &[QueueType::AddressV2]
+        };
+        for queue_type in queue_types {
+            let queue_type = *queue_type as u8;
+            let size = queue_sizes
+                .remove(&(tree.tree_pubkey.clone(), queue_type))
+                .unwrap_or(0);
+            queues.push(QueueInfo {
+                tree: bs58::encode(&tree.tree_pubkey).into_string(),
+                queue: bs58::encode(&tree.queue_pubkey).into_string(),
                 queue_type,
                 queue_size: size,
-            }
-        })
-        .collect();
+            });
+        }
+    }
 
     let slot = Context::extract(db).await?.slot;
 

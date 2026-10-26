@@ -8,10 +8,10 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
-use sea_orm::sea_query::SimpleExpr;
+use sea_orm::sea_query::{Expr, SimpleExpr};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, Value,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait, Value,
 };
 use serde::{Deserialize, Serialize};
 use solana_signature::Signature;
@@ -31,6 +31,17 @@ pub const PAGE_LIMIT: u64 = 1000;
 #[cfg(test)]
 #[path = "../../../tests/unit_tests/owner_signature_tests.rs"]
 mod tests;
+
+fn token_account_cursor_filter(cursor_mint: &[u8], cursor_hash: &[u8]) -> SimpleExpr {
+    Expr::tuple([
+        Expr::col(token_accounts::Column::Mint.as_column_ref()).into_simple_expr(),
+        Expr::col(token_accounts::Column::Hash.as_column_ref()).into_simple_expr(),
+    ])
+    .greater_than(Expr::tuple([
+        Expr::value(cursor_mint.to_vec()),
+        Expr::value(cursor_hash.to_vec()),
+    ]))
+}
 
 pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
     value
@@ -159,14 +170,7 @@ pub async fn fetch_token_accounts(
         if options.mint.is_some() {
             filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
         } else {
-            // No specific mint, use both mint and hash for pagination
-            filter = filter.and(
-                token_accounts::Column::Mint
-                    .gt::<Vec<u8>>(cursor_mint.into())
-                    .or(token_accounts::Column::Mint
-                        .eq::<Vec<u8>>(cursor_mint.into())
-                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
-            );
+            filter = filter.and(token_account_cursor_filter(cursor_mint, cursor_hash));
         }
     }
     if let Some(l) = options.limit {
@@ -434,9 +438,14 @@ fn compute_search_filter_and_arg(
         SignatureFilter::Address(address) => {
             ("JOIN accounts ON account_transactions.hash = accounts.hash WHERE accounts.address = $1".to_string(), address.into())
         }
-        SignatureFilter::Owner(owner) => (format!(
-            "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
-        ), owner.into()),
+        SignatureFilter::Owner(owner) => {
+            // Both history indexes start with spent; retain spent and unspent accounts.
+            let filter = format!(
+                "JOIN {base_table} ON account_transactions.hash = {base_table}.hash \
+                 WHERE {base_table}.owner = $1 AND {base_table}.spent IN (FALSE, TRUE)"
+            );
+            (filter, owner.into())
+        }
     };
     let arg: Value = arg.into();
     Ok((filter, arg))
@@ -467,14 +476,16 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
-            let cursor_filter =  format!(
-                "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
-                num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
+            // Bound both indexes so merge joins can start at the cursor.
+            let cursor_filter = format!(
+                "AND (transactions.slot, transactions.signature) < (${}, ${}) AND blocks.slot <= ${}",
+                num_preceding_args + 1,
+                num_preceding_args + 2,
+                num_preceding_args + 1
             );
             Ok((
                 cursor_filter,
                 vec![
-                    slot.into(),
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
                 ],
@@ -493,14 +504,12 @@ fn compute_raw_sql_query_and_args(
     limit: u64,
 ) -> Result<(String, Vec<Value>), PhotonApiError> {
     match signature_filter {
-        Some(SignatureFilter::Owner(owner))
-            if search_type == SignatureSearchType::Standard
-                && backend == DatabaseBackend::Postgres =>
-        {
+        Some(SignatureFilter::Owner(owner)) if backend == DatabaseBackend::Postgres => {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
-            // SQLite uses the owner-driven join below to avoid scanning unrelated transactions.
-            // A transaction can touch many accounts belonging to this owner. EXISTS avoids
-            // multiplying those rows and sorting the full history to remove duplicates.
+            let (filter, arg) =
+                compute_search_filter_and_arg(search_type, SignatureFilter::Owner(owner))?;
+            // EXISTS returns each transaction once, even when many owned accounts touch it.
+            // Reuse the spent predicate so selective owners can use the existing history index.
             let raw_sql = format!(
                 "
                 SELECT transactions.signature, transactions.slot, transactions.error, blocks.block_time
@@ -508,8 +517,7 @@ fn compute_raw_sql_query_and_args(
                 JOIN blocks ON transactions.slot = blocks.slot
                 WHERE EXISTS (
                     SELECT 1 FROM account_transactions
-                    JOIN accounts ON account_transactions.hash = accounts.hash
-                    WHERE accounts.owner = $1
+                    {filter}
                       AND account_transactions.signature = transactions.signature
                 )
                 {cursor_filter}
@@ -517,11 +525,7 @@ fn compute_raw_sql_query_and_args(
                 LIMIT {limit}
             "
             );
-            let owner: Vec<u8> = owner.into();
-            Ok((
-                raw_sql,
-                vec![owner.into()].into_iter().chain(cursor_args).collect(),
-            ))
+            Ok((raw_sql, vec![arg].into_iter().chain(cursor_args).collect()))
         }
         Some(signature_filter) => {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
@@ -580,6 +584,7 @@ pub async fn search_for_signatures(
     limit: Option<Limit>,
 ) -> Result<PaginatedSignatureInfoListWithError, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
+    let owner_search = matches!(signature_filter.as_ref(), Some(SignatureFilter::Owner(_)));
     let (raw_sql, args) = compute_raw_sql_query_and_args(
         conn.get_database_backend(),
         search_type,
@@ -589,11 +594,27 @@ pub async fn search_for_signatures(
         limit,
     )?;
 
-    let signatures: Vec<SignatureInfoModel> = SignatureInfoModel::find_by_statement(
-        Statement::from_sql_and_values(conn.get_database_backend(), &raw_sql, args.clone()),
-    )
-    .all(conn)
-    .await?;
+    let query = SignatureInfoModel::find_by_statement(Statement::from_sql_and_values(
+        conn.get_database_backend(),
+        &raw_sql,
+        args,
+    ));
+    let signatures = if owner_search && conn.get_database_backend() == DatabaseBackend::Postgres {
+        let transaction = conn.begin().await?;
+        // A cached generic plan can scan a large owner's history before applying LIMIT.
+        // SET LOCAL keeps owner-specific planning scoped to this search transaction.
+        transaction
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                "SET LOCAL plan_cache_mode = force_custom_plan".to_string(),
+            ))
+            .await?;
+        let signatures = query.all(&transaction).await?;
+        transaction.commit().await?;
+        signatures
+    } else {
+        query.all(conn).await?
+    };
 
     let signatures = parse_signatures_infos(signatures)?;
 
@@ -731,14 +752,7 @@ pub async fn fetch_token_accounts_v2(
         if options.mint.is_some() {
             filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
         } else {
-            // No specific mint, use both mint and hash for pagination
-            filter = filter.and(
-                token_accounts::Column::Mint
-                    .gt::<Vec<u8>>(cursor_mint.into())
-                    .or(token_accounts::Column::Mint
-                        .eq::<Vec<u8>>(cursor_mint.into())
-                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
-            );
+            filter = filter.and(token_account_cursor_filter(cursor_mint, cursor_hash));
         }
     }
     if let Some(l) = options.limit {
