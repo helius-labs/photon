@@ -434,9 +434,16 @@ fn compute_search_filter_and_arg(
         SignatureFilter::Address(address) => {
             ("JOIN accounts ON account_transactions.hash = accounts.hash WHERE accounts.address = $1".to_string(), address.into())
         }
-        SignatureFilter::Owner(owner) => (format!(
-            "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
-        ), owner.into()),
+        SignatureFilter::Owner(owner) => {
+            let mut filter = format!(
+                "JOIN {base_table} ON account_transactions.hash = {base_table}.hash WHERE {base_table}.owner = $1"
+            );
+            if search_type == SignatureSearchType::Standard {
+                // Enumerate both non-null spent states to use the (spent, owner, hash) index.
+                filter.push_str(" AND accounts.spent IN (FALSE, TRUE)");
+            }
+            (filter, owner.into())
+        }
     };
     let arg: Value = arg.into();
     Ok((filter, arg))
