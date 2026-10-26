@@ -10,8 +10,8 @@ use crate::dao::generated::{accounts, token_accounts};
 use byteorder::{ByteOrder, LittleEndian};
 use sea_orm::sea_query::SimpleExpr;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Statement, Value,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{Deserialize, Serialize};
 use solana_signature::Signature;
@@ -27,6 +27,10 @@ use utoipa::ToSchema;
 use super::super::error::PhotonApiError;
 
 pub const PAGE_LIMIT: u64 = 1000;
+
+#[cfg(test)]
+#[path = "../../../tests/unit_tests/owner_signature_tests.rs"]
+mod tests;
 
 pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
     value
@@ -481,6 +485,7 @@ fn compute_cursor_filter(
 }
 
 fn compute_raw_sql_query_and_args(
+    backend: DatabaseBackend,
     search_type: SignatureSearchType,
     signature_filter: Option<SignatureFilter>,
     only_compressed: bool,
@@ -488,6 +493,36 @@ fn compute_raw_sql_query_and_args(
     limit: u64,
 ) -> Result<(String, Vec<Value>), PhotonApiError> {
     match signature_filter {
+        Some(SignatureFilter::Owner(owner))
+            if search_type == SignatureSearchType::Standard
+                && backend == DatabaseBackend::Postgres =>
+        {
+            let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
+            // SQLite uses the owner-driven join below to avoid scanning unrelated transactions.
+            // A transaction can touch many accounts belonging to this owner. EXISTS avoids
+            // multiplying those rows and sorting the full history to remove duplicates.
+            let raw_sql = format!(
+                "
+                SELECT transactions.signature, transactions.slot, transactions.error, blocks.block_time
+                FROM transactions
+                JOIN blocks ON transactions.slot = blocks.slot
+                WHERE EXISTS (
+                    SELECT 1 FROM account_transactions
+                    JOIN accounts ON account_transactions.hash = accounts.hash
+                    WHERE accounts.owner = $1
+                      AND account_transactions.signature = transactions.signature
+                )
+                {cursor_filter}
+                ORDER BY transactions.slot DESC, transactions.signature DESC
+                LIMIT {limit}
+            "
+            );
+            let owner: Vec<u8> = owner.into();
+            Ok((
+                raw_sql,
+                vec![owner.into()].into_iter().chain(cursor_args).collect(),
+            ))
+        }
         Some(signature_filter) => {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
 
@@ -546,6 +581,7 @@ pub async fn search_for_signatures(
 ) -> Result<PaginatedSignatureInfoListWithError, PhotonApiError> {
     let limit = limit.unwrap_or_default().0;
     let (raw_sql, args) = compute_raw_sql_query_and_args(
+        conn.get_database_backend(),
         search_type,
         signature_filter,
         only_compressed,
