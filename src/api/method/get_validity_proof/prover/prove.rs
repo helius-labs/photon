@@ -1,4 +1,3 @@
-use crate::api::error::PhotonApiError;
 use crate::api::method::get_multiple_new_address_proofs::MerkleContextWithNewAddressProof;
 use crate::api::method::get_validity_proof::prover::gnark::compress_proof;
 use crate::api::method::get_validity_proof::prover::helpers::{
@@ -12,11 +11,17 @@ use crate::api::method::get_validity_proof::prover::structs::{
 use crate::common::typedefs::hash::Hash;
 use crate::ingester::parser::tree_info::TreeInfo;
 use crate::ingester::persist::MerkleProofWithContext;
+use crate::{api::error::PhotonApiError, metric};
+use cadence_macros::statsd_time;
 use light_batched_merkle_tree::constants::{
     DEFAULT_BATCH_ADDRESS_TREE_HEIGHT, DEFAULT_BATCH_STATE_TREE_HEIGHT,
 };
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
+use std::time::Instant;
+
+static PROVER_HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 /// Computes a proof's index into its tree's circular root-history buffer.
 ///
@@ -132,13 +137,12 @@ pub(crate) async fn generate_proof(
         new_addresses: convert_non_inclusion_merkle_proof_to_hex(db_new_address_proofs.clone()),
     };
 
-    let client = Client::new();
     let prover_request_url = format!("{}/prove", prover_url);
     let json_body = serde_json::to_string(&batch_inputs).map_err(|e| {
         PhotonApiError::UnexpectedError(format!("Error serializing prover request: {}", e))
     })?;
 
-    let mut request_builder = client
+    let mut request_builder = PROVER_HTTP_CLIENT
         .post(&prover_request_url)
         .body(json_body)
         .header("Content-Type", "application/json");
@@ -147,6 +151,7 @@ pub(crate) async fn generate_proof(
         request_builder = request_builder.header("Authorization", format!("Bearer {}", api_key));
     }
 
+    let request_started_at = Instant::now();
     let res = request_builder.send().await.map_err(|e| {
         PhotonApiError::UnexpectedError(format!("Error sending request to prover: {}", e))
     })?;
@@ -161,6 +166,9 @@ pub(crate) async fn generate_proof(
     let response_text = res.text().await.map_err(|e| {
         PhotonApiError::UnexpectedError(format!("Error reading prover response: {}", e))
     })?;
+    metric! {
+        statsd_time!("prover_request_duration_ms", request_started_at.elapsed());
+    }
 
     let proof_json: GnarkProofJson = serde_json::from_str(&response_text).map_err(|e| {
         PhotonApiError::UnexpectedError(format!(
@@ -179,8 +187,11 @@ pub(crate) async fn generate_proof(
                 "Failed to get TreeInfo for account tree '{}'",
                 acc_proof.merkle_tree
             )))?;
-        let root_index_mod_queue =
-            root_index_mod_queue(acc_proof.root_seq, tree_info.root_history_capacity, queue_size)?;
+        let root_index_mod_queue = root_index_mod_queue(
+            acc_proof.root_seq,
+            tree_info.root_history_capacity,
+            queue_size,
+        )?;
         log::debug!("Proof generation: tree {} leaf_index {} root_seq {} tree_capacity {} root_index_mod_queue {}",
             acc_proof.merkle_tree, acc_proof.leaf_index, acc_proof.root_seq, tree_info.root_history_capacity, root_index_mod_queue);
         account_details.push(AccountProofDetail {
@@ -201,8 +212,11 @@ pub(crate) async fn generate_proof(
                 "Failed to get TreeInfo for address tree '{}'",
                 addr_proof.merkleTree
             )))?;
-        let root_index_mod_queue =
-            root_index_mod_queue(addr_proof.rootSeq, tree_info.root_history_capacity, queue_size)?;
+        let root_index_mod_queue = root_index_mod_queue(
+            addr_proof.rootSeq,
+            tree_info.root_history_capacity,
+            queue_size,
+        )?;
         address_details.push(AddressProofDetail {
             address: addr_proof.address.to_string(),
             root: addr_proof.root.to_string(),
