@@ -1,5 +1,6 @@
 use core::fmt;
-use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, thread::sleep, time::Duration};
+use std::{env, net::UdpSocket, path::PathBuf, sync::Arc, time::Duration};
+use tokio::time::sleep;
 
 use cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient};
 use cadence_macros::set_global_default;
@@ -12,6 +13,7 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
+pub mod rpc;
 pub mod token_layout;
 pub mod typedefs;
 
@@ -50,32 +52,41 @@ pub fn setup_metrics(metrics_endpoint: Option<String>) {
 }
 
 pub async fn get_genesis_hash_with_infinite_retry(rpc_client: &RpcClient) -> String {
+    let mut backoff = crate::ingester::retry::Backoff::default();
     loop {
         match rpc_client.get_genesis_hash().await {
             Ok(genesis_hash) => return genesis_hash.to_string(),
             Err(e) => {
                 log::error!("Failed to fetch genesis hash: {}", e);
-                sleep(Duration::from_secs(5));
+                sleep(backoff.next_delay()).await;
             }
         }
     }
 }
 
 pub async fn fetch_block_parent_slot(rpc_client: &RpcClient, slot: u64) -> u64 {
-    rpc_client
-        .get_block_with_config(
-            slot,
-            RpcBlockConfig {
-                encoding: Some(UiTransactionEncoding::Base64),
-                transaction_details: Some(TransactionDetails::None),
-                rewards: None,
-                commitment: Some(CommitmentConfig::confirmed()),
-                max_supported_transaction_version: Some(1),
-            },
-        )
-        .await
-        .unwrap()
-        .parent_slot
+    let mut backoff = crate::ingester::retry::Backoff::default();
+    loop {
+        match rpc_client
+            .get_block_with_config(
+                slot,
+                RpcBlockConfig {
+                    encoding: Some(UiTransactionEncoding::Base64),
+                    transaction_details: Some(TransactionDetails::None),
+                    rewards: None,
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    max_supported_transaction_version: Some(1),
+                },
+            )
+            .await
+        {
+            Ok(block) => return block.parent_slot,
+            Err(error) => {
+                log::error!("Failed to fetch parent for start slot {}: {}", slot, error);
+                sleep(backoff.next_delay()).await;
+            }
+        }
+    }
 }
 
 pub async fn get_network_start_slot(rpc_client: &RpcClient) -> u64 {
@@ -134,6 +145,7 @@ pub async fn setup_pg_connection(database_url: &str, max_connections: u32) -> Da
 }
 
 pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
+    let mut backoff = crate::ingester::retry::Backoff::default();
     loop {
         match client.get_slot().await {
             Ok(slot) => {
@@ -141,7 +153,7 @@ pub async fn fetch_current_slot_with_infinite_retry(client: &RpcClient) -> u64 {
             }
             Err(e) => {
                 log::error!("Failed to fetch current slot: {}", e);
-                sleep(Duration::from_secs(5));
+                sleep(backoff.next_delay()).await;
             }
         }
     }

@@ -1,137 +1,195 @@
 use std::{
-    collections::BTreeMap,
     sync::{atomic::Ordering, Arc},
+    time::Duration,
 };
 
 use async_stream::stream;
 use cadence_macros::statsd_count;
-use futures::{pin_mut, Stream, StreamExt};
-use solana_client::{
-    nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig, rpc_request::RpcError,
-};
-
+use futures::{stream, Stream, StreamExt};
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig};
 use solana_commitment_config::CommitmentConfig;
 use solana_transaction_status::{TransactionDetails, UiTransactionEncoding};
 
 use crate::{
-    ingester::typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+    ingester::{
+        error::IngesterError,
+        retry::Backoff,
+        typedefs::block_info::{parse_ui_confirmed_blocked, BlockInfo},
+    },
     metric,
     monitor::{start_latest_slot_updater, LATEST_SLOT},
 };
 
-const SKIPPED_BLOCK_ERRORS: [i64; 2] = [-32007, -32009];
+const SLOT_PAGE: u64 = 4096;
 
-fn get_slot_stream(rpc_client: Arc<RpcClient>, start_slot: u64) -> impl Stream<Item = u64> {
-    stream! {
-        start_latest_slot_updater(rpc_client.clone()).await;
-        let mut next_slot_to_fetch = start_slot;
-        loop {
-            if next_slot_to_fetch > LATEST_SLOT.load(Ordering::SeqCst) {
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                continue;
-            }
-            yield next_slot_to_fetch;
-            next_slot_to_fetch += 1;
-        }
-    }
-}
-
+/// Enumerate produced slots rather than interpreting provider errors as proof
+/// that a slot was skipped. Ordered, finite batches bound fetch-ahead even when
+/// a predecessor is unavailable. No later batch is scheduled before this one
+/// has been consumed by the indexer.
 pub fn get_block_poller_stream(
     rpc_client: Arc<RpcClient>,
     mut last_indexed_slot: u64,
     max_concurrent_block_fetches: usize,
 ) -> impl Stream<Item = Vec<BlockInfo>> {
     stream! {
-        let start_slot = match last_indexed_slot {
-            0 => 0,
-            last_indexed_slot => last_indexed_slot + 1
-        };
-        let slot_stream = get_slot_stream(rpc_client.clone(), start_slot);
-        pin_mut!(slot_stream);
-        let block_stream = slot_stream
-            .map(|slot| {
-                let rpc_client = rpc_client.clone();
-                async move { fetch_block_with_infinite_retries(rpc_client.clone(), slot).await }
-            })
-            .buffer_unordered(max_concurrent_block_fetches);
-        pin_mut!(block_stream);
-        let mut block_cache: BTreeMap<u64, BlockInfo> = BTreeMap::new();
-        while let Some(block) = block_stream.next().await {
-            if let Some(block) = block {
-                block_cache.insert(block.metadata.slot, block);
+        start_latest_slot_updater(rpc_client.clone()).await;
+        let concurrency = max_concurrent_block_fetches.max(1);
+        // Slot zero is the bootstrap checkpoint; genesis blocks may have no
+        // timestamp or transaction metadata and contain no compression events.
+        let mut next_slot = last_indexed_slot.saturating_add(1);
+        let mut backoff = Backoff::default();
+        loop {
+            let head = LATEST_SLOT.load(Ordering::SeqCst);
+            if next_slot > head {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
             }
-            let (blocks_to_index, last_indexed_slot_from_cache) = pop_cached_blocks_to_index(&mut block_cache, last_indexed_slot);
-            last_indexed_slot = last_indexed_slot_from_cache;
-            metric! {
-                statsd_count!("rpc_block_emitted", blocks_to_index.len() as i64);
+            let end = head.min(next_slot.saturating_add(SLOT_PAGE - 1));
+            let slots = match rpc_client.get_blocks_with_commitment(next_slot, Some(end), CommitmentConfig::confirmed()).await {
+                Ok(slots) if slots.iter().all(|slot| (next_slot..=end).contains(slot))
+                    && slots.windows(2).all(|pair| pair[0] < pair[1]) => slots,
+                result => {
+                    log::error!("getBlocks failed for {}-{}: {:?}", next_slot, end, result);
+                    let error = match result {
+                        Err(error) => IngesterError::from(error),
+                        Ok(_) => IngesterError::ParserError("Invalid produced-slot order or range".into()),
+                    };
+                    crate::ingester::supervisor::record_source_failure(&error);
+                    tokio::time::sleep(backoff.next_delay()).await;
+                    continue;
+                }
+            };
+            if slots.is_empty() {
+                next_slot = end.saturating_add(1);
+                continue;
             }
-            if !blocks_to_index.is_empty() {
-                yield blocks_to_index;
+            let block_stream = stream::iter(slots.into_iter().take(concurrency))
+                .map(|slot| fetch_block(rpc_client.clone(), slot))
+                .buffered(concurrency);
+            futures::pin_mut!(block_stream);
+            let mut blocks = Vec::new();
+            let mut failure = None;
+            while let Some(result) = block_stream.next().await {
+                match result {
+                    Ok(block) => {
+                        let expected_parent = blocks.last().map_or(last_indexed_slot, |block: &BlockInfo| block.metadata.slot);
+                        if block.metadata.parent_slot != expected_parent {
+                            if blocks.is_empty() {
+                                // getBlocks may omit history on one provider. Walk the
+                                // actual parent links, asking fallback RPCs as needed.
+                                match repair_gap(rpc_client.clone(), block, last_indexed_slot, concurrency).await {
+                                    Ok(repaired) => blocks = repaired,
+                                    Err(error) => failure = Some(error),
+                                }
+                            } else {
+                                // Commit the valid prefix, then repair on the next pass.
+                                log::warn!("Parent gap after slot {}, restarting from that checkpoint", expected_parent);
+                            }
+                            break;
+                        }
+                        if blocks.last().is_some_and(|parent| parent.metadata.blockhash != block.metadata.parent_blockhash) {
+                            failure = Some(IngesterError::ParserError(format!("Parent hash mismatch at slot {}", block.metadata.slot)));
+                            break;
+                        }
+                        blocks.push(block);
+                    }
+                    Err(error) => { failure = Some(error); break; }
+                }
+            }
+            if let Some(error) = failure {
+                // An empty page on a lagging provider may have moved the scan
+                // ahead of real blocks. Retry from the durable chain boundary.
+                next_slot = last_indexed_slot.saturating_add(1);
+                crate::ingester::supervisor::record_source_failure(&error);
+                log::error!("Block fetch stopped after checkpoint {}: {} (retryable={})", last_indexed_slot, error, error.is_retryable());
+                metric! { statsd_count!("rpc_block_fetch_failed", 1); }
+                tokio::time::sleep(backoff.next_delay()).await;
+            }
+            if let Some(last) = blocks.last() {
+                last_indexed_slot = last.metadata.slot;
+                next_slot = last_indexed_slot.saturating_add(1);
+                backoff = Backoff::default();
+                metric! {
+                    statsd_count!("rpc_block_emitted", blocks.len() as i64);
+                }
+                yield blocks;
             }
         }
     }
 }
 
-fn pop_cached_blocks_to_index(
-    block_cache: &mut BTreeMap<u64, BlockInfo>,
-    mut last_indexed_slot: u64,
-) -> (Vec<BlockInfo>, u64) {
-    let mut blocks = Vec::new();
-    while let Some(&min_slot) = block_cache.keys().min() {
-        let block: &BlockInfo = block_cache.get(&min_slot).unwrap();
-        if block.metadata.parent_slot == last_indexed_slot {
-            last_indexed_slot = block.metadata.slot;
-            blocks.push(block.clone());
-            block_cache.remove(&min_slot);
-        } else if min_slot < last_indexed_slot {
-            block_cache.remove(&min_slot);
-        } else {
-            break;
+async fn repair_gap(
+    rpc: Arc<RpcClient>,
+    block: BlockInfo,
+    checkpoint: u64,
+    window: usize,
+) -> Result<Vec<BlockInfo>, IngesterError> {
+    let mut ancestors = vec![block];
+    loop {
+        let child = ancestors
+            .last()
+            .ok_or_else(|| IngesterError::ParserError("Empty parent chain".into()))?;
+        let parent = child.metadata.parent_slot;
+        if parent == checkpoint {
+            ancestors.reverse();
+            return Ok(ancestors);
         }
+        if parent < checkpoint || parent >= child.metadata.slot {
+            return Err(IngesterError::ParserError(format!("Cannot connect block {} to checkpoint {}; reindex or canonical-chain reconciliation required", child.metadata.slot, checkpoint)));
+        }
+        let predecessor = fetch_block(rpc.clone(), parent).await?;
+        if predecessor.metadata.blockhash != child.metadata.parent_blockhash {
+            return Err(IngesterError::ParserError(format!(
+                "Parent hash mismatch at slot {}",
+                parent
+            )));
+        }
+        // Keep only the oldest window while walking back. A large, persistent
+        // omission must still yield a prefix extending the committed checkpoint.
+        // Discarded descendants will be fetched after that prefix is consumed.
+        if ancestors.len() == window {
+            ancestors.clear();
+        }
+        ancestors.push(predecessor);
     }
-    (blocks, last_indexed_slot)
 }
 
+async fn fetch_block(rpc_client: Arc<RpcClient>, slot: u64) -> Result<BlockInfo, IngesterError> {
+    let block = rpc_client
+        .get_block_with_config(
+            slot,
+            RpcBlockConfig {
+                encoding: Some(UiTransactionEncoding::Base64),
+                transaction_details: Some(TransactionDetails::Full),
+                rewards: Some(false),
+                commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(1),
+            },
+        )
+        .await?;
+    let block = parse_ui_confirmed_blocked(block, slot)?;
+    metric! { statsd_count!("rpc_block_fetched", 1); }
+    Ok(block)
+}
+
+/// Kept for callers fetching one block. A skipped response is unresolved until
+/// the produced-slot listing or a child's parent link establishes the chain.
 pub async fn fetch_block_with_infinite_retries(
     rpc_client: Arc<RpcClient>,
     slot: u64,
 ) -> Option<BlockInfo> {
+    let mut backoff = Backoff::default();
     loop {
-        match rpc_client
-            .get_block_with_config(
-                slot,
-                RpcBlockConfig {
-                    encoding: Some(UiTransactionEncoding::Base64),
-                    transaction_details: Some(TransactionDetails::Full),
-                    rewards: None,
-                    commitment: Some(CommitmentConfig::confirmed()),
-                    max_supported_transaction_version: Some(1),
-                },
-            )
-            .await
-        {
-            Ok(block) => {
-                metric! {
-                    statsd_count!("rpc_block_fetched", 1);
-                }
-                return Some(parse_ui_confirmed_blocked(block, slot).unwrap());
-            }
-            Err(e) => {
-                if let solana_client::client_error::ClientErrorKind::RpcError(
-                    RpcError::RpcResponseError { code, .. },
-                ) = *e.kind
-                {
-                    if SKIPPED_BLOCK_ERRORS.contains(&code) {
-                        metric! {
-                            statsd_count!("rpc_skipped_block", 1);
-                        }
-                        log::info!("Skipped block: {}", slot);
-                        return None;
-                    }
-                }
-                metric! {
-                    statsd_count!("rpc_block_fetch_failed", 1);
-                }
+        match fetch_block(rpc_client.clone(), slot).await {
+            Ok(block) => return Some(block),
+            Err(error) => {
+                log::error!(
+                    "getBlock slot {} failed (attempt {}): {}",
+                    slot,
+                    backoff.attempts() + 1,
+                    error
+                );
+                tokio::time::sleep(backoff.next_delay()).await;
             }
         }
     }
