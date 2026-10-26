@@ -37,8 +37,7 @@ impl<'de> Deserialize<'de> for SerializableSignature {
 
 impl Serialize for SerializableSignature {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let base58_string = bs58::encode(self.0).into_string();
-        serializer.serialize_str(&base58_string)
+        serializer.collect_str(&self.0)
     }
 }
 

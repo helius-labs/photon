@@ -7,6 +7,7 @@ mod account_lookup_index_tests;
 mod api_profile;
 #[cfg(feature = "api-profiling")]
 mod api_profile_workloads;
+mod base58_serialization_tests;
 mod batch_append_nullified_test;
 mod batched_address_tree_tests;
 mod batched_state_tree_tests;

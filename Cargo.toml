@@ -47,6 +47,7 @@ base64 = "0.21.0"
 borsh = "0.10.3"
 borsh1 = { package = "borsh", version = "1.5" }
 bs58 = "0.4.0"
+five8 = "1.0.0"
 byteorder = "1.5.0"
 cadence-macros = "1.2.0"
 clap = { "version" = "4.5.2", features = ["derive"] }

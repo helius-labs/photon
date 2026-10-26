@@ -4676,6 +4676,7 @@ dependencies = [
  "clap 4.6.0",
  "cloud-storage",
  "dirs 5.0.1",
+ "five8 1.0.0",
  "function_name",
  "futures",
  "hex",
