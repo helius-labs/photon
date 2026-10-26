@@ -2,7 +2,19 @@ use photon_indexer::api::{
     error::PhotonApiError,
     method::utils::{search_for_signatures, SignatureFilter, SignatureSearchType},
 };
-use sea_orm::{DatabaseConnection, DbErr, RuntimeErr, SqlxPostgresConnector};
+use photon_indexer::{
+    api::method::utils::{PaginatedSignatureInfoListWithError, SignatureInfoWithError},
+    common::typedefs::{
+        limit::Limit, serializable_signature::SerializableSignature, unix_timestamp::UnixTimestamp,
+        unsigned_integer::UnsignedInteger,
+    },
+};
+use rstest::rstest;
+use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, DbErr,
+    RuntimeErr, SqlxPostgresConnector, Statement,
+};
+use solana_signature::Signature;
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 
 async fn setup_owner_search() -> anyhow::Result<(PgPool, DatabaseConnection)> {
@@ -50,7 +62,8 @@ async fn setup_owner_search() -> anyhow::Result<(PgPool, DatabaseConnection)> {
 
 const OWNER_STATEMENT: &str = "
     SELECT name, generic_plans, custom_plans FROM pg_prepared_statements
-    WHERE regexp_replace(statement, '^[[:space:]]+', '') LIKE 'SELECT DISTINCT transactions.signature,%'
+    WHERE regexp_replace(statement, '^[[:space:]]+', '') LIKE 'SELECT transactions.signature,%'
+      AND statement LIKE '%WHERE EXISTS (%'
       AND statement LIKE '%AND accounts.spent IN (FALSE, TRUE)%'
 ";
 
@@ -184,5 +197,190 @@ async fn other_signature_searches_keep_session_plan_mode() -> anyhow::Result<()>
         ),
         "Other signature searches must preserve their normal planning behavior"
     );
+    Ok(())
+}
+
+async fn history_fixture(backend: DatabaseBackend) -> anyhow::Result<DatabaseConnection> {
+    let url = if backend == DatabaseBackend::Postgres {
+        let url = std::env::var("TEST_DATABASE_URL")?;
+        assert!(url.contains("127.0.0.1") || url.contains("localhost"));
+        url
+    } else {
+        "sqlite::memory:".to_string()
+    };
+    let mut options = ConnectOptions::new(url);
+    options.max_connections(1);
+    let conn = Database::connect(options).await?;
+    let binary = if backend == DatabaseBackend::Postgres {
+        "BYTEA"
+    } else {
+        "BLOB"
+    };
+    for sql in [
+        "CREATE TEMP TABLE blocks (slot BIGINT PRIMARY KEY, block_time BIGINT NOT NULL)".to_string(),
+        format!("CREATE TEMP TABLE transactions (signature {binary} PRIMARY KEY, slot BIGINT NOT NULL, error TEXT)"),
+        format!("CREATE TEMP TABLE accounts (hash {binary} PRIMARY KEY, owner {binary} NOT NULL, spent BOOLEAN NOT NULL)"),
+        format!("CREATE TEMP TABLE account_transactions (hash {binary}, signature {binary}, PRIMARY KEY(hash,signature))"),
+        "CREATE INDEX owner_history_fixture_idx ON accounts (spent,owner,hash)".to_string(),
+    ] {
+        conn.execute(Statement::from_string(backend, sql)).await?;
+    }
+    Ok(conn)
+}
+
+fn history_account_hash(ordinal: u64) -> Vec<u8> {
+    let mut hash = [0_u8; 32];
+    hash.get_mut(..8)
+        .unwrap()
+        .copy_from_slice(&ordinal.to_be_bytes());
+    hash.to_vec()
+}
+
+fn history_cursor(item: &SignatureInfoWithError) -> String {
+    bs58::encode(
+        [
+            item.slot.0.to_le_bytes().to_vec(),
+            item.signature.0.as_ref().to_vec(),
+        ]
+        .concat(),
+    )
+    .into_string()
+}
+
+async fn history_page(
+    conn: &DatabaseConnection,
+    owner: u8,
+    cursor: Option<String>,
+    limit: Option<Limit>,
+) -> anyhow::Result<PaginatedSignatureInfoListWithError> {
+    Ok(search_for_signatures(
+        conn,
+        SignatureSearchType::Standard,
+        Some(SignatureFilter::Owner([owner; 32].into())),
+        true,
+        cursor,
+        limit,
+    )
+    .await?)
+}
+
+#[rstest]
+#[tokio::test]
+async fn owner_history_preserves_default_pages_and_complete_cursor_traversal(
+    #[values(DatabaseBackend::Sqlite, DatabaseBackend::Postgres)] backend: DatabaseBackend,
+) -> anyhow::Result<()> {
+    let conn = history_fixture(backend).await?;
+    let mut expected = Vec::new();
+    for ordinal in 1_u64..=1006 {
+        let mut signature = [0_u8; 64];
+        signature
+            .get_mut(..8)
+            .unwrap()
+            .copy_from_slice(&ordinal.to_be_bytes());
+        let slot = 10 + ordinal / 3;
+        let error = (ordinal % 7 == 0).then(|| format!("fixture error {ordinal}"));
+        conn.execute(Statement::from_sql_and_values(
+            backend,
+            "INSERT INTO blocks VALUES ($1,$2) ON CONFLICT DO NOTHING",
+            [(slot as i64).into(), (1000_i64 + slot as i64).into()],
+        ))
+        .await?;
+        conn.execute(Statement::from_sql_and_values(
+            backend,
+            "INSERT INTO transactions VALUES ($1,$2,$3)",
+            [
+                signature.to_vec().into(),
+                (slot as i64).into(),
+                error.clone().into(),
+            ],
+        ))
+        .await?;
+        conn.execute(Statement::from_sql_and_values(
+            backend,
+            "INSERT INTO accounts VALUES ($1,$2,$3)",
+            [
+                history_account_hash(ordinal).into(),
+                vec![if ordinal == 1006 { 8_u8 } else { 9 }; 32].into(),
+                (ordinal < 1005).into(),
+            ],
+        ))
+        .await?;
+        conn.execute(Statement::from_sql_and_values(
+            backend,
+            "INSERT INTO account_transactions VALUES ($1,$2)",
+            [
+                history_account_hash(ordinal).into(),
+                signature.to_vec().into(),
+            ],
+        ))
+        .await?;
+        if ordinal > 1 && ordinal <= 1005 {
+            // Each transaction consumes the previous account and creates a new one.
+            // Each account therefore has only its creation and spending signatures.
+            conn.execute(Statement::from_sql_and_values(
+                backend,
+                "INSERT INTO account_transactions VALUES ($1,$2)",
+                [
+                    history_account_hash(ordinal - 1).into(),
+                    signature.to_vec().into(),
+                ],
+            ))
+            .await?;
+        }
+        if ordinal <= 1005 {
+            expected.push(SignatureInfoWithError {
+                signature: SerializableSignature(Signature::from(signature)),
+                slot: UnsignedInteger(slot),
+                block_time: UnixTimestamp(1000 + slot),
+                error,
+            });
+        }
+    }
+    expected.reverse();
+    let first_items = expected.iter().take(1000).cloned().collect::<Vec<_>>();
+    let first_cursor = history_cursor(first_items.last().unwrap());
+    assert_eq!(
+        history_page(&conn, 9, None, None).await?,
+        PaginatedSignatureInfoListWithError {
+            items: first_items,
+            cursor: Some(first_cursor.clone())
+        },
+        "Default pages must contain 1000 unique transactions across spent and unspent history"
+    );
+    assert_eq!(
+        history_page(&conn, 9, Some(first_cursor), None).await?,
+        PaginatedSignatureInfoListWithError {
+            items: expected.iter().skip(1000).cloned().collect(),
+            cursor: None
+        },
+        "Default pagination must retain the remaining history and its errors"
+    );
+    let mut cursor = None;
+    let mut actual = Vec::new();
+    for _ in 0..=expected.len() {
+        let response = history_page(&conn, 9, cursor, Some(Limit::new(2).unwrap())).await?;
+        actual.extend(response.items);
+        cursor = response.cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert_eq!(
+        (actual, cursor),
+        (expected.clone(), None),
+        "Small pages must preserve strict same-slot ordering without duplicate transactions"
+    );
+    let exhausted = history_cursor(expected.last().unwrap());
+    for (owner, cursor, limit) in [
+        (255_u8, None, None),
+        (9, Some(exhausted), None),
+        (9, None, Some(Limit::new(0).unwrap())),
+    ] {
+        assert_eq!(
+            history_page(&conn, owner, cursor, limit).await?,
+            PaginatedSignatureInfoListWithError::default(),
+            "Absent, exhausted and zero-limit requests must keep empty-page behavior"
+        );
+    }
     Ok(())
 }

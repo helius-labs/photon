@@ -511,9 +511,10 @@ fn compute_raw_sql_query_and_args(
                 && backend == DatabaseBackend::Postgres =>
         {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
-            // SQLite uses the owner-driven join below to avoid scanning unrelated transactions.
-            // A transaction can touch many accounts belonging to this owner. EXISTS avoids
-            // multiplying those rows and sorting the full history to remove duplicates.
+            let (filter, arg) =
+                compute_search_filter_and_arg(search_type, SignatureFilter::Owner(owner))?;
+            // EXISTS returns each transaction once, even when many owned accounts touch it.
+            // Reuse the spent predicate so selective owners can use the existing history index.
             let raw_sql = format!(
                 "
                 SELECT transactions.signature, transactions.slot, transactions.error, blocks.block_time
@@ -521,8 +522,7 @@ fn compute_raw_sql_query_and_args(
                 JOIN blocks ON transactions.slot = blocks.slot
                 WHERE EXISTS (
                     SELECT 1 FROM account_transactions
-                    JOIN accounts ON account_transactions.hash = accounts.hash
-                    WHERE accounts.owner = $1
+                    {filter}
                       AND account_transactions.signature = transactions.signature
                 )
                 {cursor_filter}
@@ -530,11 +530,7 @@ fn compute_raw_sql_query_and_args(
                 LIMIT {limit}
             "
             );
-            let owner: Vec<u8> = owner.into();
-            Ok((
-                raw_sql,
-                vec![owner.into()].into_iter().chain(cursor_args).collect(),
-            ))
+            Ok((raw_sql, vec![arg].into_iter().chain(cursor_args).collect()))
         }
         Some(signature_filter) => {
             let (cursor_filter, cursor_args) = compute_cursor_filter(cursor, 1)?;
