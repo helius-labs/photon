@@ -313,7 +313,7 @@ pub async fn setup_sqllite_pool() -> SqlitePool {
 
 pub async fn reset_tables(conn: &DatabaseConnection) -> Result<(), DbErr> {
     let query = match conn.get_database_backend() {
-        sea_orm::DatabaseBackend::Postgres => "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema' AND tablename != 'seaql_migrations'",
+        sea_orm::DatabaseBackend::Postgres => "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema() AND tablename != 'seaql_migrations'",
         sea_orm::DatabaseBackend::Sqlite => "SELECT name as tablename FROM sqlite_master WHERE type='table'",
         _ => unimplemented!()
         // Add other database backends here if needed
