@@ -132,7 +132,47 @@ docker run -p 3001:3001 docker.io/pmantica1/light-prover:1
 cargo test
 ```
 
-Note: All migrations run automatically during tests for both Postgres and SQLite.
+Apply PostgreSQL migrations before the tests, as in CI. SQLite migrations run inside the test fixtures.
+
+### API profiling
+
+The optional `api-profiling` feature records handler duration, success/error status,
+and database statement counts and duration from the existing test workloads. It is
+disabled in normal builds. The additional fixture workloads cover every registered
+RPC implementation, including repeatable offline responses for Solana RPC calls.
+
+Start a local PostgreSQL database and prover, configure the test environment above,
+and apply pending PostgreSQL migrations:
+
+```bash
+DATABASE_URL="$TEST_DATABASE_URL" cargo run --bin photon-migration -- up
+```
+
+Capture a profile using a fresh output path for each run:
+
+```bash
+PHOTON_API_PROFILE_OUT=/tmp/photon-before.jsonl \
+PHOTON_PROFILE_REPETITIONS=20 \
+cargo test --release --features api-profiling --test integration_tests -- \
+  --test-threads=1 --skip merkle_tree_deserialization:: --skip open_api_tests::
+```
+
+The skipped groups require live Devnet access or OpenAPI tooling and add no handler
+profiling coverage. Profile files append to the selected path. Handler spans do not
+include JSON-RPC transport or response serialization; use complete HTTP requests
+when measuring those costs.
+
+Compare matching workloads after another build:
+
+```bash
+python3 scripts/profile_api.py \
+  --baseline /tmp/photon-before.jsonl --candidate /tmp/photon-after.jsonl \
+  --json-output /tmp/photon-profile.json --markdown-output /tmp/photon-profile.md
+```
+
+The report separates PostgreSQL and SQLite, errors and successful calls, and
+unmatched or undersampled test groups. A faster deep page does not establish the
+same improvement for a first page or point lookup.
 
 ### Database Model Generation
 
