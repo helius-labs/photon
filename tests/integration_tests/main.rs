@@ -2,6 +2,7 @@
 // binary. This has a number of benefits:
 // 1. Faster compile time since we only have 1 binary.
 // 2. The ability to add global locks on the DB to prevent tests from interfering with each other.
+mod account_lookup_index_tests;
 #[cfg(feature = "api-profiling")]
 mod api_profile;
 #[cfg(feature = "api-profiling")]

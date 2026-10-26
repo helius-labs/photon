@@ -21,7 +21,7 @@ use sea_orm::{
 };
 use solana_signature::Signature;
 
-async fn fixture(backend: DatabaseBackend) -> anyhow::Result<DatabaseConnection> {
+pub(super) async fn fixture(backend: DatabaseBackend) -> anyhow::Result<DatabaseConnection> {
     let url = if backend == DatabaseBackend::Postgres {
         let url = std::env::var("TEST_DATABASE_URL")?;
         assert!(url.contains("127.0.0.1") || url.contains("localhost"));
@@ -83,7 +83,7 @@ async fn fixture(backend: DatabaseBackend) -> anyhow::Result<DatabaseConnection>
     Ok(conn)
 }
 
-async fn add_account(
+pub(super) async fn add_account(
     conn: &DatabaseConnection,
     hash: u8,
     owner: u8,
