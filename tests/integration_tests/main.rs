@@ -4,6 +4,8 @@
 // 2. The ability to add global locks on the DB to prevent tests from interfering with each other.
 #[cfg(feature = "api-profiling")]
 mod api_profile;
+#[cfg(feature = "api-profiling")]
+mod api_profile_workloads;
 mod batch_append_nullified_test;
 mod batched_address_tree_tests;
 mod batched_state_tree_tests;
