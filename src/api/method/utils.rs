@@ -8,7 +8,7 @@ use crate::common::typedefs::unsigned_integer::UnsignedInteger;
 use crate::dao::generated::{accounts, token_accounts};
 
 use byteorder::{ByteOrder, LittleEndian};
-use sea_orm::sea_query::SimpleExpr;
+use sea_orm::sea_query::{Expr, SimpleExpr};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait, Value,
@@ -31,6 +31,17 @@ pub const PAGE_LIMIT: u64 = 1000;
 #[cfg(test)]
 #[path = "../../../tests/unit_tests/owner_signature_tests.rs"]
 mod tests;
+
+fn token_account_cursor_filter(cursor_mint: &[u8], cursor_hash: &[u8]) -> SimpleExpr {
+    Expr::tuple([
+        Expr::col(token_accounts::Column::Mint.as_column_ref()).into_simple_expr(),
+        Expr::col(token_accounts::Column::Hash.as_column_ref()).into_simple_expr(),
+    ])
+    .greater_than(Expr::tuple([
+        Expr::value(cursor_mint.to_vec()),
+        Expr::value(cursor_hash.to_vec()),
+    ]))
+}
 
 pub fn parse_decimal(value: Decimal) -> Result<u64, PhotonApiError> {
     value
@@ -159,14 +170,7 @@ pub async fn fetch_token_accounts(
         if options.mint.is_some() {
             filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
         } else {
-            // No specific mint, use both mint and hash for pagination
-            filter = filter.and(
-                token_accounts::Column::Mint
-                    .gt::<Vec<u8>>(cursor_mint.into())
-                    .or(token_accounts::Column::Mint
-                        .eq::<Vec<u8>>(cursor_mint.into())
-                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
-            );
+            filter = filter.and(token_account_cursor_filter(cursor_mint, cursor_hash));
         }
     }
     if let Some(l) = options.limit {
@@ -474,14 +478,14 @@ fn compute_cursor_filter(
                 PhotonApiError::ValidationError("Invalid signature in cursor".to_string())
             })?;
 
-            let cursor_filter =  format!(
-                "AND (transactions.slot < ${} OR (transactions.slot = ${} AND transactions.signature < ${}))",
-                num_preceding_args + 1, num_preceding_args + 2, num_preceding_args + 3
+            let cursor_filter = format!(
+                "AND (transactions.slot, transactions.signature) < (${}, ${})",
+                num_preceding_args + 1,
+                num_preceding_args + 2
             );
             Ok((
                 cursor_filter,
                 vec![
-                    slot.into(),
                     slot.into(),
                     Into::<Vec<u8>>::into(Into::<[u8; 64]>::into(signature)).into(),
                 ],
@@ -756,14 +760,7 @@ pub async fn fetch_token_accounts_v2(
         if options.mint.is_some() {
             filter = filter.and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()));
         } else {
-            // No specific mint, use both mint and hash for pagination
-            filter = filter.and(
-                token_accounts::Column::Mint
-                    .gt::<Vec<u8>>(cursor_mint.into())
-                    .or(token_accounts::Column::Mint
-                        .eq::<Vec<u8>>(cursor_mint.into())
-                        .and(token_accounts::Column::Hash.gt::<Vec<u8>>(cursor_hash.into()))),
-            );
+            filter = filter.and(token_account_cursor_filter(cursor_mint, cursor_hash));
         }
     }
     if let Some(l) = options.limit {

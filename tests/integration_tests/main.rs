@@ -10,6 +10,7 @@ mod batch_append_nullified_test;
 mod batched_address_tree_tests;
 mod batched_state_tree_tests;
 mod e2e_tests;
+mod keyset_cursor_tests;
 mod merkle_tree_deserialization;
 mod mock_tests;
 mod monitor_tests;
