@@ -32,6 +32,9 @@ use tokio::io::{AsyncRead, ReadBuf};
 pub mod gcs_utils;
 pub mod s3_utils;
 
+#[cfg(test)]
+mod tests;
+
 pub const MEGABYTE: usize = 1024 * 1024;
 pub const CHUNK_SIZE: usize = 100 * 1024 * 1024;
 // Up to 50 MB
@@ -132,7 +135,7 @@ impl R2DirectoryAdapter {
             .r2_bucket
             .list(self.r2_prefix.clone(), None)
             .await
-            .unwrap_or_default();
+            .context("Failed to list R2 snapshot files")?;
 
         let mut files = Vec::new();
         for result in results {
@@ -558,8 +561,68 @@ pub async fn get_snapshot_files_with_metadata(
             });
         }
     }
-    snapshot_files_with_slots.sort_by_key(|file| file.start_slot);
-    Ok(snapshot_files_with_slots)
+    // An interrupted merge can leave both its output and its inputs. Select a
+    // contiguous chain instead of concatenating overlapping copies of history.
+    // Prefer the original inputs when a complete chain still exists, avoiding
+    // repeatedly folding an earlier merged copy back into itself.
+    snapshot_files_with_slots.sort_by_key(|file| (file.start_slot, file.end_slot));
+    if snapshot_files_with_slots.is_empty() {
+        return Ok(snapshot_files_with_slots);
+    }
+    for file in &snapshot_files_with_slots {
+        anyhow::ensure!(
+            file.start_slot <= file.end_slot,
+            "Invalid snapshot slot range: {}",
+            file.file
+        );
+    }
+    let last_slot = snapshot_files_with_slots
+        .iter()
+        .map(|file| file.end_slot)
+        .max()
+        .unwrap();
+    // start slot -> (number of files in the best complete chain, first index).
+    let mut paths = std::collections::BTreeMap::<u64, (usize, usize)>::new();
+    for (index, file) in snapshot_files_with_slots.iter().enumerate().rev() {
+        let tail_length = if file.end_slot == last_slot {
+            Some(0)
+        } else {
+            file.end_slot
+                .checked_add(1)
+                .and_then(|next| paths.get(&next).map(|(length, _)| *length))
+        };
+        if let Some(tail_length) = tail_length {
+            let length = tail_length + 1;
+            if paths
+                .get(&file.start_slot)
+                .map_or(true, |(best, _)| length > *best)
+            {
+                paths.insert(file.start_slot, (length, index));
+            }
+        }
+    }
+    let mut start_slot = snapshot_files_with_slots[0].start_slot;
+    anyhow::ensure!(
+        paths.contains_key(&start_slot),
+        "Snapshot history has a gap or partial overlap between slots {} and {}",
+        start_slot,
+        last_slot
+    );
+    let mut selected = Vec::new();
+    loop {
+        let (_, index) = paths[&start_slot];
+        let file = &snapshot_files_with_slots[index];
+        selected.push(SnapshotFileWithSlots {
+            file: file.file.clone(),
+            start_slot: file.start_slot,
+            end_slot: file.end_slot,
+        });
+        if file.end_slot == last_slot {
+            break;
+        }
+        start_slot = file.end_slot + 1;
+    }
+    Ok(selected)
 }
 
 fn create_temp_snapshot_file(dir: &str) -> (File, PathBuf) {
@@ -609,6 +672,9 @@ async fn try_merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) -> Result
     let snapshot_files = get_snapshot_files_with_metadata(directory_adapter.as_ref())
         .await
         .context("Failed to get snapshot files")?;
+    if snapshot_files.len() <= 1 {
+        return Ok(());
+    }
     let start_slot = snapshot_files
         .first()
         .map(|file| file.start_slot)
@@ -625,7 +691,13 @@ async fn try_merge_snapshots(directory_adapter: Arc<DirectoryAdapter>) -> Result
     create_snapshot_from_byte_stream(byte_stream, directory_adapter.as_ref())
         .await
         .context("Failed to create merged snapshot")?;
+    let merged_file = format!("snapshot-{}-{}", start_slot, end_slot);
     for snapshot_file in snapshot_files {
+        // Never remove the destination, including when a previous merge left it
+        // in the input listing before cleanup completed.
+        if snapshot_file.file == merged_file {
+            continue;
+        }
         directory_adapter
             .delete_file(snapshot_file.file.clone())
             .await
