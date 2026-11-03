@@ -40,8 +40,7 @@ impl TreeInfo {
         let metadata = TreeMetadata::find()
             .filter(tree_metadata::Column::TreePubkey.eq(tree_bytes.clone()))
             .one(conn)
-            .await
-            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+            .await?;
 
         if let Some(metadata) = metadata {
             return Ok(Some(TreeInfo::from_metadata(metadata, *pubkey)?));
@@ -50,8 +49,7 @@ impl TreeInfo {
         let metadata = TreeMetadata::find()
             .filter(tree_metadata::Column::QueuePubkey.eq(tree_bytes.clone()))
             .one(conn)
-            .await
-            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+            .await?;
 
         if let Some(metadata) = metadata {
             let tree_bytes: [u8; 32] =
@@ -107,8 +105,7 @@ impl TreeInfo {
         let metadata_list = TreeMetadata::find()
             .filter(tree_metadata::Column::TreePubkey.is_in(tree_bytes_vec))
             .all(conn)
-            .await
-            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+            .await?;
 
         let mut result = std::collections::HashMap::new();
 
@@ -149,8 +146,7 @@ impl TreeInfo {
         let metadata_list = TreeMetadata::find()
             .filter(tree_metadata::Column::TreePubkey.is_in(tree_bytes_vec))
             .all(conn)
-            .await
-            .map_err(|e| PhotonApiError::UnexpectedError(format!("Database error: {}", e)))?;
+            .await?;
 
         let mut result = std::collections::HashMap::new();
 
@@ -220,7 +216,7 @@ impl TreeInfo {
     }
 }
 
-/// Bundles an RPC client with a negative cache of pubkeys that failed discovery.
+/// Bundles an RPC client with a cache of accounts confirmed to be excluded.
 /// Created once per block batch and threaded through the parsing call chain,
 /// so the same garbage pubkey is never queried twice.
 pub struct TreeResolver<'a> {
@@ -250,31 +246,52 @@ impl<'a> TreeResolver<'a> {
             return Ok(None);
         }
 
-        let mut account = match self.rpc_client.get_account(pubkey).await {
-            Ok(account) => account,
-            Err(e) => {
-                log::warn!("RPC error fetching tree {}: {}", pubkey, e);
-                self.failed_discoveries.insert(*pubkey);
-                return Ok(None);
-            }
-        };
-
-        match tree_metadata_sync::process_tree_account(conn, *pubkey, &mut account, slot).await {
+        // A transport failure or missing account is unresolved, not an excluded
+        // tree. Do not commit a block that depends on data we could not fetch.
+        let mut account = self.rpc_client.get_account(pubkey).await?;
+        // V2 output events can reference the output queue instead of the tree.
+        // A valid queue is a dependency to resolve, not an excluded account.
+        let tree =
+            if account.owner == super::get_compression_program_id() && account.data.len() >= 8 {
+                light_batched_merkle_tree::queue::BatchedQueueAccount::output_from_bytes(
+                    &mut account.data,
+                )
+                .ok()
+                .map(|queue| {
+                    Pubkey::new_from_array(
+                        queue
+                            .get_metadata()
+                            .metadata
+                            .associated_merkle_tree
+                            .to_bytes(),
+                    )
+                })
+                .unwrap_or(*pubkey)
+            } else {
+                *pubkey
+            };
+        if tree != *pubkey {
+            account = self.rpc_client.get_account(&tree).await?;
+        }
+        match tree_metadata_sync::process_tree_account(conn, tree, &mut account, slot).await {
             Ok(true) => {
                 log::info!("Discovered and synced new tree: {}", pubkey);
                 TreeInfo::get_by_pubkey(conn, pubkey)
                     .await
-                    .map_err(|e| IngesterError::ParserError(e.to_string()))
+                    .map_err(|e| IngesterError::ParserError(e.to_string()))?
+                    .ok_or_else(|| {
+                        IngesterError::ParserError(format!(
+                            "Discovered tree {} does not match reference {}",
+                            tree, pubkey
+                        ))
+                    })
+                    .map(Some)
             }
             Ok(false) => {
                 self.failed_discoveries.insert(*pubkey);
                 Ok(None)
             }
-            Err(e) => {
-                log::warn!("Failed to process discovered tree {}: {}", pubkey, e);
-                self.failed_discoveries.insert(*pubkey);
-                Ok(None)
-            }
+            Err(e) => Err(e.into()),
         }
     }
 }
@@ -293,16 +310,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_discover_tree_rpc_error_returns_none_and_caches() {
+    async fn test_discover_tree_rpc_error_propagates_without_caching() {
         let rpc_client = RpcClient::new("http://localhost:1".to_string());
         let db = setup_test_db().await;
         let mut resolver = TreeResolver::new(&rpc_client);
         let pubkey = Pubkey::new_unique();
 
         let result = resolver.discover_tree(&db, &pubkey, 0).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
-        assert!(resolver.failed_discoveries.contains(&pubkey));
+        assert!(matches!(result, Err(IngesterError::RpcError { .. })));
+        assert!(resolver.failed_discoveries.is_empty());
     }
 
     #[tokio::test]
@@ -324,7 +340,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_discover_tree_multiple_unknown_pubkeys_all_cached() {
+    async fn test_discover_tree_transport_errors_are_never_cached() {
         let rpc_client = RpcClient::new("http://localhost:1".to_string());
         let db = setup_test_db().await;
         let mut resolver = TreeResolver::new(&rpc_client);
@@ -333,20 +349,16 @@ mod tests {
 
         for pk in &pubkeys {
             let result = resolver.discover_tree(&db, pk, 0).await;
-            assert!(result.is_ok());
-            assert!(result.unwrap().is_none());
+            assert!(result.is_err());
         }
-        assert_eq!(resolver.failed_discoveries.len(), 5);
+        assert!(resolver.failed_discoveries.is_empty());
 
-        // Second round: all should skip immediately
-        let start = std::time::Instant::now();
+        // Second round must try discovery again after transport failures.
         for pk in &pubkeys {
             let result = resolver.discover_tree(&db, pk, 0).await;
-            assert!(result.is_ok());
-            assert!(result.unwrap().is_none());
+            assert!(result.is_err());
         }
-        assert!(start.elapsed().as_millis() < 10);
-        assert_eq!(resolver.failed_discoveries.len(), 5);
+        assert!(resolver.failed_discoveries.is_empty());
     }
 
     #[tokio::test]

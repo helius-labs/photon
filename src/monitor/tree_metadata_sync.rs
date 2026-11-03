@@ -74,7 +74,12 @@ pub async fn sync_tree_metadata(
         "Tree metadata sync completed. Synced: {}, Failed: {}",
         synced_count, failed_count
     );
-
+    if failed_count > 0 {
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Tree metadata sync failed for {} accounts",
+            failed_count
+        )));
+    }
     Ok(())
 }
 
@@ -87,6 +92,17 @@ pub async fn process_tree_account<C>(
 where
     C: ConnectionTrait,
 {
+    if account.owner != get_compression_program_id() {
+        return Ok(false);
+    }
+    // The external batched-tree parser splits off the discriminator before
+    // checking length. Reject truncated program accounts before calling it.
+    if account.data.len() < 8 {
+        return Err(PhotonApiError::UnexpectedError(format!(
+            "Truncated compression account {}",
+            pubkey
+        )));
+    }
     if let Ok(data) = process_v1_state_account(account) {
         if !check_tree_owner(&data.owner) {
             debug!(

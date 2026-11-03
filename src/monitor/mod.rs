@@ -42,6 +42,7 @@ use std::mem;
 const CHUNK_SIZE: usize = 100;
 
 pub static LATEST_SLOT: Lazy<Arc<AtomicU64>> = Lazy::new(|| Arc::new(AtomicU64::new(0)));
+static LATEST_SLOT_UPDATER: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
 static TREE_VALIDATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 struct TreeValidationGuard;
@@ -76,6 +77,7 @@ pub fn continously_monitor_photon(
         }
 
         let mut has_been_healthy = false;
+        let mut next_metadata_sync = tokio::time::Instant::now() + Duration::from_secs(60);
         start_latest_slot_updater(rpc_client.clone()).await;
 
         // Use interval timer to ensure fixed intervals regardless of execution time
@@ -83,6 +85,14 @@ pub fn continously_monitor_photon(
 
         loop {
             interval.tick().await;
+            if tokio::time::Instant::now() >= next_metadata_sync {
+                if let Err(error) =
+                    tree_metadata_sync::sync_tree_metadata(rpc_client.as_ref(), db.as_ref()).await
+                {
+                    error!("Periodic tree metadata sync failed: {}", error);
+                }
+                next_metadata_sync = tokio::time::Instant::now() + Duration::from_secs(60);
+            }
 
             let latest_slot = LATEST_SLOT.load(Ordering::SeqCst);
             let last_indexed_slot = fetch_last_indexed_slot_with_infinite_retry(db.as_ref()).await;
@@ -158,17 +168,18 @@ pub async fn update_latest_slot(rpc_client: &RpcClient) {
 }
 
 pub async fn start_latest_slot_updater(rpc_client: Arc<RpcClient>) {
-    if LATEST_SLOT.load(Ordering::SeqCst) != 0 {
-        return;
-    }
-    update_latest_slot(&rpc_client).await;
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_millis(100));
-        loop {
-            interval.tick().await;
-            update_latest_slot(&rpc_client).await;
-        }
-    });
+    LATEST_SLOT_UPDATER
+        .get_or_init(|| async move {
+            tokio::spawn(async move {
+                let mut interval = interval(Duration::from_millis(500));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    interval.tick().await;
+                    update_latest_slot(&rpc_client).await;
+                }
+            });
+        })
+        .await;
 }
 
 fn parse_historical_roots(account: SolanaAccount) -> Vec<Hash> {

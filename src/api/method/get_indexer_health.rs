@@ -18,6 +18,9 @@ pub async fn get_indexer_health(
         .await
         .map_err(|e| PhotonApiError::UnexpectedError(format!("RPC error: {}", e)))?;
 
+    if let Some(error) = crate::ingester::supervisor::health_error(slot > context.slot) {
+        return Err(PhotonApiError::UnexpectedError(error));
+    }
     let slots_behind = slot as i64 - context.slot as i64;
     if slots_behind > HEALTH_CHECK_SLOT_DISTANCE {
         return Err(PhotonApiError::StaleSlot(slots_behind as u64));

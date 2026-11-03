@@ -12,6 +12,7 @@ pub mod poller;
 use grpc::get_grpc_stream_with_rpc_fallback;
 use poller::get_block_poller_stream;
 
+#[derive(Clone)]
 pub struct BlockStreamConfig {
     pub rpc_client: Arc<RpcClient>,
     pub geyser_url: Option<String>,
@@ -21,18 +22,24 @@ pub struct BlockStreamConfig {
 
 impl BlockStreamConfig {
     pub fn load_block_stream(&self) -> impl Stream<Item = Vec<BlockInfo>> {
-        let grpc_stream = self.geyser_url.as_ref().map(|geyser_url| {
-            let auth_header = std::env::var("GRPC_X_TOKEN").unwrap();
-            get_grpc_stream_with_rpc_fallback(
+        let grpc_stream = self.geyser_url.as_ref().and_then(|geyser_url| {
+            let auth_header = match std::env::var("GRPC_X_TOKEN") {
+                Ok(token) => token,
+                Err(error) => {
+                    log::error!("Missing GRPC_X_TOKEN; using RPC polling: {}", error);
+                    return None;
+                }
+            };
+            Some(get_grpc_stream_with_rpc_fallback(
                 geyser_url.clone(),
                 auth_header,
                 self.rpc_client.clone(),
                 self.last_indexed_slot,
                 self.max_concurrent_block_fetches,
-            )
+            ))
         });
 
-        let poller_stream = if self.geyser_url.is_none() {
+        let poller_stream = if grpc_stream.is_none() {
             Some(get_block_poller_stream(
                 self.rpc_client.clone(),
                 self.last_indexed_slot,
