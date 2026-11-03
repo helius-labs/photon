@@ -45,6 +45,10 @@ paths:
                   properties:
                     address:
                       $ref: '#/components/schemas/SerializablePubkey'
+                    commitment:
+                      allOf:
+                      - $ref: '#/components/schemas/RpcCommitment'
+                      nullable: true
                   additionalProperties: false
         required: true
       responses:
@@ -85,6 +89,126 @@ paths:
                         $ref: '#/components/schemas/Context'
                       value:
                         $ref: '#/components/schemas/AccountInterface'
+        '429':
+          description: Exceeded rate limit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+        '500':
+          description: The server encountered an unexpected condition that prevented it from fulfilling the request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                  jsonrpc:
+                    type: string
+  /getAtaInterface:
+    summary: getAtaInterface
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - jsonrpc
+              - id
+              - method
+              - params
+              properties:
+                id:
+                  type: string
+                  description: An ID to identify the request.
+                  enum:
+                  - test-account
+                jsonrpc:
+                  type: string
+                  description: The version of the JSON-RPC protocol.
+                  enum:
+                  - '2.0'
+                method:
+                  type: string
+                  description: The name of the method to invoke.
+                  enum:
+                  - getAtaInterface
+                params:
+                  type: object
+                  description: Request for getAtaInterface
+                  required:
+                  - owner
+                  - mint
+                  properties:
+                    config:
+                      allOf:
+                      - $ref: '#/components/schemas/GetAtaInterfaceConfig'
+                      nullable: true
+                    mint:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                    owner:
+                      $ref: '#/components/schemas/SerializablePubkey'
+                  additionalProperties: false
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - jsonrpc
+                - id
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                      message:
+                        type: string
+                  id:
+                    type: string
+                    description: An ID to identify the response.
+                    enum:
+                    - test-account
+                  jsonrpc:
+                    type: string
+                    description: The version of the JSON-RPC protocol.
+                    enum:
+                    - '2.0'
+                  result:
+                    type: object
+                    description: Response for getAtaInterface
+                    required:
+                    - context
+                    properties:
+                      context:
+                        $ref: '#/components/schemas/Context'
+                      value:
+                        $ref: '#/components/schemas/AtaInterfaceValue'
         '429':
           description: Exceeded rate limit.
           content:
@@ -3021,6 +3145,10 @@ paths:
                       items:
                         $ref: '#/components/schemas/SerializablePubkey'
                       description: List of account addresses to look up (max 100)
+                    commitment:
+                      allOf:
+                      - $ref: '#/components/schemas/RpcCommitment'
+                      nullable: true
                   additionalProperties: false
         required: true
       responses:
@@ -4841,6 +4969,40 @@ components:
         tree:
           $ref: '#/components/schemas/SerializablePubkey'
       additionalProperties: false
+    AtaInterfaceValue:
+      type: object
+      required:
+      - key
+      - owner
+      - mint
+      - mode
+      - wrap
+      - addresses
+      - account
+      - hot
+      properties:
+        account:
+          $ref: '#/components/schemas/SolanaAccountData'
+        addresses:
+          $ref: '#/components/schemas/GetAtaDerivedAddresses'
+        cold:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountV2'
+          description: Raw compressed inputs used in synthesis.
+          nullable: true
+        hot:
+          $ref: '#/components/schemas/GetAtaHotSources'
+        key:
+          $ref: '#/components/schemas/SerializablePubkey'
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+        mode:
+          $ref: '#/components/schemas/GetAtaProgramMode'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+        wrap:
+          type: boolean
     Base58String:
       type: string
       description: A base 58 encoded string.
@@ -4988,6 +5150,112 @@ components:
       properties:
         memcmp:
           $ref: '#/components/schemas/Memcmp'
+    GetAccountInterfaceRequest:
+      type: object
+      description: Request for getAccountInterface
+      required:
+      - address
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        commitment:
+          $ref: '#/components/schemas/RpcCommitment'
+      additionalProperties: false
+    GetAccountInterfaceResponse:
+      type: object
+      description: Response for getAccountInterface
+      required:
+      - context
+      properties:
+        context:
+          $ref: '#/components/schemas/Context'
+        value:
+          $ref: '#/components/schemas/AccountInterface'
+    GetAtaDerivedAddresses:
+      type: object
+      required:
+      - light
+      - spl
+      - token2022
+      - canonical
+      properties:
+        canonical:
+          $ref: '#/components/schemas/SerializablePubkey'
+        light:
+          $ref: '#/components/schemas/SerializablePubkey'
+        spl:
+          $ref: '#/components/schemas/SerializablePubkey'
+        token2022:
+          $ref: '#/components/schemas/SerializablePubkey'
+    GetAtaHotEntry:
+      type: object
+      required:
+      - address
+      - amount
+      properties:
+        address:
+          $ref: '#/components/schemas/SerializablePubkey'
+        amount:
+          $ref: '#/components/schemas/UnsignedInteger'
+    GetAtaHotSources:
+      type: object
+      properties:
+        light:
+          $ref: '#/components/schemas/GetAtaHotEntry'
+        spl:
+          $ref: '#/components/schemas/GetAtaHotEntry'
+        token2022:
+          $ref: '#/components/schemas/GetAtaHotEntry'
+    GetAtaInterfaceConfig:
+      type: object
+      properties:
+        allowOwnerOffCurve:
+          type: boolean
+          description: Allow PDA/off-curve owners for ATA derivation.
+          nullable: true
+        commitment:
+          $ref: '#/components/schemas/RpcCommitment'
+        minContextSlot:
+          $ref: '#/components/schemas/UnsignedInteger'
+        programId:
+          $ref: '#/components/schemas/SerializablePubkey'
+        wrap:
+          type: boolean
+          description: Include SPL/T22 hot balances in canonical aggregation (auto mode only).
+          nullable: true
+      additionalProperties: false
+    GetAtaInterfaceRequest:
+      type: object
+      description: Request for getAtaInterface
+      required:
+      - owner
+      - mint
+      properties:
+        config:
+          $ref: '#/components/schemas/GetAtaInterfaceConfig'
+        mint:
+          $ref: '#/components/schemas/SerializablePubkey'
+        owner:
+          $ref: '#/components/schemas/SerializablePubkey'
+      additionalProperties: false
+    GetAtaInterfaceResponse:
+      type: object
+      description: Response for getAtaInterface
+      required:
+      - context
+      properties:
+        context:
+          $ref: '#/components/schemas/Context'
+        value:
+          $ref: '#/components/schemas/AtaInterfaceValue'
+    GetAtaProgramMode:
+      type: string
+      description: Program mode for getAtaInterface canonical account selection.
+      enum:
+      - auto
+      - light
+      - spl
+      - token2022
     GetCompressedAccountProofResponseValue:
       type: object
       required:
@@ -5049,6 +5317,36 @@ components:
         treeContext:
           $ref: '#/components/schemas/TreeContextInfo'
       additionalProperties: false
+    GetMultipleAccountInterfacesRequest:
+      type: object
+      description: Request for getMultipleAccountInterfaces
+      required:
+      - addresses
+      properties:
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/SerializablePubkey'
+          description: List of account addresses to look up (max 100)
+        commitment:
+          $ref: '#/components/schemas/RpcCommitment'
+      additionalProperties: false
+    GetMultipleAccountInterfacesResponse:
+      type: object
+      description: Response for getMultipleAccountInterfaces
+      required:
+      - context
+      - value
+      properties:
+        context:
+          $ref: '#/components/schemas/Context'
+        value:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/AccountInterface'
+            nullable: true
+          description: List of account results (Some for found accounts, None for not found)
     Hash:
       type: string
       description: A 32-byte hash represented as a base58 string.
@@ -5342,6 +5640,12 @@ components:
           type: integer
           format: uint64
           minimum: 0
+    RpcCommitment:
+      type: string
+      enum:
+      - processed
+      - confirmed
+      - finalized
     SerializablePubkey:
       type: string
       description: A Solana public key represented as a base58 string.

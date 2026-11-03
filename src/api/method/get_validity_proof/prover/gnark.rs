@@ -2,7 +2,7 @@ use crate::api::error::PhotonApiError;
 use crate::api::method::get_validity_proof::prover::structs::{CompressedProof, ProofABC};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use solana_bn254::compression::prelude::{
-    alt_bn128_g1_compress, alt_bn128_g2_compress, convert_endianness,
+    alt_bn128_g1_compress_be, alt_bn128_g2_compress_be, convert_endianness,
 };
 use std::ops::Neg;
 
@@ -31,11 +31,11 @@ pub fn negate_g1(g1_be: &[u8; 64]) -> Result<[u8; 64], PhotonApiError> {
 }
 
 pub fn compress_proof(proof: &ProofABC) -> Result<CompressedProof, PhotonApiError> {
-    let proof_a = alt_bn128_g1_compress(&proof.a)
+    let proof_a = alt_bn128_g1_compress_be(&proof.a)
         .map_err(|_| PhotonApiError::UnexpectedError("Failed to compress G1 proof".to_string()))?;
-    let proof_b = alt_bn128_g2_compress(&proof.b)
+    let proof_b = alt_bn128_g2_compress_be(&proof.b)
         .map_err(|_| PhotonApiError::UnexpectedError("Failed to compress G2 proof".to_string()))?;
-    let proof_c = alt_bn128_g1_compress(&proof.c)
+    let proof_c = alt_bn128_g1_compress_be(&proof.c)
         .map_err(|_| PhotonApiError::UnexpectedError("Failed to compress G1 proof".to_string()))?;
 
     Ok(CompressedProof {
